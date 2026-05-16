@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Duplicate detection · SEO · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
+<span class="crumb"></span>
+<span style="font-weight:600">🔁 Duplicate detection</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('seo_dashboard') }}">← Quay lại SEO</a>
+{% endblock %}
+
+{% block content %}
+
+{% set field_labels = {
+  'title': ('🏷️', 'Title trùng'),
+  'meta_desc': ('📝', 'Meta description trùng'),
+  'h1': ('🔠', 'H1 trùng'),
+} %}
+
+<section class="card">
+  <p class="muted" style="margin:0 0 12px 0">
+    Phát hiện các trang đang dùng cùng <strong>title</strong>, <strong>meta description</strong>, hoặc <strong>H1</strong>.
+    Trùng nội dung là vấn đề SEO lớn — Google sẽ chọn 1 trang để index, các trang còn lại bị "cạnh tranh nội bộ".
+  </p>
+  <div class="seo-issue-chips">
+    {% for f, info in field_labels.items() %}
+      {% set icon, label = info %}
+      <a href="?field={{ f }}"
+         class="seo-issue-chip {% if field == f %}seo-issue-error{% else %}seo-issue-info{% endif %}"
+         style="{% if field == f %}border-color:#f87171;{% endif %}">
+        <span>{{ icon }}</span>
+        <span>{{ label }}</span>
+        <span class="seo-issue-count">{{ counts[f] }}</span>
+      </a>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="card" style="margin-top:16px">
+  {% set _icon, _label = field_labels[field] %}
+  <h3 style="margin-top:0">
+    {{ _icon }} {{ _label }}
+    <span class="muted" style="font-weight:400;font-size:14px">
+      — {{ groups|length }} nhóm trùng
+    </span>
+  </h3>
+
+  {% if groups %}
+    <div class="seo-issue-list">
+      {% for g in groups %}
+        <div class="seo-issue-row seo-issue-warn" style="flex-direction:column;align-items:stretch">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+            <div style="flex:1;min-width:0">
+              <div class="seo-issue-label" style="word-break:break-word">
+                {{ g.value or '(rỗng)' }}
+              </div>
+              <div class="muted" style="margin-top:4px;font-size:13px">
+                Xuất hiện trên <strong>{{ g.count }} trang</strong>
+              </div>
+            </div>
+            <span class="pill pill-warn" style="flex-shrink:0">{{ g.count }}× trùng</span>
+          </div>
+          <ul style="margin:10px 0 0 0;padding-left:18px">
+            {% for u in g.urls %}
+              {% set pid = g.ids[loop.index0] if loop.index0 < g.ids|length else None %}
+              <li style="margin:4px 0">
+                <a href="{{ u }}" target="_blank" rel="noopener" class="seo-url-link">{{ u }}</a>
+                {% if pid %}
+                  <a href="{{ url_for('seo_url_detail', page_id=pid) }}" class="btn btn-sm" style="margin-left:8px">Chi tiết →</a>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+          <div class="seo-issue-fix" style="margin-top:10px">
+            💡 <strong>Cách sửa:</strong>
+            {% if field == 'title' %}
+              Mỗi trang nên có title riêng, mô tả đúng nội dung. Với sản phẩm Shopify, đừng để auto-gen — viết tay theo công thức "[Tên SP] - [USP] | Sintech".
+            {% elif field == 'meta_desc' %}
+              Viết meta riêng cho từng trang (140-160 ký tự, có CTA viết HOA). Tránh để Shopify auto-gen từ description.
+            {% else %}
+              H1 phải khớp với tiêu đề thực tế của trang. Sửa H1 để mô tả đúng nội dung từng trang.
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted" style="margin:0">
+      🎉 Không phát hiện {{ _label|lower }} nào.
+      {% if counts.title == 0 and counts.meta_desc == 0 and counts.h1 == 0 %}
+        <br><small>Nếu chưa crawl trang nào, bấm <strong>"🚀 Crawl toàn bộ"</strong> ở dashboard SEO để bắt đầu.</small>
+      {% endif %}
+    </p>
+  {% endif %}
+</section>
+
+{% endblock %}

@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+{% block title %}Content Jobs · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span style="font-weight:600">📝 Content Jobs</span>
+<span class="crumb"></span>
+<span class="muted" style="font-weight:400">Quản lý bài viết AI cho SP</span>
+{% endblock %}
+
+{% block page_actions %}
+<form action="{{ url_for('content_jobs_push_from_empty_desc') }}" method="post" style="display:inline">
+  <button class="btn" type="submit" title="Đẩy SP rỗng/ngắn từ tab SEO sang đây">
+    📤 Đẩy SP từ /seo/empty-desc
+  </button>
+</form>
+<form action="{{ url_for('content_jobs_queue_start_all') }}" method="post" style="display:inline">
+  <button class="btn btn-primary" type="submit" title="Worker tự gen tuần tự tất cả SP đang pending">
+    🚀 Start worker (gen all pending)
+  </button>
+</form>
+{% endblock %}
+
+{% block content %}
+
+{# ───── KPI ───── #}
+<div class="kpi-grid">
+  {% set status_meta = [
+    ('pending', '⏳', 'Chờ AI', '#94a3b8'),
+    ('drafting', '🤖', 'Đang gen', '#60a5fa'),
+    ('text_done', '📝', 'Text xong', '#a78bfa'),
+    ('draft', '📋', 'Draft full', '#facc15'),
+    ('approved', '✅', 'Đã duyệt', '#4ade80'),
+    ('synced', '🚀', 'Đã sync', '#a3a3a3'),
+    ('failed', '❌', 'Lỗi', '#f87171'),
+  ] %}
+  {% for s, ic, label, color in status_meta %}
+  <a class="kpi" href="?status={{ s }}" style="text-decoration:none">
+    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(148,163,184,0.15);color:{{ color }}">{{ ic }}</div></div>
+    <div class="kpi-num" style="color:{{ color }}">{{ stats.by_status.get(s, 0) }}</div>
+    <div class="kpi-label">{{ label }}</div>
+  </a>
+  {% endfor %}
+</div>
+
+{# ───── WORKER STATUS CARD (2 worker song song: text + image) ───── #}
+<section class="card" id="worker-status-card" style="margin-top:14px;border:1px solid rgba(96,165,250,0.3)">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+    <strong style="font-size:14px">🤖 Pipeline AI Workers:</strong>
+    <span style="flex:1"></span>
+    <form id="worker-stop-form" action="{{ url_for('content_jobs_queue_stop') }}" method="post" style="display:none">
+      <button class="btn" type="submit">🛑 Dừng cả 2 worker</button>
+    </form>
+  </div>
+
+  {# 3 worker badges + progress bar #}
+  <div style="display:flex;gap:12px;flex-wrap:wrap">
+    {# TEXT WORKER #}
+    <div style="flex:1;min-width:300px;padding:12px 14px;background:rgba(96,165,250,0.06);border-radius:8px;border-left:3px solid #60a5fa">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <strong style="font-size:13px;color:#60a5fa">📝 Text Worker</strong>
+        <span id="text-status-badge" style="padding:2px 8px;border-radius:6px;font-size:11px;background:rgba(148,163,184,0.15)">⏸️ Idle</span>
+        <span id="text-progress-pct" style="margin-left:auto;font-size:11px;font-weight:600;color:#60a5fa"></span>
+      </div>
+      <div id="text-stats" class="muted" style="font-size:11px">—</div>
+      <div id="text-current" class="muted" style="font-size:11px;margin-top:4px;display:none"></div>
+      <div style="margin-top:6px;height:6px;background:rgba(96,165,250,0.12);border-radius:3px;overflow:hidden">
+        <div id="text-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#60a5fa,#3b82f6);border-radius:3px;transition:width 0.5s ease"></div>
+      </div>
+    </div>
+    {# IMAGE WORKER #}
+    <div style="flex:1;min-width:300px;padding:12px 14px;background:rgba(167,139,250,0.06);border-radius:8px;border-left:3px solid #a78bfa">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <strong style="font-size:13px;color:#a78bfa">🖼️ Image Worker</strong>
+        <span id="image-status-badge" style="padding:2px 8px;border-radius:6px;font-size:11px;background:rgba(148,163,184,0.15)">⏸️ Idle</span>
+        <span id="image-progress-pct" style="margin-left:auto;font-size:11px;font-weight:600;color:#a78bfa"></span>
+      </div>
+      <div id="image-stats" class="muted" style="font-size:11px">—</div>
+      <div id="image-current" class="muted" style="font-size:11px;margin-top:4px;display:none"></div>
+      <div style="margin-top:6px;height:6px;background:rgba(167,139,250,0.12);border-radius:3px;overflow:hidden">
+        <div id="image-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#a78bfa,#7c3aed);border-radius:3px;transition:width 0.5s ease"></div>
+      </div>
+    </div>
+    {# PRE-WARMER #}
+    <div style="flex:1;min-width:300px;padding:12px 14px;background:rgba(250,204,21,0.06);border-radius:8px;border-left:3px solid #facc15">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <strong style="font-size:13px;color:#facc15">🔥 Pre-warmer</strong>
+        <span id="prewarmer-status-badge" style="padding:2px 8px;border-radius:6px;font-size:11px;background:rgba(148,163,184,0.15)">⏸️ Idle</span>
+        <span id="prewarmer-progress-pct" style="margin-left:auto;font-size:11px;font-weight:600;color:#facc15"></span>
+      </div>
+      <div id="prewarmer-stats" class="muted" style="font-size:11px">—</div>
+      <div id="prewarmer-current" class="muted" style="font-size:11px;margin-top:4px;display:none"></div>
+      <div style="margin-top:6px;height:6px;background:rgba(250,204,21,0.12);border-radius:3px;overflow:hidden">
+        <div id="prewarmer-progress-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#facc15,#eab308);border-radius:3px;transition:width 0.5s ease"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="muted" style="margin-top:8px;font-size:11px">
+    Pipeline: pending → 📝 Text Worker → text_done → 🖼️ Image Worker → draft. 2 worker chạy song song để tăng throughput ~67%.
+  </div>
+</section>
+
+<script>
+  // ETA per worker (giây) — used to estimate progress %
+  const WORKER_ETA = {
+    text: 60,        // Codex gen text ~60s với reasoning low
+    image: 25,       // Process + upload 2 ảnh ~25s (cache hit ~5s)
+    prewarmer: 4,    // Download + resize 2 ảnh ~4s
+  };
+
+  function updateWorkerBadge(prefix, snap) {
+    const badge = document.getElementById(prefix + '-status-badge');
+    const stats = document.getElementById(prefix + '-stats');
+    const current = document.getElementById(prefix + '-current');
+    const progBar = document.getElementById(prefix + '-progress-bar');
+    const progPct = document.getElementById(prefix + '-progress-pct');
+    // Detect rate limit từ last_message → hiện badge đỏ riêng
+    const msg = (snap.last_message || '').toLowerCase();
+    const isRateLimited = msg.includes('rate limit') || msg.includes('quota') || msg.includes('hit your');
+    if (isRateLimited) {
+      badge.textContent = '🚨 RATE LIMIT';
+      badge.style.background = 'rgba(239,68,68,0.20)';
+      badge.style.color = '#dc2626';
+      stats.innerHTML = '<strong style="color:#dc2626">Quota Codex Plus hết — đợi 5h reset, mở terminal gõ <code>codex</code> rồi <code>/status</code> xem khi nào reset.</strong>';
+      current.style.display = 'none';
+      progBar.style.width = '0%';
+      progPct.textContent = '';
+      return;
+    }
+    if (snap.running) {
+      badge.textContent = '🟢 Running';
+      badge.style.background = 'rgba(74,222,128,0.20)';
+      badge.style.color = '#4ade80';
+      if (snap.current_job_id || snap.current_handle) {
+        current.style.display = 'block';
+        const label = snap.current_job_id
+          ? '⚙️ <strong>#' + snap.current_job_id + '</strong> ' + (snap.current_job_url || '').replace('https://sintech.vn','').slice(0,60)
+          : '🔥 ' + (snap.current_handle || '').slice(0, 60);
+        current.innerHTML = label;
+        // Calculate progress %
+        const startedAt = snap.current_started_at;
+        if (startedAt) {
+          const elapsed = (Date.now() - new Date(startedAt).getTime()) / 1000;
+          const eta = WORKER_ETA[prefix] || 60;
+          const pct = Math.min(95, Math.max(2, (elapsed / eta) * 100));
+          progBar.style.width = pct.toFixed(1) + '%';
+          progPct.textContent = pct.toFixed(0) + '% · ' + elapsed.toFixed(0) + 's';
+        } else {
+          progBar.style.width = '5%';
+          progPct.textContent = '';
+        }
+      } else {
+        current.style.display = 'none';
+        progBar.style.width = '0%';
+        progPct.textContent = '⏳ Đợi job...';
+      }
+    } else {
+      badge.textContent = '⏸️ Idle';
+      badge.style.background = 'rgba(148,163,184,0.15)';
+      badge.style.color = '';
+      current.style.display = 'none';
+      progBar.style.width = '0%';
+      progPct.textContent = '';
+    }
+    stats.textContent = '✅ ' + (snap.completed || 0) + ' done · ❌ ' + (snap.failed || 0) + ' lỗi · ' + (snap.last_message || '—');
+  }
+
+  async function refreshWorkerStatus() {
+    try {
+      const r = await fetch('{{ url_for("content_jobs_queue_status_api") }}');
+      const data = await r.json();
+      const stopForm = document.getElementById('worker-stop-form');
+      updateWorkerBadge('text', data.text_worker || {});
+      updateWorkerBadge('image', data.image_worker || {});
+      // Prewarmer: synthesize started_at từ last activity (Pre-warmer không có per-job started_at)
+      const pw = Object.assign({}, data.prewarmer || {});
+      // Pre-warmer dùng `current_handle` thay job_id
+      if (pw.running && pw.current_handle && !pw.current_started_at) {
+        // Use now-2s as approximation (mỗi prewarm ~4s)
+        pw.current_started_at = new Date(Date.now() - 2000).toISOString();
+      }
+      updateWorkerBadge('prewarmer', pw);
+      // Prewarmer custom stats text
+      const pwStats = document.getElementById('prewarmer-stats');
+      pwStats.textContent = '🔥 ' + (pw.preheated || 0) + ' SP cached · ❌ ' + (pw.failed || 0) + ' lỗi · ' + (pw.last_message || '—');
+      stopForm.style.display = data.running ? 'inline' : 'none';
+      const next = data.running ? 5000 : 30000;
+      setTimeout(refreshWorkerStatus, next);
+    } catch (e) {
+      setTimeout(refreshWorkerStatus, 10000);
+    }
+  }
+  refreshWorkerStatus();
+  // Auto-reload page mỗi 60s khi worker chạy
+  setInterval(async () => {
+    try {
+      const r = await fetch('{{ url_for("content_jobs_queue_status_api") }}');
+      const data = await r.json();
+      if (data.running) location.reload();
+    } catch (e) {}
+  }, 60000);
+</script>
+
+{# ───── BULK SYNC FORM ngoài bảng ───── #}
+{% set approved_jobs = jobs|selectattr('status','equalto','approved')|list %}
+<form id="sync-form" method="post" action="{{ url_for('content_jobs_sync') }}" style="margin-top:16px">
+  <section class="card" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <strong>🚀 Bulk Sync Haravan:</strong>
+    <span class="muted" style="font-size:13px">
+      Tick các bài <strong>đã duyệt</strong> trong bảng → bấm Sync để push lên Haravan.
+    </span>
+    <span style="flex:1"></span>
+    <span class="muted" style="font-size:13px">
+      {{ approved_jobs|length }} bài approved có sẵn để sync
+    </span>
+    <button class="btn btn-primary" type="submit"
+            {% if not approved_jobs %}disabled title="Chưa có bài approved nào"{% endif %}>
+      🚀 SYNC tất cả tick
+    </button>
+  </section>
+
+{# ───── FILTER STATUS BAR ───── #}
+<section class="card" style="margin-top:16px">
+  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+    <strong>Lọc trạng thái:</strong>
+    <a class="seo-issue-chip {% if not active_status %}seo-issue-error{% else %}seo-issue-info{% endif %}"
+       href="{{ url_for('content_jobs_list_page', cate=active_cate) }}">
+      Tất cả <span class="seo-issue-count">{{ stats.total }}</span>
+    </a>
+    {% for s, ic, label, color in status_meta %}
+      <a class="seo-issue-chip {% if active_status == s %}seo-issue-error{% else %}seo-issue-warn{% endif %}"
+         href="?status={{ s }}{% if active_cate %}&cate={{ active_cate }}{% endif %}">
+        {{ ic }} {{ label }} <span class="seo-issue-count">{{ stats.by_status.get(s, 0) }}</span>
+      </a>
+    {% endfor %}
+  </div>
+</section>
+
+{# ───── FILTER CATEGORY BAR ───── #}
+{% if categories %}
+<section class="card" style="margin-top:12px">
+  <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+    <strong>📁 Phân mục:</strong>
+    <a class="seo-issue-chip {% if not active_cate %}seo-issue-error{% else %}seo-issue-info{% endif %}"
+       href="{{ url_for('content_jobs_list_page', status=active_status) }}"
+       style="font-size:12px">
+      Tất cả cate <span class="seo-issue-count">{{ stats.total }}</span>
+    </a>
+    {% for c in categories %}
+      <a class="seo-issue-chip {% if active_cate == c.product_type %}seo-issue-error{% else %}seo-issue-info{% endif %}"
+         href="?cate={{ c.product_type|urlencode }}{% if active_status %}&status={{ active_status }}{% endif %}"
+         title="approved={{ c.approved_cnt }} draft={{ c.draft_cnt }} synced={{ c.synced_cnt }} pending={{ c.pending_cnt }}"
+         style="font-size:12px">
+        {{ c.product_type }} <span class="seo-issue-count">{{ c.total }}</span>
+      </a>
+    {% endfor %}
+  </div>
+  {% if active_cate %}
+  <div class="muted" style="margin-top:8px;font-size:12px">
+    🎯 Đang lọc theo: <strong>{{ active_cate }}</strong> — hiển thị {{ jobs|length }} bài.
+    <a href="{{ url_for('content_jobs_list_page', status=active_status) }}" style="margin-left:8px">✕ Bỏ lọc</a>
+  </div>
+  {% endif %}
+</section>
+{% endif %}
+
+{# ───── TABLE ───── #}
+<section class="card" style="margin-top:16px">
+  {% if not jobs %}
+  <p class="muted" style="margin:0;text-align:center;padding:24px">
+    Chưa có job nào. Bấm <strong>📤 Đẩy SP từ /seo/empty-desc</strong> ở header để bắt đầu.
+  </p>
+  {% else %}
+  <table class="data-table" style="font-size:13px">
+    <thead>
+      <tr>
+        <th style="width:40px"></th>
+        <th style="width:30px">#</th>
+        <th style="width:90px">Status</th>
+        <th>Sản phẩm</th>
+        <th style="width:80px;text-align:center">Lý do</th>
+        <th style="width:80px;text-align:center">WC<br>hiện tại</th>
+        <th style="width:80px;text-align:center">Internal<br>links</th>
+        <th style="width:120px">Cập nhật</th>
+        <th style="width:130px">Hành động</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for j in jobs %}
+      {% set ic, label, color = {
+        'pending': ('⏳','Chờ AI','#94a3b8'),
+        'drafting': ('🤖','Đang gen','#60a5fa'),
+        'text_done': ('📝','Text xong','#a78bfa'),
+        'draft': ('📋','Draft full','#facc15'),
+        'approved': ('✅','Approved','#4ade80'),
+        'synced': ('🚀','Synced','#a3a3a3'),
+        'failed': ('❌','Lỗi','#f87171'),
+      }.get(j.status, ('❓',j.status,'#94a3b8')) %}
+      <tr>
+        <td>
+          {% if j.status == 'approved' %}
+          <input type="checkbox" name="job_ids" value="{{ j.id }}" form="sync-form" checked>
+          {% endif %}
+        </td>
+        <td class="muted">{{ j.id }}</td>
+        <td>
+          <span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:8px;background:rgba(148,163,184,0.12);color:{{ color }};font-size:11px;font-weight:600">
+            {{ ic }} {{ label }}
+          </span>
+        </td>
+        <td>
+          <a href="{{ j.product_url }}" target="_blank" rel="noopener" style="word-break:break-all">
+            {{ j.product_url|replace('https://sintech.vn', '') }}
+          </a>
+          {% if j.product_title %}
+          <div class="muted" style="font-size:11px;margin-top:2px">{{ j.product_title[:120] }}</div>
+          {% endif %}
+          {% if j.error %}
+          <div style="color:#f87171;font-size:11px;margin-top:2px">⚠️ {{ j.error[:200] }}</div>
+          {% endif %}
+        </td>
+        <td style="text-align:center;font-size:11px">
+          {% if j.reason == 'empty_desc' %}<span style="color:#f87171">📭 Rỗng</span>
+          {% elif j.reason == 'short_desc' %}<span style="color:#facc15">📝 Ngắn</span>
+          {% elif j.reason == 'missing_links' %}<span style="color:#facc15">🔗 Thiếu link</span>
+          {% else %}<span class="muted">{{ j.reason or '—' }}</span>{% endif %}
+        </td>
+        <td style="text-align:center">
+          {% if j.current_word_count == 0 %}
+            <span class="muted">—</span>
+          {% else %}
+            <span>{{ j.current_word_count }}</span>
+          {% endif %}
+        </td>
+        <td style="text-align:center">
+          {{ (j.internal_links_list or [])|length }}
+        </td>
+        <td class="muted" style="font-size:11px">
+          {{ (j.updated_at or j.created_at or '')[:16] }}
+        </td>
+        <td>
+          <a class="btn" style="padding:4px 10px;font-size:12px" href="{{ url_for('content_jobs_detail_page', job_id=j.id) }}">
+            🔍 Mở
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+</form>
+
+{% endblock %}

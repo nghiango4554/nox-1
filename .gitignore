@@ -1,0 +1,88 @@
+# ─── Secrets / tokens / env ───
+.secrets/
+state/
+.env
+.env/
+*.env
+*.token
+key_*.txt
+credentials*.json
+*_credentials.json
+*_token.json
+
+# ─── Local agent / harness config ───
+.openclaw/
+.openclaw-cli-images/
+.claude/
+claude/
+
+# ─── Python ───
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# ─── Databases ───
+*.db
+*.db.bak*
+*.sqlite
+*.sqlite3
+marketing_hub/data/*.db
+marketing_hub/data/*.db.bak*
+
+# ─── Logs ───
+*.log
+*.err.log
+*.err
+marketing_hub/..server.*log
+marketing_hub/server.log
+marketing_hub/server.err.log
+marketing_hub/telegram_bot.log
+marketing_hub/telegram_bot.err.log
+server.log
+server.err.log
+
+# ─── Cache / snapshot / generated data ───
+marketing_hub/data/images/
+marketing_hub/data/backups/
+marketing_hub/data/seo_snapshots/
+marketing_hub/data/gsc_cache.json
+marketing_hub/data/haravan_collections.json
+marketing_hub/data/carte_audit_report.json
+marketing_hub/data/carte_no_content_urls.json
+marketing_hub/data/collections_seo_paste.tsv
+marketing_hub/data/posted_products.json
+marketing_hub/uploads/
+
+# ─── Scratch / exploration scripts (workspace root) ───
+/_*.py
+/_*.json
+/_*.html
+/_*.tsv
+/gen_nox_portrait.py
+
+# ─── Scratch trong marketing_hub ───
+marketing_hub/_check*.html
+marketing_hub/_gen_test_*.json
+marketing_hub/_resync_*.log
+marketing_hub/test_processed.jpg
+
+# ─── Workspace artifact / personal drafts ───
+/blog_drafts/
+/portraits/
+/data/
+UsersNghia
+/seo_duplicates.tsv
+
+# ─── Archives / binaries ───
+*.zip
+*.tar.gz
+
+# ─── OS ───
+.DS_Store
+Thumbs.db
+desktop.ini

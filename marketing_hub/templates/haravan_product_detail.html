@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+{% block title %}{{ p.title or p.handle }} · Haravan · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('haravan_dashboard') }}" class="muted" style="font-weight:500">🛒 Haravan</a>
+<span class="crumb"></span>
+<a href="{{ url_for('haravan_products_page') }}" class="muted" style="font-weight:500">Sản phẩm</a>
+<span class="crumb"></span>
+<span style="font-weight:600">Chi tiết</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('haravan_products_page') }}">← Danh sách</a>
+{% if p.handle %}
+  <a class="btn" href="https://sintech.vn/products/{{ p.handle }}" target="_blank" rel="noopener">↗ Xem trên web</a>
+{% endif %}
+<a class="btn btn-primary" href="https://sintech.myharavan.com/admin/products/{{ p.haravan_id }}" target="_blank" rel="noopener">✏️ Sửa trên Haravan</a>
+{% endblock %}
+
+{% block content %}
+
+{# ───── HERO ───── #}
+<section class="card seo-detail-hero">
+  <div class="seo-detail-head">
+    <div style="flex:1;min-width:0">
+      <div class="muted" style="font-size:13px">
+        {{ p.vendor or '—' }} · {{ p.product_type or '—' }} ·
+        {% if p.status == 'active' %}
+          <span style="color:#86efac">active</span>
+        {% else %}
+          <span style="color:#fde68a">{{ p.status or '—' }}</span>
+        {% endif %}
+      </div>
+      <h2 style="margin:4px 0 8px 0;font-size:22px">{{ p.title or '(không title)' }}</h2>
+      {% if p.handle %}
+        <a href="https://sintech.vn/products/{{ p.handle }}" target="_blank" rel="noopener" class="seo-url-link">
+          sintech.vn/products/{{ p.handle }}
+        </a>
+      {% endif %}
+    </div>
+    <div class="seo-detail-score">
+      {% if p.audit_score is not none %}
+        {% if p.audit_score >= 80 %}
+          <div class="seo-bigscore seo-score-good">{{ p.audit_score }}</div>
+        {% elif p.audit_score >= 60 %}
+          <div class="seo-bigscore seo-score-ok">{{ p.audit_score }}</div>
+        {% else %}
+          <div class="seo-bigscore seo-score-bad">{{ p.audit_score }}</div>
+        {% endif %}
+        <div class="muted" style="text-align:center;font-size:12px">/ 100</div>
+      {% else %}
+        <div class="muted">Chưa audit</div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{# ───── METRICS ───── #}
+<div class="kpi-grid" style="margin-top:16px">
+  <div class="kpi">
+    <div class="kpi-label">Giá (₫)</div>
+    <div class="kpi-num" style="font-size:22px">
+      {% if p.price_min %}
+        {{ "{:,.0f}".format(p.price_min) }}
+        {% if p.price_max and p.price_max != p.price_min %}
+          – {{ "{:,.0f}".format(p.price_max) }}
+        {% endif %}
+      {% else %}—{% endif %}
+    </div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Tồn kho</div>
+    <div class="kpi-num" style="font-size:22px">{{ p.inventory_total or 0 }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Variants</div>
+    <div class="kpi-num" style="font-size:22px">{{ p.variants_count or 0 }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Word count</div>
+    <div class="kpi-num" style="font-size:22px">{{ p.word_count or 0 }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Số ảnh</div>
+    <div class="kpi-num" style="font-size:22px">
+      {{ p.images_count or 0 }}
+      {% if p.images_no_alt %}
+        <small class="muted" style="font-size:12px">({{ p.images_no_alt }} thiếu alt)</small>
+      {% endif %}
+    </div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Sync gần nhất</div>
+    <div class="kpi-num" style="font-size:14px">{{ p.last_synced or '—' }}</div>
+  </div>
+</div>
+
+{# ───── METADATA — quick edit inline ───── #}
+<section class="card" style="margin-top:16px">
+  <h3 style="margin-top:0">Metadata SEO <span class="muted" style="font-weight:400;font-size:12px">— click để sửa, save sẽ tự push Haravan</span></h3>
+  <table class="table table-plain seo-meta-table" data-haravan-id="{{ p.haravan_id }}">
+    <tbody>
+      <tr>
+        <td class="seo-meta-key">Title</td>
+        <td>
+          <div class="hv-edit-cell" data-field="title" data-value="{{ p.title or '' }}">
+            <span class="hv-edit-display">{{ p.title or '(thiếu)' }}</span>
+            <small class="muted" style="margin-left:6px">{{ (p.title or '')|length }} ký tự</small>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td class="seo-meta-key">Handle</td>
+        <td><code>{{ p.handle or '—' }}</code> <small class="muted">(không sửa được — handle gắn URL)</small></td>
+      </tr>
+      <tr>
+        <td class="seo-meta-key">Meta title</td>
+        <td>
+          <div class="hv-edit-cell" data-field="meta_title" data-value="{{ p.meta_title or '' }}">
+            <span class="hv-edit-display">{{ p.meta_title or '(thiếu)' }}</span>
+            <small class="muted" style="margin-left:6px">{{ (p.meta_title or '')|length }} ký tự</small>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td class="seo-meta-key">Meta description</td>
+        <td>
+          <div class="hv-edit-cell" data-field="meta_description" data-value="{{ p.meta_description or '' }}" data-multiline="1">
+            <span class="hv-edit-display">{{ p.meta_description or '(thiếu)' }}</span>
+            <small class="muted" style="margin-left:6px">{{ (p.meta_description or '')|length }} ký tự — nên 140-160</small>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td class="seo-meta-key">Tags</td>
+        <td>
+          <div class="hv-edit-cell" data-field="tags" data-value="{{ p.tags or '' }}">
+            <span class="hv-edit-display">
+              {% if p.tags %}
+                {% for t in p.tags.split(',') %}<span class="pill" style="margin:2px">{{ t.strip() }}</span>{% endfor %}
+              {% else %}<span class="muted">(thiếu)</span>{% endif %}
+            </span>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td class="seo-meta-key">Vendor</td>
+        <td>
+          <div class="hv-edit-cell" data-field="vendor" data-value="{{ p.vendor or '' }}">
+            <span class="hv-edit-display">{{ p.vendor or '—' }}</span>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td class="seo-meta-key">Product type</td>
+        <td>
+          <div class="hv-edit-cell" data-field="product_type" data-value="{{ p.product_type or '' }}">
+            <span class="hv-edit-display">{{ p.product_type or '—' }}</span>
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td class="seo-meta-key">Created</td>
+        <td><small class="muted">{{ p.created_at_haravan or '—' }}</small></td>
+      </tr>
+      <tr>
+        <td class="seo-meta-key">Updated</td>
+        <td><small class="muted">{{ p.updated_at_haravan or '—' }}</small></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div id="hv-edit-toast" class="hv-edit-toast hidden"></div>
+</section>
+
+{% block scripts %}
+<style>
+.hv-edit-cell {
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px dashed transparent;
+  transition: border-color .12s, background .12s;
+  min-height: 28px;
+  display: block;
+}
+.hv-edit-cell:hover { border-color: var(--accent); background: rgba(255,255,255,0.02); }
+.hv-edit-cell.editing { border-style: solid; border-color: var(--accent); background: rgba(255,255,255,0.03); }
+.hv-edit-input {
+  width: 100%;
+  padding: 6px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.hv-edit-actions { margin-top: 6px; display: flex; gap: 6px; }
+.hv-edit-toast {
+  position: fixed;
+  top: 70px; right: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+.hv-edit-toast.hidden { display: none; }
+.hv-edit-toast.success { border-color: rgba(34,197,94,0.5); color: #4ade80; }
+.hv-edit-toast.error { border-color: rgba(239,68,68,0.5); color: #fca5a5; }
+</style>
+<script>
+(function () {
+  const haravanId = document.querySelector('[data-haravan-id]')?.dataset.haravanId;
+  if (!haravanId) return;
+  const toast = document.getElementById('hv-edit-toast');
+  function showToast(text, kind) {
+    toast.textContent = text;
+    toast.className = 'hv-edit-toast ' + (kind || '');
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 2500);
+  }
+
+  document.querySelectorAll('.hv-edit-cell').forEach(cell => {
+    cell.addEventListener('click', e => {
+      if (cell.classList.contains('editing')) return;
+      const field = cell.dataset.field;
+      const value = cell.dataset.value || '';
+      const multiline = cell.dataset.multiline === '1';
+      cell.classList.add('editing');
+      const display = cell.querySelector('.hv-edit-display');
+      if (display) display.style.display = 'none';
+
+      const input = document.createElement(multiline ? 'textarea' : 'input');
+      input.className = 'hv-edit-input';
+      if (multiline) input.rows = 3;
+      input.value = value;
+      cell.appendChild(input);
+
+      const actions = document.createElement('div');
+      actions.className = 'hv-edit-actions';
+      actions.innerHTML = '<button class="btn btn-sm btn-primary">💾 Save</button> <button class="btn btn-sm btn-ghost" type="button">Hủy</button>';
+      cell.appendChild(actions);
+      input.focus();
+      input.select();
+
+      function cleanup() {
+        input.remove();
+        actions.remove();
+        cell.classList.remove('editing');
+        if (display) display.style.display = '';
+      }
+
+      actions.querySelector('.btn-primary').addEventListener('click', async () => {
+        const newValue = input.value.trim();
+        if (newValue === value) { cleanup(); return; }
+        actions.querySelector('.btn-primary').disabled = true;
+        actions.querySelector('.btn-primary').textContent = '⏳ Đang lưu...';
+        try {
+          const r = await fetch(`/api/haravan/products/${haravanId}/edit`, {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({field, value: newValue}),
+          });
+          const j = await r.json();
+          if (j.error) {
+            showToast('❌ ' + j.error, 'error');
+            cleanup();
+            return;
+          }
+          cell.dataset.value = newValue;
+          if (display) display.textContent = newValue || '(thiếu)';
+          showToast('✅ Đã lưu + push Haravan', 'success');
+          cleanup();
+        } catch (err) {
+          showToast('❌ ' + err.message, 'error');
+          cleanup();
+        }
+      });
+      actions.querySelector('.btn-ghost').addEventListener('click', cleanup);
+    });
+  });
+})();
+</script>
+{% endblock %}
+
+{# ───── ISSUES ───── #}
+{% if issues %}
+<section class="card" style="margin-top:16px">
+  <h3 style="margin-top:0">Vấn đề cần sửa ({{ issues|length }})</h3>
+  <div class="seo-issue-list">
+    {% for it in issues %}
+      <div class="seo-issue-row seo-issue-{{ it.level }}">
+        <div class="seo-issue-icon">{{ it.icon }}</div>
+        <div class="seo-issue-body">
+          <div class="seo-issue-label">
+            {{ it.label }}
+            <span class="seo-issue-level seo-issue-level-{{ it.level }}">{{ it.level }}</span>
+          </div>
+          {% if it.msg %}<div class="muted" style="font-size:13px">{{ it.msg }}</div>{% endif %}
+          {% if it.fix %}<div class="seo-issue-fix">💡 {{ it.fix }}</div>{% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% else %}
+<section class="card" style="margin-top:16px">
+  <h3 style="margin-top:0">✅ Không phát hiện vấn đề</h3>
+  <p class="muted">Sản phẩm này đạt chuẩn SEO/content nội bộ Sintech.</p>
+</section>
+{% endif %}
+
+{# ───── IMAGES ───── #}
+{% if images %}
+<section class="card" style="margin-top:16px">
+  <h3 style="margin-top:0">Ảnh sản phẩm ({{ images|length }})</h3>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
+    {% for img in images %}
+      <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--surface)">
+        <a href="{{ img.src }}" target="_blank" rel="noopener">
+          <img src="{{ img.src }}" alt="{{ img.alt }}" loading="lazy"
+               style="width:100%;height:140px;object-fit:cover;display:block">
+        </a>
+        <div style="padding:6px 8px;font-size:11px">
+          {% if img.alt %}
+            <div style="color:#86efac">✓ alt</div>
+            <div class="muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ img.alt }}</div>
+          {% else %}
+            <div style="color:#fca5a5">✗ thiếu alt</div>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{# ───── BODY HTML ───── #}
+<section class="card" style="margin-top:16px">
+  <h3 style="margin-top:0">Mô tả sản phẩm (raw HTML)</h3>
+  {% if p.body_html %}
+    <details>
+      <summary class="muted" style="cursor:pointer;margin-bottom:8px">Xem source HTML ({{ p.body_html|length }} chars)</summary>
+      <pre style="white-space:pre-wrap;word-wrap:break-word;background:var(--surface);padding:12px;border-radius:6px;font-size:12px;max-height:400px;overflow:auto">{{ p.body_html }}</pre>
+    </details>
+    <div style="margin-top:12px;padding:12px;background:var(--surface);border-radius:6px">
+      {{ p.body_html|safe }}
+    </div>
+  {% else %}
+    <p class="muted">(Chưa có mô tả)</p>
+  {% endif %}
+</section>
+
+{% endblock %}

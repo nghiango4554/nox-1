@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Blog Content · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span style="font-weight:600">📰 Blog Content (huong-dan / news)</span>
+{% endblock %}
+
+{% block page_actions %}
+<form method="post" action="{{ url_for('blog_content_sync_all') }}" style="display:inline"
+      onsubmit="return confirm('Sync tất cả bài đang status=draft lên Haravan?');">
+  <button class="btn btn-primary" type="submit">🚀 Sync tất cả draft</button>
+</form>
+{% endblock %}
+
+{% block content %}
+
+<style>
+  .bc-kpi { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:16px }
+  .bc-kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; text-decoration:none; color:inherit; }
+  .bc-kpi-card.active { border-color:#7c3aed; background:rgba(124,58,237,0.06) }
+  .bc-kpi-num { font-size:24px; font-weight:700; }
+  .bc-kpi-lbl { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px; margin-top:4px }
+
+  .bc-table { width:100%; font-size:12.5px; table-layout:fixed; border-collapse:collapse }
+  .bc-table th { font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px;
+    padding:8px; text-align:left; border-bottom:1px solid var(--border); background:rgba(255,255,255,.02) }
+  .bc-table td { padding:7px 8px; border-bottom:1px solid rgba(255,255,255,.04); vertical-align:middle }
+  .bc-table tbody tr:hover { background:rgba(255,255,255,.03) }
+  .bc-table .bc-cell-url { font-size:11px; color:var(--text-muted); word-break:break-all }
+  .bc-table .num { text-align:right; font-variant-numeric:tabular-nums }
+
+  .bc-status-pill { font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; display:inline-block; min-width:60px; text-align:center }
+  .bc-status-pending  { background:rgba(148,163,184,0.18); color:#94a3b8 }
+  .bc-status-drafting { background:rgba(250,204,21,0.18); color:#facc15 }
+  .bc-status-draft    { background:rgba(52,211,153,0.18); color:#34d399 }
+  .bc-status-synced   { background:rgba(96,165,250,0.18); color:#60a5fa }
+  .bc-status-failed   { background:rgba(239,68,68,0.18); color:#f87171 }
+
+  .bc-len-good { color:#34d399; font-weight:600 }
+  .bc-len-warn { color:#facc15 }
+  .bc-len-bad  { color:#f87171 }
+  .bc-len-empty { color:#94a3b8 }
+</style>
+
+<div class="bc-kpi">
+  <a href="{{ url_for('blog_content_page') }}" class="bc-kpi-card{% if not active_status %} active{% endif %}">
+    <div class="bc-kpi-num">{{ stats.total }}</div>
+    <div class="bc-kpi-lbl">Tổng bài</div>
+  </a>
+  <a href="?status=pending" class="bc-kpi-card{% if active_status == 'pending' %} active{% endif %}">
+    <div class="bc-kpi-num" style="color:#94a3b8">{{ stats.pending }}</div>
+    <div class="bc-kpi-lbl">⏳ Pending</div>
+  </a>
+  <a href="?status=draft" class="bc-kpi-card{% if active_status == 'draft' %} active{% endif %}">
+    <div class="bc-kpi-num" style="color:#34d399">{{ stats.draft }}</div>
+    <div class="bc-kpi-lbl">📝 Draft</div>
+  </a>
+  <a href="?status=synced" class="bc-kpi-card{% if active_status == 'synced' %} active{% endif %}">
+    <div class="bc-kpi-num" style="color:#60a5fa">{{ stats.synced }}</div>
+    <div class="bc-kpi-lbl">✅ Synced</div>
+  </a>
+  <a href="?status=failed" class="bc-kpi-card{% if active_status == 'failed' %} active{% endif %}">
+    <div class="bc-kpi-num" style="color:#f87171">{{ stats.failed }}</div>
+    <div class="bc-kpi-lbl">❌ Failed</div>
+  </a>
+</div>
+
+{% if not jobs %}
+<section class="card" style="padding:24px;text-align:center">
+  <p class="muted">Không có bài nào trong filter này.</p>
+  <p class="muted" style="font-size:12px">Seed bài từ Haravan bằng <code>python _seed_blog_jobs.py</code></p>
+</section>
+{% else %}
+<section class="card" style="padding:0;overflow-x:auto">
+<table class="bc-table">
+  <colgroup>
+    <col style="width:42px"><col style="width:78px">
+    <col style="width:24%"><col style="width:60px"><col style="width:60px"><col style="width:65px">
+    <col style="width:60px"><col style="width:60px"><col style="width:60px"><col style="width:55px">
+    <col><col style="width:120px"><col style="width:180px">
+  </colgroup>
+  <thead>
+    <tr>
+      <th>#</th><th>Status</th>
+      <th>Tiêu đề bài</th>
+      <th class="num">Title</th><th class="num">Meta</th><th class="num">Words</th>
+      <th class="num" title="SEO quality 0-100">⭐ Q</th>
+      <th class="num" title="Readability 0-100">📖 R</th>
+      <th class="num" title="GSC click 90d">👆 Clk</th>
+      <th class="num" title="GSC position">📊 Pos</th>
+      <th>URL</th>
+      <th>Synced lúc</th>
+      <th style="text-align:center">Hành động</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for j in jobs %}
+    {% set tl = (j.edited_title or '')|length %}
+    {% set ml = (j.edited_meta or '')|length %}
+    {% set wc = j.word_count or 0 %}
+    <tr>
+      <td class="muted">{{ loop.index }}</td>
+      <td><span class="bc-status-pill bc-status-{{ j.status }}">{{ j.status }}</span></td>
+      <td style="font-weight:500">{{ (j.article_title or j.handle)[:70] }}</td>
+      <td class="num">
+        {% if tl == 0 %}<span class="bc-len-empty">—</span>
+        {% elif 45 <= tl <= 61 %}<span class="bc-len-good">{{ tl }}c</span>
+        {% elif tl > 61 %}<span class="bc-len-bad">{{ tl }}c</span>
+        {% else %}<span class="bc-len-warn">{{ tl }}c</span>{% endif %}
+      </td>
+      <td class="num">
+        {% if ml == 0 %}<span class="bc-len-empty">—</span>
+        {% elif 140 <= ml <= 160 %}<span class="bc-len-good">{{ ml }}c</span>
+        {% elif ml > 160 %}<span class="bc-len-bad">{{ ml }}c</span>
+        {% else %}<span class="bc-len-warn">{{ ml }}c</span>{% endif %}
+      </td>
+      <td class="num">
+        {% if wc == 0 %}<span class="bc-len-empty">—</span>
+        {% else %}<span>{{ wc }}</span>{% endif %}
+      </td>
+      <td class="num">
+        {% set qs = j.quality_score %}
+        {% if not qs %}<span class="bc-len-empty">—</span>
+        {% elif qs >= 80 %}<span class="bc-len-good">{{ qs }}</span>
+        {% elif qs >= 65 %}<span style="color:#22c55e;font-weight:600">{{ qs }}</span>
+        {% elif qs >= 50 %}<span class="bc-len-warn">{{ qs }}</span>
+        {% elif qs >= 35 %}<span style="color:#f59e0b;font-weight:600">{{ qs }}</span>
+        {% else %}<span class="bc-len-bad">{{ qs }}</span>{% endif %}
+      </td>
+      <td class="num">
+        {% set rs = j.readability_score %}
+        {% if not rs %}<span class="bc-len-empty">—</span>
+        {% elif rs >= 60 %}<span class="bc-len-good">{{ rs }}</span>
+        {% elif rs >= 40 %}<span class="bc-len-warn">{{ rs }}</span>
+        {% else %}<span class="bc-len-bad">{{ rs }}</span>{% endif %}
+      </td>
+      <td class="num">
+        {% if not j.click %}<span class="bc-len-empty">—</span>
+        {% else %}<strong style="color:#60a5fa">{{ j.click }}</strong>{% endif %}
+      </td>
+      <td class="num">
+        {% if not j.pos %}<span class="bc-len-empty">—</span>
+        {% else %}<span class="muted">{{ '%.1f'|format(j.pos) }}</span>{% endif %}
+      </td>
+      <td class="bc-cell-url">
+        <a href="{{ j.blog_url }}" target="_blank" rel="noopener">{{ j.blog_url|replace('https://sintech.vn', '') }}</a>
+      </td>
+      <td class="muted" style="font-size:11px">{{ j.synced_at[:16] if j.synced_at else '—' }}</td>
+      <td style="text-align:center">
+        <a href="{{ url_for('blog_content_detail_page', job_id=j.id) }}" class="btn btn-sm">✏️ Sửa</a>
+        <button class="btn btn-sm btn-primary" onclick="genAIInline({{ j.id }}, this)">🤖 AI</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</section>
+{% endif %}
+
+<script>
+async function genAIInline(id, btn) {
+  if (!confirm(`🤖 AI gen content cho bài #${id}? (~60-120s, bài blog dài hơn collection)`)) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳';
+  try {
+    const r = await fetch(`/blog-content/${id}/gen`, {method: 'POST'});
+    const d = await r.json();
+    if (d.ok) {
+      btn.textContent = '✅';
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      btn.textContent = orig; btn.disabled = false;
+      alert('❌ Lỗi: ' + (d.error || 'unknown'));
+    }
+  } catch (e) { btn.textContent = orig; btn.disabled = false; alert('❌ ' + e); }
+}
+</script>
+
+{% endblock %}

@@ -1,0 +1,502 @@
+{% extends "base.html" %}
+{% block title %}Title & Meta · SEO · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
+<span class="crumb"></span>
+<span style="font-weight:600">📝 Title &amp; Meta</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('seo_dashboard') }}">← Quay lại SEO</a>
+{% endblock %}
+
+{% block content %}
+
+<section class="card" style="margin-top:0">
+  <p class="muted" style="margin:0">
+    Gom <strong>10 mã lỗi</strong> title/meta từ kết quả crawl SEO vào 1 list duy nhất.
+    Mỗi URL 1 dòng — dù có 1 hay 5 lỗi. Auto-fix gọi <strong>Codex CLI</strong> sinh 3 title +
+    3 meta theo rule SEO Sintech, lấy M1 (SPEC) → PUT Haravan <code>metafields_global_*</code>.
+    <br><span class="muted" style="font-size:12px">⚙️ Auto-fix chỉ áp dụng cho <strong>product</strong>.
+    Blog/page/collection sửa tay trên Haravan admin.</span>
+  </p>
+</section>
+
+{# ───── KPI ───── #}
+<div class="kpi-grid" style="margin-top:14px">
+  <div class="kpi">
+    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(239,68,68,0.15);color:#f87171">📝</div></div>
+    <div class="kpi-num" style="color:#f87171">{{ summary.total }}</div>
+    <div class="kpi-label">URL có lỗi title/meta</div>
+  </div>
+  {% for code, count in summary.by_code.items() %}
+  {% set lbl = issue_labels.get(code, ('❓', code)) %}
+  <a class="kpi" style="text-decoration:none;color:inherit"
+     href="{{ url_for('seo_title_meta_page', type=url_type, issue=code, sort=sort) }}">
+    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(250,204,21,0.18);color:#facc15">{{ lbl[0] }}</div></div>
+    <div class="kpi-num">{{ count }}</div>
+    <div class="kpi-label">{{ lbl[1] }}</div>
+  </a>
+  {% endfor %}
+</div>
+
+{# ───── FILTER + ACTION BAR ───── #}
+<section class="card" style="margin-top:16px">
+  <form method="get" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:8px">
+    <label class="muted" style="font-size:13px">Loại:</label>
+    <select name="type">
+      <option value="">Tất cả</option>
+      {% for t, label in [('product','🛍️ SP'), ('collection','📂 Cate'), ('blog','📝 Blog'), ('page','📄 Page')] %}
+      <option value="{{ t }}" {% if url_type == t %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="muted" style="font-size:13px;margin-left:8px">Lỗi:</label>
+    <select name="issue">
+      <option value="">Tất cả lỗi</option>
+      {% for code, lbl in issue_labels.items() %}
+      <option value="{{ code }}" {% if issue_filter == code %}selected{% endif %}>
+        {{ lbl[0] }} {{ lbl[1] }}
+      </option>
+      {% endfor %}
+    </select>
+
+    <label class="muted" style="font-size:13px;margin-left:8px">Sort:</label>
+    <select name="sort">
+      <option value="score_asc"     {% if sort == 'score_asc'     %}selected{% endif %}>↑ Điểm thấp trước</option>
+      <option value="n_issues_desc" {% if sort == 'n_issues_desc' %}selected{% endif %}>↑ Nhiều lỗi trước</option>
+      <option value="url"           {% if sort == 'url'           %}selected{% endif %}>🔤 URL A→Z</option>
+    </select>
+
+    <button type="submit" class="btn btn-primary btn-sm">Lọc</button>
+    <a class="btn btn-sm btn-ghost" href="{{ url_for('seo_title_meta_page') }}">Reset</a>
+
+    <span style="flex:1"></span>
+    <button type="button" class="btn btn-primary" onclick="startFixAllJob()" id="fix-all-btn">
+      🚀 Auto-fix tất cả (Codex AI)
+    </button>
+    <button type="button" class="btn" onclick="stopFixAllJob()" id="fix-stop-btn"
+            style="display:none;background:#dc2626;color:white">
+      ⏹️ Dừng job
+    </button>
+    <button type="button" class="btn" onclick="copyTitleMetaTable()" id="copy-btn">
+      📋 Copy bảng
+    </button>
+  </form>
+
+  {# Hàng báo cáo realtime job fix-all #}
+  <div id="fix-all-report" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(59,130,246,0.08);border-radius:8px;font-size:13px;border:1px solid rgba(59,130,246,0.25)">
+    <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:8px">
+      <strong>📊 Job Auto-fix:</strong>
+      <span id="fix-job-state-badge" style="padding:2px 10px;border-radius:12px;font-weight:600;font-size:12px">—</span>
+      <span class="muted" id="fix-job-time" style="font-size:11px">—</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:18px;font-weight:500">
+      <span>📋 Tổng: <strong id="fix-total">0</strong></span>
+      <span>🔄 Đã xử lý: <strong id="fix-checked">0</strong>/<span id="fix-total-mirror">0</span></span>
+      <span style="color:#34d399">✅ Thành công: <strong id="fix-success">0</strong></span>
+      <span style="color:#f87171">❌ Lỗi: <strong id="fix-failed">0</strong></span>
+      <span class="muted">⏭️ Bỏ qua (blog/page): <strong id="fix-skipped">0</strong></span>
+      <span class="muted">⏳ Còn lại: <strong id="fix-pending">0</strong></span>
+    </div>
+    <div id="fix-current-row" style="margin-top:8px;font-size:12px;display:none">
+      <span class="muted">Đang xử lý:</span>
+      <code id="fix-current-url" style="font-size:11px"></code>
+    </div>
+    <div id="fix-message" style="margin-top:6px;font-size:12px"></div>
+  </div>
+</section>
+
+{# ───── TABLE ───── #}
+<style>
+  .tm-table { font-size:12px; table-layout:fixed; width:100%; }
+  .tm-table th, .tm-table td { padding:6px 8px; vertical-align:top; }
+  .tm-table thead th {
+    font-size:11px; font-weight:600; text-transform:uppercase;
+    letter-spacing:.4px; color:var(--text-muted, #94a3b8);
+    border-bottom:1px solid var(--border, rgba(255,255,255,.08));
+  }
+  .tm-table tbody tr { border-bottom:1px solid rgba(255,255,255,.04); }
+  .tm-table tbody tr:hover { background:rgba(255,255,255,.02); }
+
+  .tm-url { font-size:11.5px; word-break:break-all; line-height:1.35; }
+  .tm-url-type { font-size:10px; color:var(--text-muted); margin-top:2px; display:block; }
+
+  .tm-text { font-size:12px; line-height:1.4;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+    overflow:hidden; word-break:break-word; }
+  .tm-text.empty { color:#f87171; font-style:italic; }
+  .tm-len { font-size:10px; color:var(--text-muted); margin-top:3px; display:flex; gap:6px; align-items:center; }
+  .tm-len strong { font-variant-numeric:tabular-nums; }
+  .tm-len .ok   { color:#34d399; }
+  .tm-len .warn { color:#facc15; }
+  .tm-len .err  { color:#f87171; }
+
+  /* Issue chips — gọn, inline, wrap tự nhiên */
+  .tm-issues { display:flex; flex-wrap:wrap; gap:4px; }
+  .tm-chip {
+    display:inline-flex; align-items:center; gap:3px;
+    font-size:10.5px; line-height:1; padding:3px 7px;
+    border-radius:10px; white-space:nowrap;
+    background:rgba(148,163,184,0.12); color:var(--text);
+    border:1px solid rgba(148,163,184,0.18);
+  }
+  .tm-chip.err  { background:rgba(239,68,68,0.14);  border-color:rgba(239,68,68,0.30);  color:#fca5a5; }
+  .tm-chip.warn { background:rgba(250,204,21,0.14); border-color:rgba(250,204,21,0.30); color:#fde047; }
+  .tm-chip.dup  { background:rgba(168,85,247,0.14); border-color:rgba(168,85,247,0.30); color:#d8b4fe; }
+
+  .tm-score { display:inline-block; font-variant-numeric:tabular-nums;
+    font-weight:600; min-width:28px; text-align:center; }
+  .tm-score.good { color:#34d399; }
+  .tm-score.ok   { color:#facc15; }
+  .tm-score.bad  { color:#f87171; }
+
+  .tm-stt { color:var(--text-muted); font-variant-numeric:tabular-nums; font-size:11px; }
+
+  .tm-fix-btn { font-size:11px; padding:4px 10px; }
+</style>
+
+<section class="card" style="margin-top:16px;padding:0">
+  {% if not items %}
+    <p class="muted" style="margin:0;text-align:center;padding:24px">
+      {% if summary.total == 0 %}
+        🎉 Tất cả URL đã clean title/meta. Quét lại nếu cần refresh.
+      {% else %}
+        Không có URL nào khớp filter hiện tại. <a href="{{ url_for('seo_title_meta_page') }}">Reset</a>.
+      {% endif %}
+    </p>
+  {% else %}
+  <table class="tm-table">
+    <colgroup>
+      <col style="width:42px">
+      <col style="width:52px">
+      <col style="width:18%">
+      <col style="width:22%">
+      <col style="width:28%">
+      <col style="width:170px">
+      <col style="width:50px">
+      <col style="width:130px">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Loại</th>
+        <th>URL</th>
+        <th>Title hiện tại</th>
+        <th>Meta hiện tại</th>
+        <th>Lỗi</th>
+        <th style="text-align:center">Điểm</th>
+        <th style="text-align:center">Hành động</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in items %}
+      <tr data-url="{{ it.url }}">
+        <td class="tm-stt">{{ loop.index }}</td>
+        <td>
+          {% set t = it.url_type %}
+          {% if t == 'product' %}🛍️
+          {% elif t == 'collection' %}📂
+          {% elif t == 'blog' %}📝
+          {% elif t == 'page' %}📄
+          {% else %}❓{% endif %}
+          <span class="tm-url-type">{{ t }}</span>
+        </td>
+        <td>
+          <a href="{{ it.url }}" target="_blank" rel="noopener" class="tm-url"
+             title="{{ it.url }}">
+            {{ it.url|replace('https://sintech.vn', '')|truncate(60, true, '…') }}
+          </a>
+        </td>
+        <td class="title-cell">
+          {% if it.title %}
+            <div class="tm-text" title="{{ it.title }}">{{ it.title }}</div>
+          {% else %}
+            <div class="tm-text empty">(rỗng)</div>
+          {% endif %}
+          <div class="tm-len">
+            <strong>{{ it.title_len }}c</strong>
+            {% if it.title_len == 0 %}<span class="err">❌ thiếu</span>
+            {% elif it.title_len < 20 %}<span class="warn">⚠ ngắn</span>
+            {% elif it.title_len > 61 %}<span class="warn">⚠ dài</span>
+            {% else %}<span class="ok">OK</span>{% endif %}
+          </div>
+        </td>
+        <td class="meta-cell">
+          {% if it.meta_desc %}
+            <div class="tm-text" title="{{ it.meta_desc }}">{{ it.meta_desc }}</div>
+          {% else %}
+            <div class="tm-text empty">(rỗng)</div>
+          {% endif %}
+          <div class="tm-len">
+            <strong>{{ it.meta_desc_len }}c</strong>
+            {% if it.meta_desc_len == 0 %}<span class="err">❌ thiếu</span>
+            {% elif it.meta_desc_len < 140 %}<span class="warn">⚠ ngắn</span>
+            {% elif it.meta_desc_len > 160 %}<span class="warn">⚠ dài</span>
+            {% else %}<span class="ok">OK</span>{% endif %}
+          </div>
+        </td>
+        <td class="issue-cell">
+          <div class="tm-issues">
+            {% for c in it.issue_codes %}
+              {% set lbl = issue_labels.get(c, ('❓', c)) %}
+              {% if c in ('no_title', 'no_meta') %}{% set cls = 'err' %}
+              {% elif c in ('duplicate_title', 'duplicate_meta') %}{% set cls = 'dup' %}
+              {% else %}{% set cls = 'warn' %}{% endif %}
+              <span class="tm-chip {{ cls }}" title="{{ lbl[1] }}">{{ lbl[0] }} {{ lbl[1] }}</span>
+            {% endfor %}
+          </div>
+        </td>
+        <td style="text-align:center">
+          {% if it.score is not none %}
+            {% if it.score >= 80 %}<span class="tm-score good">{{ it.score }}</span>
+            {% elif it.score >= 60 %}<span class="tm-score ok">{{ it.score }}</span>
+            {% else %}<span class="tm-score bad">{{ it.score }}</span>{% endif %}
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td class="action-cell" style="text-align:center">
+          {% if it.url_type == 'product' %}
+            <button type="button" class="btn btn-primary fix-btn tm-fix-btn"
+                    onclick="fixTitleMetaSingle(this)">🔧 Auto-fix</button>
+          {% else %}
+            <span class="muted" style="font-size:10.5px">Sửa tay admin</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+
+<script>
+// ─── Single fix (per row) ───
+async function fixTitleMetaSingle(btn) {
+  const row = btn.closest('tr');
+  const url = row.dataset.url;
+  if (!url) return;
+  if (!confirm(`🔧 Auto-fix title + meta cho:\n${url}\n\nCodex sẽ sinh 3 phương án + lấy M1 (SPEC) → PUT Haravan. Tốn ~30-60s. Tiếp tục?`)) return;
+
+  const oldText = btn.textContent;
+  row.style.background = 'rgba(250,204,21,0.12)';
+  btn.disabled = true;
+  btn.textContent = '⏳ Đang gen...';
+
+  try {
+    const resp = await fetch('{{ url_for("seo_title_meta_fix") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url}),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      applyFixResultToRow(row, data);
+      alert(`✅ ${data.message}\nTitle mới (${data.title_len}c): ${data.new_title}\nMeta mới (${data.meta_len}c): ${data.new_meta}\nBackup: ${data.backup}`);
+    } else {
+      row.style.background = 'rgba(239,68,68,0.10)';
+      btn.textContent = oldText;
+      btn.disabled = false;
+      alert('❌ Lỗi: ' + (data.error || 'Unknown') + (data.raw ? '\n\nCodex raw: ' + data.raw.substring(0, 300) : ''));
+    }
+  } catch (err) {
+    btn.textContent = oldText;
+    btn.disabled = false;
+    alert('❌ Network: ' + err);
+  }
+}
+
+function applyFixResultToRow(row, data) {
+  const titleCell = row.querySelector('.title-cell');
+  const metaCell = row.querySelector('.meta-cell');
+  const issueCell = row.querySelector('.issue-cell');
+  const actionCell = row.querySelector('.action-cell');
+  if (titleCell && data.new_title) {
+    titleCell.innerHTML = `
+      <div class="tm-text" title="${escapeHtml(data.new_title)}">${escapeHtml(data.new_title)}</div>
+      <div class="tm-len"><strong>${data.title_len}c</strong> <span class="ok">OK · ✨ AI</span></div>`;
+  }
+  if (metaCell && data.new_meta) {
+    metaCell.innerHTML = `
+      <div class="tm-text" title="${escapeHtml(data.new_meta)}">${escapeHtml(data.new_meta)}</div>
+      <div class="tm-len"><strong>${data.meta_len}c</strong> <span class="ok">OK · ✨ AI</span></div>`;
+  }
+  if (issueCell) issueCell.innerHTML = '<span class="tm-chip" style="background:rgba(52,211,153,0.16);border-color:rgba(52,211,153,0.32);color:#86efac">✅ Đã fix</span>';
+  if (actionCell) actionCell.innerHTML = '<span style="color:#34d399;font-size:11px;font-weight:600">✅ Done</span>';
+  row.style.background = 'rgba(52,211,153,0.08)';
+}
+
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"
+  })[c]);
+}
+
+// ─── Background job fix-all ───
+let _pollTimer = null;
+const _appliedResults = new Set();
+
+async function startFixAllJob() {
+  const filterType = {{ (url_type or '')|tojson }};
+  const filterIssue = {{ (issue_filter or '')|tojson }};
+  const msg = `🚀 Auto-fix tất cả SP có lỗi title/meta?\n\n` +
+    (filterType ? `· Loại: ${filterType}\n` : '') +
+    (filterIssue ? `· Lỗi: ${filterIssue}\n` : '') +
+    `\nMỗi SP tốn ~30-60s gọi Codex. Job chạy ngầm — em chuyển trang được.`;
+  if (!confirm(msg)) return;
+  try {
+    const resp = await fetch('{{ url_for("seo_title_meta_fix_all_start") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type: filterType, issue: filterIssue}),
+    });
+    const data = await resp.json();
+    if (!data.ok) { alert('❌ ' + (data.error || 'Không start được')); return; }
+    _appliedResults.clear();
+    document.getElementById('fix-all-report').style.display = 'block';
+    startPolling();
+  } catch (err) { alert('❌ ' + err); }
+}
+
+async function stopFixAllJob() {
+  if (!confirm('⏹️ Dừng job? Bài đang chạy sẽ xong rồi mới dừng.')) return;
+  try {
+    const resp = await fetch('{{ url_for("seo_title_meta_fix_all_stop") }}', {method: 'POST'});
+    const data = await resp.json();
+    if (!data.ok) alert(data.error);
+  } catch (err) { alert('❌ ' + err); }
+}
+
+function startPolling() {
+  if (_pollTimer) return;
+  pollStatus();
+  _pollTimer = setInterval(pollStatus, 3000);
+}
+function stopPolling() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+}
+
+async function pollStatus() {
+  try {
+    const resp = await fetch('{{ url_for("seo_title_meta_fix_all_status") }}');
+    const s = await resp.json();
+    renderStatus(s);
+    for (const [url, res] of Object.entries(s.results || {})) {
+      if (_appliedResults.has(url)) continue;
+      const row = document.querySelector(`tr[data-url="${CSS.escape(url)}"]`);
+      if (row) {
+        if (res.status === 'success') {
+          applyFixResultToRow(row, {
+            new_title: res.new_title, new_meta: res.new_meta,
+            title_len: res.title_len, meta_len: res.meta_len,
+          });
+        } else {
+          const actionCell = row.querySelector('.action-cell');
+          if (actionCell) {
+            const err = (res.error || '').toString();
+            actionCell.innerHTML = `<div style="color:#f87171;font-size:10px" title="${err.replace(/"/g,'&quot;')}">❌ ${err.length > 40 ? err.substring(0,40)+'...' : err}</div>`;
+          }
+          row.style.background = 'rgba(239,68,68,0.10)';
+        }
+      }
+      _appliedResults.add(url);
+    }
+    if (!s.running) stopPolling();
+  } catch (err) { console.error(err); }
+}
+
+function renderStatus(s) {
+  const reportBox = document.getElementById('fix-all-report');
+  const allBtn = document.getElementById('fix-all-btn');
+  const stopBtn = document.getElementById('fix-stop-btn');
+  const badge = document.getElementById('fix-job-state-badge');
+  const timeEl = document.getElementById('fix-job-time');
+  const currentRow = document.getElementById('fix-current-row');
+  if (s.started_at || s.running) reportBox.style.display = 'block';
+
+  if (s.running) {
+    badge.textContent = s.stop_requested ? '⏹️ Đang dừng...' : '▶️ Đang chạy';
+    badge.style.background = s.stop_requested ? 'rgba(239,68,68,0.18)' : 'rgba(34,197,94,0.18)';
+    badge.style.color = s.stop_requested ? '#f87171' : '#34d399';
+    allBtn.disabled = true;
+    allBtn.textContent = '⏳ Đang chạy...';
+    stopBtn.style.display = 'inline-block';
+    if (s.current_url) {
+      currentRow.style.display = 'block';
+      document.getElementById('fix-current-url').textContent = s.current_url.replace('https://sintech.vn', '');
+    }
+  } else {
+    badge.textContent = s.finished_at ? '🏁 Hoàn tất' : '— Chưa chạy';
+    badge.style.background = s.finished_at ? 'rgba(59,130,246,0.18)' : 'rgba(148,163,184,0.18)';
+    badge.style.color = s.finished_at ? '#60a5fa' : '#94a3b8';
+    allBtn.disabled = false;
+    allBtn.textContent = '🚀 Auto-fix tất cả (Codex AI)';
+    stopBtn.style.display = 'none';
+    currentRow.style.display = 'none';
+  }
+  document.getElementById('fix-total').textContent = s.total || 0;
+  document.getElementById('fix-total-mirror').textContent = s.total || 0;
+  document.getElementById('fix-checked').textContent = s.checked || 0;
+  document.getElementById('fix-success').textContent = s.success || 0;
+  document.getElementById('fix-failed').textContent = s.failed || 0;
+  document.getElementById('fix-skipped').textContent = s.skipped || 0;
+  document.getElementById('fix-pending').textContent = Math.max(0, (s.total || 0) - (s.checked || 0));
+  document.getElementById('fix-message').textContent = s.message || '';
+  if (s.started_at) {
+    const parts = [`Bắt đầu: ${s.started_at.replace('T',' ')}`];
+    if (s.finished_at) parts.push(`Kết thúc: ${s.finished_at.replace('T',' ')}`);
+    timeEl.textContent = parts.join(' · ');
+  }
+}
+
+// ─── Copy bảng (TSV) ───
+function copyTitleMetaTable() {
+  const table = document.querySelector('table.data-table');
+  if (!table) return;
+  const headers = ['#','Loại','URL','Title','Title len','Meta','Meta len','Lỗi','Điểm'];
+  const lines = [headers.join('\t')];
+  table.querySelectorAll('tbody tr').forEach((tr,i) => {
+    const tds = tr.querySelectorAll('td');
+    if (tds.length < 8) return;
+    const loai = tds[1].querySelector('span.muted')?.textContent.trim() || '';
+    const url = tr.dataset.url || '';
+    const title = tds[3].querySelector('div')?.textContent.trim().replace(/\s+/g,' ') || '';
+    const titleLen = tds[3].querySelector('strong')?.textContent.trim() || '';
+    const meta = tds[4].querySelector('div')?.textContent.trim().replace(/\s+/g,' ') || '';
+    const metaLen = tds[4].querySelector('strong')?.textContent.trim() || '';
+    const issues = [...tds[5].querySelectorAll('div')].map(d => d.textContent.trim()).join(' | ');
+    const score = tds[6].textContent.trim();
+    lines.push([i+1, loai, url, title, titleLen, meta, metaLen, issues, score].join('\t'));
+  });
+  const btn = document.getElementById('copy-btn');
+  const oldText = btn.textContent;
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    btn.textContent = `✅ Copy ${lines.length - 1} dòng`;
+    setTimeout(() => { btn.textContent = oldText; }, 2000);
+  });
+}
+
+// Auto-load status khi vào trang
+(async function init() {
+  try {
+    const resp = await fetch('{{ url_for("seo_title_meta_fix_all_status") }}');
+    const s = await resp.json();
+    if (s.running || s.finished_at) {
+      document.getElementById('fix-all-report').style.display = 'block';
+      for (const [url, res] of Object.entries(s.results || {})) {
+        if (_appliedResults.has(url)) continue;
+        const row = document.querySelector(`tr[data-url="${CSS.escape(url)}"]`);
+        if (row && res.status === 'success') applyFixResultToRow(row, {
+          new_title: res.new_title, new_meta: res.new_meta,
+          title_len: res.title_len, meta_len: res.meta_len,
+        });
+        _appliedResults.add(url);
+      }
+      renderStatus(s);
+      if (s.running) startPolling();
+    }
+  } catch (err) { console.error(err); }
+})();
+</script>
+
+{% endblock %}

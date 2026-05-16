@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}AI viết bài SEO · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span>✍️ AI viết bài SEO</span>
+<span class="crumb"></span>
+<span class="muted" style="font-weight:400">Tuân thủ rule v2</span>
+{% endblock %}
+
+{% block content %}
+
+{% if error_no_key %}
+<div class="card" style="margin-bottom:14px;border-color:rgba(239,68,68,0.4);background:rgba(239,68,68,0.05)">
+  <h3 style="margin:0 0 8px 0;color:#fca5a5">⚠️ Chưa có Anthropic API key</h3>
+  <p class="muted" style="margin:0 0 8px 0;font-size:13px">
+    Để AI viết bài, cần setup biến môi trường <code>ANTHROPIC_API_KEY</code>.
+  </p>
+  <p style="margin:0;font-size:12px">
+    1. Lấy key tại <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com/settings/keys</a><br>
+    2. Trên Windows PowerShell:<br>
+    <code style="display:block;padding:6px 10px;background:#000;border-radius:4px;margin:4px 0">[Environment]::SetEnvironmentVariable("ANTHROPIC_API_KEY", "sk-ant-...", "User")</code>
+    3. Đóng hết terminal + restart Flask Hub
+  </p>
+</div>
+{% endif %}
+
+<div class="bw-layout">
+  {# ─── FORM bên trái ─── #}
+  <section class="card bw-form-card">
+    <h3 style="margin:0 0 12px 0;font-size:15px">📝 Thông tin sản phẩm</h3>
+    <form method="post" id="bw-form">
+      <label class="bw-label">Tên sản phẩm <span style="color:#fca5a5">*</span></label>
+      <input type="text" name="product_name" required maxlength="200"
+             class="seo-filter-input" style="width:100%;margin-bottom:10px"
+             placeholder="vd: Nguồn máy tính VSP Delta P350W NEW"
+             value="{{ product_info.product_name if product_info else '' }}">
+
+      <label class="bw-label">Loại sản phẩm</label>
+      <select name="product_type" class="seo-filter-select" style="width:100%;margin-bottom:10px">
+        <option value="">-- Chọn loại --</option>
+        {% for t in product_types %}
+          <option value="{{ t }}" {% if product_info and product_info.product_type == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+
+      <label class="bw-label">Hãng / Brand</label>
+      <input type="text" name="vendor" maxlength="60"
+             class="seo-filter-input" style="width:100%;margin-bottom:10px"
+             placeholder="vd: VSP, Asus, Logitech, MSI..."
+             value="{{ product_info.vendor or '' if product_info else '' }}">
+
+      <label class="bw-label">USP / Điểm nổi bật <span class="muted">(tùy chọn)</span></label>
+      <input type="text" name="usp" maxlength="200"
+             class="seo-filter-input" style="width:100%;margin-bottom:10px"
+             placeholder="vd: bảo hành 36 tháng, fan 120mm, tản nhiệt tốt..."
+             value="{{ product_info.usp or '' if product_info else '' }}">
+
+      <label class="bw-label">Bảng thông số tham khảo <span class="muted">(càng đầy đủ càng tốt)</span></label>
+      <textarea name="specs" rows="14"
+                class="seo-filter-input" style="width:100%;font-family:monospace;font-size:12px"
+                placeholder="Paste bảng spec ở đây — anh sẽ nhặt đúng thông số có thật, không bịa.
+
+Ví dụ:
+Công suất: 350W
+Hiệu suất: 80%
+Quạt: 120mm
+Bảo hành: 36 tháng
+...">{{ product_info.specs or '' if product_info else '' }}</textarea>
+
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn btn-primary" type="submit" id="bw-submit">
+          ✨ AI viết bài (~30 giây)
+        </button>
+        <a href="{{ url_for('blog_writer_page') }}" class="btn btn-ghost">Reset</a>
+      </div>
+
+      <p class="muted" style="font-size:11px;margin-top:8px">
+        Output: 3 title / 3 meta description / meta keywords / bài đầy đủ 8 H2 / outline.<br>
+        Model: Claude Haiku 4.5. Cost ~$0.005-0.01/bài.
+      </p>
+    </form>
+  </section>
+
+  {# ─── KẾT QUẢ bên phải ─── #}
+  <section class="bw-result">
+    {% if result %}
+      <div class="card">
+        <h3 style="margin:0 0 10px 0;font-size:15px">✅ Bài đã viết</h3>
+        <div class="muted" style="font-size:12px;margin-bottom:10px">
+          📊 Word count: <strong>{{ result.stats.word_count }}</strong> từ ·
+          Title len: {% for n in result.stats.title_lens %}{{ n }}{% if not loop.last %}/{% endif %}{% endfor %} ·
+          Meta len: {% for n in result.stats.meta_lens %}{{ n }}{% if not loop.last %}/{% endif %}{% endfor %}
+        </div>
+      </div>
+
+      {# ─ 3 TITLES ─ #}
+      <div class="card bw-section">
+        <div class="bw-section-head">
+          <h4 style="margin:0">🏷️ 3 phương án Title</h4>
+        </div>
+        {% for t in result.titles %}
+          <div class="bw-option">
+            <div class="bw-option-num">{{ loop.index }}</div>
+            <div class="bw-option-text">{{ t }}</div>
+            <div class="bw-option-meta">{{ t|length }} ký tự</div>
+            <button type="button" class="btn btn-sm copy-text-btn" data-text="{{ t }}">📋</button>
+          </div>
+        {% endfor %}
+      </div>
+
+      {# ─ 3 META ─ #}
+      <div class="card bw-section">
+        <div class="bw-section-head">
+          <h4 style="margin:0">📝 3 phương án Meta description</h4>
+        </div>
+        {% for m in result.metas %}
+          <div class="bw-option">
+            <div class="bw-option-num">{{ loop.index }}</div>
+            <div class="bw-option-text">{{ m }}</div>
+            <div class="bw-option-meta">{{ m|length }} ký tự</div>
+            <button type="button" class="btn btn-sm copy-text-btn" data-text="{{ m }}">📋</button>
+          </div>
+        {% endfor %}
+      </div>
+
+      {# ─ KEYWORDS ─ #}
+      <div class="card bw-section">
+        <div class="bw-section-head">
+          <h4 style="margin:0">🔑 Meta keywords</h4>
+          <button type="button" class="btn btn-sm copy-text-btn" data-text="{{ result.keywords }}">📋 Copy</button>
+        </div>
+        <div style="font-family:monospace;font-size:13px;padding:8px;background:rgba(0,0,0,0.3);border-radius:4px">
+          {{ result.keywords }}
+        </div>
+      </div>
+
+      {# ─ OUTLINE ─ #}
+      <div class="card bw-section">
+        <div class="bw-section-head">
+          <h4 style="margin:0">📋 Outline</h4>
+        </div>
+        <table class="table table-plain" style="margin:0">
+          <thead><tr><th style="width:80px">Cấp</th><th>Nội dung</th></tr></thead>
+          <tbody>
+            {% for h in result.outline %}
+              <tr>
+                <td><span class="pill" style="font-size:11px">{{ h.level|upper }}</span></td>
+                <td>{{ h.text }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {# ─ BÀI VIẾT ─ #}
+      <div class="card bw-section">
+        <div class="bw-section-head">
+          <h4 style="margin:0">📰 Bài viết (Markdown)</h4>
+          <button type="button" class="btn btn-sm copy-text-btn" id="copy-body-btn">📋 Copy toàn bài</button>
+        </div>
+        <pre id="bw-body" style="white-space:pre-wrap;word-wrap:break-word;font-family:monospace;font-size:12.5px;background:rgba(0,0,0,0.3);padding:12px;border-radius:4px;max-height:600px;overflow:auto;line-height:1.5">{{ result.body_markdown }}</pre>
+      </div>
+    {% else %}
+      <div class="card" style="text-align:center;padding:60px 20px">
+        <div style="font-size:42px;margin-bottom:12px">✍️</div>
+        <h3 style="margin:0 0 8px 0">AI viết bài SEO sản phẩm</h3>
+        <p class="muted" style="margin:0;font-size:13px;max-width:400px;margin:0 auto">
+          Điền thông tin SP bên trái → bấm "AI viết bài" →
+          nhận ngay 3 title + 3 meta + bài hoàn chỉnh ~1500 từ theo rule v2 Sintech.
+        </p>
+      </div>
+    {% endif %}
+  </section>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+.bw-layout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 14px;
+}
+@media (max-width: 1100px) {
+  .bw-layout { grid-template-columns: 1fr; }
+}
+.bw-form-card { padding: 16px; height: fit-content; position: sticky; top: 80px; }
+.bw-label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
+.bw-result { display: flex; flex-direction: column; gap: 12px; }
+.bw-section { padding: 14px; }
+.bw-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+.bw-option {
+  display: grid;
+  grid-template-columns: 24px 1fr auto auto;
+  gap: 8px;
+  align-items: start;
+  padding: 8px;
+  margin-bottom: 6px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.bw-option-num {
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 13px;
+}
+.bw-option-text { font-size: 13px; line-height: 1.4; }
+.bw-option-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  align-self: center;
+}
+.copy-text-btn { font-size: 11px !important; padding: 4px 8px !important; }
+.copy-text-btn.copy-success { background: rgba(34,197,94,0.15); color: #4ade80; }
+</style>
+
+<script>
+(function () {
+  document.querySelectorAll('.copy-text-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      let text = btn.dataset.text;
+      if (btn.id === 'copy-body-btn') {
+        text = document.getElementById('bw-body')?.innerText || '';
+      }
+      try {
+        await navigator.clipboard.writeText(text);
+        const orig = btn.innerHTML;
+        btn.innerHTML = '✅';
+        btn.classList.add('copy-success');
+        setTimeout(() => {
+          btn.innerHTML = orig;
+          btn.classList.remove('copy-success');
+        }, 1200);
+      } catch (e) { btn.innerHTML = '❌'; }
+    });
+  });
+
+  // Submit button: hiện loading
+  const form = document.getElementById('bw-form');
+  const submitBtn = document.getElementById('bw-submit');
+  form?.addEventListener('submit', () => {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '⏳ AI đang viết... (30-60s)';
+  });
+})();
+</script>
+{% endblock %}

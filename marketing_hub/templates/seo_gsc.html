@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Google Search Console · SEO · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
+<span class="crumb"></span>
+<span style="font-weight:600">🔵 Google Search Console</span>
+{% endblock %}
+
+{% block page_actions %}
+<form method="post" action="{{ url_for('seo_gsc_refresh') }}" style="display:inline">
+  <button class="btn" type="submit" title="Re-fetch data từ 2 Google Sheet GSC export">🔄 Refresh cache</button>
+</form>
+<a class="btn" href="{{ url_for('seo_dashboard') }}">← SEO dashboard</a>
+{% endblock %}
+
+{% block content %}
+
+<style>
+  .gsc-kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:20px }
+  .gsc-kpi { background:var(--surface,#1a1a1a); border:1px solid var(--border,rgba(255,255,255,.1)); border-radius:10px; padding:14px 16px; }
+  .gsc-kpi-num { font-size:26px; font-weight:700; line-height:1; letter-spacing:-.5px; }
+  .gsc-kpi-label { font-size:11px; color:var(--text-muted,#94a3b8); margin-top:6px; text-transform:uppercase; letter-spacing:.4px }
+
+  .gsc-tasks { display:flex; flex-direction:column; gap:10px; }
+  .gsc-task-card {
+    display:flex; align-items:center; gap:14px; padding:14px 16px;
+    border:1px solid var(--border,rgba(255,255,255,.1)); border-radius:10px;
+    background:var(--surface,#1a1a1a); transition:transform .12s, border-color .12s;
+    text-decoration:none; color:inherit;
+  }
+  .gsc-task-card:hover { transform:translateY(-1px); border-color:var(--accent,#7c3aed); }
+  .gsc-task-icon { font-size:24px; line-height:1; flex-shrink:0; width:36px; text-align:center }
+  .gsc-task-body { flex:1; min-width:0 }
+  .gsc-task-title { font-size:14px; font-weight:600; margin-bottom:3px; line-height:1.35 }
+  .gsc-task-desc { font-size:12px; color:var(--text-muted,#94a3b8); line-height:1.4 }
+  .gsc-task-count { font-size:22px; font-weight:700; min-width:50px; text-align:right; font-variant-numeric:tabular-nums }
+  .gsc-task-action { font-size:10.5px; color:var(--text-muted,#94a3b8); padding:4px 10px; border-radius:14px; white-space:nowrap; min-width:90px; text-align:center; }
+
+  .level-critical { border-left:4px solid #ef4444 }
+  .level-critical .gsc-task-count { color:#f87171 }
+  .level-critical .gsc-task-action { background:rgba(239,68,68,.14); color:#fca5a5 }
+  .level-high     { border-left:4px solid #f59e0b }
+  .level-high .gsc-task-count { color:#facc15 }
+  .level-high .gsc-task-action { background:rgba(245,158,11,.14); color:#fde047 }
+  .level-medium   { border-left:4px solid #6366f1 }
+  .level-medium .gsc-task-count { color:#a5b4fc }
+  .level-medium .gsc-task-action { background:rgba(99,102,241,.14); color:#c7d2fe }
+  .level-info     { border-left:4px solid #34d399 }
+  .level-info .gsc-task-count { color:#34d399 }
+  .level-info .gsc-task-action { background:rgba(52,211,153,.14); color:#86efac }
+
+  .gsc-section-h { font-size:14px; font-weight:600; margin:24px 0 10px; padding-bottom:8px; border-bottom:1px solid var(--border,rgba(255,255,255,.08)); display:flex; justify-content:space-between; align-items:baseline }
+  .gsc-mini-table { width:100%; font-size:12px; border-collapse:collapse }
+  .gsc-mini-table th { font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px; padding:6px 8px; text-align:left; border-bottom:1px solid var(--border) }
+  .gsc-mini-table td { padding:6px 8px; border-bottom:1px solid rgba(255,255,255,.04) }
+  .gsc-mini-table tbody tr:hover { background:rgba(255,255,255,.02) }
+</style>
+
+{% if not cache %}
+<section class="card" style="margin-top:14px;padding:24px;text-align:center">
+  <h3>📭 Chưa có data GSC cache</h3>
+  <p class="muted">Chạy script <code>marketing_hub/_fetch_gsc_cache.py</code> để fetch data từ 2 Google Sheet GSC export.</p>
+  <form method="post" action="{{ url_for('seo_gsc_refresh') }}" style="margin-top:12px">
+    <button class="btn btn-primary" type="submit">🔄 Fetch ngay</button>
+  </form>
+</section>
+{% else %}
+
+{# KPI Overview #}
+<div class="gsc-kpi-row">
+  <div class="gsc-kpi">
+    <div class="gsc-kpi-num" style="color:#60a5fa">{{ "{:,}".format(summary.total_click) }}</div>
+    <div class="gsc-kpi-label">Total click (3 tháng)</div>
+  </div>
+  <div class="gsc-kpi">
+    <div class="gsc-kpi-num">{{ "{:,}".format(summary.total_imp) }}</div>
+    <div class="gsc-kpi-label">Total impression</div>
+  </div>
+  <div class="gsc-kpi">
+    <div class="gsc-kpi-num" style="color:{% if summary.avg_ctr >= 5 %}#34d399{% elif summary.avg_ctr >= 3 %}#facc15{% else %}#f87171{% endif %}">{{ summary.avg_ctr }}%</div>
+    <div class="gsc-kpi-label">CTR trung bình</div>
+  </div>
+  <div class="gsc-kpi">
+    <div class="gsc-kpi-num">{{ summary.avg_position }}</div>
+    <div class="gsc-kpi-label">Position TB (1-100)</div>
+  </div>
+  <div class="gsc-kpi" style="background:rgba(239,68,68,0.04);border-color:rgba(239,68,68,0.30)">
+    <div class="gsc-kpi-num" style="color:#f87171">{{ coverage.critical.get('crawled_not_indexed', {}).get('count', 0) }}</div>
+    <div class="gsc-kpi-label">URL chưa được index</div>
+  </div>
+  <div class="gsc-kpi">
+    <div class="gsc-kpi-num" style="font-size:13px;font-weight:500;color:var(--text-muted)">{{ fetched_at[:16] if fetched_at else '—' }}</div>
+    <div class="gsc-kpi-label">Fetched at</div>
+  </div>
+</div>
+
+{# Tasks list #}
+<div class="gsc-section-h">
+  <span>🎯 Task cần làm — click vào để xem chi tiết</span>
+  <span class="muted" style="font-size:11px">{{ tasks|length }} task</span>
+</div>
+
+<div class="gsc-tasks">
+  {% for t in tasks %}
+  <a class="gsc-task-card level-{{ t.level }}" href="{{ url_for('seo_gsc_task_page', task_id=t.id) }}">
+    <div class="gsc-task-icon">{{ t.icon }}</div>
+    <div class="gsc-task-body">
+      <div class="gsc-task-title">{{ t.title }}</div>
+      <div class="gsc-task-desc">{{ t.desc }}</div>
+    </div>
+    <div class="gsc-task-count">{{ "{:,}".format(t.count) }}</div>
+    <div class="gsc-task-action">
+      {% if t.needs_export %}📁 Cần export{% else %}🔧 Có data chi tiết{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+{# Top Performance preview #}
+<div class="gsc-section-h">
+  <span>🔍 Top 10 Keyword (3 tháng)</span>
+  <a href="{{ url_for('seo_gsc_task_page', task_id='top_cash_cow') }}" class="muted" style="font-size:12px">Xem tất cả →</a>
+</div>
+<section class="card" style="padding:0 14px">
+  <table class="gsc-mini-table">
+    <thead><tr><th>#</th><th>Keyword</th><th style="text-align:right">Click</th><th style="text-align:right">Imp</th><th style="text-align:right">CTR</th><th style="text-align:right">Pos</th></tr></thead>
+    <tbody>
+      {% for q in performance.queries[:10] %}
+      <tr>
+        <td class="muted">{{ loop.index }}</td>
+        <td>{{ q.query[:80] }}</td>
+        <td style="text-align:right;font-weight:600">{{ q.click }}</td>
+        <td style="text-align:right" class="muted">{{ q.imp }}</td>
+        <td style="text-align:right;color:{% if q.ctr >= 10 %}#34d399{% elif q.ctr >= 3 %}#facc15{% else %}#f87171{% endif %}">{{ q.ctr }}%</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">{{ q.pos }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<div class="gsc-section-h">
+  <span>📄 Top 10 URL (3 tháng)</span>
+</div>
+<section class="card" style="padding:0 14px">
+  <table class="gsc-mini-table">
+    <thead><tr><th>#</th><th>URL</th><th style="text-align:right">Click</th><th style="text-align:right">Imp</th><th style="text-align:right">CTR</th><th style="text-align:right">Pos</th></tr></thead>
+    <tbody>
+      {% for p in performance.pages[:10] %}
+      <tr>
+        <td class="muted">{{ loop.index }}</td>
+        <td><a href="{{ p.url }}" target="_blank" rel="noopener" style="word-break:break-all;font-size:11.5px">{{ p.url|replace('https://sintech.vn', '') }}</a></td>
+        <td style="text-align:right;font-weight:600">{{ p.click }}</td>
+        <td style="text-align:right" class="muted">{{ p.imp }}</td>
+        <td style="text-align:right;color:{% if p.ctr >= 5 %}#34d399{% elif p.ctr >= 3 %}#facc15{% else %}#f87171{% endif %}">{{ p.ctr }}%</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">{{ p.pos }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% endif %}
+
+{% endblock %}

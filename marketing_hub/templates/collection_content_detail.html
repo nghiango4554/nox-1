@@ -1,0 +1,725 @@
+{% extends "base.html" %}
+{% block title %}{{ job.collection_title or job.handle }} · Collection Content · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('collection_content_page') }}" class="muted" style="font-weight:500">🗂️ Collection Content</a>
+<span class="crumb"></span>
+<span style="font-weight:600">{{ (job.collection_title or job.handle)[:60] }}</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('collection_content_page') }}">← Quay lại danh sách</a>
+<a class="btn" href="{{ job.collection_url }}" target="_blank" rel="noopener">🔗 Mở trang Sintech</a>
+{% endblock %}
+
+{% block content %}
+
+<style>
+  .cd-header {
+    padding:18px 22px; border-radius:12px; margin-bottom:18px;
+    background:linear-gradient(135deg,rgba(124,58,237,0.10) 0%,rgba(96,165,250,0.04) 100%);
+    border:1px solid var(--border);
+  }
+  .cd-header.status-draft { border-left:4px solid #34d399 }
+  .cd-header.status-synced { border-left:4px solid #60a5fa }
+  .cd-header.status-failed { border-left:4px solid #f87171 }
+  .cd-header.status-drafting { border-left:4px solid #facc15 }
+  .cd-header.status-pending { border-left:4px solid #6366f1 }
+  .cd-title-row { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap }
+  .cd-title-big { font-size:18px; font-weight:700 }
+  .cd-status-pill { font-size:11px; padding:3px 12px; border-radius:14px; font-weight:600 }
+  .cd-pending  { background:rgba(148,163,184,0.18); color:#94a3b8 }
+  .cd-drafting { background:rgba(250,204,21,0.18); color:#facc15 }
+  .cd-draft    { background:rgba(52,211,153,0.18); color:#34d399 }
+  .cd-synced   { background:rgba(96,165,250,0.18); color:#60a5fa }
+  .cd-failed   { background:rgba(239,68,68,0.18); color:#f87171 }
+  .cd-meta-row { display:flex; gap:18px; margin-top:8px; flex-wrap:wrap; font-size:12px; color:var(--text-muted) }
+  .cd-meta-row code { font-family:Consolas, monospace; font-size:11.5px; color:#a5b4fc }
+
+  .cd-section { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin-bottom:14px; }
+  .cd-section-h { font-size:13px; font-weight:600; margin-bottom:8px; display:flex; justify-content:space-between; align-items:baseline }
+  .cd-section-hint { font-size:11px; color:var(--text-muted) }
+
+  .cd-input, .cd-textarea {
+    width:100%; padding:8px 10px; font-size:13px;
+    border:1px solid var(--border); border-radius:6px;
+    background:rgba(255,255,255,0.02); color:var(--text);
+    font-family:inherit;
+  }
+  .cd-textarea { font-family:Consolas, monospace; font-size:12px; line-height:1.5; resize:vertical }
+
+  /* Rich text WYSIWYG editor */
+  .cd-richtext-wrap { border:1px solid var(--border); border-radius:6px; overflow:hidden; background:rgba(255,255,255,0.02) }
+  .cd-toolbar {
+    display:flex; gap:4px; padding:6px 8px; flex-wrap:wrap; align-items:center;
+    border-bottom:1px solid var(--border); background:rgba(255,255,255,0.03);
+  }
+  .cd-tb-btn {
+    background:transparent; border:1px solid transparent; color:var(--text);
+    padding:4px 8px; border-radius:4px; cursor:pointer; font-size:12px;
+    min-width:28px; height:26px; display:inline-flex; align-items:center; justify-content:center;
+  }
+  .cd-tb-btn:hover { background:rgba(255,255,255,0.08); border-color:var(--border) }
+  .cd-tb-btn.active { background:rgba(124,58,237,0.18); color:#c4b5fd }
+  .cd-tb-sep { width:1px; height:18px; background:var(--border); margin:0 4px }
+  .cd-tb-color-input { width:24px; height:24px; padding:0; border:none; cursor:pointer; background:transparent }
+  .cd-richtext {
+    padding:12px 14px; min-height:300px; max-height:600px; overflow-y:auto;
+    font-size:13px; line-height:1.6; color:var(--text);
+    outline:none; font-family:Arial, sans-serif;
+  }
+  .cd-richtext:focus { outline:none; background:rgba(255,255,255,0.01) }
+  .cd-richtext h2 { font-size:16px; font-weight:700; margin:14px 0 8px; color:#a5b4fc }
+  .cd-richtext h3 { font-size:14px; font-weight:700; margin:10px 0 6px; color:#c4b5fd }
+  .cd-richtext p { margin:8px 0 }
+  .cd-richtext a { color:#60a5fa; text-decoration:underline }
+  .cd-richtext ul, .cd-richtext ol { margin:8px 0; padding-left:22px }
+  .cd-richtext img { max-width:100%; height:auto; border-radius:4px; margin:8px 0 }
+  .cd-richtext code { background:rgba(255,255,255,0.06); padding:1px 5px; border-radius:3px; font-size:11.5px }
+  .cd-richtext pre { background:rgba(255,255,255,0.04); padding:8px; border-radius:4px; overflow-x:auto; font-size:11.5px }
+
+  .cd-source-toggle { font-size:11px; color:var(--text-muted); cursor:pointer; text-decoration:underline; margin-left:auto }
+  .cd-meter { font-size:11px; color:var(--text-muted); text-align:right; margin-top:3px }
+  .cd-meter.ok { color:#34d399; font-weight:600 }
+  .cd-meter.warn { color:#facc15 }
+  .cd-meter.bad  { color:#f87171; font-weight:600 }
+
+  .cd-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; padding-top:14px; border-top:1px solid var(--border) }
+  .cd-error { padding:10px 12px; background:rgba(239,68,68,0.10); color:#fca5a5; border-radius:6px; font-size:12px; margin-bottom:10px }
+  .cd-preview { padding:12px; background:rgba(255,255,255,.02); border-radius:6px; max-height:400px; overflow-y:auto; font-size:13px; line-height:1.5 }
+  .cd-preview h2 { font-size:16px; margin-top:14px; }
+  .cd-preview h3 { font-size:14px; margin-top:10px; }
+  .cd-preview p { margin:8px 0 }
+</style>
+
+<div class="cd-header status-{{ job.status }}">
+  <div class="cd-title-row">
+    <span class="cd-title-big">{{ job.collection_title or job.handle }}</span>
+    <span class="cd-status-pill cd-{{ job.status }}">{{ job.status }}</span>
+    {% if job.quality_score %}
+    <span style="margin-left:auto;display:flex;gap:10px;align-items:center">
+      <span title="SEO Quality 0-100" style="font-size:13px">⭐ <strong style="font-size:18px;color:{% if job.quality_score >= 80 %}#34d399{% elif job.quality_score >= 65 %}#facc15{% elif job.quality_score >= 50 %}#f59e0b{% else %}#f87171{% endif %}">{{ job.quality_score }}</strong>/100</span>
+      <span title="Readability 0-100" style="font-size:13px">📖 <strong style="font-size:18px;color:{% if job.readability_score >= 60 %}#34d399{% elif job.readability_score >= 40 %}#facc15{% else %}#f87171{% endif %}">{{ job.readability_score }}</strong>/100</span>
+    </span>
+    {% endif %}
+  </div>
+  <div class="cd-meta-row">
+    <span>🔗 <a href="{{ job.collection_url }}" target="_blank" rel="noopener" class="muted">{{ job.collection_url|replace('https://sintech.vn', '') }}</a></span>
+    <span>🏷️ handle: <code>{{ job.handle or '—' }}</code></span>
+    <span>🆔 haravan_id: <code>{{ job.haravan_id or '—' }}</code></span>
+    {% if job.ai_generated_at %}<span>🤖 AI gen: {{ job.ai_generated_at[:16] }}</span>{% endif %}
+    {% if job.synced_at %}<span>✅ Synced: {{ job.synced_at[:16] }}</span>{% endif %}
+  </div>
+</div>
+
+{% if job.quality_breakdown %}
+{% set qb = job.quality_breakdown|from_json %}
+<div class="cd-section" style="margin-bottom:14px">
+  <div class="cd-section-h">
+    <span>⭐ Quality breakdown — {{ qb.tier or '' }}</span>
+    <span class="cd-section-hint">Click vào category để xem chi tiết · auto-recompute khi Save</span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px">
+    {% for cat, b in qb.breakdown.items() %}
+    {% set pct = (b.score * 100 / b.max)|round|int %}
+    <div style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,.02)">
+      <div style="font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">{{ cat }}</div>
+      <div style="font-size:18px;font-weight:700;margin-top:2px;color:{% if pct >= 80 %}#34d399{% elif pct >= 60 %}#facc15{% elif pct >= 40 %}#f59e0b{% else %}#f87171{% endif %}">
+        {{ b.score }}<span style="font-size:11px;color:var(--text-muted)">/{{ b.max }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% if qb.issues_high %}
+  <div style="margin-top:10px;padding:8px 10px;background:rgba(239,68,68,.08);border-radius:6px;font-size:12px">
+    <strong style="color:#fca5a5">🚨 Critical ({{ qb.issues_high|length }}):</strong>
+    <ul style="margin:4px 0 0;padding-left:18px;line-height:1.5">
+      {% for i in qb.issues_high %}<li>{{ i }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  {% if qb.issues_med %}
+  <div style="margin-top:8px;padding:8px 10px;background:rgba(245,158,11,.06);border-radius:6px;font-size:12px">
+    <strong style="color:#fde047">⚠️ Warnings ({{ qb.issues_med|length }}):</strong>
+    <ul style="margin:4px 0 0;padding-left:18px;line-height:1.5">
+      {% for i in qb.issues_med %}<li>{{ i }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if not job.haravan_id %}
+<div class="cd-error">⚠️ Collection này không có <code>haravan_id</code> — không sync được. Có thể URL chỉ trỏ sintech.vn nhưng chưa tạo trên Haravan admin.</div>
+{% endif %}
+{% if job.error %}
+<div class="cd-error">❌ Lỗi gần nhất: {{ job.error[:500] }}</div>
+{% endif %}
+
+<form id="edit-form" onsubmit="return false">
+
+<div class="cd-section">
+  <div class="cd-section-h">
+    <span>📝 Title (45-61 ký tự)</span>
+    <span class="cd-section-hint">SEO title hiển thị trên Google · KHÔNG chứa "Sintech"</span>
+  </div>
+  <input type="text" class="cd-input" id="f-title" name="title"
+         value="{{ job.edited_title or '' }}" maxlength="80"
+         oninput="updateMeter('f-title', 'meter-title', 45, 61)">
+  <div class="cd-meter" id="meter-title">{{ (job.edited_title or '')|length }}c</div>
+</div>
+
+<div class="cd-section">
+  <div class="cd-section-h">
+    <span>📄 Meta description (140-160 ký tự)</span>
+    <span class="cd-section-hint">CTA HOA cuối câu: XEM NGAY / THAM KHẢO NGAY / CHỌN NGAY / KHÁM PHÁ NGAY</span>
+  </div>
+  <textarea class="cd-textarea" id="f-meta" name="meta" rows="3"
+            oninput="updateMeter('f-meta', 'meter-meta', 140, 160)">{{ job.edited_meta or '' }}</textarea>
+  <div class="cd-meter" id="meter-meta">{{ (job.edited_meta or '')|length }}c</div>
+</div>
+
+<div class="cd-section">
+  <div class="cd-section-h">
+    <span>📃 Mô tả collection (rich-text — paste từ Google Doc giữ format)</span>
+    <span class="cd-section-hint">600-1200 từ · Paste trực tiếp từ Doc · Auto-save format/link/màu</span>
+  </div>
+  <div class="cd-richtext-wrap">
+    <div class="cd-toolbar">
+      <button type="button" class="cd-tb-btn" onclick="cmd('bold')" title="Bold (Ctrl+B)"><b>B</b></button>
+      <button type="button" class="cd-tb-btn" onclick="cmd('italic')" title="Italic (Ctrl+I)"><i>I</i></button>
+      <button type="button" class="cd-tb-btn" onclick="cmd('underline')" title="Underline (Ctrl+U)"><u>U</u></button>
+      <button type="button" class="cd-tb-btn" onclick="cmd('strikeThrough')" title="Strike"><s>S</s></button>
+      <span class="cd-tb-sep"></span>
+      <button type="button" class="cd-tb-btn" onclick="cmd('formatBlock', 'H2')" title="Heading 2">H2</button>
+      <button type="button" class="cd-tb-btn" onclick="cmd('formatBlock', 'H3')" title="Heading 3">H3</button>
+      <button type="button" class="cd-tb-btn" onclick="cmd('formatBlock', 'P')" title="Paragraph">¶</button>
+      <span class="cd-tb-sep"></span>
+      <button type="button" class="cd-tb-btn" onclick="cmd('insertUnorderedList')" title="Bullet list">•—</button>
+      <button type="button" class="cd-tb-btn" onclick="cmd('insertOrderedList')" title="Numbered list">1.</button>
+      <span class="cd-tb-sep"></span>
+      <button type="button" class="cd-tb-btn" onclick="alignText('left')" title="Căn trái">⬅</button>
+      <button type="button" class="cd-tb-btn" onclick="alignText('center')" title="Căn giữa (áp cho cell bảng nếu đang trong table)">⬌</button>
+      <button type="button" class="cd-tb-btn" onclick="alignText('right')" title="Căn phải">➡</button>
+      <span class="cd-tb-sep"></span>
+      <button type="button" class="cd-tb-btn" onclick="insertLink()" title="Chèn link">🔗</button>
+      <button type="button" class="cd-tb-btn" onclick="cmd('unlink')" title="Bỏ link">✂️🔗</button>
+      <button type="button" class="cd-tb-btn" onclick="applyFullFormat(this)" title="Áp toàn bộ định dạng Sintech: font Arial, H2/H3 đậm, link đỏ, viền bảng" style="background:linear-gradient(135deg,#7c3aed,#e74c3c);color:white;font-weight:700;padding:5px 12px">🎨 Format full</button>
+      <input type="color" class="cd-tb-color-input" id="color-picker" onchange="cmd('foreColor', this.value)" title="Màu chữ">
+      <button type="button" class="cd-tb-btn" onclick="cmd('removeFormat')" title="Xóa định dạng">🧹</button>
+      <span class="cd-tb-sep"></span>
+      <button type="button" class="cd-tb-btn" onclick="cmd('undo')" title="Undo (Ctrl+Z)">↶</button>
+      <button type="button" class="cd-tb-btn" onclick="cmd('redo')" title="Redo (Ctrl+Y)">↷</button>
+      <a class="cd-source-toggle" onclick="toggleSource()" id="source-toggle">&lt;/&gt; xem HTML</a>
+    </div>
+    <div class="cd-richtext" id="f-body" contenteditable="true" oninput="onBodyChange()" onpaste="onPaste(event)">{{ job.edited_body_html|safe }}</div>
+    <textarea class="cd-textarea" id="f-body-source" style="display:none; border:none; border-top:1px solid var(--border); border-radius:0; min-height:300px"></textarea>
+  </div>
+  <div class="cd-meter" id="meter-body" style="display:flex;justify-content:space-between;align-items:center">
+    <span id="body-len-text">{{ (job.edited_body_html or '')|length }} / 50,000 ký tự HTML (Haravan limit)</span>
+    <span id="body-len-warn" style="font-size:11px"></span>
+  </div>
+</div>
+
+<div class="cd-actions">
+  <button class="btn btn-primary" type="button" onclick="genAI()">🤖 AI gen lại bài</button>
+  <button class="btn" type="button" onclick="saveEdit(this)">💾 Lưu edit</button>
+  <button class="btn btn-primary" type="button" onclick="syncJob()"
+          {% if not job.haravan_id %}disabled title="Thiếu haravan_id"{% endif %}>🚀 Sync lên Haravan</button>
+  <a class="btn" href="{{ url_for('collection_content_page') }}" style="margin-left:auto">← Danh sách</a>
+</div>
+
+</form>
+
+<script>
+const JOB_ID = {{ job.id }};
+
+function updateMeter(inputId, meterId, min, max) {
+  const v = document.getElementById(inputId).value;
+  const n = v.length;
+  const el = document.getElementById(meterId);
+  el.textContent = n + 'c';
+  el.className = 'cd-meter ' + (n >= min && n <= max ? 'ok' : (n === 0 ? '' : (n > max ? 'bad' : 'warn')));
+}
+// ─── Rich-text editor helpers ───
+function cmd(command, arg) {
+  document.getElementById('f-body').focus();
+  document.execCommand(command, false, arg || null);
+  onBodyChange();
+}
+
+function insertLink() {
+  const url = prompt('Nhập URL (bao gồm https://):', 'https://sintech.vn');
+  if (url) { cmd('createLink', url); }
+}
+
+// Align text — nếu selection nằm trong table cell, set text-align trên cell đó (Haravan giữ inline style).
+// Ngoài table: dùng execCommand justifyXxx (browser wrap div align hoặc set style trên block).
+function alignText(dir) {
+  const editor = document.getElementById('f-body');
+  editor.focus();
+  const sel = window.getSelection();
+  let cell = null;
+  if (sel && sel.rangeCount > 0) {
+    let node = sel.getRangeAt(0).commonAncestorContainer;
+    if (node.nodeType === 3) node = node.parentNode;
+    cell = node.closest && node.closest('td, th');
+  }
+  if (cell) {
+    cell.style.textAlign = dir;
+    onBodyChange();
+    return;
+  }
+  const map = {left: 'justifyLeft', center: 'justifyCenter', right: 'justifyRight'};
+  document.execCommand(map[dir], false, null);
+  onBodyChange();
+}
+
+function flashBtn(btn, msg) {
+  const orig = btn.innerHTML;
+  const origBg = btn.style.background;
+  btn.innerHTML = msg;
+  btn.style.background = 'rgba(52,211,153,0.25)';
+  btn.style.color = '#34d399';
+  setTimeout(() => {
+    btn.innerHTML = orig;
+    btn.style.background = origBg;
+    btn.style.color = '';
+  }, 1200);
+}
+
+function stripPasteWrapper(editor) {
+  const WRAPPER_ATTRS = ['data-turn-id-container','data-is-intersecting','data-writing-block','data-message-id','data-message-author-role','data-testid'];
+  const WRAPPER_CLASS = ['R6Vx5W_','_threadScrollVars','text-token-','has-data-','scroll-mb-','focus:outline','pointer-events','relative w-full overflow-visible','thread-','markdown','prose','dark:','empty:','wrap-break-word','flex w-full','flex max-w-full','flex-col','gap-1','gap-4','markdown-new-styling'];
+  function isWrapper(el) {
+    for (const a of WRAPPER_ATTRS) if (el.hasAttribute(a)) return true;
+    const cls = el.className || '';
+    return WRAPPER_CLASS.some(p => cls.includes(p));
+  }
+  function unwrap(el) {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+  }
+  editor.querySelectorAll('section').forEach(unwrap);
+  for (let i = 0; i < 15; i++) {
+    let changed = false;
+    editor.querySelectorAll('div').forEach(el => { if (isWrapper(el)) { unwrap(el); changed = true; } });
+    if (!changed) break;
+  }
+  const STRIP_ATTRS = ['data-turn-id-container','data-is-intersecting','data-start','data-end','data-is-last-node','data-is-only-node','data-writing-block','data-message-id','data-message-author-role','data-testid','data-node-index'];
+  editor.querySelectorAll('*').forEach(el => STRIP_ATTRS.forEach(a => el.removeAttribute(a)));
+  editor.querySelectorAll('div.contents').forEach(d => { if (!d.textContent.trim()) d.remove(); });
+}
+
+function applyFullFormat(btn) {
+  const editor = document.getElementById('f-body');
+
+  // ─── 0. Strip wrapper ChatGPT (data-turn-id-container, section R6Vx5W_, ...) ───
+  stripPasteWrapper(editor);
+
+  // ─── 1. Force font Arial cho toàn body (preview trong editor) ───
+  editor.style.fontFamily = 'Arial, sans-serif';
+  editor.style.fontSize = '14px';
+  editor.style.fontWeight = '500';
+  editor.style.lineHeight = '1.65';
+  editor.style.color = '#000000';
+
+  // ─── 2. Style H2 ───
+  const H2_STYLE = {
+    fontSize: '17pt', fontWeight: '700', color: '#000000',
+    margin: '24px 0 5px', lineHeight: '1.38',
+    fontFamily: 'Arial, sans-serif', fontStyle: 'normal',
+    textDecoration: 'none',
+  };
+  let nH2 = 0;
+  editor.querySelectorAll('h2').forEach(h => {
+    Object.assign(h.style, H2_STYLE);
+    h.querySelectorAll('*').forEach(c => {
+      Object.assign(c.style, H2_STYLE);
+      c.style.letterSpacing = '';
+    });
+    nH2++;
+  });
+
+  // ─── 3. Style H3 ───
+  const H3_STYLE = {
+    fontSize: '13pt', fontWeight: '700', color: '#000000',
+    margin: '18px 0 4px', lineHeight: '1.38',
+    fontFamily: 'Arial, sans-serif', fontStyle: 'normal',
+    textDecoration: 'none',
+  };
+  let nH3 = 0;
+  editor.querySelectorAll('h3').forEach(h => {
+    Object.assign(h.style, H3_STYLE);
+    h.querySelectorAll('*').forEach(c => {
+      Object.assign(c.style, H3_STYLE);
+      c.style.letterSpacing = '';
+    });
+    nH3++;
+  });
+
+  // ─── 4. Style P (paragraph) — font 12pt Arial, đậm nhẹ 500 (không quá nặng) ───
+  const P_STYLE = {
+    fontFamily: 'Arial, sans-serif', fontSize: '12pt', fontWeight: '500',
+    lineHeight: '1.65', margin: '10px 0', color: '#000000',
+  };
+  editor.querySelectorAll('p').forEach(p => {
+    Object.assign(p.style, P_STYLE);
+    p.querySelectorAll('span, em, u').forEach(c => {
+      if (!c.closest('a')) {
+        c.style.fontFamily = 'Arial, sans-serif';
+        c.style.fontSize = '12pt';
+        c.style.fontWeight = '500';
+        c.style.lineHeight = '1.65';
+      }
+    });
+  });
+
+  // ─── 5. Style links đỏ Sintech + bold + underline ───
+  let nLinks = 0;
+  editor.querySelectorAll('a').forEach(a => {
+    a.style.color = '#e74c3c';
+    a.style.textDecoration = 'underline';
+    a.style.fontWeight = '700';
+    a.querySelectorAll('*').forEach(c => {
+      c.style.color = '#e74c3c';
+      c.style.textDecoration = 'underline';
+      c.style.fontWeight = '700';
+    });
+    if (!/<strong/i.test(a.innerHTML)) {
+      a.innerHTML = '<strong style="color:#e74c3c;text-decoration:underline;font-weight:700">' + a.innerHTML + '</strong>';
+    }
+    nLinks++;
+  });
+
+  // ─── 6. Style tables: viền + padding ───
+  let nTables = 0;
+  editor.querySelectorAll('table').forEach(t => {
+    t.style.borderCollapse = 'collapse';
+    t.style.width = '100%';
+    t.style.margin = '14px 0';
+    t.style.fontSize = '11pt';
+    t.style.fontFamily = 'Arial, sans-serif';
+    nTables++;
+  });
+  editor.querySelectorAll('td, th').forEach(c => {
+    c.style.border = '1px solid #cccccc';
+    c.style.padding = '8px 10px';
+    c.style.verticalAlign = 'top';
+    c.style.color = '#000000';
+    c.style.fontFamily = 'Arial, sans-serif';
+  });
+  editor.querySelectorAll('th').forEach(th => {
+    th.style.fontWeight = '700';
+    th.style.background = '#f4f4f4';
+    th.style.textAlign = 'left';
+  });
+
+  // ─── 7. Style lists — font 12pt + weight 500 giống P ───
+  editor.querySelectorAll('ul, ol').forEach(l => {
+    l.style.margin = '10px 0';
+    l.style.paddingLeft = '28px';
+    l.style.fontFamily = 'Arial, sans-serif';
+    l.style.fontSize = '12pt';
+    l.style.fontWeight = '500';
+    l.style.lineHeight = '1.65';
+  });
+  editor.querySelectorAll('li').forEach(li => {
+    li.style.margin = '6px 0';
+    li.style.color = '#000000';
+    li.style.fontSize = '12pt';
+    li.style.fontWeight = '500';
+    li.style.fontFamily = 'Arial, sans-serif';
+    li.style.lineHeight = '1.65';
+    li.querySelectorAll('span, em').forEach(c => {
+      if (!c.closest('a')) {
+        c.style.fontSize = '12pt';
+        c.style.fontWeight = '500';
+        c.style.fontFamily = 'Arial, sans-serif';
+      }
+    });
+  });
+
+  onBodyChange();
+  if (btn) flashBtn(btn, `✓ ${nH2}H2 ${nH3}H3 ${nLinks}link ${nTables}table`);
+}
+
+function styleHeadingsBold(btn) {
+  const editor = document.getElementById('f-body');
+  // Style cố định theo mẫu Google Doc native — đảm bảo render đậm rõ trên Haravan
+  const STYLES = {
+    h2: {
+      fontSize: '17pt', fontWeight: '700', color: '#000000',
+      margin: '24px 0 5px', lineHeight: '1.38',
+      fontFamily: 'Arial, sans-serif', fontStyle: 'normal',
+      textDecoration: 'none',
+    },
+    h3: {
+      fontSize: '13pt', fontWeight: '700', color: '#000000',
+      margin: '18px 0 4px', lineHeight: '1.38',
+      fontFamily: 'Arial, sans-serif', fontStyle: 'normal',
+      textDecoration: 'none',
+    },
+  };
+  let nH2 = 0, nH3 = 0;
+  for (const tag of ['h2', 'h3']) {
+    editor.querySelectorAll(tag).forEach(h => {
+      Object.assign(h.style, STYLES[tag]);
+      // Force override mọi descendants — Google Doc paste tạo <h2><span style="font-size:17pt"><span><strong><span><span>...
+      // Phải set explicitly cho TẤT CẢ các tầng span/strong/em bên trong
+      h.querySelectorAll('*').forEach(child => {
+        child.style.fontWeight = STYLES[tag].fontWeight;
+        child.style.fontSize = STYLES[tag].fontSize;
+        child.style.color = STYLES[tag].color;
+        child.style.fontFamily = STYLES[tag].fontFamily;
+        child.style.fontStyle = STYLES[tag].fontStyle;
+        child.style.textDecoration = STYLES[tag].textDecoration;
+        child.style.letterSpacing = '';
+      });
+      if (tag === 'h2') nH2++; else nH3++;
+    });
+  }
+  onBodyChange();
+  if (btn) flashBtn(btn, `✓ ${nH2}H2 ${nH3}H3`);
+}
+
+function styleAllLinks(btn) {
+  const editor = document.getElementById('f-body');
+  const links = editor.querySelectorAll('a');
+  let n = 0;
+  links.forEach(a => {
+    a.style.color = '#e74c3c';
+    a.style.textDecoration = 'underline';
+    a.style.fontWeight = '700';
+    a.querySelectorAll('*').forEach(child => {
+      child.style.color = '#e74c3c';
+      child.style.textDecoration = 'underline';
+      child.style.fontWeight = '700';
+    });
+    if (!/<strong/i.test(a.innerHTML)) {
+      a.innerHTML = '<strong style="color:#e74c3c;text-decoration:underline;font-weight:700">' + a.innerHTML + '</strong>';
+    }
+    n++;
+  });
+  onBodyChange();
+  if (btn) flashBtn(btn, `✓ ${n} link đỏ`);
+}
+
+// Haravan collection body_html limit ~50,000 ký tự
+// Server compress body trước khi sync (giảm 30-70% size từ Google Doc paste)
+// → Check theo COMPRESSED length, không raw
+const HARAVAN_BODY_LIMIT = 50000;
+
+// JS port của compress_html() trong Python — match logic chính xác
+function compressHTMLPreview(html) {
+  if (!html) return html;
+  html = html.replace(/<!--[\s\S]*?-->/g, '');
+  const props = [
+    /background-color\s*:\s*transparent\s*;?/gi,
+    /font-variant\s*:\s*normal\s*;?/gi,
+    /vertical-align\s*:\s*baseline\s*;?/gi,
+    /white-space\s*:\s*pre-wrap\s*;?/gi,
+    /font-style\s*:\s*normal\s*;?/gi,
+    /text-decoration\s*:\s*none\s*;?/gi,
+    /font-weight\s*:\s*400\s*;?/gi,
+    /line-height\s*:\s*[\d.]+\s*;?/gi,
+    /margin-top\s*:\s*12pt\s*;?/gi,
+    /margin-bottom\s*:\s*12pt\s*;?/gi,
+    /text-decoration-skip-ink\s*:[^;"]+;?/gi,
+    /letter-spacing\s*:\s*-?0\.\d+px\s*;?/gi,
+    /font-family\s*:\s*Arial\s*,\s*sans-serif\s*;?/gi,
+    /font-family\s*:\s*Roboto\s*,[^;"]*;?/gi,
+    /font-size\s*:\s*11pt\s*;?/gi,
+    /font-size\s*:\s*10pt\s*;?/gi,
+    /color\s*:\s*rgb\(\s*0\s*,\s*0\s*,\s*0\s*\)\s*;?/gi,
+    /color\s*:\s*#000000\s*;?/gi,
+    /color\s*:\s*#000\s*;?/gi,
+    /padding\s*:\s*5pt\s+5pt\s+5pt\s+5pt\s*;?/gi,
+    /border-(?:top|bottom|left|right)\s*:\s*solid\s+#000000\s+0\.5pt\s*;?/gi,
+    /overflow-wrap\s*:\s*break-word\s*;?/gi,
+    /overflow\s*:\s*hidden\s*;?/gi,
+  ];
+  for (const r of props) html = html.replace(r, '');
+  html = html.replace(/;\s*;/g, ';');
+  html = html.replace(/style\s*=\s*"\s*;*\s*"/g, '');
+  html = html.replace(/style\s*=\s*"\s*;/g, 'style="');
+  html = html.replace(/;\s*"/g, '"');
+  html = html.replace(/\s+"/g, '"');
+  html = html.replace(/\sstyle\s*=\s*""/g, '');
+  for (let i = 0; i < 5; i++) {
+    const before = html;
+    html = html.replace(/<span>\s*([^<]*?)\s*<\/span>/g, '$1');
+    if (html === before) break;
+  }
+  html = html.replace(/>\s+</g, '><');
+  html = html.replace(/ {2,}/g, ' ');
+  html = html.replace(/\n+/g, ' ');
+  return html.trim();
+}
+
+function onBodyChange() {
+  const html = getBodyHTML();
+  const raw = html.length;
+  const compressed = compressHTMLPreview(html).length;
+  const n = compressed;  // check theo COMPRESSED size (server cũng compress trước sync)
+  const lenText = document.getElementById('body-len-text');
+  const warnEl = document.getElementById('body-len-warn');
+  const meter = document.getElementById('meter-body');
+
+  lenText.textContent = `Raw ${raw.toLocaleString('vi-VN')} → Compressed ${compressed.toLocaleString('vi-VN')} / 50,000 (Haravan)`;
+
+  let cls = 'cd-meter ok';
+  let warnMsg = '';
+  let blockSync = false;
+  if (n === 0) {
+    cls = 'cd-meter';
+    warnMsg = '';
+  } else if (n < 40000) {
+    cls = 'cd-meter ok';
+    warnMsg = `✅ OK sau compress (${Math.round(n*100/HARAVAN_BODY_LIMIT)}% giới hạn)`;
+  } else if (n < 47000) {
+    cls = 'cd-meter warn';
+    warnMsg = `⚠️ Gần đầy sau compress (${Math.round(n*100/HARAVAN_BODY_LIMIT)}% / 100%)`;
+  } else if (n <= HARAVAN_BODY_LIMIT) {
+    cls = 'cd-meter bad';
+    warnMsg = `🚨 SẮP VƯỢT — còn ${(HARAVAN_BODY_LIMIT - n).toLocaleString('vi-VN')} ký tự`;
+  } else {
+    cls = 'cd-meter bad';
+    warnMsg = `❌ VƯỢT LIMIT sau compress — dư ${(n - HARAVAN_BODY_LIMIT).toLocaleString('vi-VN')} ký tự`;
+    blockSync = true;
+  }
+
+  meter.className = cls + ' meter-body';
+  meter.style.display = 'flex';
+  warnEl.textContent = warnMsg;
+  warnEl.style.color = blockSync ? '#f87171' : (n > 250000 ? '#f59e0b' : (n > 200000 ? '#facc15' : '#34d399'));
+
+  // Disable / enable Sync button khi vượt limit
+  const btns = document.querySelectorAll('button');
+  btns.forEach(b => {
+    if (b.textContent.includes('Sync')) {
+      if (blockSync) {
+        b.disabled = true;
+        b.title = 'Body HTML vượt limit Haravan — rút gọn lại';
+      } else if (!b.title.includes('haravan_id')) {
+        b.disabled = false;
+        b.title = '';
+      }
+    }
+  });
+}
+
+function onPaste(event) {
+  // Cho phép browser tự xử lý paste (giữ format từ Google Doc, link, màu)
+  // Nhưng strip 1 số rác cụ thể (font-family, span class lạ) — optional
+  // Mặc định: KHÔNG can thiệp, để contentEditable giữ inline styles
+  setTimeout(onBodyChange, 50);
+}
+
+function toggleSource() {
+  const editor = document.getElementById('f-body');
+  const source = document.getElementById('f-body-source');
+  const toggle = document.getElementById('source-toggle');
+  if (source.style.display === 'none') {
+    source.value = editor.innerHTML;
+    source.style.display = 'block';
+    editor.style.display = 'none';
+    toggle.textContent = '👁️ Xem rich-text';
+  } else {
+    editor.innerHTML = source.value;
+    source.style.display = 'none';
+    editor.style.display = 'block';
+    toggle.textContent = '</> xem HTML';
+    onBodyChange();
+  }
+}
+
+// Sync source ↔ editor khi save
+function getBodyHTML() {
+  const source = document.getElementById('f-body-source');
+  if (source.style.display !== 'none') {
+    // Đang ở mode HTML source, dùng textarea
+    return source.value;
+  }
+  return document.getElementById('f-body').innerHTML;
+}
+
+async function genAI() {
+  if (!confirm('🤖 Gen lại content (ghi đè field hiện tại). Tốn ~30-60s.')) return;
+  const btns = document.querySelectorAll('button');
+  btns.forEach(b => b.disabled = true);
+  document.getElementById('f-body').innerHTML = '<p>⏳ Đang gen content qua Codex CLI... vui lòng đợi ~30-60s</p>';
+  try {
+    const r = await fetch(`/collection-content/${JOB_ID}/gen`, {method: 'POST'});
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('f-title').value = d.title || '';
+      document.getElementById('f-meta').value = d.meta || '';
+      document.getElementById('f-body').innerHTML = d.body_html || '';
+      updateMeter('f-title', 'meter-title', 45, 61);
+      updateMeter('f-meta', 'meter-meta', 140, 160);
+      document.getElementById('meter-body').textContent = (d.body_html || '').length + ' bytes';
+      alert(`✅ Gen xong! Title ${d.title_len}c · Meta ${d.meta_len}c`);
+    } else {
+      alert('❌ ' + (d.error || 'unknown'));
+      location.reload();
+    }
+  } catch (e) { alert('❌ ' + e); }
+  finally { btns.forEach(b => b.disabled = false); }
+}
+
+async function saveEdit(triggerBtn) {
+  const title = document.getElementById('f-title').value;
+  const meta = document.getElementById('f-meta').value;
+  const body = getBodyHTML();
+  try {
+    const r = await fetch(`/collection-content/${JOB_ID}/save`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title, meta, body}),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      if (triggerBtn && triggerBtn.textContent) {
+        const orig = triggerBtn.textContent;
+        triggerBtn.textContent = '✅ Đã lưu';
+        setTimeout(() => triggerBtn.textContent = orig, 1500);
+      }
+      return true;
+    } else {
+      alert('Lỗi: ' + (d.error || 'unknown'));
+      return false;
+    }
+  } catch (e) { alert('❌ ' + e); return false; }
+}
+
+// Trigger update meter on page load
+document.addEventListener('DOMContentLoaded', () => {
+  onBodyChange();
+});
+
+async function syncJob() {
+  const bodyLen = getBodyHTML().length;
+  if (bodyLen > HARAVAN_BODY_LIMIT) {
+    alert(`❌ Body HTML ${bodyLen.toLocaleString('vi-VN')} ký tự > Haravan limit ${HARAVAN_BODY_LIMIT.toLocaleString('vi-VN')}.\n\nRút gọn trước khi sync (Haravan sẽ trả lỗi "Mô tả quá dài").`);
+    return;
+  }
+  if (!confirm('🚀 Sync collection lên Haravan? Body + title + meta sẽ bị ghi đè trên admin.')) return;
+  await saveEdit();  // không truyền btn — không update text
+  const btns = document.querySelectorAll('button');
+  btns.forEach(b => b.disabled = true);
+  try {
+    const r = await fetch(`/collection-content/${JOB_ID}/sync`, {method: 'POST'});
+    const d = await r.json();
+    if (d.ok) {
+      alert('✅ Sync xong! Vào sintech.vn xem.');
+      location.reload();
+    } else {
+      alert('❌ ' + (d.error || 'unknown'));
+      btns.forEach(b => b.disabled = false);
+    }
+  } catch (e) { alert('❌ ' + e); btns.forEach(b => b.disabled = false); }
+}
+</script>
+
+{% endblock %}

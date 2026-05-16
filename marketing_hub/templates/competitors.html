@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% block title %}Đối thủ · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span>🥷 Đối thủ</span>
+<span class="crumb"></span>
+<span class="muted" style="font-weight:400">HACOM · GearVN · Phong Vũ · Minh Tuấn Mobile</span>
+{% endblock %}
+
+{% block page_actions %}
+<form action="{{ url_for('competitors_crawl') }}" method="post" style="display:inline">
+  <button class="btn btn-primary" type="submit"
+          {% if state.running %}disabled{% endif %}>
+    {% if state.running %}⏳ Đang crawl...{% else %}🚀 Crawl 4 đối thủ{% endif %}
+  </button>
+</form>
+{% endblock %}
+
+{% block content %}
+
+<div class="muted" style="font-size:12px;padding:8px 12px;background:rgba(59,130,246,0.05);border-left:3px solid #93c5fd;border-radius:4px;margin-bottom:14px">
+  💡 <strong>Cách hoạt động:</strong> Crawler gom URL từ sitemap.xml của 4 đối thủ → phân loại topic → so sánh với Sintech để phát hiện chủ đề Sintech THIẾU.
+  Không HEAD/GET từng URL — chỉ đọc sitemap, không gây tải cho đối thủ.
+</div>
+
+{# ─── 1. KPI ─── #}
+<div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+  <div class="kpi">
+    <div class="kpi-row"><div class="kpi-icon accent">🥷</div></div>
+    <div class="kpi-num">{{ stats.total }}</div>
+    <div class="kpi-label">Tổng URL đối thủ</div>
+  </div>
+  {% for k, info in competitors_meta.items() %}
+    <a href="?competitor={{ k }}" class="kpi" style="text-decoration:none;color:inherit">
+      <div class="kpi-row"><div class="kpi-icon blue">🔗</div></div>
+      <div class="kpi-num" style="font-size:22px">{{ stats.by_competitor.get(k, 0) }}</div>
+      <div class="kpi-label">{{ info.label }}</div>
+    </a>
+  {% endfor %}
+</div>
+
+{# ─── 2. PROGRESS (chỉ khi đang crawl) ─── #}
+{% if state.running %}
+<section class="card" style="margin-top:14px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <strong>⏳ Đang crawl: {{ state.competitor or '?' }}</strong>
+    <span class="muted" style="font-size:13px">{{ state.message }}</span>
+  </div>
+</section>
+{% endif %}
+
+{# ─── 3. TOPIC GAP ANALYSIS ─── #}
+{% if topic_gap %}
+<section class="card" style="margin-top:14px">
+  <h3 style="margin:0 0 10px 0;font-size:15px">🎯 Topic gap — chủ đề đối thủ có nhiều, Sintech ít/không có</h3>
+  <p class="muted" style="font-size:12px;margin:0 0 12px 0">
+    Sort theo "gap" (đối thủ nhiều hơn Sintech). Click 1 topic → filter URL đối thủ về chủ đề đó để em tham khảo.
+  </p>
+  <div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr>
+        <th class="col-stt">STT</th>
+        <th>Topic</th>
+        <th>Đối thủ có</th>
+        <th>Sintech có</th>
+        <th>Gap</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in topic_gap %}
+      <tr>
+        <td class="col-stt">{{ loop.index }}</td>
+        <td>
+          <span class="pill" style="background:{{ it.color }};font-size:12px">{{ it.label }}</span>
+        </td>
+        <td><strong>{{ it.competitor_count }}</strong></td>
+        <td>
+          {% if it.sintech_count == 0 %}
+            <span style="color:#fca5a5">{{ it.sintech_count }}</span>
+          {% elif it.sintech_count < it.competitor_count / 3 %}
+            <span style="color:#fde68a">{{ it.sintech_count }}</span>
+          {% else %}
+            <span style="color:#86efac">{{ it.sintech_count }}</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if it.gap > 0 %}
+            <span style="color:#f87171;font-weight:600">+{{ it.gap }}</span>
+          {% else %}
+            <span class="muted">{{ it.gap }}</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="?topic={{ it.topic }}" class="btn btn-sm">Xem URL đối thủ →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{# ─── 4. URL LIST với filter ─── #}
+<section class="card seo-list-section" style="margin-top:14px">
+  <div class="seo-list-head">
+    <h3 style="margin:0;font-size:15px">
+      📋 Danh sách URL đối thủ
+      <span class="muted" style="font-weight:400;font-size:13px">
+        — {{ total }} kết quả{% if total_pages > 1 %} · trang {{ page_num }}/{{ total_pages }}{% endif %}
+      </span>
+    </h3>
+  </div>
+
+  <form method="get" class="seo-filter-form seo-filter-sticky">
+    <input type="text" name="q" value="{{ filters.q }}"
+           placeholder="🔍 Tìm theo title hoặc URL..." class="seo-filter-input">
+
+    <select name="competitor" class="seo-filter-select">
+      <option value="">Tất cả đối thủ</option>
+      {% for k, info in competitors_meta.items() %}
+        <option value="{{ k }}" {% if filters.competitor == k %}selected{% endif %}>{{ info.label }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="topic" class="seo-filter-select">
+      <option value="">Tất cả topic</option>
+      {% for code, count in stats.by_topic.items() %}
+        {% set lab = topic_labels.get(code, (code, ''))[0] %}
+        <option value="{{ code }}" {% if filters.topic == code %}selected{% endif %}>{{ lab }} ({{ count }})</option>
+      {% endfor %}
+    </select>
+
+    <select name="sort" class="seo-filter-select">
+      <option value="recent" {% if filters.sort == 'recent' %}selected{% endif %}>🕐 Mới nhất</option>
+      <option value="title"  {% if filters.sort == 'title' %}selected{% endif %}>🔤 Title A→Z</option>
+      <option value="url"    {% if filters.sort == 'url' %}selected{% endif %}>URL A→Z</option>
+    </select>
+
+    <button class="btn btn-primary btn-sm" type="submit">Lọc</button>
+    <a href="{{ url_for('competitors_page') }}" class="btn btn-sm btn-ghost">Reset</a>
+  </form>
+
+  {% if items %}
+    <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th class="col-stt">STT</th>
+          <th>Đối thủ</th>
+          <th>Title (đoán từ slug)</th>
+          <th>Loại</th>
+          <th>Topic</th>
+          <th>Last modified</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+        <tr>
+          <td class="col-stt">{{ (page_num - 1) * per_page + loop.index }}</td>
+          <td>
+            <span class="pill" style="font-size:11px">
+              {{ competitors_meta.get(it.competitor, {}).get('label', it.competitor) }}
+            </span>
+          </td>
+          <td class="seo-url-cell">
+            <div style="font-size:13px;line-height:1.35">{{ it.title or '(no title)' }}</div>
+            <a href="{{ it.url }}" target="_blank" rel="noopener" class="seo-url-link" style="font-size:11.5px;word-break:break-all">{{ it.url }}</a>
+          </td>
+          <td>
+            <span class="seo-type seo-type-{{ it.url_type or 'other' }}">{{ it.url_type or '—' }}</span>
+          </td>
+          <td>
+            {% set tinfo = topic_labels.get(it.topic, ('❓ Khác', 'rgba(120,120,140,0.15)')) %}
+            <span class="pill" style="background:{{ tinfo[1] }};font-size:11px">{{ tinfo[0] }}</span>
+          </td>
+          <td><small class="muted">{{ it.lastmod or '—' }}</small></td>
+          <td>
+            <a href="{{ it.url }}" target="_blank" rel="noopener" class="btn btn-sm">↗ Xem</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+
+    {% if total_pages > 1 %}
+      {% set qs = request.args.to_dict() %}
+      <div class="seo-pagination">
+        {% if page_num > 1 %}
+          {% set _ = qs.update({'page': page_num - 1}) %}
+          <a class="btn btn-sm" href="?{{ qs|urlencode }}">← Trước</a>
+        {% endif %}
+        <span class="muted">Trang {{ page_num }}/{{ total_pages }}</span>
+        {% if page_num < total_pages %}
+          {% set _ = qs.update({'page': page_num + 1}) %}
+          <a class="btn btn-sm" href="?{{ qs|urlencode }}">Sau →</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% else %}
+    <div style="padding:40px 12px;text-align:center">
+      <div style="font-size:36px;margin-bottom:8px">🥷</div>
+      <p class="muted" style="margin:0">
+        {% if stats.total == 0 %}
+          Chưa có data đối thủ. Bấm <strong>"🚀 Crawl 4 đối thủ"</strong> ở header để bắt đầu (~1-3 phút).
+        {% else %}
+          Không có URL khớp filter. <a href="{{ url_for('competitors_page') }}">Reset</a>.
+        {% endif %}
+      </p>
+    </div>
+  {% endif %}
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const initial = {{ 'true' if state.running else 'false' }};
+  if (!initial) return;
+  let timer = setInterval(async () => {
+    try {
+      const r = await fetch("{{ url_for('api_competitors_status') }}", { cache: "no-store" });
+      const data = await r.json();
+      if (!data.state.running) {
+        clearInterval(timer);
+        setTimeout(() => location.reload(), 600);
+      }
+    } catch (e) { /* ignore */ }
+  }, 2000);
+})();
+</script>
+{% endblock %}

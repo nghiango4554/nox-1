@@ -1,0 +1,467 @@
+{% extends "base.html" %}
+{% block title %}Collection Content · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span style="font-weight:600">🗂️ Collection Content (Tạm)</span>
+{% endblock %}
+
+{% block page_actions %}
+<button class="btn" type="button" onclick="genAllInline(this)" id="btn-gen-all"
+        title="Gen AI liên tục các job pending trên trang hiện tại">🤖 Gen liên tục</button>
+<button class="btn" type="button" onclick="stopGenAll()" id="btn-stop-gen" style="display:none;background:rgba(239,68,68,0.18);color:#f87171">⏹ Dừng</button>
+<form method="post" action="{{ url_for('collection_content_sync_all') }}" style="display:inline"
+      onsubmit="return confirm('Sync tất cả collection đang status=draft lên Haravan?');">
+  <button class="btn btn-primary" type="submit">🚀 Sync tất cả</button>
+</form>
+{% endblock %}
+
+{% block content %}
+
+<style>
+  .cc-kpi { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-bottom:16px }
+  .cc-kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; text-decoration:none; color:inherit; }
+  .cc-kpi-card.active { border-color:#7c3aed; background:rgba(124,58,237,0.06) }
+  .cc-kpi-num { font-size:24px; font-weight:700; }
+  .cc-kpi-lbl { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px; margin-top:4px }
+
+  .cc-table { width:100%; font-size:12.5px; table-layout:fixed; border-collapse:collapse }
+  .cc-table th { font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px;
+    padding:8px; text-align:left; border-bottom:1px solid var(--border); background:rgba(255,255,255,.02) }
+  .cc-table td { padding:7px 8px; border-bottom:1px solid rgba(255,255,255,.04); vertical-align:middle }
+  .cc-table tbody tr:hover { background:rgba(255,255,255,.03) }
+  .cc-table .cc-cell-url { font-size:11px; color:var(--text-muted); word-break:break-all }
+  .cc-table .num { text-align:right; font-variant-numeric:tabular-nums }
+
+  .cc-status-pill { font-size:10px; padding:2px 8px; border-radius:10px; font-weight:600; display:inline-block; min-width:60px; text-align:center }
+  .cc-status-pending  { background:rgba(148,163,184,0.18); color:#94a3b8 }
+  .cc-status-drafting { background:rgba(250,204,21,0.18); color:#facc15 }
+  .cc-status-draft    { background:rgba(52,211,153,0.18); color:#34d399 }
+  .cc-status-synced   { background:rgba(96,165,250,0.18); color:#60a5fa }
+  .cc-status-failed   { background:rgba(239,68,68,0.18); color:#f87171 }
+  .cc-status-existing { background:rgba(168,85,247,0.18); color:#c084fc }
+
+  .cc-len-good { color:#34d399; font-weight:600 }
+  .cc-len-warn { color:#facc15 }
+  .cc-len-bad  { color:#f87171 }
+  .cc-len-empty { color:#94a3b8 }
+
+  /* ─── PROGRESS BAR GEN LIÊN TỤC ─── */
+  .gen-progress {
+    position:sticky; top:0; z-index:50;
+    background:linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(96,165,250,0.10) 100%);
+    border:1px solid #7c3aed; border-radius:10px;
+    padding:12px 16px; margin-bottom:14px;
+    backdrop-filter:blur(10px);
+    box-shadow:0 4px 14px rgba(124,58,237,0.18);
+    animation:gen-pulse 2s ease-in-out infinite;
+  }
+  @keyframes gen-pulse {
+    0%,100% { box-shadow:0 4px 14px rgba(124,58,237,0.18) }
+    50% { box-shadow:0 4px 22px rgba(124,58,237,0.32) }
+  }
+  .gen-progress.done { animation:none; border-color:#34d399; box-shadow:0 4px 14px rgba(52,211,153,0.20) }
+  .gen-progress.stopped { animation:none; border-color:#f59e0b; box-shadow:0 4px 14px rgba(245,158,11,0.20) }
+  .gp-row1 { display:flex; justify-content:space-between; align-items:center; font-size:13px; font-weight:600; margin-bottom:8px }
+  .gp-row1 .gp-title { display:flex; align-items:center; gap:10px }
+  .gp-row1 .gp-counts { font-variant-numeric:tabular-nums; font-size:12.5px; color:var(--text-muted); font-weight:500 }
+  .gp-row1 .gp-counts strong { font-weight:700 }
+  .gp-bar-wrap { position:relative; height:10px; background:rgba(255,255,255,0.06); border-radius:6px; overflow:hidden; margin-bottom:6px }
+  .gp-bar-fill {
+    height:100%; width:0%; transition:width 0.5s ease-out;
+    background:linear-gradient(90deg, #7c3aed 0%, #60a5fa 50%, #34d399 100%);
+    background-size:200% 100%;
+    animation:gp-shimmer 2s linear infinite;
+    border-radius:6px;
+  }
+  .gen-progress.done .gp-bar-fill { animation:none; background:#34d399 }
+  .gen-progress.stopped .gp-bar-fill { animation:none; background:#f59e0b }
+  @keyframes gp-shimmer {
+    0% { background-position:0% 0% }
+    100% { background-position:200% 0% }
+  }
+  .gp-row2 { display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--text-muted); gap:14px }
+  .gp-current { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .gp-current strong { color:var(--text) }
+  .gp-eta { font-variant-numeric:tabular-nums }
+  .gp-eta-val { color:#a5b4fc; font-weight:600 }
+</style>
+
+<div id="gen-progress" class="gen-progress" style="display:none">
+  <div class="gp-row1">
+    <div class="gp-title">
+      <span id="gp-icon">🤖</span>
+      <span id="gp-title-text">Đang gen liên tục...</span>
+    </div>
+    <div class="gp-counts">
+      <strong id="gp-done">0</strong>/<strong id="gp-total">0</strong>
+      <span style="color:#34d399">· <span id="gp-ok">0</span>✅</span>
+      <span style="color:#f87171">· <span id="gp-fail">0</span>❌</span>
+      <span id="gp-pct">(0%)</span>
+      <button id="gp-reload" onclick="location.reload()"
+              style="display:none;margin-left:10px;background:rgba(96,165,250,0.18);border:1px solid #60a5fa;color:#60a5fa;padding:2px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-weight:600"
+              title="Reload trang để xem quality + readability từng bài">🔄 Xem kết quả</button>
+      <button id="gp-dismiss" onclick="dismissProgressBar()"
+              style="display:none;margin-left:6px;background:transparent;border:1px solid var(--border);color:var(--text-muted);padding:2px 10px;border-radius:6px;font-size:11px;cursor:pointer"
+              title="Đóng thanh tiến độ này, không hiện lại">✕ Đóng</button>
+    </div>
+  </div>
+  <div class="gp-bar-wrap"><div id="gp-bar-fill" class="gp-bar-fill"></div></div>
+  <div class="gp-row2">
+    <div class="gp-current">📝 Đang gen: <strong id="gp-current-name">—</strong></div>
+    <div class="gp-eta">
+      ⏱ <span id="gp-elapsed">0s</span>
+      · ETA <span id="gp-eta-val" class="gp-eta-val">—</span>
+      · Trung bình <span id="gp-avg">—</span>/bài
+    </div>
+  </div>
+</div>
+
+<div class="cc-kpi">
+  <a href="{{ url_for('collection_content_page') }}" class="cc-kpi-card{% if not active_status %} active{% endif %}">
+    <div class="cc-kpi-num">{{ stats.total }}</div>
+    <div class="cc-kpi-lbl">Tổng collection</div>
+  </a>
+  <a href="?status=pending" class="cc-kpi-card{% if active_status == 'pending' %} active{% endif %}">
+    <div class="cc-kpi-num" style="color:#94a3b8">{{ stats.pending }}</div>
+    <div class="cc-kpi-lbl">⏳ Pending (cần viết)</div>
+  </a>
+  <a href="?status=existing" class="cc-kpi-card{% if active_status == 'existing' %} active{% endif %}">
+    <div class="cc-kpi-num" style="color:#c084fc">{{ stats.existing }}</div>
+    <div class="cc-kpi-lbl">🔵 Đã có content (Haravan)</div>
+  </a>
+  <a href="?status=draft" class="cc-kpi-card{% if active_status == 'draft' %} active{% endif %}">
+    <div class="cc-kpi-num" style="color:#34d399">{{ stats.draft }}</div>
+    <div class="cc-kpi-lbl">📝 Draft</div>
+  </a>
+  <a href="?status=synced" class="cc-kpi-card{% if active_status == 'synced' %} active{% endif %}">
+    <div class="cc-kpi-num" style="color:#60a5fa">{{ stats.synced }}</div>
+    <div class="cc-kpi-lbl">✅ Synced</div>
+  </a>
+  <a href="?status=failed" class="cc-kpi-card{% if active_status == 'failed' %} active{% endif %}">
+    <div class="cc-kpi-num" style="color:#f87171">{{ stats.failed }}</div>
+    <div class="cc-kpi-lbl">❌ Failed</div>
+  </a>
+</div>
+
+{% if not jobs %}
+<section class="card" style="padding:24px;text-align:center">
+  <p class="muted">Không có collection nào trong filter này.</p>
+</section>
+{% else %}
+<section class="card" style="padding:0">
+<table class="cc-table">
+  <colgroup>
+    <col style="width:42px"><col style="width:78px">
+    <col style="width:22%"><col style="width:70px"><col style="width:70px"><col style="width:70px">
+    <col style="width:70px"><col style="width:70px">
+    <col><col style="width:130px"><col style="width:180px">
+  </colgroup>
+  <thead>
+    <tr>
+      <th>#</th><th>Status</th>
+      <th>Tên collection</th>
+      <th class="num">Title</th><th class="num">Meta</th><th class="num">Body</th>
+      <th class="num" title="SEO quality score 0-100">⭐ Quality</th>
+      <th class="num" title="Readability score 0-100">📖 Read</th>
+      <th>URL</th>
+      <th>Synced lúc</th>
+      <th style="text-align:center">Hành động</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for j in jobs %}
+    {% set tl = (j.edited_title or '')|length %}
+    {% set ml = (j.edited_meta or '')|length %}
+    {% set bl = (j.edited_body_html or '')|length %}
+    <tr data-job-id="{{ j.id }}" data-status="{{ j.status }}">
+      <td class="muted">{{ loop.index }}</td>
+      <td><span class="cc-status-pill cc-status-{{ j.status }}">{{ j.status }}</span></td>
+      <td style="font-weight:500">{{ (j.collection_title or j.handle)[:60] }}</td>
+      <td class="num">
+        {% if tl == 0 %}<span class="cc-len-empty">—</span>
+        {% elif 45 <= tl <= 61 %}<span class="cc-len-good">{{ tl }}c</span>
+        {% elif tl > 61 %}<span class="cc-len-bad">{{ tl }}c</span>
+        {% else %}<span class="cc-len-warn">{{ tl }}c</span>{% endif %}
+      </td>
+      <td class="num">
+        {% if ml == 0 %}<span class="cc-len-empty">—</span>
+        {% elif 140 <= ml <= 160 %}<span class="cc-len-good">{{ ml }}c</span>
+        {% elif ml > 160 %}<span class="cc-len-bad">{{ ml }}c</span>
+        {% else %}<span class="cc-len-warn">{{ ml }}c</span>{% endif %}
+      </td>
+      <td class="num">
+        {% if bl == 0 %}<span class="cc-len-empty">—</span>
+        {% else %}<span class="muted">{{ bl }}b</span>{% endif %}
+      </td>
+      <td class="num">
+        {% set qs = j.quality_score %}
+        {% if not qs %}<span class="cc-len-empty">—</span>
+        {% elif qs >= 80 %}<span class="cc-len-good">{{ qs }}</span>
+        {% elif qs >= 65 %}<span style="color:#22c55e;font-weight:600">{{ qs }}</span>
+        {% elif qs >= 50 %}<span class="cc-len-warn">{{ qs }}</span>
+        {% elif qs >= 35 %}<span style="color:#f59e0b;font-weight:600">{{ qs }}</span>
+        {% else %}<span class="cc-len-bad">{{ qs }}</span>{% endif %}
+      </td>
+      <td class="num">
+        {% set rs = j.readability_score %}
+        {% if not rs %}<span class="cc-len-empty">—</span>
+        {% elif rs >= 60 %}<span class="cc-len-good">{{ rs }}</span>
+        {% elif rs >= 40 %}<span class="cc-len-warn">{{ rs }}</span>
+        {% else %}<span class="cc-len-bad">{{ rs }}</span>{% endif %}
+      </td>
+      <td class="cc-cell-url">
+        <a href="{{ j.collection_url }}" target="_blank" rel="noopener">{{ j.collection_url|replace('https://sintech.vn', '') }}</a>
+      </td>
+      <td class="muted" style="font-size:11px">{{ j.synced_at[:16] if j.synced_at else '—' }}</td>
+      <td style="text-align:center">
+        <a href="{{ url_for('collection_content_detail_page', job_id=j.id) }}" class="btn btn-sm">✏️ Sửa</a>
+        <button class="btn btn-sm btn-primary" onclick="genAIInline({{ j.id }}, this)">🤖 AI gen</button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</section>
+{% endif %}
+
+<script>
+async function genAIInline(id, btn) {
+  if (!confirm(`🤖 AI gen content cho collection #${id}? (~30-60s)`)) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ Đang gen...';
+  try {
+    const r = await fetch(`/collection-content/${id}/gen`, {method: 'POST'});
+    const d = await r.json();
+    if (d.ok) {
+      btn.textContent = '✅ Done';
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      btn.textContent = orig; btn.disabled = false;
+      alert('❌ Lỗi: ' + (d.error || 'unknown'));
+    }
+  } catch (e) { btn.textContent = orig; btn.disabled = false; alert('❌ ' + e); }
+}
+
+// ─── GEN LIÊN TỤC + PROGRESS BAR (BACKGROUND server-side) ───
+// Server chạy gen thật trong thread riêng → client poll /gen-status để update UI.
+// Chuyển trang/đóng tab vẫn tiếp tục gen, mở lại trang sẽ thấy bar đang chạy.
+
+let _pollTimer = null;
+let _pollClientT0 = 0;  // client-side clock for elapsed display when between polls
+
+function _fmtDuration(sec) {
+  sec = Math.max(0, Math.round(sec));
+  if (sec < 60) return sec + 's';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m < 60) return s ? `${m}m ${s}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
+function _renderBGProgress(s) {
+  const wrap = document.getElementById('gen-progress');
+  wrap.style.display = '';
+  const total = s.total || 0;
+  const done = s.done || 0;
+  const ok = s.ok || 0;
+  const fail = s.fail || 0;
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const isFinished = !s.running;
+  const isStopped = s.stopped && isFinished;
+
+  if (isFinished) {
+    wrap.className = 'gen-progress ' + (isStopped ? 'stopped' : 'done');
+    document.getElementById('gp-icon').textContent = isStopped ? '⏸' : '✅';
+    document.getElementById('gp-title-text').textContent = isStopped
+      ? `Đã dừng — ${ok}✅ ${fail}❌`
+      : `Gen xong — ${ok}✅ ${fail}❌`;
+    document.getElementById('gp-current-name').textContent = isStopped ? 'Đã dừng giữa chừng' : '✓ Hoàn tất';
+    document.getElementById('btn-stop-gen').style.display = 'none';
+    const btn = document.getElementById('btn-gen-all');
+    btn.disabled = false;
+    if (btn.dataset.orig) btn.textContent = btn.dataset.orig;
+  } else {
+    wrap.className = 'gen-progress';
+    document.getElementById('gp-icon').textContent = '🤖';
+    document.getElementById('gp-title-text').textContent = s.stopped
+      ? '⏸ Đang dừng sau job hiện tại...'
+      : 'Đang gen liên tục (server ngầm)...';
+    document.getElementById('btn-stop-gen').style.display = '';
+    document.getElementById('btn-gen-all').disabled = true;
+    document.getElementById('btn-gen-all').textContent = '⏳ Đang chạy...';
+  }
+
+  document.getElementById('gp-bar-fill').style.width = pct + '%';
+  document.getElementById('gp-done').textContent = done;
+  document.getElementById('gp-total').textContent = total;
+  document.getElementById('gp-ok').textContent = ok;
+  document.getElementById('gp-fail').textContent = fail;
+  document.getElementById('gp-pct').textContent = `(${pct}%)`;
+
+  // Current job + elapsed
+  let curText = '—';
+  if (s.current_name) {
+    curText = `#${s.current_id} ${s.current_name}`;
+    if (s.job_started_at) {
+      const jobT0 = new Date(s.job_started_at).getTime();
+      const jobElapsed = (Date.now() - jobT0) / 1000;
+      curText += ` · ⏱ ${_fmtDuration(jobElapsed)}`;
+    }
+  } else if (isFinished) {
+    curText = isStopped ? 'Đã dừng' : '✓ Hoàn tất';
+  }
+  document.getElementById('gp-current-name').textContent = curText;
+
+  // Elapsed tổng + ETA + avg
+  if (s.started_at) {
+    const t0 = new Date(s.started_at).getTime();
+    const endT = s.finished_at ? new Date(s.finished_at).getTime() : Date.now();
+    const elapsed = (endT - t0) / 1000;
+    document.getElementById('gp-elapsed').textContent = _fmtDuration(elapsed);
+  }
+  const durs = s.completed_durations || [];
+  if (durs.length > 0) {
+    const avg = durs.reduce((a,b) => a+b, 0) / durs.length;
+    document.getElementById('gp-avg').textContent = _fmtDuration(avg);
+    if (!isFinished) {
+      const remaining = total - done;
+      document.getElementById('gp-eta-val').textContent = _fmtDuration(avg * remaining);
+    } else {
+      document.getElementById('gp-eta-val').textContent = '✓ Xong';
+    }
+  } else if (isFinished) {
+    document.getElementById('gp-eta-val').textContent = '✓ Xong';
+  }
+
+  // Update row pill on the page nếu có thấy
+  if (s.current_id) {
+    const row = document.querySelector(`tr[data-job-id="${s.current_id}"]`);
+    if (row) {
+      const pill = row.querySelector('.cc-status-pill');
+      if (pill && !pill.textContent.includes('drafting')) {
+        pill.textContent = 'drafting';
+        pill.className = 'cc-status-pill cc-status-drafting';
+        row.children[2].style.background = 'rgba(250,204,21,0.10)';
+      }
+    }
+  }
+}
+
+function dismissProgressBar() {
+  const wrap = document.getElementById('gen-progress');
+  const finishedAt = wrap.dataset.finishedAt;
+  if (finishedAt) {
+    // Nhớ "đã đóng" mãi (localStorage) — không hiện lại run này
+    localStorage.setItem('cc_bg_acked_' + finishedAt, '1');
+  }
+  wrap.style.display = 'none';
+}
+
+async function _pollBGStatus() {
+  try {
+    const r = await fetch('/collection-content/gen-status', {cache: 'no-store'});
+    const s = await r.json();
+    if (s.running) {
+      // Đang chạy → render + poll tiếp, KHÔNG show nút Đóng/Reload
+      _renderBGProgress(s);
+      document.getElementById('gp-dismiss').style.display = 'none';
+      document.getElementById('gp-reload').style.display = 'none';
+      _pollTimer = setTimeout(_pollBGStatus, 2000);
+    } else if (s.finished_at) {
+      // Đã xong — kiểm tra user đã đóng bar cho run này chưa
+      const ackKey = 'cc_bg_acked_' + s.finished_at;
+      if (localStorage.getItem(ackKey)) {
+        // Đã đóng rồi → ẩn luôn, không hiện lại
+        document.getElementById('gen-progress').style.display = 'none';
+      } else {
+        // Show 1 lần, hiện nút Reload + Đóng, KHÔNG auto reload, KHÔNG poll tiếp
+        _renderBGProgress(s);
+        document.getElementById('gen-progress').dataset.finishedAt = s.finished_at;
+        document.getElementById('gp-dismiss').style.display = '';
+        document.getElementById('gp-reload').style.display = '';
+      }
+      // KHÔNG poll tiếp khi đã xong
+    } else {
+      document.getElementById('gen-progress').style.display = 'none';
+    }
+  } catch(e) {
+    console.error('Poll error:', e);
+    // Khi lỗi mạng → retry 5s sau, NHƯNG chỉ nếu đang running mới poll tiếp
+    _pollTimer = setTimeout(_pollBGStatus, 5000);
+  }
+}
+
+async function stopGenAll() {
+  document.getElementById('btn-stop-gen').textContent = '⏸ Đang dừng...';
+  try {
+    await fetch('/collection-content/gen-stop', {method: 'POST'});
+  } catch(e) { alert('Lỗi gửi stop: ' + e); }
+}
+
+async function genAllInline(btn) {
+  const allRows = Array.from(document.querySelectorAll('tr[data-job-id]'));
+  const pendingRows = allRows.filter(r => ['pending','failed'].includes(r.dataset.status));
+  if (pendingRows.length === 0) {
+    alert('Không có job pending/failed nào trên trang hiện tại. Filter sang tab "⏳ Pending" hoặc "❌ Failed" rồi thử lại.');
+    return;
+  }
+  const askN = prompt(
+    `Gen liên tục bao nhiêu bài? (Tối đa ${pendingRows.length} bài pending/failed trên trang)\n` +
+    `Mỗi bài mất ~60-120s, ${pendingRows.length} bài ≈ ${Math.ceil(pendingRows.length * 90 / 60)} phút.\n\n` +
+    `✨ Server chạy NGẦM — em có thể tự do chuyển trang, mở bài khác mà gen vẫn tiếp tục.`,
+    String(Math.min(pendingRows.length, 10))
+  );
+  if (askN === null) return;
+  const limit = parseInt(askN, 10);
+  if (isNaN(limit) || limit < 1) { alert('Số không hợp lệ.'); return; }
+  const targets = pendingRows.slice(0, limit);
+  const ids = targets.map(r => parseInt(r.dataset.jobId));
+
+  btn.disabled = true; btn.dataset.orig = btn.textContent; btn.textContent = '⏳ Đang khởi động...';
+  document.getElementById('btn-stop-gen').style.display = '';
+  document.getElementById('btn-stop-gen').textContent = '⏹ Dừng';
+
+  try {
+    const r = await fetch('/collection-content/gen-bg', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ids: ids})
+    });
+    const d = await r.json();
+    if (!d.ok) {
+      alert('❌ ' + (d.error || 'unknown'));
+      btn.disabled = false; btn.textContent = btn.dataset.orig;
+      document.getElementById('btn-stop-gen').style.display = 'none';
+      return;
+    }
+    // Start polling
+    if (_pollTimer) clearTimeout(_pollTimer);
+    _pollBGStatus();
+  } catch(e) {
+    alert('❌ ' + e);
+    btn.disabled = false; btn.textContent = btn.dataset.orig;
+    document.getElementById('btn-stop-gen').style.display = 'none';
+  }
+}
+
+// Auto-detect: khi load trang, check status — nếu đang chạy thì show bar + poll luôn.
+document.addEventListener('DOMContentLoaded', () => {
+  _pollBGStatus();
+  // Update job-elapsed mỗi 1s cho mượt (không cần fetch server)
+  setInterval(() => {
+    const cur = document.getElementById('gp-current-name');
+    if (!cur || cur.textContent === '—' || cur.textContent.startsWith('✓') || cur.textContent.startsWith('Đã dừng')) return;
+    // Nhặt elapsed từ last fetched job_started_at (lưu trong dataset)
+    const startStr = cur.dataset.jobStart;
+    if (startStr) {
+      const t0 = parseInt(startStr);
+      const elapsed = (Date.now() - t0) / 1000;
+      const base = cur.textContent.split(' · ⏱')[0];
+      cur.textContent = `${base} · ⏱ ${_fmtDuration(elapsed)}`;
+    }
+  }, 1000);
+});
+</script>
+
+{% endblock %}

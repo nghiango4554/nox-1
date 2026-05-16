@@ -1,0 +1,687 @@
+{% extends "base.html" %}
+{% block title %}{% if post %}{{ post.code }}{% else %}Bài mới{% endif %} · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('posts_page') }}" class="crumb">Posts</a>
+<span>{% if post %}{{ post.code }}{% else %}+ Bài mới{% endif %}</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn btn-ghost" href="{{ url_for('posts_page') }}">← Danh sách</a>
+{% endblock %}
+
+{% block content %}
+
+<div class="form-wrap">
+  <form method="post" enctype="multipart/form-data"
+    action="{% if post %}{{ url_for('post_update', post_id=post.id) }}{% else %}{{ url_for('post_new') }}{% endif %}"
+    class="post-form" id="post-form">
+
+    <div class="row">
+      <label>
+        <span>Ngày đăng</span>
+        <input type="date" name="scheduled_date" value="{{ post.scheduled_date or '' }}">
+      </label>
+      <label>
+        <span>Giờ đăng</span>
+        {% set t = post.scheduled_time or '' %}
+        {% set hh = t.split(':')[0] if ':' in t else '' %}
+        {% set mm = t.split(':')[1] if ':' in t else '' %}
+        <div class="time-split">
+          <input type="text" id="f-time-hh" class="time-part" inputmode="numeric"
+                 maxlength="2" placeholder="HH" value="{{ hh }}">
+          <span class="time-sep">:</span>
+          <input type="text" id="f-time-mm" class="time-part" inputmode="numeric"
+                 maxlength="2" placeholder="MM" value="{{ mm }}">
+          <input type="hidden" name="scheduled_time" id="f-time" value="{{ t }}">
+        </div>
+      </label>
+      <label>
+        <span>Loại bài</span>
+        <select name="type">
+          {% for v, label in types %}
+            <option value="{{ v }}" {% if post and post.type == v %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>
+        <span>Trạng thái</span>
+        <select name="status">
+          {% for v, label in statuses %}
+            <option value="{{ v }}" {% if post and post.status == v %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+
+    <label>
+      <span>Caption (nội dung Facebook)</span>
+      <textarea name="caption" id="f-caption" rows="20" placeholder="Nội dung bài viết...">{{ post.caption or '' }}</textarea>
+    </label>
+
+    <label>
+      <span>Link sản phẩm (tuỳ chọn)</span>
+      <div class="row-flex gap-2" style="display:flex;gap:6px;align-items:stretch">
+        <input type="url" name="link" id="f-link" value="{{ post.link or '' }}" placeholder="https://sintech.vn/..." style="flex:1">
+        <a id="btn-open-link" class="btn" target="_blank" rel="noopener noreferrer"
+           href="{{ post.link or '#' }}"
+           {% if not post.link %}style="pointer-events:none;opacity:0.4"{% endif %}
+           title="Mở link trong tab mới">↗ Mở tab</a>
+      </div>
+    </label>
+    <script>
+    (function(){
+      const inp = document.getElementById('f-link');
+      const btn = document.getElementById('btn-open-link');
+      function sync() {
+        const v = (inp.value || '').trim();
+        if (v) {
+          btn.href = v;
+          btn.style.pointerEvents = '';
+          btn.style.opacity = '';
+        } else {
+          btn.href = '#';
+          btn.style.pointerEvents = 'none';
+          btn.style.opacity = '0.4';
+        }
+      }
+      inp.addEventListener('input', sync);
+      sync();
+    })();
+    </script>
+
+    <label>
+      <span>Ảnh bài viết <small class="muted">(tick để chọn → xoá hàng loạt · kéo thả để đổi thứ tự)</small></span>
+      <div class="row-flex gap-2 mb-2" style="flex-wrap:wrap">
+        <input type="file" name="images" id="f-images-input" accept="image/*" multiple style="flex:1">
+        {% if post %}
+          <button type="button" class="btn" id="btn-open-library">📁 Chọn từ thư viện</button>
+        {% endif %}
+      </div>
+
+      {# Bulk-select toolbar #}
+      <div id="img-toolbar" class="img-toolbar" style="display:none">
+        <span><b id="img-sel-count">0</b> ảnh đã chọn</span>
+        <button type="button" class="btn btn-sm btn-ghost" id="img-sel-all">Chọn hết</button>
+        <button type="button" class="btn btn-sm btn-ghost" id="img-sel-clear">Bỏ chọn</button>
+        <button type="button" class="btn btn-sm btn-danger" id="img-sel-delete">🗑 Xoá đã chọn</button>
+      </div>
+
+      {% if post and post.image_warnings %}
+      <div class="img-warn">
+        <span>⚠️</span>
+        <div>
+          <b>Cảnh báo ảnh nhầm bài:</b> {{ post.image_warnings|length }} ảnh có tên chứa code khác <b>{{ post.code }}</b>:
+          <ul style="margin:4px 0 0 0;padding-left:18px">
+            {% for w in post.image_warnings %}
+              <li><code>{{ w.filename[:80] }}{% if w.filename|length > 80 %}…{% endif %}</code> — gắn code <b>{{ w.found_code }}</b></li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+      {% endif %}
+
+      {# Existing images (sortable) #}
+      <input type="hidden" name="images_order" id="f-images-order" value="{{ (post.image_list or []) | join(',') if post else '' }}">
+      <div id="img-grid" class="img-grid">
+        {% if post %}
+          {% for fn in post.image_list %}
+            <div class="img-tile" draggable="true" data-fn="{{ fn }}">
+              <span class="img-num">{{ loop.index }}</span>
+              <img src="{{ url_for('serve_upload', filename=fn) }}" alt="{{ fn }}">
+              <div class="img-select-badge">✓</div>
+              <label class="img-check-wrap" title="Chọn ảnh">
+                <input type="checkbox" class="img-check" data-fn="{{ fn }}">
+                <span class="img-check-box"></span>
+              </label>
+              <button type="button" class="img-del" data-fn="{{ fn }}" title="Xoá ảnh này">×</button>
+            </div>
+          {% endfor %}
+        {% endif %}
+      </div>
+      <div id="img-pending" class="img-pending muted" style="display:none"></div>
+    </label>
+
+    <div class="actions">
+      <button class="btn btn-primary">{% if post %}💾 Lưu thay đổi{% else %}+ Tạo bài{% endif %}</button>
+      {% if post %}
+        <button type="button" class="btn" id="btn-publish">🚀 Đăng ngay</button>
+        <button type="button" class="btn" id="btn-schedule">⏰ Schedule (FB native)</button>
+        <form method="post" action="{{ url_for('post_delete', post_id=post.id) }}" style="display:inline" onsubmit="return confirm('Xóa bài {{ post.code }}?')">
+          <button class="btn btn-danger">🗑 Xóa</button>
+        </form>
+      {% endif %}
+    </div>
+  </form>
+
+  {# ───── PREVIEW PANE ───── #}
+  <aside class="fb-preview" id="fb-preview">
+    <h3>👁️ Xem trước bài FB</h3>
+    <p class="muted">Đồng bộ realtime khi em sửa caption hoặc kéo ảnh.</p>
+
+    <div id="lint-panel" class="lint-panel" style="display:none">
+      <div class="lint-head">🔍 Cảnh báo nội dung</div>
+      <ul id="lint-list"></ul>
+    </div>
+
+    <div class="fbp-card">
+      <div class="fbp-head">
+        <div class="fbp-avatar">S</div>
+        <div>
+          <div class="fbp-page">Sintech PC Gaming &amp; Gear</div>
+          <div class="fbp-meta">Bài đăng · 🌐</div>
+        </div>
+      </div>
+      <div class="fbp-caption" id="fbp-caption"></div>
+      <div class="fbp-media" id="fbp-media"></div>
+      <a id="fbp-link" class="fbp-link" target="_blank" rel="noopener" style="display:none"></a>
+      <div class="fbp-actions">
+        <span>👍 Thích</span><span>💬 Bình luận</span><span>↗ Chia sẻ</span>
+      </div>
+    </div>
+  </aside>
+</div>
+
+{# ───── IMAGE LIBRARY MODAL ───── #}
+{% if post %}
+<div id="lib-modal" class="lib-modal hidden" role="dialog">
+  <div class="lib-modal-card">
+    <div class="lib-modal-head">
+      <div class="card-title">📁 Thư viện ảnh — <span class="muted" id="lib-cat-label">chọn category</span></div>
+      <div class="row-flex gap-2">
+        <span class="muted" id="lib-sel-count">0 ảnh đã chọn</span>
+        <button type="button" class="btn btn-primary" id="lib-add-selected" disabled>+ Thêm vào bài</button>
+        <button type="button" class="btn btn-ghost" id="lib-close">✕</button>
+      </div>
+    </div>
+    <div class="lib-modal-body">
+      <aside class="lib-sidebar">
+        <input type="text" id="lib-cat-search" placeholder="🔍 Lọc category..." class="lib-search">
+        <div id="lib-cat-list" class="lib-cat-list"><small class="muted">Đang tải...</small></div>
+      </aside>
+      <main class="lib-grid-wrap">
+        <div id="lib-grid" class="lib-grid">
+          <div class="muted" style="padding:20px;text-align:center">← Chọn category bên trái</div>
+        </div>
+      </main>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+const POST_ID = {% if post %}{{ post.id }}{% else %}null{% endif %};
+const UPLOAD_BASE = "{{ url_for('serve_upload', filename='') }}";
+
+// ───── Helpers ─────
+function escapeHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ───── TIME INPUT: split HH | : | MM ─────
+const fTime = document.getElementById('f-time');
+const fHH = document.getElementById('f-time-hh');
+const fMM = document.getElementById('f-time-mm');
+
+function syncTime() {
+  const hh = (fHH.value || '').padStart(2, '0');
+  const mm = (fMM.value || '').padStart(2, '0');
+  fTime.value = (fHH.value || fMM.value) ? `${hh}:${mm}` : '';
+}
+fHH?.addEventListener('input', e => {
+  let v = e.target.value.replace(/[^0-9]/g, '').slice(0, 2);
+  if (parseInt(v || '0', 10) > 23) v = '23';
+  e.target.value = v;
+  if (v.length === 2) fMM.focus();
+  syncTime();
+});
+fMM?.addEventListener('input', e => {
+  let v = e.target.value.replace(/[^0-9]/g, '').slice(0, 2);
+  if (parseInt(v || '0', 10) > 59) v = '59';
+  e.target.value = v;
+  syncTime();
+});
+[fHH, fMM].forEach(inp => inp?.addEventListener('blur', e => {
+  if (e.target.value) e.target.value = e.target.value.padStart(2, '0');
+  syncTime();
+}));
+fMM?.addEventListener('keydown', e => {
+  if (e.key === 'Backspace' && !fMM.value) fHH.focus();
+});
+syncTime();
+
+// ───── PREVIEW SYNC ─────
+const fbpCaption = document.getElementById('fbp-caption');
+const fbpMedia = document.getElementById('fbp-media');
+const fbpLink = document.getElementById('fbp-link');
+const fCaption = document.getElementById('f-caption');
+const fLink = document.getElementById('f-link');
+const imgGrid = document.getElementById('img-grid');
+const imgPending = document.getElementById('img-pending');
+const orderInput = document.getElementById('f-images-order');
+
+function currentImages() {
+  return Array.from(imgGrid.querySelectorAll('.img-tile')).map(t => t.dataset.fn);
+}
+
+function syncOrderInput() {
+  orderInput.value = currentImages().join(',');
+  // renumber tiles
+  imgGrid.querySelectorAll('.img-tile').forEach((t, i) => {
+    const n = t.querySelector('.img-num'); if (n) n.textContent = i + 1;
+  });
+}
+
+function renderPreview() {
+  const text = fCaption.value || '';
+  fbpCaption.innerHTML = escapeHtml(text).replace(/\n/g, '<br>') ||
+    '<span class="muted">(caption trống)</span>';
+
+  const imgs = currentImages();
+  let pendingFiles = Array.from(document.getElementById('f-images-input').files || []);
+  const pendingPreviews = pendingFiles.map(f => URL.createObjectURL(f));
+
+  let html = '';
+  const all = imgs.map(fn => UPLOAD_BASE + encodeURIComponent(fn)).concat(pendingPreviews);
+  if (all.length === 0) {
+    html = '<div class="fbp-empty">📷 Chưa có ảnh</div>';
+  } else if (all.length === 1) {
+    html = `<div class="fbp-grid grid-1"><img src="${all[0]}"></div>`;
+  } else if (all.length === 2) {
+    html = `<div class="fbp-grid grid-2">${all.map(u=>`<img src="${u}">`).join('')}</div>`;
+  } else if (all.length === 3) {
+    html = `<div class="fbp-grid grid-3"><img src="${all[0]}" class="big">` +
+           `<div class="col">${all.slice(1).map(u=>`<img src="${u}">`).join('')}</div></div>`;
+  } else {
+    const extra = all.length > 4 ? `<div class="more">+${all.length - 4}</div>` : '';
+    html = `<div class="fbp-grid grid-4">` +
+           all.slice(0, 4).map((u, i) => `<div class="cell">${i===3 && extra ? extra : ''}<img src="${u}"></div>`).join('') +
+           `</div>`;
+  }
+  fbpMedia.innerHTML = html;
+
+  if (fLink && fLink.value.trim()) {
+    fbpLink.href = fLink.value.trim();
+    fbpLink.textContent = fLink.value.trim();
+    fbpLink.style.display = '';
+  } else {
+    fbpLink.style.display = 'none';
+  }
+
+  // pending files note
+  if (pendingFiles.length) {
+    imgPending.style.display = '';
+    imgPending.textContent = `+ ${pendingFiles.length} ảnh sẽ được upload khi lưu`;
+  } else {
+    imgPending.style.display = 'none';
+  }
+}
+
+fCaption?.addEventListener('input', () => { renderPreview(); lintCaption(); });
+fLink?.addEventListener('input', () => { renderPreview(); lintCaption(); });
+document.getElementById('f-images-input')?.addEventListener('change', renderPreview);
+
+// ───── CAPTION LINTER ─────
+const lintPanel = document.getElementById('lint-panel');
+const lintList = document.getElementById('lint-list');
+
+function lintCaption() {
+  const cap = (fCaption?.value || '');
+  const link = (fLink?.value || '').trim();
+  const issues = [];
+
+  // 1. Lộ giá: số có dạng X.XXX.XXX hoặc XXXXXXX (>= 6 chữ số liền) hoặc XX,XXX,XXX
+  // Match e.g. "4.190.000đ", "4.190.000", "4190000đ" — nhưng KHÔNG match "1Tr8xx", "67x.000", "X.XXX.XXX" placeholder
+  const priceLine = cap.match(/[💸]?\s*[Gg]i[áa][^\n]*/g) || [];
+  let leakedPrices = [];
+  // Detect digit groups like 1.234.000 or 1,234,000 or 1234000
+  const reThousands = /\b\d{1,3}(?:[.,]\d{3}){1,}(?:đ|VND|vnđ|vnd)?\b/g;
+  const reBigNum = /\b\d{6,}(?:đ|VND|vnđ|vnd)?\b/g;
+  // search whole caption (giá lộ ở bất kỳ đâu, không chỉ dòng "💸 Giá:")
+  let m;
+  while ((m = reThousands.exec(cap))) leakedPrices.push(m[0]);
+  while ((m = reBigNum.exec(cap))) {
+    // tránh duplicate với reThousands
+    if (!leakedPrices.includes(m[0])) leakedPrices.push(m[0]);
+  }
+  // loại bỏ các số là số điện thoại / năm / hashtag
+  leakedPrices = leakedPrices.filter(s => {
+    // số tiền cần >= 6 digits sau loại bỏ . , đ
+    const digits = s.replace(/[^0-9]/g, '');
+    if (digits.length < 6) return false;
+    // hotline pattern (e.g. "0911 713 000" — đã match thường có space, nhưng ta chỉ check không-space)
+    return true;
+  });
+  if (leakedPrices.length) {
+    issues.push({
+      level: 'error',
+      msg: `Lộ giá rõ: <code>${leakedPrices.slice(0, 3).map(escapeHtml).join('</code>, <code>')}</code> — nên che thành <b>1Tr8xx</b>, <b>4Tr1xx</b>, <b>67x.000</b>...`,
+    });
+  }
+
+  // 2. Có link sản phẩm nhưng caption không có CTA "Xem thêm thông tin sản phẩm tại đây"
+  if (link) {
+    const hasCta = /[Xx]em th[êe]m th[ôo]ng tin s[ảa]n ph[ẩa]m t[ạa]i [đd][âa]y/.test(cap);
+    if (!hasCta) {
+      issues.push({
+        level: 'warn',
+        msg: 'Bài có link sản phẩm nhưng thiếu CTA <code>👉 Xem thêm thông tin sản phẩm tại đây:</code> + link',
+      });
+    }
+  }
+
+  // 3. Spec block > 7 dòng
+  const specMatch = cap.match(/⚙️\s*THÔNG SỐ NỔI BẬT\n([\s\S]+?)(?:\n\n|$)/);
+  if (specMatch) {
+    const specLines = specMatch[1].split('\n').filter(s => s.trim().length > 0);
+    if (specLines.length > 7) {
+      issues.push({
+        level: 'warn',
+        msg: `Block thông số có <b>${specLines.length} dòng</b> — nên rút còn ≤ 7 dòng cho gọn`,
+      });
+    }
+  }
+
+  // Render
+  if (!issues.length) {
+    lintPanel.style.display = 'none';
+    lintPanel.classList.remove('lint-error', 'lint-warn');
+    return;
+  }
+  const hasError = issues.some(i => i.level === 'error');
+  lintPanel.style.display = '';
+  lintPanel.classList.toggle('lint-error', hasError);
+  lintPanel.classList.toggle('lint-warn', !hasError);
+  lintList.innerHTML = issues.map(i =>
+    `<li class="lint-${i.level}"><span class="lint-icon">${i.level === 'error' ? '🚨' : '⚠️'}</span><span>${i.msg}</span></li>`
+  ).join('');
+}
+
+// ───── IMAGE TILE: delete + drag reorder ─────
+function attachTileEvents(tile) {
+  tile.addEventListener('dragstart', e => {
+    tile.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', tile.dataset.fn);
+  });
+  tile.addEventListener('dragend', () => {
+    tile.classList.remove('dragging');
+    syncOrderInput(); renderPreview();
+  });
+}
+
+imgGrid?.addEventListener('dragover', e => {
+  e.preventDefault();
+  const dragging = imgGrid.querySelector('.img-tile.dragging');
+  if (!dragging) return;
+  const after = [...imgGrid.querySelectorAll('.img-tile:not(.dragging)')].find(t => {
+    const r = t.getBoundingClientRect();
+    return e.clientY < r.top + r.height / 2 && e.clientX < r.right;
+  });
+  if (after) imgGrid.insertBefore(dragging, after);
+  else imgGrid.appendChild(dragging);
+});
+
+imgGrid?.addEventListener('click', async e => {
+  const del = e.target.closest('.img-del');
+  if (!del) return;
+  const fn = del.dataset.fn;
+  if (!POST_ID) {
+    del.closest('.img-tile')?.remove();
+    syncOrderInput(); renderPreview(); refreshSelToolbar();
+    return;
+  }
+  if (!confirm('Xoá ảnh này khỏi bài?')) return;
+  const r = await fetch(`/api/post/${POST_ID}/images/remove`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({filename: fn}),
+  });
+  const j = await r.json();
+  if (j.ok) { del.closest('.img-tile')?.remove(); syncOrderInput(); renderPreview(); refreshSelToolbar(); }
+  else alert('❌ ' + (j.error || 'Lỗi xoá ảnh'));
+});
+
+// ───── BULK SELECT (checkbox) ─────
+const selToolbar = document.getElementById('img-toolbar');
+const selCount = document.getElementById('img-sel-count');
+
+function selectedTiles() {
+  return Array.from(imgGrid?.querySelectorAll('.img-check:checked') || [])
+    .map(c => c.closest('.img-tile')).filter(Boolean);
+}
+function paintTile(t) {
+  const c = t.querySelector('.img-check');
+  const badge = t.querySelector('.img-select-badge');
+  const img = t.querySelector('img');
+  const on = !!(c && c.checked);
+  if (on) {
+    t.style.outline = '4px solid #6366f1';
+    t.style.outlineOffset = '-4px';
+    t.style.boxShadow = '0 0 0 5px rgba(99,102,241,0.45), 0 8px 24px rgba(0,0,0,0.45)';
+    t.style.transform = 'translateY(-3px) scale(0.97)';
+    if (img) img.style.filter = 'brightness(0.55) saturate(1.15)';
+    if (badge) badge.style.display = 'grid';
+  } else {
+    t.style.outline = '';
+    t.style.outlineOffset = '';
+    t.style.boxShadow = '';
+    t.style.transform = '';
+    if (img) img.style.filter = '';
+    if (badge) badge.style.display = 'none';
+  }
+}
+function refreshSelToolbar() {
+  const tiles = imgGrid?.querySelectorAll('.img-tile') || [];
+  const sel = selectedTiles();
+  selCount.textContent = sel.length;
+  selToolbar.style.display = tiles.length ? 'flex' : 'none';
+  tiles.forEach(paintTile);
+}
+
+imgGrid?.addEventListener('change', e => {
+  if (e.target.classList.contains('img-check')) {
+    paintTile(e.target.closest('.img-tile'));
+    refreshSelToolbar();
+  }
+});
+document.getElementById('img-sel-all')?.addEventListener('click', () => {
+  imgGrid.querySelectorAll('.img-check').forEach(c => c.checked = true);
+  refreshSelToolbar();
+});
+document.getElementById('img-sel-clear')?.addEventListener('click', () => {
+  imgGrid.querySelectorAll('.img-check').forEach(c => c.checked = false);
+  refreshSelToolbar();
+});
+document.getElementById('img-sel-delete')?.addEventListener('click', async () => {
+  const tiles = selectedTiles();
+  if (!tiles.length) return;
+  if (!confirm(`Xoá ${tiles.length} ảnh đã chọn?`)) return;
+  if (!POST_ID) {
+    tiles.forEach(t => t.remove());
+    syncOrderInput(); renderPreview(); refreshSelToolbar();
+    return;
+  }
+  for (const t of tiles) {
+    const fn = t.dataset.fn;
+    const r = await fetch(`/api/post/${POST_ID}/images/remove`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({filename: fn}),
+    });
+    const j = await r.json();
+    if (j.ok) t.remove();
+  }
+  syncOrderInput(); renderPreview(); refreshSelToolbar();
+});
+
+imgGrid?.querySelectorAll('.img-tile').forEach(attachTileEvents);
+syncOrderInput();
+renderPreview();
+lintCaption();
+refreshSelToolbar();
+
+// auto-save reorder for existing post
+let reorderTimer;
+const observer = new MutationObserver(() => {
+  if (!POST_ID) return;
+  clearTimeout(reorderTimer);
+  reorderTimer = setTimeout(async () => {
+    const order = currentImages();
+    await fetch(`/api/post/${POST_ID}/images/reorder`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({order}),
+    });
+  }, 600);
+});
+if (imgGrid) observer.observe(imgGrid, {childList: true});
+
+// ───── PUBLISH / SCHEDULE ─────
+document.getElementById('btn-publish')?.addEventListener('click', async () => {
+  if (!POST_ID) return;
+  if (!confirm('Đăng ngay lên Page Sintech?')) return;
+  const r = await fetch('/posts/' + POST_ID + '/publish', {method: 'POST'});
+  const j = await r.json();
+  if (j.ok) { alert('✅ Đã đăng!\n' + (j.url || j.fb_post_id)); location.reload(); }
+  else alert('❌ ' + (j.error || 'Lỗi không xác định'));
+});
+
+document.getElementById('btn-schedule')?.addEventListener('click', async () => {
+  if (!POST_ID) return;
+  if (!confirm('Lên lịch FB native theo ngày/giờ đã set?')) return;
+  const r = await fetch('/posts/' + POST_ID + '/schedule', {method: 'POST'});
+  const j = await r.json();
+  if (j.ok) { alert('⏰ Đã lên lịch ' + j.scheduled_at); location.reload(); }
+  else alert('❌ ' + (j.error || 'Lỗi không xác định'));
+});
+
+// ───── IMAGE LIBRARY (multi-select) ─────
+const libModal = document.getElementById('lib-modal');
+const libCatList = document.getElementById('lib-cat-list');
+const libGrid = document.getElementById('lib-grid');
+const libCatLabel = document.getElementById('lib-cat-label');
+const libSelCount = document.getElementById('lib-sel-count');
+const libAddBtn = document.getElementById('lib-add-selected');
+let libCatsCache = null;
+let libCurrentCat = null;
+const libSelected = new Map(); // key=`${cat}::${fn}` -> {cat, fn, url}
+
+function libUpdateCounter() {
+  const n = libSelected.size;
+  libSelCount.textContent = `${n} ảnh đã chọn`;
+  libAddBtn.disabled = n === 0;
+  libAddBtn.textContent = n > 0 ? `+ Thêm ${n} ảnh vào bài` : '+ Thêm vào bài';
+}
+
+document.getElementById('btn-open-library')?.addEventListener('click', async () => {
+  libModal.classList.remove('hidden');
+  if (!libCatsCache) {
+    const r = await fetch('/api/library/categories');
+    const j = await r.json();
+    libCatsCache = j.categories || [];
+    renderCats(libCatsCache);
+  }
+});
+document.getElementById('lib-close')?.addEventListener('click', () => libModal.classList.add('hidden'));
+libModal?.addEventListener('click', e => { if (e.target === libModal) libModal.classList.add('hidden'); });
+document.getElementById('lib-cat-search')?.addEventListener('input', e => {
+  const q = e.target.value.toLowerCase();
+  renderCats(libCatsCache.filter(c => c.name.toLowerCase().includes(q)));
+});
+
+function renderCats(list) {
+  if (!list.length) { libCatList.innerHTML = '<small class="muted">Không khớp</small>'; return; }
+  libCatList.innerHTML = list.map(c =>
+    `<button type="button" class="lib-cat-btn" data-cat="${encodeURIComponent(c.name)}">
+       <span>${escapeHtml(c.name)}</span><b>${c.count}</b>
+     </button>`
+  ).join('');
+  libCatList.querySelectorAll('[data-cat]').forEach(b => {
+    b.addEventListener('click', () => loadImages(decodeURIComponent(b.dataset.cat), b));
+  });
+}
+
+async function loadImages(cat, btn) {
+  libCatList.querySelectorAll('.lib-cat-btn').forEach(b => b.classList.remove('active'));
+  btn?.classList.add('active');
+  libCatLabel.textContent = cat;
+  libCurrentCat = cat;
+  libGrid.innerHTML = '<div class="muted" style="padding:20px;text-align:center">⏳ Đang tải ảnh...</div>';
+  const r = await fetch('/api/library/images?cat=' + encodeURIComponent(cat));
+  const j = await r.json();
+  if (!j.images || !j.images.length) {
+    libGrid.innerHTML = '<div class="muted" style="padding:20px;text-align:center">Category trống</div>';
+    return;
+  }
+  libGrid.innerHTML = j.images.map(img => {
+    const key = cat + '::' + img.filename;
+    const sel = libSelected.has(key) ? ' selected' : '';
+    return `<div class="lib-thumb${sel}" data-key="${encodeURIComponent(key)}" data-cat="${encodeURIComponent(cat)}" data-fn="${encodeURIComponent(img.filename)}" data-url="${img.url}">
+       <img src="${img.url}" loading="lazy" alt="${escapeHtml(img.filename)}">
+       <div class="lib-thumb-name">${escapeHtml(img.filename)}</div>
+       <div class="lib-thumb-check">✓</div>
+     </div>`;
+  }).join('');
+  libGrid.querySelectorAll('.lib-thumb').forEach(t => {
+    t.addEventListener('click', () => {
+      const cat = decodeURIComponent(t.dataset.cat);
+      const fn = decodeURIComponent(t.dataset.fn);
+      const key = cat + '::' + fn;
+      if (libSelected.has(key)) { libSelected.delete(key); t.classList.remove('selected'); }
+      else { libSelected.set(key, {cat, fn, url: t.dataset.url}); t.classList.add('selected'); }
+      libUpdateCounter();
+    });
+  });
+}
+
+libAddBtn?.addEventListener('click', async () => {
+  if (!POST_ID) { alert('Lưu bài trước rồi mới chọn ảnh'); return; }
+  if (libSelected.size === 0) return;
+  // group by category
+  const byCat = new Map();
+  for (const {cat, fn} of libSelected.values()) {
+    if (!byCat.has(cat)) byCat.set(cat, []);
+    byCat.get(cat).push(fn);
+  }
+  libAddBtn.disabled = true;
+  libAddBtn.textContent = '⏳ Đang thêm...';
+  let allImages = currentImages();
+  for (const [cat, fnames] of byCat) {
+    const r = await fetch('/api/library/use', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({category: cat, filenames: fnames, post_id: POST_ID}),
+    });
+    const j = await r.json();
+    if (j.error) { alert('❌ ' + j.error); break; }
+    allImages = j.images;
+  }
+  // re-render tiles from server response
+  imgGrid.innerHTML = allImages.map((fn, i) =>
+    `<div class="img-tile" draggable="true" data-fn="${encodeURIComponent(fn)}">
+       <span class="img-num">${i+1}</span>
+       <img src="${UPLOAD_BASE + encodeURIComponent(fn)}" alt="">
+       <div class="img-select-badge">✓</div>
+       <label class="img-check-wrap" title="Chọn ảnh">
+         <input type="checkbox" class="img-check" data-fn="${encodeURIComponent(fn)}">
+         <span class="img-check-box"></span>
+       </label>
+       <button type="button" class="img-del" data-fn="${encodeURIComponent(fn)}" title="Xoá">×</button>
+     </div>`
+  ).join('');
+  imgGrid.querySelectorAll('.img-tile').forEach(t => {
+    t.dataset.fn = decodeURIComponent(t.dataset.fn);
+    t.querySelector('.img-del').dataset.fn = t.dataset.fn;
+    t.querySelector('.img-check').dataset.fn = t.dataset.fn;
+    attachTileEvents(t);
+  });
+  libSelected.clear();
+  libUpdateCounter();
+  syncOrderInput();
+  renderPreview();
+  refreshSelToolbar();
+  libModal.classList.add('hidden');
+});
+
+libUpdateCounter();
+</script>
+{% endblock %}

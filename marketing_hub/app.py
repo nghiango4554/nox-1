@@ -1,0 +1,3211 @@
+"""Sintech Marketing Hub — web app quản lý lịch đăng Facebook Page.
+
+Run: python app.py  →  http://127.0.0.1:5055
+"""
+
+import os
+import re
+import json
+import secrets
+from datetime import datetime, timedelta, date
+from pathlib import Path
+
+from flask import (
+    Flask,
+    render_template,
+    request,
+    jsonify,
+    redirect,
+    url_for,
+    send_from_directory,
+    flash,
+    make_response,
+    session,
+)
+from werkzeug.utils import secure_filename
+from apscheduler.schedulers.background import BackgroundScheduler
+
+import db
+import fb_client
+import seo as seo_mod
+import haravan_sync as hv_sync
+import notifier
+import competitors as competitors_mod
+
+ROOT = Path(__file__).parent
+ALLOWED_EXT = {"jpg", "jpeg", "png", "gif", "webp", "mp4"}
+LIBRARY_ROOT = Path(r"C:\Users\Nghia Dep Gai\Desktop\Sintech\FB-Library")
+# Ảnh upload trực tiếp từ Hub → vào _inbox dưới FB-Library (gộp 2 chỗ thành 1).
+# Em có thể move file sang subfolder code SP (vd "FB0003 - Laptop X/") sau khi
+# categorize — filename không đổi nên bài cũ vẫn đọc được nếu app fallback search.
+UPLOAD_DIR = LIBRARY_ROOT / "_inbox"
+LIBRARY_IMG_EXT = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+
+app = Flask(__name__)
+app.secret_key = secrets.token_hex(16)
+app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.jinja_env.auto_reload = True
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
+# Constants
+POST_TYPES = [
+    ("product", "🔥 SP đẩy số"),
+    ("new_product", "🔥 Sản phẩm mới"),
+    ("meme", "😂 Meme"),
+    ("news", "🚨 Tin tức"),
+    ("handover", "🖥️ Bàn giao PC"),
+    ("fact", "🧠 Fact PC"),
+]
+
+POST_STATUSES = [
+    ("draft", "📝 Draft"),
+    ("ready", "✅ Ready"),
+    ("approved", "👍 Approved"),
+    ("scheduled", "⏰ Scheduled"),
+    ("posted", "🎉 Posted"),
+    ("skipped", "⏭️ Skipped"),
+]
+
+
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXT
+
+
+def post_images(post: dict) -> list:
+    """Get list of image filenames for a post — prefers `images` JSON, falls back to legacy image_path."""
+    raw = (post or {}).get("images")
+    if raw:
+        try:
+            arr = json.loads(raw) if isinstance(raw, str) else raw
+            if isinstance(arr, list):
+                return [s for s in arr if isinstance(s, str) and s]
+        except (ValueError, TypeError):
+            pass
+    legacy = (post or {}).get("image_path")
+    return [legacy] if legacy else []
+
+
+def _resolve_image_file(fn: str):
+    """Tìm file ảnh: ưu tiên UPLOAD_DIR (_inbox), fallback search toàn FB-Library
+    (case em đã move file sang subfolder category code SP)."""
+    p = UPLOAD_DIR / fn
+    if p.exists():
+        return p
+    # Fallback: search recursive trong LIBRARY_ROOT
+    if LIBRARY_ROOT.exists():
+        for found in LIBRARY_ROOT.rglob(fn):
+            if found.is_file():
+                return found
+    return None
+
+
+def post_image_paths(post: dict) -> list:
+    """Resolve filenames into absolute file paths (skip missing).
+    Tự động fallback search toàn FB-Library nếu file đã move sang subfolder."""
+    out = []
+    for fn in post_images(post):
+        p = _resolve_image_file(fn)
+        if p:
+            out.append(str(p))
+    return out
+
+
+def _sanitize_folder_name(text: str, max_len: int = 110) -> str:
+    """Loại bỏ ký tự cấm trong tên folder Windows: < > : " / \\ | ? *
+    Windows tự strip trailing space/dot → cần strip cả sau khi cắt."""
+    if not text:
+        return ""
+    s = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", text)
+    s = re.sub(r"\s+", " ", s).strip(" .")
+    s = s[:max_len]
+    return s.rstrip(" .")
+
+
+def _post_title_short(post: dict, max_len: int = 50) -> str:
+    """Lấy title ngắn từ dòng đầu caption (max 50 chars để chừa chỗ cho code+date)."""
+    cap = (post.get("caption") or "").strip()
+    if not cap:
+        return "(no caption)"
+    first_line = cap.split("\n")[0].strip()
+    s = re.sub(r"\s+", " ", first_line)[:max_len].rstrip(" -.")
+    return s or "(no caption)"
+
+
+def _post_folder_name(post: dict) -> str:
+    """Folder name = '<code> - <title 50ch> - <YYYY-MM-DD>'.
+    Title cắt 50 char + sanitize riêng để giữ nguyên code + date đầy đủ."""
+    code = (post.get("code") or f"POST{post.get('id', '')}")[:12]
+    title = _sanitize_folder_name(_post_title_short(post), max_len=50)
+    date_str = post.get("scheduled_date") or (post.get("created_at") or "")[:10]
+    if not date_str:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+    parts = [str(p) for p in (code, title, date_str) if p]
+    return _sanitize_folder_name(" - ".join(parts), max_len=110)
+
+
+def _post_folder_path(post: dict) -> Path:
+    return LIBRARY_ROOT / _post_folder_name(post)
+
+
+def _ensure_post_folder(post: dict) -> Path:
+    folder = _post_folder_path(post)
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def save_upload(file_storage, post: dict = None):
+    """Save 1 file. Nếu có `post`, lưu vào folder bài đó; nếu không, vào _inbox."""
+    if not file_storage or not file_storage.filename:
+        return None
+    if not allowed_file(file_storage.filename):
+        return None
+    target_dir = _ensure_post_folder(post) if post else UPLOAD_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+    safe = secure_filename(file_storage.filename)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    fname = f"{stamp}_{safe}"
+    path = target_dir / fname
+    file_storage.save(path)
+    return fname
+
+
+def _move_inbox_files_to_post(post: dict, filenames: list):
+    """Sau khi save bài mới, move các ảnh đã upload tạm trong _inbox sang folder bài."""
+    if not filenames:
+        return
+    folder = _ensure_post_folder(post)
+    for fn in filenames:
+        src = UPLOAD_DIR / fn
+        if src.exists() and src.is_file():
+            dst = folder / fn
+            if not dst.exists():
+                try:
+                    src.rename(dst)
+                except OSError:
+                    import shutil
+                    shutil.move(str(src), str(dst))
+
+
+# ─────────────────────────── ROUTES ───────────────────────────
+
+
+DOW_VI = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"]
+DOW_VI_LONG = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"]
+
+
+def _day_meta(d: date, today: date):
+    return {
+        "date": d.isoformat(),
+        "dow": DOW_VI[d.weekday()],
+        "dow_long": DOW_VI_LONG[d.weekday()],
+        "dnum": d.day,
+        "month": d.month,
+        "is_today": d == today,
+        "is_past": d < today,
+    }
+
+
+@app.route("/")
+def dashboard():
+    s = db.stats()
+    today = date.today()
+
+    week_param = request.args.get("week")
+    month_param = request.args.get("month")
+    year_param = request.args.get("year")
+
+    monday = None
+    if month_param and year_param:
+        try:
+            target = date(int(year_param), int(month_param), 1)
+            days_to_mon = (7 - target.weekday()) % 7
+            monday = target + timedelta(days=days_to_mon)
+        except (ValueError, TypeError):
+            monday = None
+    if monday is None and week_param:
+        try:
+            wd = date.fromisoformat(week_param)
+            monday = wd - timedelta(days=wd.weekday())
+        except ValueError:
+            monday = None
+    if monday is None:
+        monday = today - timedelta(days=today.weekday())
+
+    sunday = monday + timedelta(days=6)
+    prev_week = (monday - timedelta(days=7)).isoformat()
+    next_week = (monday + timedelta(days=7)).isoformat()
+    this_week = (today - timedelta(days=today.weekday())).isoformat()
+
+    upcoming = []
+    for i in range(7):
+        d = monday + timedelta(days=i)
+        posts = db.list_posts(date=d.isoformat())
+        meta = _day_meta(d, today)
+        meta["posts"] = posts
+        upcoming.append(meta)
+
+    display_month = monday.month
+    display_year = monday.year
+    year_options = list(range(today.year - 1, today.year + 4))
+
+    try:
+        page = fb_client.page_info()
+    except Exception as e:
+        page = {"error": str(e)}
+    recent_activity = db.activity_recent(limit=12)
+    return render_template(
+        "dashboard.html",
+        stats=s,
+        upcoming=upcoming,
+        page=page,
+        types=POST_TYPES,
+        statuses=POST_STATUSES,
+        today=today.isoformat(),
+        week_start=monday.isoformat(),
+        week_end=sunday.isoformat(),
+        week_start_disp=f"{monday.day:02d}/{monday.month:02d}",
+        recent_activity=recent_activity,
+        week_end_disp=f"{sunday.day:02d}/{sunday.month:02d}",
+        prev_week=prev_week,
+        next_week=next_week,
+        this_week=this_week,
+        display_month=display_month,
+        display_year=display_year,
+        year_options=year_options,
+        is_current_week=(monday.isoformat() == this_week),
+    )
+
+
+@app.route("/posts")
+def posts_page():
+    today = date.today()
+    f_status = request.args.get("status") or None
+    f_type = request.args.get("type") or None
+
+    week_param = request.args.get("week")
+    month_param = request.args.get("month")
+    year_param = request.args.get("year")
+
+    monday = None
+    if month_param and year_param:
+        try:
+            target = date(int(year_param), int(month_param), 1)
+            days_to_mon = (7 - target.weekday()) % 7
+            monday = target + timedelta(days=days_to_mon)
+        except (ValueError, TypeError):
+            monday = None
+    if monday is None and week_param:
+        try:
+            wd = date.fromisoformat(week_param)
+            monday = wd - timedelta(days=wd.weekday())
+        except ValueError:
+            monday = None
+    if monday is None:
+        monday = today - timedelta(days=today.weekday())
+
+    sunday = monday + timedelta(days=6)
+    prev_week = (monday - timedelta(days=7)).isoformat()
+    next_week = (monday + timedelta(days=7)).isoformat()
+    this_week = (today - timedelta(days=today.weekday())).isoformat()
+
+    posts = db.list_posts(
+        date_from=monday.isoformat(),
+        date_to=sunday.isoformat(),
+        status=f_status,
+        ptype=f_type,
+    )
+
+    days = []
+    for i in range(7):
+        d = monday + timedelta(days=i)
+        meta = _day_meta(d, today)
+        meta["posts"] = [p for p in posts if p.get("scheduled_date") == d.isoformat()]
+        days.append(meta)
+
+    year_options = list(range(today.year - 1, today.year + 4))
+
+    return render_template(
+        "posts.html",
+        posts=posts,
+        days=days,
+        types=POST_TYPES,
+        statuses=POST_STATUSES,
+        f_status=f_status,
+        f_type=f_type,
+        week_start=monday.isoformat(),
+        week_end=sunday.isoformat(),
+        week_start_disp=f"{monday.day:02d}/{monday.month:02d}",
+        week_end_disp=f"{sunday.day:02d}/{sunday.month:02d}",
+        prev_week=prev_week,
+        next_week=next_week,
+        this_week=this_week,
+        display_month=monday.month,
+        display_year=monday.year,
+        year_options=year_options,
+        is_current_week=(monday.isoformat() == this_week),
+    )
+
+
+@app.route("/calendar")
+def calendar_page():
+    today = date.today()
+    days = []
+    for i in range(14):
+        d = today + timedelta(days=i)
+        posts = db.list_posts(date=d.isoformat())
+        meta = _day_meta(d, today)
+        meta["posts"] = posts
+        days.append(meta)
+    return render_template(
+        "calendar.html", days=days, types=POST_TYPES, statuses=POST_STATUSES
+    )
+
+
+@app.route("/posts/new", methods=["GET", "POST"])
+def post_new():
+    if request.method == "POST":
+        files = request.files.getlist("images") or []
+        if not files:
+            single = request.files.get("image")
+            if single:
+                files = [single]
+        # Phase 1: upload tạm vào _inbox (chưa biết post.id để tạo folder)
+        added = [fn for fn in (save_upload(f) for f in files) if fn]
+        data = {
+            "scheduled_date": request.form.get("scheduled_date") or None,
+            "scheduled_time": request.form.get("scheduled_time") or None,
+            "type": request.form.get("type") or "product",
+            "status": request.form.get("status") or "draft",
+            "caption": request.form.get("caption") or "",
+            "image_path": added[0] if added else None,
+            "images": json.dumps(added),
+            "link": request.form.get("link") or None,
+        }
+        pid = db.create_post(data)
+        # Phase 2: post đã có id+code, move ảnh từ _inbox sang folder bài
+        if added:
+            new_post = db.get_post(pid)
+            if new_post:
+                _move_inbox_files_to_post(new_post, added)
+        new_post = db.get_post(pid)
+        db.activity_log(
+            kind="post_create", icon="📝",
+            title=f"Tạo bài mới #{new_post.get('code') or pid}",
+            description=(new_post.get("caption") or "")[:120],
+            href=url_for("post_detail", post_id=pid),
+        )
+        flash(f"Đã tạo bài #{pid}", "success")
+        return redirect(url_for("post_detail", post_id=pid))
+    return render_template(
+        "post_form.html",
+        post=None,
+        types=POST_TYPES,
+        statuses=POST_STATUSES,
+    )
+
+
+@app.route("/posts/<int:post_id>")
+def post_detail(post_id):
+    p = db.get_post(post_id)
+    if not p:
+        return "Not found", 404
+    p["image_list"] = post_images(p)
+    p["image_warnings"] = _detect_image_mismatches(p["code"], p["image_list"])
+    return render_template(
+        "post_form.html",
+        post=p,
+        types=POST_TYPES,
+        statuses=POST_STATUSES,
+    )
+
+
+_FB_CODE_RE = __import__("re").compile(r"fb\d{4}", __import__("re").IGNORECASE)
+
+
+def _detect_image_mismatches(post_code: str, filenames: list) -> list:
+    """Return list of {filename, found_code} for images whose filename contains a FB-code different from post_code."""
+    if not post_code:
+        return []
+    target = post_code.lower()
+    out = []
+    for fn in filenames or []:
+        m = _FB_CODE_RE.search(fn or "")
+        if m and m.group(0).lower() != target:
+            out.append({"filename": fn, "found_code": m.group(0).upper()})
+    return out
+
+
+@app.route("/posts/<int:post_id>/update", methods=["POST"])
+def post_update(post_id):
+    p = db.get_post(post_id)
+    if not p:
+        return "Not found", 404
+    files = request.files.getlist("images") or []
+    if not files:
+        single = request.files.get("image")
+        if single:
+            files = [single]
+    new_uploads = [fn for fn in (save_upload(f, post=p) for f in files) if fn]
+    data = {
+        "scheduled_date": request.form.get("scheduled_date") or None,
+        "scheduled_time": request.form.get("scheduled_time") or None,
+        "type": request.form.get("type") or p["type"],
+        "status": request.form.get("status") or p["status"],
+        "caption": request.form.get("caption") or "",
+        "link": request.form.get("link") or None,
+    }
+    order_raw = request.form.get("images_order") or ""
+    current = post_images(p)
+    if order_raw:
+        wanted = [s for s in order_raw.split(",") if s]
+        valid = set(current)
+        imgs = [fn for fn in wanted if fn in valid]
+    else:
+        imgs = list(current)
+    imgs.extend(new_uploads)
+    data["image_path"] = imgs[0] if imgs else None
+    data["images"] = json.dumps(imgs)
+    db.update_post(post_id, data)
+    flash("Đã lưu thay đổi", "success")
+    return redirect(url_for("post_detail", post_id=post_id))
+
+
+@app.route("/api/post/<int:post_id>/images/reorder", methods=["POST"])
+def api_post_images_reorder(post_id):
+    p = db.get_post(post_id)
+    if not p:
+        return jsonify({"error": "not found"}), 404
+    body = request.get_json(force=True) or {}
+    order = body.get("order") or []
+    valid = set(post_images(p))
+    new_order = [fn for fn in order if fn in valid]
+    db.update_post(post_id, {
+        "images": json.dumps(new_order),
+        "image_path": new_order[0] if new_order else None,
+    })
+    return jsonify({"ok": True, "images": new_order})
+
+
+@app.route("/api/post/<int:post_id>/images/remove", methods=["POST"])
+def api_post_images_remove(post_id):
+    p = db.get_post(post_id)
+    if not p:
+        return jsonify({"error": "not found"}), 404
+    body = request.get_json(force=True) or {}
+    target = body.get("filename") or ""
+    imgs = [f for f in post_images(p) if f != target]
+    db.update_post(post_id, {
+        "images": json.dumps(imgs),
+        "image_path": imgs[0] if imgs else None,
+    })
+    return jsonify({"ok": True, "images": imgs})
+
+
+@app.route("/posts/<int:post_id>/delete", methods=["POST"])
+def post_delete(post_id):
+    db.delete_post(post_id)
+    flash("Đã xóa bài", "warning")
+    return redirect(url_for("posts_page"))
+
+
+@app.route("/api/posts/bulk", methods=["POST"])
+def api_posts_bulk():
+    body = request.get_json(force=True) or {}
+    ids = body.get("ids") or []
+    action = (body.get("action") or "").strip()
+    payload = body.get("payload") or {}
+    if not ids or not isinstance(ids, list):
+        return jsonify({"error": "ids rỗng"}), 400
+    valid_status = {v for v, _ in POST_STATUSES}
+    affected = 0
+    if action == "status":
+        new_status = (payload.get("status") or "").strip()
+        if new_status not in valid_status:
+            return jsonify({"error": f"status không hợp lệ: {new_status}"}), 400
+        for pid in ids:
+            try:
+                if db.get_post(int(pid)):
+                    db.update_post(int(pid), {"status": new_status})
+                    affected += 1
+            except (ValueError, TypeError):
+                continue
+    elif action == "delete":
+        for pid in ids:
+            try:
+                if db.get_post(int(pid)):
+                    db.delete_post(int(pid))
+                    affected += 1
+            except (ValueError, TypeError):
+                continue
+    else:
+        return jsonify({"error": f"action không hỗ trợ: {action}"}), 400
+    return jsonify({"ok": True, "affected": affected})
+
+
+@app.route("/api/post/<int:post_id>/reschedule", methods=["POST"])
+def api_post_reschedule(post_id):
+    p = db.get_post(post_id)
+    if not p:
+        return jsonify({"error": "not found"}), 404
+    body = request.get_json(force=True) or {}
+    new_date = (body.get("scheduled_date") or "").strip()
+    new_time = (body.get("scheduled_time") or "").strip()
+    try:
+        datetime.strptime(new_date, "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "ngày sai format YYYY-MM-DD"}), 400
+    if new_time:
+        try:
+            datetime.strptime(new_time, "%H:%M")
+        except ValueError:
+            return jsonify({"error": "giờ sai format HH:MM"}), 400
+    db.update_post(post_id, {
+        "scheduled_date": new_date,
+        "scheduled_time": new_time or None,
+    })
+    return jsonify({"ok": True, "scheduled_date": new_date, "scheduled_time": new_time})
+
+
+@app.route("/posts/<int:post_id>/status/<new_status>", methods=["POST"])
+def post_change_status(post_id, new_status):
+    valid = {s[0] for s in POST_STATUSES}
+    if new_status not in valid:
+        return jsonify({"error": "invalid status"}), 400
+    db.update_post(post_id, {"status": new_status})
+    return jsonify({"ok": True, "status": new_status})
+
+
+# ─────────────────────────── FB POSTING ───────────────────────────
+
+
+@app.route("/posts/<int:post_id>/publish", methods=["POST"])
+def post_publish(post_id):
+    p = db.get_post(post_id)
+    if not p:
+        return jsonify({"error": "not found"}), 404
+    if not p["caption"]:
+        return jsonify({"error": "caption rỗng"}), 400
+    paths = post_image_paths(p)
+    try:
+        if len(paths) >= 2:
+            result = fb_client.post_multi_to_page(p["caption"], paths, published=True)
+        elif len(paths) == 1:
+            result = fb_client.post_to_page(p["caption"], image_path=paths[0], published=True)
+        else:
+            result = fb_client.post_to_page(p["caption"], image_path=None, published=True)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    fb_id = result.get("post_id") or result.get("id")
+    db.update_post(post_id, {"status": "posted", "fb_post_id": fb_id})
+    return jsonify(
+        {
+            "ok": True,
+            "fb_post_id": fb_id,
+            "url": fb_client.post_url(fb_id) if fb_id else None,
+        }
+    )
+
+
+@app.route("/posts/<int:post_id>/schedule", methods=["POST"])
+def post_schedule(post_id):
+    """Lên lịch FB Native (FB tự đăng tới giờ) — yêu cầu cách hiện tại 10 phút trở lên."""
+    p = db.get_post(post_id)
+    if not p:
+        return jsonify({"error": "not found"}), 404
+    if not p["scheduled_date"] or not p["scheduled_time"]:
+        return jsonify({"error": "thiếu ngày/giờ lên lịch"}), 400
+    dt_str = f"{p['scheduled_date']} {p['scheduled_time']}"
+    try:
+        dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+    except ValueError:
+        return jsonify({"error": "định dạng ngày/giờ sai"}), 400
+    ts = int(dt.timestamp())
+    if ts < int(datetime.now().timestamp()) + 11 * 60:
+        return jsonify({"error": "phải cách hiện tại tối thiểu 11 phút"}), 400
+    paths = post_image_paths(p)
+    try:
+        if len(paths) >= 2:
+            result = fb_client.post_multi_to_page(
+                p["caption"], paths, scheduled_publish_time=ts
+            )
+        else:
+            result = fb_client.post_to_page(
+                p["caption"],
+                image_path=(paths[0] if paths else None),
+                scheduled_publish_time=ts,
+            )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    fb_id = result.get("post_id") or result.get("id")
+    db.update_post(post_id, {"status": "scheduled", "fb_post_id": fb_id})
+    return jsonify({"ok": True, "fb_post_id": fb_id, "scheduled_at": dt_str})
+
+
+# ─────────────────────────── WIDGET CHAT ───────────────────────────
+
+
+@app.route("/api/widget-chat", methods=["POST"])
+def api_widget_chat():
+    data = request.get_json(force=True) or {}
+    msg = (data.get("message") or "").strip()
+    if not msg:
+        return jsonify({"reply": "Vợ yêu nói gì với anh nè 💕"})
+    # MVP: echo + light routing. Có thể nâng cấp gọi LLM sau.
+    low = msg.lower()
+    if any(k in low for k in ("hi", "hello", "chào", "alo")):
+        reply = "Chào vợ yêu 💕 Anh đang trực ở đây nha. Em cần gì?"
+    elif "lịch" in low and "ngày mai" in low:
+        d = (date.today() + timedelta(days=1)).isoformat()
+        ps = db.list_posts(date=d)
+        if not ps:
+            reply = f"Ngày mai ({d}) chưa có bài nào trong DB."
+        else:
+            lines = [f"📅 Lịch ngày mai ({d}) — {len(ps)} bài:"]
+            for p in ps:
+                t = p.get("scheduled_time") or "--:--"
+                lines.append(f"• {t} — {p['code']} [{p['status']}] {p.get('title') or ''}")
+            reply = "\n".join(lines)
+    elif "thống kê" in low or "stats" in low:
+        s = db.stats()
+        reply = (
+            f"📊 Tổng: {s['total']} bài | Hôm nay: {s['today_count']} | "
+            f"Status: {s['by_status']}"
+        )
+    else:
+        reply = (
+            "Anh đã nhận tin nhắn của vợ 💌\n"
+            "Tip: thử hỏi 'lịch ngày mai', 'thống kê', hoặc dùng nút Command Center "
+            "ở Dashboard."
+        )
+    return jsonify({"reply": reply})
+
+
+# ─────────────────────────── COMMAND CENTER ───────────────────────────
+
+
+@app.route("/api/command/<name>", methods=["POST"])
+def api_command(name):
+    if name == "preview-tomorrow":
+        d = (date.today() + timedelta(days=1)).isoformat()
+        return jsonify({"date": d, "posts": db.list_posts(date=d)})
+    if name == "preview-today":
+        d = date.today().isoformat()
+        return jsonify({"date": d, "posts": db.list_posts(date=d)})
+    if name == "page-info":
+        return jsonify(fb_client.page_info())
+    return jsonify({"error": "unknown command"}), 400
+
+
+# ─────────────────────────── MEDIA ───────────────────────────
+
+
+@app.route("/uploads/<path:filename>")
+def serve_upload(filename):
+    """Serve ảnh: ưu tiên _inbox, fallback search toàn FB-Library
+    (case em đã move file sang subfolder category SP)."""
+    p = _resolve_image_file(filename)
+    if p and p.is_file():
+        return send_from_directory(p.parent, p.name)
+    return send_from_directory(UPLOAD_DIR, filename)
+
+
+@app.route("/local-images/<handle>/<filename>")
+def serve_local_image(handle, filename):
+    """Serve ảnh content_jobs đã resize local (pattern lazy upload 2026-05-12).
+
+    Path: marketing_hub/data/images/<handle>/<filename>
+    """
+    from pathlib import Path
+    import re as _re
+    safe_handle = _re.sub(r"[^a-z0-9_-]", "_", (handle or "").lower())[:80]
+    folder = Path(__file__).parent / "data" / "images" / safe_handle
+    if not folder.exists():
+        return ("Image folder not found", 404)
+    return send_from_directory(folder, filename)
+
+
+# ─────────────────────────── IMAGE LIBRARY ───────────────────────────
+
+
+def _safe_lib_path(category: str, filename: str = "") -> Path | None:
+    """Resolve category[/filename] under LIBRARY_ROOT, refuse path escape."""
+    if not category:
+        return None
+    target = (LIBRARY_ROOT / category / filename).resolve()
+    try:
+        target.relative_to(LIBRARY_ROOT.resolve())
+    except ValueError:
+        return None
+    return target
+
+
+@app.route("/api/library/categories")
+def api_library_categories():
+    if not LIBRARY_ROOT.exists():
+        return jsonify({"error": f"library root not found: {LIBRARY_ROOT}"}), 404
+    cats = []
+    for entry in sorted(LIBRARY_ROOT.iterdir()):
+        if not entry.is_dir():
+            continue
+        # Skip folder internal (prefix _) như _inbox
+        if entry.name.startswith("_"):
+            continue
+        count = sum(
+            1 for f in entry.iterdir()
+            if f.is_file() and f.suffix.lower() in LIBRARY_IMG_EXT
+        )
+        if count > 0:
+            cats.append({"name": entry.name, "count": count})
+    return jsonify({"categories": cats, "total": len(cats)})
+
+
+@app.route("/api/library/images")
+def api_library_images():
+    cat = request.args.get("cat", "").strip()
+    folder = _safe_lib_path(cat)
+    if not folder or not folder.is_dir():
+        return jsonify({"error": "invalid category"}), 400
+    images = []
+    for f in sorted(folder.iterdir()):
+        if not f.is_file() or f.suffix.lower() not in LIBRARY_IMG_EXT:
+            continue
+        images.append({
+            "filename": f.name,
+            "size": f.stat().st_size,
+            "url": url_for("library_file", category=cat, filename=f.name),
+        })
+    return jsonify({"category": cat, "images": images, "count": len(images)})
+
+
+@app.route("/library/file/<category>/<path:filename>")
+def library_file(category, filename):
+    target = _safe_lib_path(category, filename)
+    if not target or not target.is_file():
+        return "Not found", 404
+    return send_from_directory(target.parent, target.name)
+
+
+@app.route("/api/library/use", methods=["POST"])
+def api_library_use():
+    """Copy library image(s) into uploads/ and append to post.images list.
+
+    Body: {category, filename | filenames[], post_id}
+    """
+    import shutil
+    data = request.get_json(force=True) or {}
+    cat = (data.get("category") or "").strip()
+    post_id = data.get("post_id")
+    fnames = data.get("filenames")
+    if not fnames:
+        single = (data.get("filename") or "").strip()
+        fnames = [single] if single else []
+    if not fnames:
+        return jsonify({"error": "no filename(s)"}), 400
+
+    # Copy thẳng vào folder bài (nếu có post_id), không thì _inbox
+    target_post = db.get_post(post_id) if post_id else None
+    target_dir = _ensure_post_folder(target_post) if target_post else UPLOAD_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    added = []
+    for fname in fnames:
+        src = _safe_lib_path(cat, fname)
+        if not src or not src.is_file():
+            continue
+        if src.suffix.lower().lstrip(".") not in ALLOWED_EXT:
+            continue
+        safe = secure_filename(f"{cat}_{fname}") or f"lib_{fname}"
+        dest_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{safe}"
+        dest = target_dir / dest_name
+        shutil.copy2(src, dest)
+        added.append(dest_name)
+
+    if not added:
+        return jsonify({"error": "no valid images copied"}), 400
+
+    images_now = added
+    if post_id:
+        try:
+            pid = int(post_id)
+            p = db.get_post(pid)
+            if p:
+                imgs = post_images(p) + added
+                db.update_post(pid, {
+                    "images": json.dumps(imgs),
+                    "image_path": imgs[0],
+                })
+                images_now = imgs
+        except (ValueError, TypeError):
+            pass
+    return jsonify({
+        "ok": True,
+        "added": added,
+        "images": images_now,
+        "urls": [url_for("serve_upload", filename=fn) for fn in images_now],
+    })
+
+
+# ─────────────────────────── SEO ───────────────────────────
+
+
+SEO_SNAPSHOT_DIR = ROOT / "data" / "seo_snapshots"
+
+
+def _open_snapshot(path):
+    import gzip
+    if str(path).endswith(".gz"):
+        return gzip.open(path, "rt", encoding="utf-8")
+    return open(path, "r", encoding="utf-8")
+
+
+def _list_seo_snapshots() -> list:
+    SEO_SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    out = []
+    paths = list(SEO_SNAPSHOT_DIR.glob("*.json")) + list(SEO_SNAPSHOT_DIR.glob("*.json.gz"))
+    for p in sorted(paths, key=lambda x: x.stat().st_mtime, reverse=True):
+        try:
+            with _open_snapshot(p) as f:
+                data = json.load(f)
+            counts = data.get("counts") or {}
+            out.append({
+                "filename": p.name,
+                "size_kb": round(p.stat().st_size / 1024, 1),
+                "exported_at": data.get("exported_at") or "",
+                "label": data.get("label") or "",
+                "pages": counts.get("pages", 0),
+                "links": counts.get("links", 0),
+                "runs": counts.get("runs", 0),
+            })
+        except (ValueError, OSError):
+            continue
+    return out
+
+
+@app.route("/seo")
+def seo_dashboard():
+    stats = db.seo_stats()
+    latest_run = db.seo_latest_run()
+    state = seo_mod.state_snapshot()
+    snapshots = _list_seo_snapshots()
+    top_issues = db.seo_top_issues(limit=10)
+    # bổ sung label cho top_issues
+    for it in top_issues:
+        icon, label, _fix = seo_mod.ISSUE_LABELS.get(it["code"], ("⚪", it["code"], ""))
+        it["icon"] = icon
+        it["label"] = label
+
+    f_type = request.args.get("type") or None
+    f_band = request.args.get("band") or None
+    f_issue = request.args.get("issue") or None
+    f_search = (request.args.get("q") or "").strip() or None
+    f_sort = request.args.get("sort") or "score_asc"
+    try:
+        page_num = max(1, int(request.args.get("page") or 1))
+    except (TypeError, ValueError):
+        page_num = 1
+    per_page = 50
+
+    band_map = {"good": (80, None), "ok": (60, 79), "bad": (None, 59)}
+    min_score, max_score = band_map.get(f_band, (None, None))
+
+    list_kwargs = dict(
+        url_type=f_type, min_score=min_score, max_score=max_score,
+        issue_code=f_issue, search=f_search, sort=f_sort,
+    )
+    total_filtered = db.seo_count_pages(**list_kwargs)
+    pages_list = db.seo_list_pages(**list_kwargs, limit=per_page, offset=(page_num - 1) * per_page)
+    total_pages = max(1, (total_filtered + per_page - 1) // per_page)
+
+    return render_template(
+        "seo.html",
+        stats=stats,
+        latest_run=latest_run,
+        state=state,
+        link_state=seo_mod.link_check_state(),
+        pages=pages_list,
+        top_issues=top_issues,
+        snapshots=snapshots,
+        filters={
+            "type": f_type, "band": f_band, "issue": f_issue,
+            "q": f_search or "", "sort": f_sort,
+        },
+        page_num=page_num,
+        total_pages=total_pages,
+        total_filtered=total_filtered,
+    )
+
+
+@app.route("/seo/url/<int:page_id>")
+def seo_url_detail(page_id):
+    page = db.seo_get_page(page_id)
+    if not page:
+        flash("Không tìm thấy URL.", "error")
+        return redirect(url_for("seo_dashboard"))
+    raw_issues = []
+    if page.get("issues"):
+        try:
+            raw_issues = json.loads(page["issues"])
+        except (ValueError, TypeError):
+            raw_issues = []
+    issues = [seo_mod.enrich_issue(it) for it in raw_issues]
+    return render_template("seo_detail.html", p=page, issues=issues)
+
+
+@app.route("/seo/duplicates")
+def seo_duplicates():
+    field = request.args.get("field", "title")
+    if field not in ("title", "meta_desc", "h1"):
+        field = "title"
+    dup_groups = db.seo_find_duplicates(field)
+    counts = {
+        "title": len(db.seo_find_duplicates("title")),
+        "meta_desc": len(db.seo_find_duplicates("meta_desc")),
+        "h1": len(db.seo_find_duplicates("h1")),
+    }
+    return render_template("seo_duplicates.html", field=field, groups=dup_groups, counts=counts)
+
+
+@app.route("/seo/inlinks")
+def seo_inlinks_page():
+    view = request.args.get("view", "top")  # top | orphans
+    url_type = request.args.get("type") or None
+    summary = db.seo_inlinks_summary()
+    if view == "orphans":
+        items = db.seo_orphan_pages(url_type=url_type, limit=500)
+    else:
+        items = db.seo_top_inlinks(limit=100)
+    return render_template(
+        "seo_inlinks.html",
+        summary=summary, items=items, view=view, url_type=url_type,
+    )
+
+
+@app.route("/seo/indexability")
+def seo_indexability_page():
+    reason = request.args.get("reason")
+    stats = db.seo_indexability_stats()
+    pages = db.seo_list_non_indexable(reason=reason, limit=500)
+    return render_template(
+        "seo_indexability.html",
+        stats=stats, pages=pages, active_reason=reason,
+    )
+
+
+@app.route("/seo/broken-links")
+def seo_broken_links_page():
+    summary = db.seo_broken_link_summary()
+    state = seo_mod.link_check_state()
+    breakdown = db.seo_broken_breakdown()
+
+    kind = request.args.get("kind") or None
+    if kind not in ("4xx", "5xx", "timeout"):
+        kind = None
+    try:
+        status_code = int(request.args["status"]) if request.args.get("status") else None
+    except (TypeError, ValueError):
+        status_code = None
+    error_kind = request.args.get("error_kind") or None
+    internal_arg = request.args.get("internal")
+    is_internal = None
+    if internal_arg == "1":
+        is_internal = True
+    elif internal_arg == "0":
+        is_internal = False
+    search = (request.args.get("q") or "").strip() or None
+    sort = request.args.get("sort") or "refs_desc"
+    if sort not in ("refs_desc", "refs_asc", "url", "status"):
+        sort = "refs_desc"
+    try:
+        page_num = max(1, int(request.args.get("page") or 1))
+    except (TypeError, ValueError):
+        page_num = 1
+    per_page = 100
+
+    filters = dict(kind=kind, status_code=status_code, error_kind=error_kind,
+                   is_internal=is_internal, search=search)
+    total_filtered = db.seo_count_broken_filtered(**filters)
+    total_pages = max(1, (total_filtered + per_page - 1) // per_page)
+    broken = db.seo_broken_links_filtered(
+        **filters, sort=sort,
+        limit=per_page, offset=(page_num - 1) * per_page,
+    )
+
+    return render_template(
+        "seo_broken_links.html",
+        summary=summary, state=state, broken=broken,
+        breakdown=breakdown,
+        error_labels=seo_mod.LINK_ERROR_LABELS,
+        filters={
+            "kind": kind, "status_code": status_code, "error_kind": error_kind,
+            "internal": internal_arg, "q": search or "", "sort": sort,
+        },
+        page_num=page_num, total_pages=total_pages, total_filtered=total_filtered,
+        per_page=per_page,
+    )
+
+
+@app.route("/seo/check-links", methods=["POST"])
+def seo_check_links():
+    started = seo_mod.start_link_check_async()
+    if started:
+        flash("Đã bắt đầu check link gãy. Quá trình này có thể mất vài phút.", "success")
+    else:
+        flash("Đang check link — chờ xong rồi check tiếp.", "error")
+    return redirect(url_for("seo_broken_links_page"))
+
+
+@app.route("/seo/recheck-broken", methods=["POST"])
+def seo_recheck_broken():
+    """Re-check ĐÚNG các link đang broken (4xx/5xx/timeout) — không quét toàn bộ
+    pool external chưa check. Tiện cho việc phân loại error_kind chi tiết."""
+    # Lấy danh sách target broken TRƯỚC khi reset (sau reset sẽ NULL → query không match)
+    targets = db.seo_get_broken_target_urls()
+    if not targets:
+        flash("Không có link broken nào để re-check.", "error")
+        return redirect(url_for("seo_broken_links_page"))
+    n = db.seo_reset_broken_links_for_recheck()
+    started = seo_mod.start_link_check_async(only_targets=targets)
+    if started:
+        flash(f"Đã reset {n} link và bắt đầu re-check ĐÚNG {len(targets)} target broken.", "success")
+    else:
+        flash(f"Đã reset {n} link nhưng đang có run khác — chờ xong rồi bấm lại.", "warning")
+    return redirect(url_for("seo_broken_links_page"))
+
+
+@app.route("/api/seo/link-check-status")
+def seo_link_check_status():
+    return jsonify({
+        "state": seo_mod.link_check_state(),
+        "summary": db.seo_broken_link_summary(),
+    })
+
+
+@app.route("/seo/rules")
+def seo_rules_page():
+    """UI quản lý SEO rules: enable/disable, edit threshold/score/label/message."""
+    cfg = seo_mod.load_rules_config()
+    return render_template("seo_rules.html", config=cfg)
+
+
+@app.route("/seo/rules/save", methods=["POST"])
+def seo_rules_save():
+    """Lưu config rules từ form. Field name format: rule_<code>_<field>."""
+    cfg = seo_mod.load_rules_config(force=True)
+    # Update thresholds (good/ok)
+    try:
+        cfg["thresholds"]["good"] = int(request.form.get("threshold_good") or 65)
+        cfg["thresholds"]["ok"] = int(request.form.get("threshold_ok") or 50)
+    except ValueError:
+        pass
+
+    # Update từng rule
+    for rule in cfg.get("rules", []):
+        code = rule.get("code")
+        if not code:
+            continue
+        # Enabled checkbox
+        rule["enabled"] = bool(request.form.get(f"rule_{code}_enabled"))
+        # Name
+        name = (request.form.get(f"rule_{code}_name") or "").strip()
+        if name:
+            rule["name"] = name
+        # Level
+        lvl = request.form.get(f"rule_{code}_level")
+        if lvl in ("error", "warn", "info"):
+            rule["level"] = lvl
+        # Score
+        try:
+            score_str = request.form.get(f"rule_{code}_score")
+            if score_str is not None and score_str != "":
+                rule["score"] = int(score_str)
+        except ValueError:
+            pass
+        # Threshold
+        thr_str = request.form.get(f"rule_{code}_threshold")
+        if thr_str is not None and thr_str != "":
+            try:
+                rule["threshold"] = int(thr_str)
+            except ValueError:
+                try:
+                    rule["threshold"] = float(thr_str)
+                except ValueError:
+                    rule["threshold"] = thr_str
+        # Message
+        msg = request.form.get(f"rule_{code}_msg")
+        if msg is not None:
+            rule["msg"] = msg
+
+    # Save atomically
+    import datetime as _dt
+    cfg["last_edited"] = _dt.datetime.now().isoformat(timespec="seconds")
+    seo_mod.save_rules_config(cfg)
+    flash(f"✅ Đã lưu {len(cfg.get('rules', []))} rules. Crawl sau sẽ apply ngay.", "success")
+    return redirect(url_for("seo_rules_page"))
+
+
+@app.route("/seo/export/<kind>")
+def seo_export(kind):
+    """kind = pages | issues | summary"""
+    import csv
+    import io
+    from flask import Response
+
+    if kind == "summary":
+        summary = {
+            "stats": db.seo_stats(),
+            "indexability": db.seo_indexability_stats(),
+            "inlinks": db.seo_inlinks_summary(),
+            "duplicates": {
+                "title": len(db.seo_find_duplicates("title")),
+                "meta_desc": len(db.seo_find_duplicates("meta_desc")),
+                "h1": len(db.seo_find_duplicates("h1")),
+            },
+            "broken_links": db.seo_broken_link_summary(),
+            "top_issues": db.seo_top_issues(limit=20),
+            "exported_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        return Response(
+            json.dumps(summary, ensure_ascii=False, indent=2),
+            mimetype="application/json",
+            headers={"Content-Disposition": "attachment; filename=seo-summary.json"},
+        )
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+
+    if kind == "pages":
+        writer.writerow([
+            "url", "url_type", "status_code", "indexable", "indexability_reason",
+            "title", "title_len", "meta_desc", "meta_desc_len",
+            "h1", "h1_count", "word_count", "score",
+            "internal_links", "external_links", "images_total", "images_no_alt",
+            "has_canonical", "canonical_url", "has_og", "has_schema",
+            "load_ms", "page_size_bytes", "last_crawled",
+        ])
+        pages_all = db.seo_list_pages(limit=10000, sort="score_asc")
+        for p in pages_all:
+            writer.writerow([
+                p.get("url"), p.get("url_type"), p.get("status_code"),
+                p.get("indexable"), p.get("indexability_reason"),
+                p.get("title"), p.get("title_len"),
+                p.get("meta_desc"), p.get("meta_desc_len"),
+                p.get("h1"), p.get("h1_count"), p.get("word_count"), p.get("score"),
+                p.get("internal_links"), p.get("external_links"),
+                p.get("images_total"), p.get("images_no_alt"),
+                p.get("has_canonical"), p.get("canonical_url"),
+                p.get("has_og"), p.get("has_schema"),
+                p.get("load_ms"), p.get("page_size_bytes"), p.get("last_crawled"),
+            ])
+        return Response(
+            "﻿" + buf.getvalue(),
+            mimetype="text/csv; charset=utf-8",
+            headers={"Content-Disposition": "attachment; filename=seo-pages.csv"},
+        )
+
+    if kind == "issues":
+        writer.writerow(["url", "url_type", "score", "issue_code", "level", "message", "fix"])
+        pages_all = db.seo_list_pages(limit=10000, sort="score_asc")
+        for p in pages_all:
+            try:
+                issue_arr = json.loads(p.get("issues") or "[]")
+            except (ValueError, TypeError):
+                issue_arr = []
+            for it in issue_arr:
+                _icon, label, fix = seo_mod.ISSUE_LABELS.get(it.get("code", ""), ("", it.get("code", ""), ""))
+                writer.writerow([
+                    p.get("url"), p.get("url_type"), p.get("score"),
+                    it.get("code"), it.get("level"),
+                    f"{label} — {it.get('msg', '')}", fix,
+                ])
+        return Response(
+            "﻿" + buf.getvalue(),
+            mimetype="text/csv; charset=utf-8",
+            headers={"Content-Disposition": "attachment; filename=seo-issues.csv"},
+        )
+
+    flash("Loại export không hợp lệ. Chọn: pages / issues / summary.", "error")
+    return redirect(url_for("seo_dashboard"))
+
+
+@app.route("/seo/snapshot/save", methods=["POST"])
+def seo_snapshot_save():
+    import gzip
+    SEO_SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    label_raw = (request.form.get("label") or "").strip()
+    label_slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", label_raw)[:40] if label_raw else ""
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    fname = f"seo_{stamp}{('_' + label_slug) if label_slug else ''}.json.gz"
+    snapshot = db.seo_export_snapshot()
+    snapshot["label"] = label_raw
+    path = SEO_SNAPSHOT_DIR / fname
+    with gzip.open(path, "wt", encoding="utf-8") as f:
+        json.dump(snapshot, f, ensure_ascii=False)
+    counts = snapshot["counts"]
+    size_mb = round(path.stat().st_size / 1024 / 1024, 1)
+    flash(
+        f"💾 Đã save snapshot: {fname} ({size_mb} MB) — {counts['pages']} URL, {counts['links']} link, {counts['runs']} run.",
+        "success",
+    )
+    return redirect(url_for("seo_dashboard"))
+
+
+@app.route("/seo/snapshot/load/<filename>", methods=["POST"])
+def seo_snapshot_load(filename):
+    safe = secure_filename(filename)
+    path = SEO_SNAPSHOT_DIR / safe
+    if not path.exists() or not (safe.endswith(".json") or safe.endswith(".json.gz")):
+        flash("Không tìm thấy snapshot.", "error")
+        return redirect(url_for("seo_dashboard"))
+    try:
+        with _open_snapshot(path) as f:
+            data = json.load(f)
+        db.seo_import_snapshot(data)
+        counts = data.get("counts") or {}
+        flash(
+            f"📂 Đã load snapshot {safe} — {counts.get('pages', 0)} URL, {counts.get('links', 0)} link.",
+            "success",
+        )
+    except (ValueError, OSError) as e:
+        flash(f"Lỗi load snapshot: {e}", "error")
+    return redirect(url_for("seo_dashboard"))
+
+
+@app.route("/seo/snapshot/delete/<filename>", methods=["POST"])
+def seo_snapshot_delete(filename):
+    safe = secure_filename(filename)
+    path = SEO_SNAPSHOT_DIR / safe
+    if path.exists() and (safe.endswith(".json") or safe.endswith(".json.gz")):
+        path.unlink()
+        flash(f"🗑️ Đã xoá snapshot {safe}.", "success")
+    else:
+        flash("Không tìm thấy snapshot.", "error")
+    return redirect(url_for("seo_dashboard"))
+
+
+@app.route("/seo/clear", methods=["POST"])
+def seo_clear():
+    if request.form.get("confirm") != "yes":
+        flash("Cần xác nhận xoá. Click lại nút Clear.", "error")
+        return redirect(url_for("seo_dashboard"))
+    db.seo_clear_all()
+    flash("⚠️ Đã clear toàn bộ data crawl SEO.", "success")
+    return redirect(url_for("seo_dashboard"))
+
+
+@app.route("/seo/url/<int:page_id>/recrawl", methods=["POST"])
+def seo_url_recrawl(page_id):
+    page = db.seo_get_page(page_id)
+    if not page:
+        flash("Không tìm thấy URL.", "error")
+        return redirect(url_for("seo_dashboard"))
+    result = seo_mod.crawl_one(page["url"])
+    result["last_run_id"] = page.get("last_run_id")
+    links = result.pop("_links", [])
+    db.seo_upsert_page(result)
+    if links:
+        db.seo_replace_links(result["url"], links)
+    flash(f"Đã crawl lại — điểm: {result.get('score', 0)}.", "success")
+    return redirect(url_for("seo_url_detail", page_id=page_id))
+
+
+@app.route("/seo/seed", methods=["POST"])
+def seo_seed():
+    try:
+        urls = seo_mod.fetch_sitemap_urls()
+    except Exception as e:
+        flash(f"Lỗi fetch sitemap: {e.__class__.__name__}: {e}", "error")
+        return redirect(url_for("seo_dashboard"))
+    pairs = [(u, seo_mod.classify_url(u)) for u in urls]
+    res = db.seo_seed_urls(pairs)
+    flash(
+        f"Đã quét sitemap: {len(urls)} URL — thêm mới {res['added']}, đã có sẵn {res['existing']}.",
+        "success",
+    )
+    return redirect(url_for("seo_dashboard"))
+
+
+@app.route("/api/seo/status")
+def seo_status():
+    return jsonify({
+        "state": seo_mod.state_snapshot(),
+        "link_state": seo_mod.link_check_state(),
+        "stats": db.seo_stats(),
+        "broken_summary": db.seo_broken_link_summary(),
+    })
+
+
+@app.route("/seo/recompute-dup", methods=["POST"])
+def seo_recompute_dup():
+    """Detect dup title/meta cross-site, trừ điểm + cập nhật issues vào seo_pages."""
+    try:
+        stats = seo_mod.recompute_dup_flags()
+        return jsonify({"ok": True, **stats})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{e.__class__.__name__}: {e}"}), 500
+
+
+# ─────────────────────────── GLOBAL SEARCH ───────────────────────────
+
+
+@app.route("/api/search")
+def api_global_search():
+    """Fuzzy search trên posts + Haravan products + SEO pages + competitors."""
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 2:
+        return jsonify({"results": []})
+    limit_each = 5
+    like = f"%{q}%"
+    results = []
+    conn = db.get_conn()
+
+    # Posts
+    rows = conn.execute(
+        "SELECT id, code, caption, scheduled_date FROM posts "
+        "WHERE code LIKE ? OR caption LIKE ? ORDER BY id DESC LIMIT ?",
+        (like, like, limit_each),
+    ).fetchall()
+    for r in rows:
+        results.append({
+            "kind": "post", "icon": "📝",
+            "title": (r["code"] or f"Post #{r['id']}"),
+            "snippet": (r["caption"] or "")[:80],
+            "href": url_for("post_detail", post_id=r["id"]),
+            "tag": r["scheduled_date"] or "",
+        })
+
+    # Haravan products
+    rows = conn.execute(
+        "SELECT haravan_id, title, handle, vendor, audit_score FROM haravan_products "
+        "WHERE title LIKE ? OR handle LIKE ? OR vendor LIKE ? "
+        "ORDER BY audit_score ASC LIMIT ?",
+        (like, like, like, limit_each),
+    ).fetchall()
+    for r in rows:
+        results.append({
+            "kind": "haravan", "icon": "🛒",
+            "title": r["title"] or "(no title)",
+            "snippet": f"{r['vendor'] or ''} · /{r['handle']}",
+            "href": url_for("haravan_product_detail", haravan_id=r["haravan_id"]),
+            "tag": f"score {r['audit_score']}" if r["audit_score"] is not None else "",
+        })
+
+    # SEO pages (chỉ match URL/title nhanh)
+    rows = conn.execute(
+        "SELECT id, url, title, url_type, score FROM seo_pages "
+        "WHERE title LIKE ? OR url LIKE ? "
+        "ORDER BY score ASC LIMIT ?",
+        (like, like, limit_each),
+    ).fetchall()
+    for r in rows:
+        results.append({
+            "kind": "seo", "icon": "🔍",
+            "title": r["title"] or r["url"],
+            "snippet": r["url"],
+            "href": url_for("seo_url_detail", page_id=r["id"]),
+            "tag": f"{r['url_type'] or ''} · {r['score']}đ" if r["score"] is not None else (r["url_type"] or ""),
+        })
+
+    # Competitors
+    rows = conn.execute(
+        "SELECT id, competitor, url, title FROM competitor_urls "
+        "WHERE title LIKE ? OR url LIKE ? LIMIT ?",
+        (like, like, limit_each),
+    ).fetchall()
+    for r in rows:
+        results.append({
+            "kind": "competitor", "icon": "🥷",
+            "title": r["title"] or "(no title)",
+            "snippet": r["url"],
+            "href": r["url"],
+            "tag": r["competitor"],
+        })
+
+    conn.close()
+    return jsonify({"results": results, "total": len(results)})
+
+
+# ─────────────────────────── COMPETITORS ───────────────────────────
+
+
+@app.route("/competitors")
+def competitors_page():
+    stats = db.competitor_stats()
+    state = competitors_mod.state_snapshot()
+    topic_gap = db.competitor_topic_gap(min_competitor_count=3)
+
+    # Cross-reference với Sintech (seo_pages) để tính gap thật
+    sintech_topic_count = {}
+    sintech_blogs = db.seo_list_pages(url_type="blog", limit=1000, sort="url")
+    for b in sintech_blogs:
+        topic = classify_blog_topic(b.get("title") or "")
+        sintech_topic_count[topic] = sintech_topic_count.get(topic, 0) + 1
+
+    for it in topic_gap:
+        it["sintech_count"] = sintech_topic_count.get(it["topic"], 0)
+        it["gap"] = it["competitor_count"] - it["sintech_count"]
+        label, color = BLOG_TOPIC_LABELS.get(it["topic"], (it["topic"], "rgba(120,120,140,0.15)"))
+        it["label"] = label
+        it["color"] = color
+
+    # Filter & paginate URL list
+    f_competitor = request.args.get("competitor") or None
+    f_topic = request.args.get("topic") or None
+    f_search = (request.args.get("q") or "").strip() or None
+    f_sort = request.args.get("sort") or "recent"
+    try:
+        page_num = max(1, int(request.args.get("page") or 1))
+    except (TypeError, ValueError):
+        page_num = 1
+    per_page = 50
+
+    filters = dict(competitor=f_competitor, topic=f_topic, search=f_search)
+    total = db.competitor_count(**filters)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    items = db.competitor_list(
+        **filters, sort=f_sort,
+        limit=per_page, offset=(page_num - 1) * per_page,
+    )
+
+    return render_template(
+        "competitors.html",
+        stats=stats, state=state,
+        topic_gap=topic_gap,
+        items=items,
+        competitors_meta=competitors_mod.COMPETITORS,
+        topic_labels=BLOG_TOPIC_LABELS,
+        filters={"competitor": f_competitor, "topic": f_topic,
+                 "q": f_search or "", "sort": f_sort},
+        page_num=page_num, total_pages=total_pages, total=total,
+        per_page=per_page,
+    )
+
+
+@app.route("/competitors/crawl", methods=["POST"])
+def competitors_crawl():
+    started = competitors_mod.start_crawl_all_async()
+    if started:
+        flash("Đã bắt đầu crawl 4 đối thủ. Có thể mất 1-3 phút.", "success")
+    else:
+        flash("Đang crawl — chờ xong rồi crawl tiếp.", "error")
+    return redirect(url_for("competitors_page"))
+
+
+@app.route("/api/competitors/status")
+def api_competitors_status():
+    return jsonify({
+        "state": competitors_mod.state_snapshot(),
+        "stats": db.competitor_stats(),
+    })
+
+
+# ─────────────────────────── SEO HISTORY ───────────────────────────
+
+
+@app.route("/seo/history")
+def seo_history_page():
+    history = db.seo_history_list(limit=200)
+    chart_data = db.seo_history_chart_data(limit=52)
+    return render_template(
+        "seo_history.html",
+        history=history,
+        chart_data=chart_data,
+    )
+
+
+@app.route("/seo/history/capture", methods=["POST"])
+def seo_history_capture():
+    note = (request.form.get("note") or "").strip()
+    rid = db.seo_capture_history(note=note)
+    db.activity_log(
+        kind="seo_snapshot", icon="📸",
+        title=f"Chụp snapshot SEO #{rid}",
+        description=f"Note: {note or 'manual'}",
+        href=url_for("seo_history_page"),
+    )
+    flash(f"📸 Đã chụp snapshot lịch sử #{rid}", "success")
+    return redirect(url_for("seo_history_page"))
+
+
+# ─────────────────────────── H1 TRONG MÔ TẢ ───────────────────────────
+
+
+@app.route("/seo/h1-in-desc")
+def seo_h1_in_desc_page():
+    url_type = request.args.get("type") or None
+    show_all = request.args.get("all") == "1"
+    items = db.seo_h1_in_desc_list(
+        url_type=url_type,
+        only_violations=not show_all,
+        limit=2000,
+    )
+    summary = db.seo_h1_in_desc_summary()
+    state = seo_mod.desc_h1_state()
+    for it in items:
+        try:
+            it["desc_h1_list"] = json.loads(it["desc_h1_text"]) if it.get("desc_h1_text") else []
+        except Exception:
+            it["desc_h1_list"] = []
+    return render_template(
+        "seo_h1_in_desc.html",
+        items=items, summary=summary, state=state,
+        url_type=url_type, show_all=show_all,
+    )
+
+
+@app.route("/seo/h1-in-desc/scan", methods=["POST"])
+def seo_h1_in_desc_scan():
+    types_raw = request.form.getlist("types")
+    valid = {"product", "collection", "blog", "page"}
+    url_types = [t for t in types_raw if t in valid] or None
+    try:
+        limit = int(request.form.get("limit") or 0) or None
+    except ValueError:
+        limit = None
+    started = seo_mod.start_desc_h1_scan_async(url_types=url_types, limit=limit)
+    if started:
+        scope = ", ".join(url_types) if url_types else "tất cả loại"
+        flash(f"🔎 Đã bắt đầu quét H1 trong mô tả ({scope}). Tự refresh để xem tiến độ.", "success")
+    else:
+        flash("⏳ Đang có lượt quét chạy — chờ xong mới chạy lượt mới.", "info")
+    return redirect(url_for("seo_h1_in_desc_page"))
+
+
+@app.route("/api/seo/h1-in-desc/status")
+def seo_h1_in_desc_status():
+    return jsonify({
+        "state": seo_mod.desc_h1_state(),
+        "summary": db.seo_h1_in_desc_summary(),
+    })
+
+
+@app.route("/seo/h1-in-desc/fix", methods=["POST"])
+def seo_h1_in_desc_fix():
+    payload = request.get_json(silent=True) or request.form
+    url = (payload.get("url") or "").strip()
+    if not url:
+        return jsonify({"ok": False, "error": "Thiếu url"}), 400
+    try:
+        result = seo_mod.fix_h1_in_desc_for_url(url)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Lỗi server: {e}"}), 500
+    status = 200 if result.get("ok") else 400
+    return jsonify(result), status
+
+
+@app.route("/seo/h1-in-desc/fix-all/start", methods=["POST"])
+def seo_h1_fix_all_start():
+    payload = request.get_json(silent=True) or request.form
+    url_type = (payload.get("type") or "").strip() or None
+    if url_type and url_type not in ("product", "collection", "blog", "page"):
+        url_type = None
+    started = seo_mod.start_h1_fix_all_async(url_type=url_type)
+    if started:
+        return jsonify({"ok": True, "message": "Đã start job fix-all."})
+    return jsonify({"ok": False, "error": "Job đang chạy rồi — đợi xong hoặc bấm dừng."}), 409
+
+
+@app.route("/seo/h1-in-desc/fix-all/stop", methods=["POST"])
+def seo_h1_fix_all_stop():
+    stopped = seo_mod.stop_h1_fix_all()
+    if stopped:
+        return jsonify({"ok": True, "message": "Đã gửi yêu cầu dừng."})
+    return jsonify({"ok": False, "error": "Không có job đang chạy."}), 400
+
+
+@app.route("/api/seo/h1-in-desc/fix-all/status")
+def seo_h1_fix_all_status():
+    return jsonify(seo_mod.h1_fix_all_state())
+
+
+# ─────────────────────────── TITLE / META HUB ───────────────────────────
+
+
+@app.route("/seo/title-meta")
+def seo_title_meta_page():
+    url_type = request.args.get("type") or None
+    issue_filter = request.args.get("issue") or None
+    sort = request.args.get("sort") or "score_asc"
+    if url_type and url_type not in ("product", "collection", "blog", "page"):
+        url_type = None
+    if issue_filter and issue_filter not in seo_mod.ALL_TITLE_META_CODES:
+        issue_filter = None
+    if sort not in ("score_asc", "n_issues_desc", "url"):
+        sort = "score_asc"
+    items = seo_mod.list_title_meta_pages(
+        url_type=url_type, issue_filter=issue_filter, sort=sort, limit=2000,
+    )
+    summary = seo_mod.title_meta_summary()
+    fix_state = seo_mod.title_meta_fix_state()
+    return render_template(
+        "seo_title_meta.html",
+        items=items, summary=summary, fix_state=fix_state,
+        url_type=url_type, issue_filter=issue_filter, sort=sort,
+        issue_labels=seo_mod.TITLE_META_LABELS,
+    )
+
+
+@app.route("/seo/title-meta/fix", methods=["POST"])
+def seo_title_meta_fix():
+    payload = request.get_json(silent=True) or request.form
+    url = (payload.get("url") or "").strip()
+    if not url:
+        return jsonify({"ok": False, "error": "Thiếu url"}), 400
+    force_title = (payload.get("title") or "").strip() or None
+    force_meta = (payload.get("meta") or "").strip() or None
+    try:
+        result = seo_mod.fix_title_meta_for_url(url,
+            force_title=force_title, force_meta=force_meta)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Lỗi server: {e}"}), 500
+    return jsonify(result), 200 if result.get("ok") else 400
+
+
+@app.route("/seo/title-meta/fix-all/start", methods=["POST"])
+def seo_title_meta_fix_all_start():
+    payload = request.get_json(silent=True) or request.form
+    url_type = (payload.get("type") or "").strip() or None
+    issue_filter = (payload.get("issue") or "").strip() or None
+    if url_type and url_type not in ("product", "collection", "blog", "page"):
+        url_type = None
+    if issue_filter and issue_filter not in seo_mod.ALL_TITLE_META_CODES:
+        issue_filter = None
+    started = seo_mod.start_title_meta_fix_all_async(
+        url_type=url_type, issue_filter=issue_filter)
+    if started:
+        return jsonify({"ok": True, "message": "Đã start job."})
+    return jsonify({"ok": False, "error": "Job đang chạy rồi."}), 409
+
+
+@app.route("/seo/title-meta/fix-all/stop", methods=["POST"])
+def seo_title_meta_fix_all_stop():
+    stopped = seo_mod.stop_title_meta_fix()
+    if stopped:
+        return jsonify({"ok": True, "message": "Đã gửi yêu cầu dừng."})
+    return jsonify({"ok": False, "error": "Không có job đang chạy."}), 400
+
+
+@app.route("/api/seo/title-meta/fix-all/status")
+def seo_title_meta_fix_all_status():
+    return jsonify(seo_mod.title_meta_fix_state())
+
+
+# ─────────────────────────── GSC INSIGHTS ───────────────────────────
+
+
+@app.route("/seo/gsc")
+def seo_gsc_page():
+    cache = seo_mod.gsc_load_cache()
+    if not cache:
+        return render_template("seo_gsc.html", cache=None, tasks=[], summary=None)
+    tasks = seo_mod.gsc_build_tasks(cache)
+    return render_template(
+        "seo_gsc.html",
+        cache=cache, tasks=tasks,
+        summary=cache.get("summary", {}),
+        fetched_at=cache.get("fetched_at"),
+        performance=cache.get("performance", {}),
+        coverage=cache.get("coverage", {}),
+    )
+
+
+@app.route("/seo/gsc/task/<task_id>")
+def seo_gsc_task_page(task_id):
+    task = seo_mod.gsc_get_task(task_id)
+    if not task:
+        flash("Task không tồn tại trong cache.", "error")
+        return redirect(url_for("seo_gsc_page"))
+    return render_template("seo_gsc_task.html", task=task)
+
+
+@app.route("/seo/gsc/refresh", methods=["POST"])
+def seo_gsc_refresh():
+    """Re-fetch data từ 2 Google Sheet GSC export."""
+    import subprocess
+    script = Path(app.root_path) / "_fetch_gsc_cache.py"
+    try:
+        r = subprocess.run(
+            ["python", str(script)],
+            capture_output=True, text=True, timeout=120, encoding="utf-8",
+        )
+        if r.returncode == 0:
+            flash("✅ Refresh cache GSC xong.", "success")
+        else:
+            flash(f"❌ Refresh fail: {r.stderr[:300]}", "error")
+    except Exception as e:
+        flash(f"❌ Refresh error: {e}", "error")
+    return redirect(url_for("seo_gsc_page"))
+
+
+# ─────────────────────────── SP THIẾU MÔ TẢ ───────────────────────────
+
+
+@app.route("/seo/empty-desc")
+def seo_empty_desc_page():
+    try:
+        threshold = int(request.args.get("threshold") or seo_mod.EMPTY_DESC_THRESHOLD)
+    except ValueError:
+        threshold = seo_mod.EMPTY_DESC_THRESHOLD
+    threshold = max(0, min(threshold, 1000))
+    show_all = request.args.get("all") == "1"
+    items = db.seo_empty_desc_list(
+        url_type="product",
+        threshold=threshold,
+        only_empty=not show_all,
+        limit=2000,
+    )
+    summary = db.seo_empty_desc_summary(threshold=threshold)
+    state = seo_mod.empty_desc_state()
+    return render_template(
+        "seo_empty_desc.html",
+        items=items, summary=summary, state=state,
+        threshold=threshold, show_all=show_all,
+    )
+
+
+@app.route("/seo/empty-desc/scan", methods=["POST"])
+def seo_empty_desc_scan():
+    try:
+        threshold = int(request.form.get("threshold") or seo_mod.EMPTY_DESC_THRESHOLD)
+    except ValueError:
+        threshold = seo_mod.EMPTY_DESC_THRESHOLD
+    threshold = max(0, min(threshold, 1000))
+    try:
+        limit = int(request.form.get("limit") or 0) or None
+    except ValueError:
+        limit = None
+    started = seo_mod.start_empty_desc_scan_async(threshold=threshold, limit=limit)
+    if started:
+        flash(f"📭 Đã bắt đầu quét SP thiếu mô tả (ngưỡng {threshold} từ).", "success")
+    else:
+        flash("⏳ Đang có lượt quét chạy — chờ xong mới chạy lượt mới.", "info")
+    return redirect(url_for("seo_empty_desc_page", threshold=threshold))
+
+
+@app.route("/api/seo/empty-desc/status")
+def seo_empty_desc_status():
+    return jsonify({
+        "state": seo_mod.empty_desc_state(),
+        "summary": db.seo_empty_desc_summary(),
+    })
+
+
+# ─────────────────────────── HARAVAN PRODUCT EDIT INLINE ───────────────────────────
+
+
+# Whitelist các field cho phép edit qua API (tránh inject)
+HV_EDITABLE_FIELDS = {"title", "vendor", "product_type", "tags",
+                       "metafields_global_title_tag", "metafields_global_description_tag"}
+
+# Map field UI → field API Haravan + DB local
+HV_FIELD_API_MAP = {
+    "title": "title",
+    "vendor": "vendor",
+    "product_type": "product_type",
+    "tags": "tags",
+    "meta_title": "metafields_global_title_tag",
+    "meta_description": "metafields_global_description_tag",
+}
+HV_FIELD_DB_MAP = {
+    "title": "title",
+    "vendor": "vendor",
+    "product_type": "product_type",
+    "tags": "tags",
+    "meta_title": "meta_title",
+    "meta_description": "meta_description",
+}
+
+
+@app.route("/api/haravan/products/<int:haravan_id>/edit", methods=["POST"])
+def api_haravan_product_edit(haravan_id):
+    """Inline edit 1 field SP Haravan: push API + update DB local."""
+    import haravan_client as hv
+    data = request.get_json(force=True) or {}
+    field = (data.get("field") or "").strip()
+    value = data.get("value")
+    if field not in HV_FIELD_API_MAP:
+        return jsonify({"error": f"field không hợp lệ: {field}"}), 400
+    api_field = HV_FIELD_API_MAP[field]
+    db_field = HV_FIELD_DB_MAP[field]
+
+    try:
+        # SEO flat field: PUT qua /products/{id}.json — theme đọc field flat (KHÔNG đọc
+        # từ /products/{id}/metafields.json dù endpoint đó cũng nhận data). Verified 15/5.
+        hv.update_product(haravan_id, {api_field: value})
+    except Exception as e:
+        return jsonify({"error": f"Haravan API error: {e.__class__.__name__}: {str(e)[:200]}"}), 502
+
+    # Update DB local
+    conn = db.get_conn()
+    conn.execute(
+        f"UPDATE haravan_products SET {db_field}=?, last_synced=? WHERE haravan_id=?",
+        (value, datetime.now().isoformat(timespec="seconds"), haravan_id),
+    )
+    conn.commit()
+    conn.close()
+
+    db.activity_log(
+        kind="hv_edit", icon="✏️",
+        title=f"Sửa SP Haravan: {field}",
+        description=f"Value: {(value or '')[:80]}",
+        href=url_for("haravan_product_detail", haravan_id=haravan_id),
+    )
+    return jsonify({"ok": True, "field": field, "value": value})
+
+
+# ─────────────────────────── HARAVAN BLOG AI REWRITE ───────────────────────────
+
+
+@app.route("/haravan/blogs/<int:page_id>/ai-rewrite", methods=["GET"])
+def haravan_blog_ai_rewrite(page_id):
+    """Pre-fill form AI writer với info bài blog cũ → AI viết bản mới."""
+    p = db.seo_get_page(page_id)
+    if not p or p.get("url_type") != "blog":
+        flash("Không tìm thấy bài blog.", "error")
+        return redirect(url_for("haravan_blogs"))
+
+    # Pre-fill blog writer form: dùng title cũ làm "product_name"
+    title = p.get("title") or "(không title)"
+    specs = (
+        f"URL gốc: {p.get('url')}\n"
+        f"Title hiện tại: {title}\n"
+        f"Meta description hiện tại: {p.get('meta_desc') or '(thiếu)'}\n"
+        f"H1 hiện tại: {p.get('h1') or '(thiếu)'}\n"
+        f"Word count hiện tại: {p.get('word_count') or 0}\n"
+        f"Điểm SEO hiện tại: {p.get('score') or '?'}/100\n"
+        f"\nViết lại bài này theo rule v2 — giữ nguyên CHỦ ĐỀ + THÔNG TIN CHÍNH "
+        f"nhưng cải thiện cấu trúc, độ dài, meta, FAQ. Không đổi keyword chính."
+    )
+    return render_template(
+        "blog_writer.html",
+        product_types=PRODUCT_TYPES_FOR_BLOG,
+        product_info={
+            "product_name": title,
+            "product_type": "Khác",
+            "vendor": "",
+            "specs": specs,
+            "usp": f"Viết lại blog cũ điểm {p.get('score') or '?'}/100 — cải thiện SEO",
+        },
+        rewrite_source={"id": page_id, "url": p.get("url"), "old_score": p.get("score")},
+    )
+
+
+# ─────────────────────────── LIBRARY STANDALONE PAGE ───────────────────────────
+
+
+@app.route("/library")
+def library_page():
+    """Trang thư viện ảnh standalone — duyệt thumbnail toàn FB-Library."""
+    return render_template("library.html")
+
+
+# ─────────────────────────── AI BLOG WRITER (kept for haravan_blog_ai_rewrite) ───────────────────────────
+
+
+PRODUCT_TYPES_FOR_BLOG = [
+    "CPU", "VGA / Card đồ họa", "RAM", "MAINBOARD", "SSD", "HDD",
+    "NGUỒN / Power Supply", "VỎ CASE", "TẢN NHIỆT", "MÀN HÌNH",
+    "BÀN PHÍM", "CHUỘT", "TAI NGHE", "LAPTOP", "PC",
+    "GHẾ GAMING", "BÀN GAMING", "MICRO", "WEBCAM", "Khác",
+]
+
+
+# Trang `/blog-writer` cũ (form 1-shot, không lưu DB) đã bị xoá.
+# Workflow viết SP mới chuyển sang `/content-jobs` — có quản lý trạng thái + sync Haravan.
+# Template blog_writer.html vẫn dùng cho `/haravan/blogs/<id>/ai-rewrite` (rewrite blog cũ).
+
+
+@app.route("/blog-writer")
+def blog_writer_redirect():
+    return redirect(url_for("content_jobs_list_page"))
+
+
+# ─────────────────────────── CONTENT JOBS — quản lý bài viết AI cho SP ───────────────────────────
+
+
+import content_writer
+import internal_links
+
+
+# ─────────────────────────── COLLECTION CONTENT ───────────────────────────
+
+
+def _collection_jobs_list(status: str = None):
+    conn = db.get_conn()
+    sql = "SELECT * FROM collection_jobs"
+    args = []
+    if status:
+        sql += " WHERE status = ?"
+        args.append(status)
+    sql += " ORDER BY id ASC"
+    rows = conn.execute(sql, args).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def _collection_jobs_get(job_id: int):
+    conn = db.get_conn()
+    row = conn.execute("SELECT * FROM collection_jobs WHERE id = ?", (job_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def _collection_jobs_update(job_id: int, **fields):
+    if not fields: return
+    # Auto-compute quality score nếu có update title/meta/body
+    if any(k in fields for k in ("edited_title", "edited_meta", "edited_body_html")):
+        # Fetch row hiện tại để có data chưa update
+        row = _collection_jobs_get(job_id) or {}
+        title = fields.get("edited_title", row.get("edited_title")) or ""
+        meta = fields.get("edited_meta", row.get("edited_meta")) or ""
+        body = fields.get("edited_body_html", row.get("edited_body_html")) or ""
+        if title or meta or body:
+            try:
+                import seo_quality
+                rate = seo_quality.rate_content(title, meta, body, url_type="collection")
+                fields["quality_score"] = rate["score"]
+                fields["readability_score"] = int(rate["readability"].get("score", 0))
+                fields["quality_breakdown"] = json.dumps({
+                    "breakdown": {k: {kk: vv for kk, vv in v.items() if kk in ("score", "max")}
+                                   for k, v in rate["breakdown"].items()},
+                    "issues_high": rate["issues_high"],
+                    "issues_med": rate["issues_med"],
+                    "issues_low": rate["issues_low"],
+                    "tier": rate["tier"],
+                }, ensure_ascii=False)
+            except Exception as e:
+                print(f"[quality_score] err: {e}")
+    fields["updated_at"] = datetime.now().isoformat(timespec="seconds")
+    keys = list(fields.keys())
+    sets = ", ".join(f"{k}=?" for k in keys)
+    conn = db.get_conn()
+    conn.execute(f"UPDATE collection_jobs SET {sets} WHERE id=?",
+                 [*[fields[k] for k in keys], job_id])
+    conn.commit()
+    conn.close()
+
+
+@app.route("/collection-content")
+def collection_content_page():
+    status_filter = request.args.get("status") or None
+    jobs = _collection_jobs_list(status=status_filter)
+    conn = db.get_conn()
+    stats = {}
+    for s in ("pending", "draft", "synced", "failed", "existing"):
+        stats[s] = conn.execute("SELECT COUNT(*) FROM collection_jobs WHERE status=?", (s,)).fetchone()[0]
+    stats["total"] = conn.execute("SELECT COUNT(*) FROM collection_jobs").fetchone()[0]
+    conn.close()
+    return render_template("collection_content.html", jobs=jobs, stats=stats, active_status=status_filter)
+
+
+@app.route("/collection-content/<int:job_id>")
+def collection_content_detail_page(job_id):
+    job = _collection_jobs_get(job_id)
+    if not job:
+        flash("Job không tồn tại.", "error")
+        return redirect(url_for("collection_content_page"))
+    return render_template("collection_content_detail.html", job=job)
+
+
+# ─────────────────────────── CANVA OAUTH + STATUS ───────────────────────────
+
+@app.route("/canva")
+def canva_status_page():
+    import canva_client
+    connected = canva_client.is_connected()
+    profile = None
+    templates = []
+    err = None
+    if connected:
+        try:
+            profile = canva_client.get_user_profile().get("profile", {})
+            templates = canva_client.list_brand_templates(limit=50)
+        except Exception as e:
+            err = str(e)[:300]
+    return render_template("canva.html",
+                           connected=connected,
+                           profile=profile,
+                           templates=templates,
+                           err=err)
+
+
+@app.route("/canva/connect")
+def canva_connect():
+    import canva_client
+    state = secrets.token_urlsafe(24)
+    auth_url, verifier = canva_client.build_auth_url(state)
+    session["canva_oauth_state"] = state
+    session["canva_code_verifier"] = verifier
+    return redirect(auth_url)
+
+
+@app.route("/canva/callback")
+def canva_callback():
+    import canva_client
+    code = request.args.get("code")
+    state = request.args.get("state")
+    err = request.args.get("error")
+    if err:
+        flash(f"Canva OAuth lỗi: {err} ({request.args.get('error_description','')})", "error")
+        return redirect(url_for("canva_status_page"))
+    if not code or state != session.get("canva_oauth_state"):
+        flash("Canva OAuth state không khớp (CSRF guard). Bấm Connect lại.", "error")
+        return redirect(url_for("canva_status_page"))
+    verifier = session.pop("canva_code_verifier", None)
+    session.pop("canva_oauth_state", None)
+    if not verifier:
+        flash("Mất code_verifier (session expired). Connect lại.", "error")
+        return redirect(url_for("canva_status_page"))
+    try:
+        canva_client.exchange_code(code, verifier)
+        flash("✅ Kết nối Canva thành công!", "success")
+    except Exception as e:
+        flash(f"❌ Exchange token lỗi: {str(e)[:300]}", "error")
+    return redirect(url_for("canva_status_page"))
+
+
+@app.route("/canva/disconnect", methods=["POST"])
+def canva_disconnect():
+    import canva_client
+    canva_client.clear_tokens()
+    flash("Đã ngắt kết nối Canva.", "success")
+    return redirect(url_for("canva_status_page"))
+
+
+# ─────────────────────────── BACKGROUND GEN COLLECTION ───────────────────────────
+import threading as _threading
+import time as _time_bg
+
+_GEN_BG = {
+    "running": False, "stopped": False, "kind": None,
+    "queue": [], "total": 0,
+    "current_id": None, "current_name": None, "job_started_at": None,
+    "started_at": None, "finished_at": None,
+    "ok": 0, "fail": 0, "done": 0,
+    "completed_durations": [], "errors": [],
+}
+_GEN_BG_LOCK = _threading.Lock()
+
+
+def _gen_bg_worker_collection(job_ids):
+    """Background worker — gen sequential từng job, update _GEN_BG state."""
+    import collection_content_writer as ccw
+    for jid in job_ids:
+        with _GEN_BG_LOCK:
+            if _GEN_BG["stopped"]:
+                break
+        job = _collection_jobs_get(jid)
+        if not job:
+            with _GEN_BG_LOCK:
+                _GEN_BG["fail"] += 1
+                _GEN_BG["done"] += 1
+                _GEN_BG["errors"].append(f"#{jid}: Job not found")
+                _GEN_BG["queue"] = [x for x in _GEN_BG["queue"] if x != jid]
+            continue
+        with _GEN_BG_LOCK:
+            _GEN_BG["current_id"] = jid
+            _GEN_BG["current_name"] = job.get("collection_title") or job.get("handle") or f"#{jid}"
+            _GEN_BG["job_started_at"] = datetime.now().isoformat(timespec="seconds")
+        t0 = _time_bg.time()
+        _collection_jobs_update(jid, status="drafting", error=None)
+        try:
+            ctx = ccw.fetch_collection_context(job["collection_url"])
+            if not ctx.get("ok"):
+                _collection_jobs_update(jid, status="failed", error=f"Fetch ctx: {ctx.get('error')}")
+                with _GEN_BG_LOCK:
+                    _GEN_BG["fail"] += 1
+                    _GEN_BG["errors"].append(f"#{jid}: fetch ctx: {str(ctx.get('error',''))[:80]}")
+            else:
+                gen = ccw.gen_collection_content(
+                    job["collection_url"],
+                    job["collection_title"] or ctx.get("h1", ""),
+                    page_title=ctx.get("page_title", ""),
+                    admin_desc=ctx.get("admin_desc", ""),
+                    sp_names=ctx.get("sp_names", []),
+                )
+                if not gen.get("ok"):
+                    _collection_jobs_update(jid, status="failed", error=gen.get("error"))
+                    with _GEN_BG_LOCK:
+                        _GEN_BG["fail"] += 1
+                        _GEN_BG["errors"].append(f"#{jid}: {str(gen.get('error',''))[:80]}")
+                else:
+                    _collection_jobs_update(
+                        jid,
+                        edited_title=gen["title"], edited_meta=gen["meta"],
+                        edited_body_html=gen["body_html"],
+                        status="draft",
+                        ai_generated_at=datetime.now().isoformat(timespec="seconds"),
+                        error=None,
+                    )
+                    with _GEN_BG_LOCK:
+                        _GEN_BG["ok"] += 1
+        except Exception as e:
+            _collection_jobs_update(jid, status="failed", error=str(e)[:300])
+            with _GEN_BG_LOCK:
+                _GEN_BG["fail"] += 1
+                _GEN_BG["errors"].append(f"#{jid}: {str(e)[:80]}")
+        with _GEN_BG_LOCK:
+            _GEN_BG["done"] += 1
+            _GEN_BG["completed_durations"].append(round(_time_bg.time() - t0, 1))
+            _GEN_BG["queue"] = [x for x in _GEN_BG["queue"] if x != jid]
+            _GEN_BG["current_id"] = None
+            _GEN_BG["current_name"] = None
+            _GEN_BG["job_started_at"] = None
+            # Cap errors tail
+            if len(_GEN_BG["errors"]) > 20:
+                _GEN_BG["errors"] = _GEN_BG["errors"][-20:]
+        _time_bg.sleep(2)
+    with _GEN_BG_LOCK:
+        _GEN_BG["running"] = False
+        _GEN_BG["finished_at"] = datetime.now().isoformat(timespec="seconds")
+        _GEN_BG["current_id"] = None
+        _GEN_BG["current_name"] = None
+
+
+@app.route("/collection-content/gen-bg", methods=["POST"])
+def collection_content_gen_bg():
+    if _GEN_BG.get("running"):
+        return jsonify({"ok": False, "error": "Đã có background job đang chạy",
+                        "state": _GEN_BG}), 409
+    payload = request.get_json(silent=True) or {}
+    ids = payload.get("ids") or []
+    try:
+        ids = [int(x) for x in ids]
+    except Exception:
+        return jsonify({"ok": False, "error": "ids phải là list int"}), 400
+    if not ids:
+        return jsonify({"ok": False, "error": "Thiếu list ids"}), 400
+    with _GEN_BG_LOCK:
+        _GEN_BG.update({
+            "running": True, "stopped": False, "kind": "collection",
+            "queue": list(ids), "total": len(ids),
+            "current_id": None, "current_name": None, "job_started_at": None,
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+            "finished_at": None,
+            "ok": 0, "fail": 0, "done": 0,
+            "completed_durations": [], "errors": [],
+        })
+    t = _threading.Thread(target=_gen_bg_worker_collection, args=(list(ids),), daemon=True)
+    t.start()
+    return jsonify({"ok": True, "state": dict(_GEN_BG)})
+
+
+@app.route("/collection-content/gen-status")
+def collection_content_gen_status():
+    return jsonify(dict(_GEN_BG))
+
+
+@app.route("/collection-content/gen-stop", methods=["POST"])
+def collection_content_gen_stop():
+    with _GEN_BG_LOCK:
+        _GEN_BG["stopped"] = True
+    return jsonify({"ok": True, "state": dict(_GEN_BG)})
+
+
+@app.route("/collection-content/<int:job_id>/gen", methods=["POST"])
+def collection_content_gen(job_id):
+    job = _collection_jobs_get(job_id)
+    if not job:
+        return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
+    import collection_content_writer as ccw
+    _collection_jobs_update(job_id, status="drafting", error=None)
+    try:
+        ctx = ccw.fetch_collection_context(job["collection_url"])
+        if not ctx.get("ok"):
+            _collection_jobs_update(job_id, status="failed", error=f"Fetch ctx: {ctx.get('error')}")
+            return jsonify({"ok": False, "error": ctx.get("error")}), 500
+        gen = ccw.gen_collection_content(
+            job["collection_url"],
+            job["collection_title"] or ctx.get("h1", ""),
+            page_title=ctx.get("page_title", ""),
+            admin_desc=ctx.get("admin_desc", ""),
+            sp_names=ctx.get("sp_names", []),
+        )
+        if not gen.get("ok"):
+            _collection_jobs_update(job_id, status="failed", error=gen.get("error"))
+            return jsonify(gen), 500
+        _collection_jobs_update(
+            job_id,
+            edited_title=gen["title"],
+            edited_meta=gen["meta"],
+            edited_body_html=gen["body_html"],
+            status="draft",
+            ai_generated_at=datetime.now().isoformat(timespec="seconds"),
+            error=None,
+        )
+        return jsonify({"ok": True, **gen})
+    except Exception as e:
+        _collection_jobs_update(job_id, status="failed", error=str(e)[:300])
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/collection-content/<int:job_id>/save", methods=["POST"])
+def collection_content_save(job_id):
+    payload = request.get_json(silent=True) or request.form
+    title = (payload.get("title") or "").strip()
+    meta = (payload.get("meta") or "").strip()
+    body = (payload.get("body") or "").strip()
+    _collection_jobs_update(job_id, edited_title=title, edited_meta=meta, edited_body_html=body)
+    return jsonify({"ok": True})
+
+
+@app.route("/collection-content/<int:job_id>/sync", methods=["POST"])
+def collection_content_sync(job_id):
+    job = _collection_jobs_get(job_id)
+    if not job:
+        return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
+    if not job.get("haravan_id"):
+        return jsonify({"ok": False, "error": "Thiếu haravan_id (collection chưa tồn tại trên Haravan)"}), 400
+    if not job.get("edited_title") or not job.get("edited_body_html"):
+        return jsonify({"ok": False, "error": "Chưa có title/body — gen AI trước"}), 400
+    import collection_content_writer as ccw
+    res = ccw.sync_collection_to_haravan(
+        int(job["haravan_id"]),
+        job["edited_title"],
+        job.get("edited_meta") or "",
+        job["edited_body_html"],
+    )
+    if res.get("ok"):
+        _collection_jobs_update(job_id, status="synced",
+                                synced_at=datetime.now().isoformat(timespec="seconds"),
+                                error=None)
+        return jsonify({"ok": True})
+    # Sync fail — reset status về 'failed' để UI hiện rõ (kể cả khi trước đó là 'synced')
+    _collection_jobs_update(job_id,
+                             status="failed",
+                             error=res.get("error", "")[:500])
+    return jsonify(res), 500
+
+
+@app.route("/collection-content/sync-all", methods=["POST"])
+def collection_content_sync_all():
+    jobs = _collection_jobs_list(status="draft")
+    ok = fail = 0
+    errors = []
+    import collection_content_writer as ccw
+    import time
+    for job in jobs:
+        if not job.get("haravan_id") or not job.get("edited_title") or not job.get("edited_body_html"):
+            fail += 1; errors.append(f"#{job['id']}: thiếu data")
+            continue
+        try:
+            res = ccw.sync_collection_to_haravan(
+                int(job["haravan_id"]),
+                job["edited_title"], job.get("edited_meta") or "",
+                job["edited_body_html"],
+            )
+            if res.get("ok"):
+                _collection_jobs_update(job["id"], status="synced",
+                                        synced_at=datetime.now().isoformat(timespec="seconds"),
+                                        error=None)
+                ok += 1
+            else:
+                _collection_jobs_update(job["id"], status="failed",
+                                        error=res.get("error", "")[:500])
+                fail += 1; errors.append(f"#{job['id']}: {res.get('error', '')[:80]}")
+        except Exception as e:
+            fail += 1; errors.append(f"#{job['id']}: {str(e)[:80]}")
+        time.sleep(0.8)
+    flash(f"🚀 Sync xong: {ok} OK, {fail} fail." + (f" Sample lỗi: {errors[0]}" if errors else ""),
+          "success" if ok else "error")
+    return redirect(url_for("collection_content_page"))
+
+
+# ─────────────────────────── BLOG CONTENT (bài viết huong-dan/news) ───────────────────────────
+
+
+def _blog_jobs_list(status: str = None):
+    conn = db.get_conn()
+    sql = "SELECT * FROM blog_jobs"
+    args = []
+    if status:
+        sql += " WHERE status = ?"
+        args.append(status)
+    sql += " ORDER BY click DESC, id ASC"
+    rows = conn.execute(sql, args).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def _blog_jobs_get(job_id: int):
+    conn = db.get_conn()
+    row = conn.execute("SELECT * FROM blog_jobs WHERE id = ?", (job_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def _blog_jobs_update(job_id: int, **fields):
+    if not fields: return
+    if any(k in fields for k in ("edited_title", "edited_meta", "edited_body_html")):
+        row = _blog_jobs_get(job_id) or {}
+        title = fields.get("edited_title", row.get("edited_title")) or ""
+        meta = fields.get("edited_meta", row.get("edited_meta")) or ""
+        body = fields.get("edited_body_html", row.get("edited_body_html")) or ""
+        if title or meta or body:
+            try:
+                import seo_quality
+                rate = seo_quality.rate_content(title, meta, body, url_type="blog")
+                fields["quality_score"] = rate["score"]
+                fields["readability_score"] = int(rate["readability"].get("score", 0))
+                fields["quality_breakdown"] = json.dumps({
+                    "breakdown": {k: {kk: vv for kk, vv in v.items() if kk in ("score", "max")}
+                                   for k, v in rate["breakdown"].items()},
+                    "issues_high": rate["issues_high"],
+                    "issues_med": rate["issues_med"],
+                    "issues_low": rate["issues_low"],
+                    "tier": rate["tier"],
+                }, ensure_ascii=False)
+                # Word count
+                import re as _re_wc
+                text_only = _re_wc.sub(r"<[^>]+>", " ", body)
+                fields["word_count"] = len([w for w in text_only.split() if w])
+            except Exception as e:
+                print(f"[blog quality_score] err: {e}")
+    fields["updated_at"] = datetime.now().isoformat(timespec="seconds")
+    keys = list(fields.keys())
+    sets = ", ".join(f"{k}=?" for k in keys)
+    conn = db.get_conn()
+    conn.execute(f"UPDATE blog_jobs SET {sets} WHERE id=?",
+                 [*[fields[k] for k in keys], job_id])
+    conn.commit()
+    conn.close()
+
+
+@app.route("/blog-content")
+def blog_content_page():
+    status_filter = request.args.get("status") or None
+    jobs = _blog_jobs_list(status=status_filter)
+    conn = db.get_conn()
+    stats = {}
+    for s in ("pending", "draft", "synced", "failed"):
+        stats[s] = conn.execute("SELECT COUNT(*) FROM blog_jobs WHERE status=?", (s,)).fetchone()[0]
+    stats["total"] = conn.execute("SELECT COUNT(*) FROM blog_jobs").fetchone()[0]
+    conn.close()
+    return render_template("blog_content.html", jobs=jobs, stats=stats, active_status=status_filter)
+
+
+@app.route("/blog-content/<int:job_id>")
+def blog_content_detail_page(job_id):
+    job = _blog_jobs_get(job_id)
+    if not job:
+        flash("Bài không tồn tại.", "error")
+        return redirect(url_for("blog_content_page"))
+    return render_template("blog_content_detail.html", job=job)
+
+
+@app.route("/blog-content/<int:job_id>/gen", methods=["POST"])
+def blog_content_gen(job_id):
+    job = _blog_jobs_get(job_id)
+    if not job:
+        return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
+    import blog_content_writer as bcw
+    _blog_jobs_update(job_id, status="drafting", error=None)
+    try:
+        ctx = bcw.fetch_blog_context(job["blog_url"])
+        if not ctx.get("ok"):
+            _blog_jobs_update(job_id, status="failed", error=f"Fetch ctx: {ctx.get('error')}")
+            return jsonify({"ok": False, "error": ctx.get("error")}), 500
+        gen = bcw.gen_blog_content(
+            job["blog_url"],
+            job["article_title"] or ctx.get("h1", ""),
+            page_title=ctx.get("page_title", ""),
+            existing_meta=ctx.get("existing_meta", ""),
+            body_snippet=ctx.get("body_snippet", ""),
+        )
+        if not gen.get("ok"):
+            _blog_jobs_update(job_id, status="failed", error=gen.get("error"))
+            return jsonify(gen), 500
+        _blog_jobs_update(
+            job_id,
+            edited_title=gen["title"],
+            edited_meta=gen["meta"],
+            edited_body_html=gen["body_html"],
+            status="draft",
+            ai_generated_at=datetime.now().isoformat(timespec="seconds"),
+            error=None,
+        )
+        return jsonify({"ok": True, **gen})
+    except Exception as e:
+        _blog_jobs_update(job_id, status="failed", error=str(e)[:300])
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/blog-content/<int:job_id>/save", methods=["POST"])
+def blog_content_save(job_id):
+    payload = request.get_json(silent=True) or request.form
+    title = (payload.get("title") or "").strip()
+    meta = (payload.get("meta") or "").strip()
+    body = (payload.get("body") or "").strip()
+    _blog_jobs_update(job_id, edited_title=title, edited_meta=meta, edited_body_html=body)
+    return jsonify({"ok": True})
+
+
+@app.route("/blog-content/<int:job_id>/sync", methods=["POST"])
+def blog_content_sync(job_id):
+    job = _blog_jobs_get(job_id)
+    if not job:
+        return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
+    if not job.get("haravan_article_id") or not job.get("haravan_blog_id"):
+        return jsonify({"ok": False, "error": "Thiếu haravan_article_id/blog_id"}), 400
+    if not job.get("edited_title") or not job.get("edited_body_html"):
+        return jsonify({"ok": False, "error": "Chưa có title/body — gen AI trước"}), 400
+    import blog_content_writer as bcw
+    res = bcw.sync_blog_to_haravan(
+        int(job["haravan_blog_id"]),
+        int(job["haravan_article_id"]),
+        job["edited_title"],
+        job.get("edited_meta") or "",
+        job["edited_body_html"],
+    )
+    if res.get("ok"):
+        _blog_jobs_update(job_id, status="synced",
+                          synced_at=datetime.now().isoformat(timespec="seconds"),
+                          error=None)
+        return jsonify({"ok": True})
+    _blog_jobs_update(job_id, status="failed", error=res.get("error", "")[:500])
+    return jsonify(res), 500
+
+
+@app.route("/blog-content/sync-all", methods=["POST"])
+def blog_content_sync_all():
+    jobs = _blog_jobs_list(status="draft")
+    ok = fail = 0
+    errors = []
+    import blog_content_writer as bcw
+    import time as _t
+    for job in jobs:
+        if (not job.get("haravan_article_id") or not job.get("haravan_blog_id")
+                or not job.get("edited_title") or not job.get("edited_body_html")):
+            fail += 1; errors.append(f"#{job['id']}: thiếu data")
+            continue
+        try:
+            res = bcw.sync_blog_to_haravan(
+                int(job["haravan_blog_id"]),
+                int(job["haravan_article_id"]),
+                job["edited_title"], job.get("edited_meta") or "",
+                job["edited_body_html"],
+            )
+            if res.get("ok"):
+                _blog_jobs_update(job["id"], status="synced",
+                                  synced_at=datetime.now().isoformat(timespec="seconds"),
+                                  error=None)
+                ok += 1
+            else:
+                _blog_jobs_update(job["id"], status="failed",
+                                  error=res.get("error", "")[:500])
+                fail += 1; errors.append(f"#{job['id']}: {res.get('error', '')[:80]}")
+        except Exception as e:
+            fail += 1; errors.append(f"#{job['id']}: {str(e)[:80]}")
+        _t.sleep(0.8)
+    flash(f"🚀 Sync xong: {ok} OK, {fail} fail." + (f" Sample lỗi: {errors[0]}" if errors else ""),
+          "success" if ok else "error")
+    return redirect(url_for("blog_content_page"))
+
+
+# ─────────────────────────── CONTENT JOBS (SP) ───────────────────────────
+
+
+@app.route("/content-jobs")
+def content_jobs_list_page():
+    status = request.args.get("status") or None
+    cate = request.args.get("cate") or None
+    valid_statuses = ("pending", "drafting", "text_done", "draft", "approved", "synced", "failed")
+    if status and status not in valid_statuses:
+        status = None
+    jobs = db.content_jobs_list(status=status, cate=cate, limit=500)
+    stats = db.content_jobs_stats()
+    categories = db.content_jobs_categories()
+    # parse JSON fields nhẹ cho list view
+    for j in jobs:
+        try:
+            j["internal_links_list"] = json.loads(j["internal_links_json"]) if j.get("internal_links_json") else []
+        except Exception:
+            j["internal_links_list"] = []
+    resp = make_response(render_template(
+        "content_jobs_list.html",
+        jobs=jobs, stats=stats, active_status=status,
+        categories=categories, active_cate=cate,
+    ))
+    # Force no-cache để browser luôn fetch HTML mới (JS inline)
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
+
+
+@app.route("/content-jobs/push-from-empty-desc", methods=["POST"])
+def content_jobs_push_from_empty_desc():
+    """Đẩy SP thiếu mô tả/ngắn từ /seo/empty-desc vào content_jobs."""
+    try:
+        threshold = int(request.form.get("threshold") or seo_mod.EMPTY_DESC_THRESHOLD)
+    except ValueError:
+        threshold = seo_mod.EMPTY_DESC_THRESHOLD
+    items = db.seo_empty_desc_list(
+        url_type="product", threshold=threshold,
+        only_empty=True, limit=2000,
+    )
+    # Skip mọi job đã có content AI để tránh overwrite (giữ draft/synced của vợ)
+    SKIP_STATUSES_PUSH = ("drafting", "text_done", "draft", "approved", "synced")
+    pushed = 0
+    skipped = 0
+    for it in items:
+        existing = db.content_job_get_by_url(it["url"])
+        if existing and existing["status"] in SKIP_STATUSES_PUSH:
+            skipped += 1
+            continue
+        wc = it.get("desc_word_count") or 0
+        reason = "empty_desc" if wc == 0 else "short_desc"
+        db.content_job_upsert(
+            it["url"],
+            product_title=it.get("title"),
+            current_word_count=wc,
+            reason=reason,
+            status="pending" if not existing else existing["status"],
+        )
+        pushed += 1
+    flash(
+        f"📤 Đã đẩy {pushed} SP vào hàng đợi viết AI "
+        f"({skipped} SP đã có content AI — bỏ qua, không overwrite).",
+        "success",
+    )
+    return redirect(url_for("content_jobs_list_page"))
+
+
+@app.route("/content-jobs/push-one", methods=["POST"])
+def content_jobs_push_one():
+    """Đẩy 1 URL cụ thể vào jobs (dùng từ tab /seo/empty-desc cho từng SP)."""
+    url = (request.form.get("url") or "").strip()
+    reason = (request.form.get("reason") or "manual").strip()
+    if not url:
+        flash("Thiếu URL", "error")
+        return redirect(request.referrer or url_for("content_jobs_list_page"))
+    existing = db.content_job_get_by_url(url)
+    if existing:
+        flash(f"⏳ SP đã có trong hàng đợi (status: {existing['status']}). Mở để xem.", "info")
+        return redirect(url_for("content_jobs_detail_page", job_id=existing["id"]))
+    job_id = db.content_job_upsert(url, reason=reason, status="pending")
+    flash("✅ Đã đẩy SP vào hàng đợi viết AI.", "success")
+    return redirect(url_for("content_jobs_detail_page", job_id=job_id))
+
+
+@app.route("/content-jobs/<int:job_id>")
+def content_jobs_detail_page(job_id):
+    job = db.content_job_get(job_id)
+    if not job:
+        flash("Không tìm thấy job.", "error")
+        return redirect(url_for("content_jobs_list_page"))
+    # parse JSON fields
+    for k in ("ai_titles_json", "ai_metas_json", "ai_outline",
+               "internal_links_json", "ai_stats_json"):
+        try:
+            job[k.replace("_json", "_list" if "links" in k or "titles" in k or "metas" in k else "_data")] = (
+                json.loads(job[k]) if job.get(k) else []
+            )
+        except Exception:
+            pass
+    titles = []
+    metas = []
+    try:
+        titles = json.loads(job["ai_titles_json"]) if job.get("ai_titles_json") else []
+    except Exception:
+        pass
+    try:
+        metas = json.loads(job["ai_metas_json"]) if job.get("ai_metas_json") else []
+    except Exception:
+        pass
+    try:
+        internal_link_list = json.loads(job["internal_links_json"]) if job.get("internal_links_json") else []
+    except Exception:
+        internal_link_list = []
+    try:
+        outline = json.loads(job["ai_outline"]) if job.get("ai_outline") else []
+    except Exception:
+        outline = []
+    try:
+        ai_stats = json.loads(job["ai_stats_json"]) if job.get("ai_stats_json") else {}
+    except Exception:
+        ai_stats = {}
+    return render_template(
+        "content_jobs_detail.html",
+        job=job,
+        titles=titles, metas=metas,
+        internal_link_list=internal_link_list,
+        outline=outline,
+        ai_stats=ai_stats,
+    )
+
+
+@app.route("/content-jobs/<int:job_id>/generate", methods=["POST"])
+def content_jobs_generate(job_id):
+    """Đẩy 1 job vào queue → worker tự gen ngầm (return ngay, không đợi)."""
+    job = db.content_job_get(job_id)
+    if not job:
+        flash("Job không tồn tại.", "error")
+        return redirect(url_for("content_jobs_list_page"))
+    # Check provider
+    import ai_writer
+    import codex_provider
+    has_provider = (
+        codex_provider.is_codex_available()
+        or ai_writer._load_openai_key()
+        or ai_writer._load_anthropic_key()
+    )
+    if not has_provider:
+        flash("⚠️ Chưa có AI provider. Cài Codex CLI (`npm install -g @openai/codex`).", "error")
+        return redirect(url_for("content_jobs_detail_page", job_id=job_id))
+    # Reset về pending nếu đang failed/draft → worker pickup
+    if job["status"] in ("failed", "draft", "drafting"):
+        db.content_job_update(job_id, status="pending", error=None)
+    started = content_writer.start_worker_async()
+    msg = f"📥 Đã đẩy job #{job_id} vào queue."
+    msg += " Worker đã start." if started else " Worker đang chạy sẽ pickup."
+    msg += " Em làm việc khác đi, anh báo khi xong."
+    flash(msg, "success")
+    return redirect(url_for("content_jobs_detail_page", job_id=job_id))
+
+
+@app.route("/content-jobs/queue/start-all", methods=["POST"])
+def content_jobs_queue_start_all():
+    """Reset tất cả job draft/failed về pending + start worker (gen tất cả pending)."""
+    started = content_writer.start_worker_async()
+    if started:
+        flash("🚀 Worker đã start — sẽ gen lần lượt tất cả job pending. Em làm việc khác, anh báo tiến độ.", "success")
+    else:
+        flash("⏳ Worker đang chạy sẵn — không cần start lại.", "info")
+    return redirect(url_for("content_jobs_list_page"))
+
+
+@app.route("/content-jobs/queue/stop", methods=["POST"])
+def content_jobs_queue_stop():
+    stopped = content_writer.stop_worker()
+    if stopped:
+        flash("🛑 Đã gửi signal dừng — worker sẽ stop sau khi xong job hiện tại.", "info")
+    else:
+        flash("Worker không đang chạy.", "info")
+    return redirect(url_for("content_jobs_list_page"))
+
+
+@app.route("/api/content-jobs/queue-status")
+def content_jobs_queue_status_api():
+    return jsonify(content_writer.queue_state())
+
+
+@app.route("/content-jobs/<int:job_id>/save", methods=["POST"])
+def content_jobs_save(job_id):
+    """Save edits từ form detail (title chosen + meta chosen + body edited + sync flags)."""
+    job = db.content_job_get(job_id)
+    if not job:
+        flash("Job không tồn tại.", "error")
+        return redirect(url_for("content_jobs_list_page"))
+    try:
+        sel_title_idx = int(request.form.get("selected_title_idx") or 0)
+    except ValueError:
+        sel_title_idx = 0
+    try:
+        sel_meta_idx = int(request.form.get("selected_meta_idx") or 0)
+    except ValueError:
+        sel_meta_idx = 0
+    edited_title = (request.form.get("edited_title") or "").strip()
+    edited_meta = (request.form.get("edited_meta") or "").strip()
+    edited_body_html = request.form.get("edited_body_html") or ""
+    is_money = 1 if request.form.get("is_money_product") else 0
+    # Default sync ALL 3 field (body + meta_title + meta_desc) — em không cần tick nữa
+    db.content_job_update(
+        job_id,
+        selected_title_idx=sel_title_idx,
+        selected_meta_idx=sel_meta_idx,
+        edited_title=edited_title,
+        edited_meta=edited_meta,
+        edited_body_html=edited_body_html,
+        is_money_product=is_money,
+        sync_body=1,
+        sync_meta_title=1,
+        sync_meta_desc=1,
+    )
+    flash("💾 Đã lưu chỉnh sửa.", "success")
+    return redirect(url_for("content_jobs_detail_page", job_id=job_id))
+
+
+@app.route("/content-jobs/<int:job_id>/toggle-money", methods=["POST"])
+def content_jobs_toggle_money(job_id):
+    """Toggle is_money_product flag — endpoint riêng cho nút nhanh trên list."""
+    job = db.content_job_get(job_id)
+    if not job:
+        return {"ok": False, "error": "not found"}, 404
+    new_val = 0 if job.get("is_money_product") else 1
+    db.content_job_update(job_id, is_money_product=new_val)
+    return {"ok": True, "is_money_product": new_val}
+
+
+@app.route("/content-jobs/<int:job_id>/approve", methods=["POST"])
+def content_jobs_approve(job_id):
+    """Đổi status job sang 'approved' — sẵn sàng sync."""
+    job = db.content_job_get(job_id)
+    if not job:
+        flash("Job không tồn tại.", "error")
+        return redirect(url_for("content_jobs_list_page"))
+    if job["status"] != "draft":
+        flash(f"Chỉ duyệt được job ở trạng thái 'draft' (hiện: {job['status']}).", "info")
+        return redirect(url_for("content_jobs_detail_page", job_id=job_id))
+    if not (job.get("edited_body_html") or "").strip():
+        flash("⚠️ Body trống — không duyệt được.", "error")
+        return redirect(url_for("content_jobs_detail_page", job_id=job_id))
+    db.content_job_update(
+        job_id,
+        status="approved",
+        approved_at=datetime.now().isoformat(timespec="seconds"),
+    )
+    flash("✅ Đã duyệt — chờ Sync ngoài bảng list.", "success")
+    return redirect(url_for("content_jobs_list_page"))
+
+
+@app.route("/content-jobs/<int:job_id>/unapprove", methods=["POST"])
+def content_jobs_unapprove(job_id):
+    db.content_job_update(job_id, status="draft", approved_at=None)
+    flash("↩️ Đã chuyển về draft để chỉnh tiếp.", "info")
+    return redirect(url_for("content_jobs_detail_page", job_id=job_id))
+
+
+@app.route("/content-jobs/<int:job_id>/delete", methods=["POST"])
+def content_jobs_delete(job_id):
+    db.content_job_delete(job_id)
+    flash("🗑️ Đã xoá job.", "info")
+    return redirect(url_for("content_jobs_list_page"))
+
+
+@app.route("/content-jobs/sync", methods=["POST"])
+def content_jobs_sync():
+    """Bulk sync các job 'approved' lên Haravan (update body_html + optional meta)."""
+    import haravan_client
+    job_ids_raw = request.form.getlist("job_ids")
+    if not job_ids_raw:
+        flash("⚠️ Chưa chọn job nào để sync.", "error")
+        return redirect(url_for("content_jobs_list_page"))
+    job_ids = []
+    for s in job_ids_raw:
+        try:
+            job_ids.append(int(s))
+        except ValueError:
+            continue
+    ok, fail = 0, 0
+    errors = []
+    for jid in job_ids:
+        job = db.content_job_get(jid)
+        if not job or job["status"] != "approved":
+            continue
+        if not job.get("haravan_id"):
+            db.content_job_update(jid, status="failed", error="Thiếu haravan_id — không sync được.")
+            fail += 1
+            errors.append(f"#{jid}: thiếu haravan_id")
+            continue
+        payload = {}
+        if job.get("sync_body"):
+            # Lazy upload: scan body_html find /local-images/... → upload Haravan + replace URL
+            try:
+                from content_writer import upload_local_images_in_body_to_haravan
+                body_with_cdn = upload_local_images_in_body_to_haravan(job.get("edited_body_html") or "")
+                payload["body_html"] = body_with_cdn
+                # Lưu body có CDN URL về DB để lần sau không upload lại
+                if body_with_cdn != (job.get("edited_body_html") or ""):
+                    db.content_job_update(jid, edited_body_html=body_with_cdn)
+            except Exception as e:
+                db.content_job_update(jid, status="failed", error=f"Upload local images fail: {str(e)[:200]}")
+                fail += 1
+                errors.append(f"#{jid}: upload img fail")
+                continue
+        # Theme đọc SEO title/meta từ flat field `metafields_global_*` (verified 15/5)
+        sync_title = job.get("sync_meta_title")
+        sync_desc = job.get("sync_meta_desc")
+        if not payload and not sync_title and not sync_desc:
+            db.content_job_update(jid, status="failed", error="Không tick field nào để sync.")
+            fail += 1
+            errors.append(f"#{jid}: chưa tick field nào")
+            continue
+        if sync_title:
+            payload["metafields_global_title_tag"] = (job.get("edited_title") or "").strip()
+        if sync_desc:
+            payload["metafields_global_description_tag"] = (job.get("edited_meta") or "").strip()
+        try:
+            haravan_client.update_product(int(job["haravan_id"]), payload)
+            db.content_job_update(
+                jid, status="synced",
+                synced_at=datetime.now().isoformat(timespec="seconds"),
+                error=None,
+            )
+            ok += 1
+        except Exception as e:
+            db.content_job_update(jid, status="failed", error=f"Sync: {e.__class__.__name__}: {str(e)[:200]}")
+            fail += 1
+            errors.append(f"#{jid}: {e.__class__.__name__}")
+    if ok:
+        db.activity_log(
+            kind="content_jobs_sync", icon="🚀",
+            title=f"Sync {ok} bài lên Haravan",
+            description=f"Lỗi: {fail}",
+            href=url_for("content_jobs_list_page"),
+        )
+    flash(f"🚀 Sync xong: {ok} OK, {fail} lỗi." + (f" Lỗi: {', '.join(errors[:5])}" if errors else ""),
+          "success" if ok else "error")
+    return redirect(url_for("content_jobs_list_page", status="synced" if ok else None))
+
+
+@app.route("/api/content-jobs/stats")
+def content_jobs_stats_api():
+    return jsonify(db.content_jobs_stats())
+
+
+# ─────────────────────────── HARAVAN BLOGS ───────────────────────────
+
+# Phân loại blog theo từ khóa trong title (auto-detect)
+# Order matters: rule cụ thể trước, generic sau (vd "pirate" check trước "tutorial")
+BLOG_TOPICS = [
+    ("pirate",   "⚠️ Crack / Pirate",    "rgba(239,68,68,0.15)",  ["full 100", "full crack", "active key", "kích hoạt key", "key bản quyền"]),
+    ("service",  "🛠️ Dịch vụ Sintech",   "rgba(34,197,94,0.15)",  ["sửa chữa", "sua chua", "dịch vụ", "tphcm", "quận"]),
+    ("review",   "📖 Review",            "rgba(168,85,247,0.15)", ["review", "đánh giá", "danh gia"]),
+    ("compare",  "🆚 So sánh",           "rgba(236,72,153,0.15)", ["so sánh", "so sanh", " vs ", "vs."]),
+    ("build_pc", "🧰 Build PC",          "rgba(245,158,11,0.15)", ["build pc", "cấu hình pc", "cau hinh pc", "build cấu hình"]),
+    ("top",      "🏆 Top / List",        "rgba(251,146,60,0.15)", ["top ", "best ", "những "]),
+    ("promo",    "💰 Khuyến mãi",        "rgba(34,197,94,0.15)",  ["khuyến mãi", "khuyen mai", "sale", "giảm giá", "ưu đãi"]),
+    ("gaming",   "🎮 Gaming",            "rgba(99,102,241,0.15)", ["tựa game", "tua game", "fps", "moba", "esport", "gaming "]),
+    ("tutorial", "📝 Hướng dẫn",         "rgba(59,130,246,0.15)", ["hướng dẫn", "huong dan", "cách ", "tutorial", "tips", "thủ thuật"]),
+    ("news",     "📰 Tin tức",           "rgba(14,165,233,0.15)", ["tin tức", "tin tuc", "news", "ra mắt", "ra mat", "công bố"]),
+    ("explain",  "💡 Giải thích",        "rgba(20,184,166,0.15)", [" là gì", "la gi", "có nên", "co nen", "khác gì", "khac gi"]),
+]
+BLOG_TOPIC_LABELS = {code: (label, color) for code, label, color, _ in BLOG_TOPICS}
+BLOG_TOPIC_LABELS["other"] = ("❓ Khác", "rgba(120,120,140,0.15)")
+
+
+def classify_blog_topic(title: str) -> str:
+    """Detect chủ đề blog theo keyword trong title."""
+    t = (title or "").lower()
+    for code, _label, _color, keywords in BLOG_TOPICS:
+        if any(kw in t for kw in keywords):
+            return code
+    return "other"
+
+
+@app.route("/haravan/blogs")
+def haravan_blogs():
+    """Quản lý blog/news của sintech.vn — data từ seo_pages (đã crawl).
+
+    Khi nào Haravan API blogs/articles fix lỗi 502, có thể swap source sang sync trực tiếp.
+    """
+    # Lấy tất cả blog từ DB (max 500, hiện 286 → đủ chỗ)
+    all_blogs = db.seo_list_pages(url_type="blog", limit=500, sort="url")
+
+    # Classify topic + add helper fields
+    for b in all_blogs:
+        b["topic"] = classify_blog_topic(b.get("title") or "")
+        try:
+            b["issue_count"] = len(json.loads(b.get("issues") or "[]"))
+        except (ValueError, TypeError):
+            b["issue_count"] = 0
+
+    # Topic counts (trên TOÀN BỘ — không filter)
+    topic_counts = {}
+    for b in all_blogs:
+        topic_counts[b["topic"]] = topic_counts.get(b["topic"], 0) + 1
+    topic_breakdown = []
+    for code, label, color, _kw in BLOG_TOPICS:
+        topic_breakdown.append({
+            "code": code, "label": label, "color": color,
+            "count": topic_counts.get(code, 0),
+        })
+    if topic_counts.get("other", 0):
+        topic_breakdown.append({
+            "code": "other", "label": "❓ Khác",
+            "color": "rgba(120,120,140,0.15)",
+            "count": topic_counts["other"],
+        })
+
+    # Filter
+    f_topic = request.args.get("topic") or None
+    f_band = request.args.get("band") or None
+    f_search = (request.args.get("q") or "").strip().lower() or None
+    f_sort = request.args.get("sort") or "score_asc"
+
+    filtered = list(all_blogs)
+    if f_topic:
+        filtered = [b for b in filtered if b["topic"] == f_topic]
+    if f_band == "good":
+        filtered = [b for b in filtered if (b.get("score") or 0) >= 80]
+    elif f_band == "ok":
+        filtered = [b for b in filtered if 60 <= (b.get("score") or 0) < 80]
+    elif f_band == "bad":
+        filtered = [b for b in filtered if (b.get("score") or 0) < 60]
+    if f_search:
+        filtered = [b for b in filtered if f_search in (b.get("title") or "").lower()
+                    or f_search in (b.get("url") or "").lower()]
+
+    sort_keys = {
+        "score_asc":  lambda b: (b.get("score") or 0, -(b.get("id") or 0)),
+        "score_desc": lambda b: (-(b.get("score") or 0), -(b.get("id") or 0)),
+        "title":      lambda b: (b.get("title") or "").lower(),
+        "wc_desc":    lambda b: -(b.get("word_count") or 0),
+        "wc_asc":     lambda b: (b.get("word_count") or 0),
+        "issues_desc": lambda b: -b["issue_count"],
+        "recent":     lambda b: -(b.get("id") or 0),
+    }
+    filtered.sort(key=sort_keys.get(f_sort, sort_keys["score_asc"]))
+
+    # Stats trên TOÀN BỘ blogs
+    scores = [b.get("score") for b in all_blogs if b.get("score") is not None]
+    stats = {
+        "total": len(all_blogs),
+        "avg_score": round(sum(scores) / len(scores), 1) if scores else 0,
+        "good": sum(1 for s in scores if s >= 80),
+        "ok":   sum(1 for s in scores if 60 <= s < 80),
+        "bad":  sum(1 for s in scores if s < 60),
+    }
+
+    try:
+        page_num = max(1, int(request.args.get("page", 1)))
+    except (TypeError, ValueError):
+        page_num = 1
+    per_page = 50
+    total = len(filtered)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page_items = filtered[(page_num - 1) * per_page : page_num * per_page]
+
+    return render_template(
+        "haravan_blogs.html",
+        blogs=page_items, stats=stats,
+        topic_breakdown=topic_breakdown,
+        topic_labels=BLOG_TOPIC_LABELS,
+        filters={"topic": f_topic, "band": f_band, "q": f_search or "", "sort": f_sort},
+        page_num=page_num, total_pages=total_pages, total=total, per_page=per_page,
+    )
+
+
+# ─────────────────────────── HARAVAN ───────────────────────────
+
+
+@app.route("/haravan")
+def haravan_dashboard():
+    stats = db.hv_stats()
+    state = hv_sync.sync_state()
+    latest = db.hv_latest_sync()
+    top_issues = db.hv_top_issues(limit=10)
+    enriched_top = []
+    for it in top_issues:
+        icon, label, _fix = hv_sync.HV_ISSUE_LABELS.get(it["code"], ("⚪", it["code"], ""))
+        enriched_top.append({**it, "icon": icon, "label": label})
+    return render_template(
+        "haravan.html",
+        stats=stats, state=state, latest=latest, top_issues=enriched_top,
+    )
+
+
+@app.route("/haravan/sync", methods=["POST"])
+def haravan_sync_start():
+    try:
+        limit_pages = int(request.form.get("limit_pages") or 0) or None
+    except (TypeError, ValueError):
+        limit_pages = None
+    started = hv_sync.start_sync_async(limit_pages=limit_pages)
+    if started:
+        flash(f"Đã bắt đầu sync Haravan {'(' + str(limit_pages) + ' page test)' if limit_pages else '(toàn bộ)'}.", "success")
+    else:
+        flash("Đang sync — chờ xong rồi sync tiếp.", "error")
+    return redirect(url_for("haravan_dashboard"))
+
+
+@app.route("/api/haravan/status")
+def haravan_status_api():
+    return jsonify({
+        "state": hv_sync.sync_state(),
+        "stats": db.hv_stats(),
+    })
+
+
+@app.route("/haravan/products")
+def haravan_products_page():
+    filters = {
+        "vendor": request.args.get("vendor") or None,
+        "product_type": request.args.get("type") or None,
+        "status": request.args.get("status") or None,
+        "issue_code": request.args.get("issue") or None,
+        "search": request.args.get("q") or None,
+        "sort": request.args.get("sort") or "score_asc",
+    }
+    band = request.args.get("band")
+    score_filter = {}
+    if band == "good":
+        score_filter = {"min_score": 80}
+    elif band == "ok":
+        score_filter = {"min_score": 60, "max_score": 79}
+    elif band == "bad":
+        score_filter = {"max_score": 59}
+
+    page_num = max(1, int(request.args.get("page", 1)))
+    per_page = 50
+    total = db.hv_count_products(**filters)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    products = db.hv_list_products(
+        **filters, limit=per_page, offset=(page_num - 1) * per_page,
+    )
+    stats = db.hv_stats()
+    top_issues = db.hv_top_issues(limit=12)
+    enriched_top = []
+    for it in top_issues:
+        icon, label, _fix = hv_sync.HV_ISSUE_LABELS.get(it["code"], ("⚪", it["code"], ""))
+        enriched_top.append({**it, "icon": icon, "label": label})
+    return render_template(
+        "haravan_products.html",
+        products=products, stats=stats, top_issues=enriched_top,
+        filters=filters, band=band,
+        page_num=page_num, total_pages=total_pages, total=total,
+    )
+
+
+@app.route("/haravan/products/<int:haravan_id>")
+def haravan_product_detail(haravan_id):
+    p = db.hv_get_product(haravan_id)
+    if not p:
+        flash("Không tìm thấy sản phẩm trong DB. Sync lại có thể giúp.", "error")
+        return redirect(url_for("haravan_products_page"))
+    raw_issues = []
+    if p.get("audit_issues"):
+        try:
+            raw_issues = json.loads(p["audit_issues"])
+        except (ValueError, TypeError):
+            raw_issues = []
+    issues = [hv_sync.hv_enrich_issue(it) for it in raw_issues]
+    images = []
+    if p.get("images"):
+        try:
+            images = json.loads(p["images"])
+        except (ValueError, TypeError):
+            images = []
+    return render_template(
+        "haravan_product_detail.html",
+        p=p, issues=issues, images=images,
+    )
+
+
+@app.route("/seo/crawl", methods=["POST"])
+def seo_crawl():
+    try:
+        limit = int(request.form.get("limit") or 0) or None
+    except (TypeError, ValueError):
+        limit = None
+    started = seo_mod.start_crawl_async(limit=limit)
+    if started:
+        flash(f"Đã bắt đầu crawl {'(' + str(limit) + ' URL test)' if limit else '(toàn bộ sitemap)'}.", "success")
+    else:
+        flash("Đang có run khác — chờ xong rồi crawl tiếp.", "error")
+    return redirect(url_for("seo_dashboard"))
+
+
+@app.route("/seo/stop-crawl", methods=["POST"])
+def seo_stop_crawl():
+    """Stop crawl đang chạy (graceful — đợi các request đang fly xong)."""
+    stopped = seo_mod.stop_crawl()
+    if stopped:
+        flash("🛑 Đã gửi signal stop — crawl sẽ dừng sau khi xong các URL đang fetch.", "info")
+    else:
+        flash("Crawl đang idle — không có gì để stop.", "info")
+    return redirect(url_for("seo_dashboard"))
+
+
+@app.route("/seo/crawl-fresh", methods=["POST"])
+def seo_crawl_fresh():
+    """Stop crawl đang chạy + xóa toàn bộ data + start crawl mới fresh.
+    Hữu ích khi muốn re-crawl từ đầu, không bị data cũ ảnh hưởng."""
+    # 1. Stop crawl đang chạy (nếu có) — soft signal
+    seo_mod.stop_crawl()
+    # 2. Đợi state về idle/done (max 10s)
+    import time
+    for _ in range(20):
+        snap = seo_mod.state_snapshot()
+        if snap["status"] not in ("fetching_sitemap", "crawling", "stopping"):
+            break
+        time.sleep(0.5)
+    # 3. Clear toàn bộ DB seo_pages + seo_links
+    db.seo_clear_all()
+    # 4. Start crawl mới — toàn bộ sitemap, không limit
+    started = seo_mod.start_crawl_async(limit=None)
+    if started:
+        flash("🆕 Đã xóa toàn bộ data cũ + bắt đầu crawl mới fresh. Refresh trang để xem tiến độ realtime.", "success")
+    else:
+        flash("Vẫn còn run khác chưa stop hết — đợi 30s rồi thử lại.", "error")
+    return redirect(url_for("seo_dashboard"))
+
+
+# ─────────────────────────── BACKGROUND ───────────────────────────
+
+
+def auto_post_due():
+    """Worker chạy mỗi phút — đăng các bài 'approved' tới giờ.
+
+    Lưu ý: có thể dùng FB native scheduling thay (đã có endpoint /schedule),
+    đây chỉ là backup local trong trường hợp em muốn quản hoàn toàn từ Hub."""
+    now = datetime.now()
+    today = now.date().isoformat()
+    posts = db.list_posts(date=today, status="approved")
+    for p in posts:
+        if not p.get("scheduled_time"):
+            continue
+        try:
+            tgt = datetime.strptime(
+                f"{p['scheduled_date']} {p['scheduled_time']}", "%Y-%m-%d %H:%M"
+            )
+        except ValueError:
+            continue
+        if tgt > now:
+            continue
+        if tgt < now - timedelta(hours=2):
+            continue  # quá hạn, skip
+        try:
+            paths = post_image_paths(p)
+            if len(paths) >= 2:
+                r = fb_client.post_multi_to_page(p["caption"], paths, published=True)
+            else:
+                r = fb_client.post_to_page(
+                    p["caption"], image_path=(paths[0] if paths else None), published=True
+                )
+            fb_id = r.get("post_id") or r.get("id")
+            db.update_post(p["id"], {"status": "posted", "fb_post_id": fb_id})
+            print(f"[auto] Đã đăng bài {p['code']} → {fb_id}")
+        except Exception as e:
+            print(f"[auto] Lỗi đăng bài {p['code']}: {e}")
+
+
+@app.template_filter("from_json")
+def jinja_from_json(value):
+    if not value:
+        return []
+    try:
+        return json.loads(value) if isinstance(value, str) else value
+    except (ValueError, TypeError):
+        return []
+
+
+@app.context_processor
+def inject_globals():
+    return {
+        "now": datetime.now(),
+        "POST_TYPES": POST_TYPES,
+        "POST_STATUSES": POST_STATUSES,
+    }
+
+
+if __name__ == "__main__":
+    db.init_db()
+    sched = BackgroundScheduler()
+    sched.add_job(auto_post_due, "interval", minutes=1, id="auto_post_due")
+    sched.add_job(
+        lambda: seo_mod.start_crawl_async(),
+        "cron", day_of_week="sun", hour=3, minute=0,
+        id="seo_weekly_crawl",
+    )
+    sched.add_job(
+        lambda: db.seo_capture_history(note="weekly_auto"),
+        "cron", day_of_week="sun", hour=4, minute=0,
+        id="seo_weekly_history_capture",
+    )
+    sched.start()
+    try:
+        app.run(host="127.0.0.1", port=5055, debug=False, threaded=True)
+    finally:
+        sched.shutdown(wait=False)

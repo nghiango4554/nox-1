@@ -1,0 +1,559 @@
+{
+  "version": "2026-05-16-1",
+  "thresholds": {
+    "good": 65,
+    "ok": 50
+  },
+  "word_count_thresholds": {
+    "blog":       {"low": 700, "ok": 1500},
+    "product":    {"low": 500, "ok": 800},
+    "collection": {"low": 150, "ok": 300},
+    "page":       {"low": 500, "ok": 800},
+    "other":      {"low": 500, "ok": 800}
+  },
+  "rules": [
+    {
+      "code": "no_title",
+      "name": "Thiếu thẻ title",
+      "enabled": true,
+      "level": "error",
+      "score": 0,
+      "msg": "Thiếu thẻ <title>",
+      "applies_to": "all"
+    },
+    {
+      "code": "title_long",
+      "name": "Title quá dài",
+      "enabled": true,
+      "level": "warn",
+      "score": 5,
+      "threshold": 61,
+      "msg": "Title quá dài ({len} ký tự, max {threshold})",
+      "applies_to": "all"
+    },
+    {
+      "code": "title_short",
+      "name": "Title quá ngắn",
+      "enabled": true,
+      "level": "warn",
+      "score": 5,
+      "threshold": 20,
+      "msg": "Title quá ngắn ({len} ký tự, nên ≥{threshold})",
+      "applies_to": "all"
+    },
+    {
+      "code": "title_ok",
+      "name": "Title đạt chuẩn",
+      "enabled": true,
+      "level": "info",
+      "score": 10,
+      "msg": "Title length OK",
+      "applies_to": "all",
+      "hidden_pass": true
+    },
+    {
+      "code": "no_meta",
+      "name": "Thiếu meta description",
+      "enabled": true,
+      "level": "error",
+      "score": 0,
+      "msg": "Thiếu meta description",
+      "applies_to": "all"
+    },
+    {
+      "code": "meta_short",
+      "name": "Meta quá ngắn",
+      "enabled": true,
+      "level": "warn",
+      "score": 5,
+      "threshold": 140,
+      "msg": "Meta quá ngắn ({len} ký tự, nên ≥{threshold})",
+      "applies_to": "all"
+    },
+    {
+      "code": "meta_long",
+      "name": "Meta quá dài",
+      "enabled": true,
+      "level": "warn",
+      "score": 5,
+      "threshold": 160,
+      "msg": "Meta quá dài ({len} ký tự, max {threshold})",
+      "applies_to": "all"
+    },
+    {
+      "code": "meta_ok",
+      "name": "Meta đạt chuẩn",
+      "enabled": true,
+      "level": "info",
+      "score": 10,
+      "msg": "Meta length OK",
+      "applies_to": "all",
+      "hidden_pass": true
+    },
+    {
+      "code": "no_h1",
+      "name": "Thiếu H1",
+      "enabled": true,
+      "level": "error",
+      "score": 0,
+      "msg": "Thiếu thẻ <h1>",
+      "applies_to": "all"
+    },
+    {
+      "code": "multi_h1",
+      "name": "Nhiều H1",
+      "enabled": true,
+      "level": "warn",
+      "score": 5,
+      "msg": "Có {count} thẻ <h1> — chỉ nên 1",
+      "applies_to": "all"
+    },
+    {
+      "code": "h1_ok",
+      "name": "H1 đạt chuẩn",
+      "enabled": true,
+      "level": "info",
+      "score": 10,
+      "msg": "H1 đúng 1 thẻ",
+      "applies_to": "all",
+      "hidden_pass": true
+    },
+    {
+      "code": "no_h2",
+      "name": "Thiếu H2",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "msg": "Không có thẻ <h2> — nội dung không chia section",
+      "applies_to": "all"
+    },
+    {
+      "code": "many_h2",
+      "name": "Nhiều H2",
+      "enabled": true,
+      "level": "info",
+      "score": 0,
+      "threshold": 15,
+      "msg": "Có {count} thẻ H2 — quá nhiều (>{threshold})",
+      "applies_to": "all"
+    },
+    {
+      "code": "h2_after_h3",
+      "name": "H3 trước H2",
+      "enabled": true,
+      "level": "info",
+      "score": 0,
+      "msg": "Heading H3 xuất hiện trước H2 đầu tiên",
+      "applies_to": "all"
+    },
+    {
+      "code": "low_content",
+      "name": "Nội dung mỏng",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "threshold": 500,
+      "msg": "Nội dung mỏng ({count} từ, chuẩn Sintech ≥800)",
+      "applies_to": "all"
+    },
+    {
+      "code": "thin_content",
+      "name": "Nội dung khá ngắn",
+      "enabled": true,
+      "level": "info",
+      "score": 5,
+      "threshold": 800,
+      "msg": "Nội dung khá ngắn ({count} từ, chuẩn Sintech ≥{threshold})",
+      "applies_to": "all"
+    },
+    {
+      "code": "content_ok",
+      "name": "Nội dung đủ",
+      "enabled": true,
+      "level": "info",
+      "score": 10,
+      "msg": "Word count ≥800",
+      "applies_to": "all",
+      "hidden_pass": true
+    },
+    {
+      "code": "img_no_alt_some",
+      "name": "Một số ảnh thiếu alt",
+      "enabled": true,
+      "level": "warn",
+      "score": 5,
+      "msg": "{count}/{total} ảnh thiếu alt",
+      "applies_to": "all"
+    },
+    {
+      "code": "img_no_alt",
+      "name": "Quá nửa ảnh thiếu alt",
+      "enabled": true,
+      "level": "error",
+      "score": 0,
+      "msg": "{count}/{total} ảnh thiếu alt",
+      "applies_to": "all"
+    },
+    {
+      "code": "img_all_alt",
+      "name": "Tất cả ảnh có alt",
+      "enabled": true,
+      "level": "info",
+      "score": 10,
+      "msg": "Tất cả ảnh có alt",
+      "applies_to": "all",
+      "hidden_pass": true
+    },
+    {
+      "code": "no_internal",
+      "name": "Không có internal link",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "msg": "Không có internal link nào",
+      "applies_to": "all"
+    },
+    {
+      "code": "few_internal",
+      "name": "Ít internal link",
+      "enabled": true,
+      "level": "info",
+      "score": 5,
+      "threshold": 3,
+      "msg": "Chỉ có {count} internal link, nên ≥{threshold}",
+      "applies_to": "all"
+    },
+    {
+      "code": "internal_ok",
+      "name": "Internal link đủ",
+      "enabled": true,
+      "level": "info",
+      "score": 10,
+      "msg": "Internal link ≥3",
+      "applies_to": "all",
+      "hidden_pass": true
+    },
+    {
+      "code": "no_canonical",
+      "name": "Thiếu canonical",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "msg": "Thiếu thẻ canonical",
+      "applies_to": "all"
+    },
+    {
+      "code": "canonical_other",
+      "name": "Canonical khác URL",
+      "enabled": true,
+      "level": "info",
+      "score": 0,
+      "msg": "Canonical trỏ URL khác: {canonical}",
+      "applies_to": "all"
+    },
+    {
+      "code": "has_canonical",
+      "name": "Có canonical",
+      "enabled": true,
+      "level": "info",
+      "score": 5,
+      "msg": "Có canonical",
+      "applies_to": "all",
+      "hidden_pass": true
+    },
+    {
+      "code": "noindex_meta",
+      "name": "Noindex meta",
+      "enabled": true,
+      "level": "error",
+      "score": 0,
+      "msg": "Meta robots noindex — Google sẽ KHÔNG index",
+      "applies_to": "all"
+    },
+    {
+      "code": "noindex_header",
+      "name": "Noindex X-Robots-Tag",
+      "enabled": true,
+      "level": "error",
+      "score": 0,
+      "msg": "X-Robots-Tag noindex — Google sẽ KHÔNG index",
+      "applies_to": "all"
+    },
+    {
+      "code": "no_og",
+      "name": "Thiếu OG tags",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "msg": "Thiếu Open Graph tags (og:title)",
+      "applies_to": "all"
+    },
+    {
+      "code": "has_og",
+      "name": "Có OG tags",
+      "enabled": true,
+      "level": "info",
+      "score": 5,
+      "msg": "Có OG tags",
+      "applies_to": "all",
+      "hidden_pass": true
+    },
+    {
+      "code": "no_schema",
+      "name": "Thiếu Schema.org",
+      "enabled": true,
+      "level": "info",
+      "score": 0,
+      "msg": "Thiếu schema.org JSON-LD",
+      "applies_to": "all"
+    },
+    {
+      "code": "has_schema",
+      "name": "Có Schema.org",
+      "enabled": true,
+      "level": "info",
+      "score": 5,
+      "msg": "Có schema.org",
+      "applies_to": "all",
+      "hidden_pass": true
+    },
+    {
+      "code": "slow",
+      "name": "Tải hơi chậm",
+      "enabled": true,
+      "level": "info",
+      "score": 5,
+      "threshold": 1500,
+      "msg": "Tải hơi chậm ({load_ms}ms, mong <{threshold}ms)",
+      "applies_to": "all"
+    },
+    {
+      "code": "very_slow",
+      "name": "Tải chậm",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "threshold": 3000,
+      "msg": "Tải chậm ({load_ms}ms, >{threshold}ms)",
+      "applies_to": "all"
+    },
+    {
+      "code": "fast_load",
+      "name": "Tải nhanh",
+      "enabled": true,
+      "level": "info",
+      "score": 10,
+      "msg": "Load ≤1500ms",
+      "applies_to": "all",
+      "hidden_pass": true
+    },
+    {
+      "code": "redirect_chain",
+      "name": "Redirect 2 hop",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "threshold": 2,
+      "msg": "Redirect chain {count} hop",
+      "applies_to": "all"
+    },
+    {
+      "code": "redirect_long_chain",
+      "name": "Redirect 3+ hop",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "threshold": 3,
+      "msg": "Redirect chain dài {count} hop",
+      "applies_to": "all"
+    },
+    {
+      "code": "sintech_in_title",
+      "name": "Sintech trong title gốc",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "msg": "Title gốc chứa 'Sintech' (không tính suffix Haravan)",
+      "applies_to": "all"
+    },
+    {
+      "code": "seoer_phrases",
+      "name": "Cụm SEOer cấm",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "msg": "Có cụm SEOer cấm: {phrases}",
+      "applies_to": "all"
+    },
+    {
+      "code": "separator_dashes",
+      "name": "Separator '---' cấm",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "msg": "Có dấu '---' hoặc '***' — rule Sintech cấm",
+      "applies_to": "all"
+    },
+    {
+      "code": "meta_no_cta",
+      "name": "Meta thiếu CTA HOA",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "msg": "Meta description thiếu CTA viết HOA",
+      "applies_to": "product"
+    },
+    {
+      "code": "missing_sintech_section",
+      "name": "Thiếu 'Vì sao Sintech'",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "msg": "Thiếu section 'Vì sao nên mua tại Sintech'",
+      "applies_to": "product"
+    },
+    {
+      "code": "missing_sintech_policy",
+      "name": "Thiếu chính sách Sintech",
+      "enabled": true,
+      "level": "info",
+      "score": 0,
+      "msg": "Thiếu câu chính sách (trả góp 0%, kiểm hàng...)",
+      "applies_to": "product"
+    },
+    {
+      "code": "missing_faq",
+      "name": "Thiếu FAQ",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "msg": "Trang sản phẩm thiếu section FAQ",
+      "applies_to": "product"
+    },
+    {
+      "code": "missing_real_experience",
+      "name": "Thiếu 'Trải nghiệm thực tế'",
+      "enabled": true,
+      "level": "info",
+      "score": 0,
+      "msg": "Thiếu section 'Trải nghiệm thực tế'",
+      "applies_to": "product"
+    },
+    {
+      "code": "missing_suitable",
+      "name": "Thiếu 'Phù hợp với ai'",
+      "enabled": true,
+      "level": "info",
+      "score": 0,
+      "msg": "Thiếu section 'Phù hợp với ai'",
+      "applies_to": "product"
+    },
+    {
+      "code": "h1_in_desc",
+      "name": "H1 trong description",
+      "enabled": true,
+      "level": "error",
+      "score": 0,
+      "msg": "{count} thẻ <h1> trong mô tả: {preview}",
+      "applies_to": "all"
+    },
+    {
+      "code": "sintech_section_ok",
+      "name": "Có section 'Vì sao Sintech'",
+      "enabled": true,
+      "level": "info",
+      "score": 4,
+      "msg": "Có section 'Vì sao nên mua tại Sintech'",
+      "applies_to": "product",
+      "hidden_pass": true
+    },
+    {
+      "code": "meta_cta_ok",
+      "name": "Meta có CTA HOA",
+      "enabled": true,
+      "level": "info",
+      "score": 3,
+      "msg": "Meta có CTA viết HOA",
+      "applies_to": "product",
+      "hidden_pass": true
+    },
+    {
+      "code": "faq_ok",
+      "name": "Có section FAQ",
+      "enabled": true,
+      "level": "info",
+      "score": 3,
+      "msg": "Có section FAQ / Câu hỏi thường gặp",
+      "applies_to": "product",
+      "hidden_pass": true
+    },
+    {
+      "code": "signature_ok",
+      "name": "Có signature Sintech",
+      "enabled": true,
+      "level": "info",
+      "score": 3,
+      "msg": "Có signature 'Tư vấn cấu hình bởi team kỹ thuật Sintech'",
+      "applies_to": "product",
+      "hidden_pass": true
+    },
+    {
+      "code": "real_experience_ok",
+      "name": "Có 'Trải nghiệm thực tế'",
+      "enabled": true,
+      "level": "info",
+      "score": 2,
+      "msg": "Có section 'Trải nghiệm thực tế'",
+      "applies_to": "product",
+      "hidden_pass": true
+    },
+    {
+      "code": "missing_signature",
+      "name": "Thiếu signature Sintech",
+      "enabled": true,
+      "level": "info",
+      "score": 0,
+      "msg": "Thiếu signature 'Tư vấn cấu hình bởi team kỹ thuật Sintech' cuối bài",
+      "applies_to": "product"
+    },
+    {
+      "code": "readability_ok",
+      "name": "Readability tốt",
+      "enabled": true,
+      "level": "info",
+      "score": 10,
+      "msg": "Readability ≥70 — bài dễ đọc",
+      "applies_to": "all",
+      "hidden_pass": true
+    },
+    {
+      "code": "readability_weak",
+      "name": "Readability yếu",
+      "enabled": true,
+      "level": "warn",
+      "score": 0,
+      "msg": "Readability <40 — bài khó đọc, cần viết câu ngắn hơn / bớt passive",
+      "applies_to": "all"
+    },
+    {
+      "code": "dup_title",
+      "name": "Title trùng cross-site",
+      "enabled": true,
+      "level": "warn",
+      "score": -5,
+      "msg": "Title trùng với URL khác trong site",
+      "applies_to": "all"
+    },
+    {
+      "code": "dup_meta",
+      "name": "Meta trùng cross-site",
+      "enabled": true,
+      "level": "warn",
+      "score": -5,
+      "msg": "Meta description trùng với URL khác trong site",
+      "applies_to": "all"
+    }
+  ],
+  "_note": "Edit qua UI /seo/rules. KHÔNG xóa field 'code' (logic crawl lookup theo code). Đổi 'enabled':false để skip rule. Đổi 'score' để tune weight. Đổi 'threshold' để chỉnh ngưỡng. word_count_thresholds cấu hình ngưỡng word count theo url_type. dup_title/dup_meta apply ở post-process qua recompute_dup_flags() (route POST /seo/recompute-dup).",
+  "last_edited": "2026-05-16T00:00:00"
+}

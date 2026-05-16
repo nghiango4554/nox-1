@@ -1,0 +1,17 @@
+[
+  {
+    "url": "https://sintech.vn/products/tan-nhiet-nuoc-aio-thermaltake-th240-v2-ultra-argb-snow",
+    "issue": "PARTIAL:T1=62c,T2=64c,M2=172c>160,M3=170c>160",
+    "row": 17
+  },
+  {
+    "url": "https://sintech.vn/products/tan-nhiet-nuoc-aio-thermaltake-th240-v2-ultra-argb-black",
+    "issue": "PARTIAL:M2=134c<140",
+    "row": 18
+  },
+  {
+    "url": "https://sintech.vn/products/tan-nhiet-nuoc-aio-thermaltake-th240-v2-argb-black",
+    "issue": "PARTIAL:T2=64c,M2=135c<140",
+    "row": 21
+  }
+]

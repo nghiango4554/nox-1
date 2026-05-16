@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Calendar · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span>📅 Calendar</span>
+<span class="crumb"></span>
+<span class="muted" style="font-weight:400">14 ngày tới</span>
+{% endblock %}
+
+{% block content %}
+
+<div class="section-head">
+  <h2 class="muted" style="font-size:13px;font-weight:500">Lịch đăng FB Sintech</h2>
+  <div class="legend">
+    <span><span class="legend-dot" style="background:var(--st-draft)"></span>Draft</span>
+    <span><span class="legend-dot" style="background:var(--st-ready)"></span>Ready</span>
+    <span><span class="legend-dot" style="background:var(--st-scheduled)"></span>Scheduled</span>
+    <span><span class="legend-dot" style="background:var(--st-posted)"></span>Posted</span>
+  </div>
+</div>
+
+<div class="cal-grid">
+  {% for day in days %}
+  <div class="cal-day">
+    <div class="day-head{% if day.is_today %} is-today{% endif %}">
+      <span class="dow">{{ day.dow_long }}</span>
+      <span class="dnum">{{ day.dnum }}/{{ day.month }}</span>
+    </div>
+    {% if day.posts %}
+      {% for p in day.posts %}
+      <a class="cal-post status-{{ p.status }}" href="{{ url_for('post_detail', post_id=p.id) }}">
+        <div class="dp-time">{{ p.scheduled_time or '--:--' }}</div>
+        <div class="dp-title">{{ p.code }}</div>
+        <div class="dp-meta">{{ p.code }} · {{ p.status }}</div>
+      </a>
+      {% endfor %}
+    {% else %}
+      <div class="cal-empty">trống</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

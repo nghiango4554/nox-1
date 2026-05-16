@@ -1,0 +1,747 @@
+{% extends "base.html" %}
+{% block title %}SEO · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span>🔍 SEO Audit</span>
+<span class="crumb"></span>
+<span class="muted" style="font-weight:400">sintech.vn</span>
+{% endblock %}
+
+{% block page_actions %}
+<form action="{{ url_for('seo_seed') }}" method="post" style="display:inline">
+  <button class="btn" type="submit" title="Lấy danh sách URL từ sitemap.xml">🔄 Sitemap</button>
+</form>
+<form action="{{ url_for('seo_crawl') }}" method="post" style="display:inline">
+  <input type="hidden" name="limit" value="50">
+  <button class="btn" type="submit"
+          {% if state.status in ('fetching_sitemap', 'crawling') %}disabled{% endif %}>
+    🧪 Test 50
+  </button>
+</form>
+<form action="{{ url_for('seo_crawl') }}" method="post" style="display:inline">
+  <button class="btn btn-primary" type="submit"
+          {% if state.status in ('fetching_sitemap', 'crawling') %}disabled{% endif %}
+          title="Crawl/refresh — KHÔNG xóa data cũ">
+    🚀 Crawl toàn bộ
+  </button>
+</form>
+<form action="{{ url_for('seo_crawl_fresh') }}" method="post" style="display:inline"
+      onsubmit="return confirm('Xóa toàn bộ data SEO cũ + crawl lại từ đầu? Action không hoàn tác.')">
+  <button class="btn" type="submit"
+          style="background:#dc2626;color:white"
+          title="Xóa data cũ + crawl mới (kết quả hiện realtime)">
+    🆕 Crawl mới (xóa data)
+  </button>
+</form>
+{% if state.status in ('fetching_sitemap', 'crawling', 'stopping') %}
+<form action="{{ url_for('seo_stop_crawl') }}" method="post" style="display:inline">
+  <button class="btn" type="submit" style="background:#facc15;color:#1f2937"
+          title="Dừng crawl đang chạy">
+    🛑 Stop crawl
+  </button>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+{# ───────────── 1. KPI COMPACT ───────────── #}
+<div class="seo-kpi-row">
+  <div class="seo-kpi-cell">
+    <div class="seo-kpi-num">{{ stats.total }}</div>
+    <div class="seo-kpi-label">Tổng URL</div>
+  </div>
+  <div class="seo-kpi-cell">
+    <div class="seo-kpi-num">{{ stats.avg_score }}<span class="seo-kpi-unit">/100</span></div>
+    <div class="seo-kpi-label">Điểm TB</div>
+  </div>
+  <a href="?band=good" class="seo-kpi-cell seo-kpi-good">
+    <div class="seo-kpi-num">{{ stats.good }}</div>
+    <div class="seo-kpi-label">🟢 Tốt (≥80)</div>
+  </a>
+  <a href="?band=ok" class="seo-kpi-cell seo-kpi-ok">
+    <div class="seo-kpi-num">{{ stats.ok if stats.ok is defined else (stats.total - stats.good - stats.bad) }}</div>
+    <div class="seo-kpi-label">🟡 OK (60-79)</div>
+  </a>
+  <a href="?band=bad" class="seo-kpi-cell seo-kpi-bad">
+    <div class="seo-kpi-num">{{ stats.bad }}</div>
+    <div class="seo-kpi-label">🔴 Cần sửa (&lt;60)</div>
+  </a>
+  <div class="seo-kpi-cell seo-kpi-types">
+    <div class="seo-kpi-label" style="margin-bottom:4px">Phân loại</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <a href="?type=product" class="seo-mini-pill" title="Sản phẩm">🛍️ {{ stats.by_type.get('product', 0) }}</a>
+      <a href="?type=collection" class="seo-mini-pill" title="Collection">📂 {{ stats.by_type.get('collection', 0) }}</a>
+      <a href="?type=blog" class="seo-mini-pill" title="Blog">📝 {{ stats.by_type.get('blog', 0) }}</a>
+      <a href="?type=page" class="seo-mini-pill" title="Page">📄 {{ stats.by_type.get('page', 0) }}</a>
+    </div>
+  </div>
+</div>
+
+{# ───────────── 2. PIPELINE PROGRESS (Phase 1 Crawl + Phase 2 Link check) ───────────── #}
+{% set link_state = link_state or {'running': False, 'checked': 0, 'total': 0, 'broken': 0} %}
+{% set crawl_running = state.status in ('fetching_sitemap', 'crawling') %}
+{% set link_running = link_state.running %}
+{% set pipeline_visible = crawl_running or link_running %}
+<section class="card seo-progress-card{% if not pipeline_visible %} hidden{% endif %}"
+         id="seo-progress-card" style="margin-top:14px">
+  <div style="margin-bottom:10px">
+    <strong style="font-size:15px">⏳ Pipeline crawl SEO</strong>
+    <span class="muted" style="font-size:12px;margin-left:8px">
+      Phase 1 quét trang &amp; chấm điểm · Phase 2 check broken external links
+    </span>
+  </div>
+
+  {# ─ Phase 1: Crawl URL ─ #}
+  <div class="pipeline-phase" id="pipe-phase1">
+    <div class="pipeline-phase-head">
+      <span class="pipeline-badge" id="phase1-badge">
+        {% if crawl_running %}🔄 Đang chạy
+        {% elif state.status == 'done' %}✅ Hoàn tất
+        {% elif state.status == 'failed' %}❌ Lỗi
+        {% else %}⏸ Idle{% endif %}
+      </span>
+      <span class="pipeline-phase-title">Phase 1 — 🌐 Crawl URL</span>
+      <span class="pipeline-phase-msg muted" id="seo-state-msg">{{ state.message or '—' }}</span>
+      <span class="pipeline-phase-meta muted">
+        <strong id="seo-state-done">{{ state.done }}</strong>/<span id="seo-state-total">{{ state.total }}</span>
+        · ✅ <span id="seo-state-success">{{ state.success }}</span>
+        · ❌ <span id="seo-state-failed">{{ state.failed }}</span>
+        · <strong id="seo-progress-pct">{% if state.total %}{{ (state.done * 100 // state.total) }}{% else %}0{% endif %}%</strong>
+      </span>
+    </div>
+    <div class="seo-progress-bar">
+      <div id="seo-progress-fill" class="seo-progress-fill"
+           style="width: {% if state.total %}{{ (state.done * 100 // state.total) }}{% else %}0{% endif %}%"></div>
+    </div>
+  </div>
+
+  {# ─ Phase 2: Link check ─ #}
+  <div class="pipeline-phase" id="pipe-phase2" style="margin-top:10px">
+    <div class="pipeline-phase-head">
+      <span class="pipeline-badge" id="phase2-badge">
+        {% if link_running %}🔄 Đang chạy
+        {% elif link_state.checked > 0 %}✅ Hoàn tất
+        {% else %}⏸ Idle{% endif %}
+      </span>
+      <span class="pipeline-phase-title">Phase 2 — 🔗 Check broken links</span>
+      <span class="pipeline-phase-meta muted">
+        <strong id="link-checked">{{ link_state.checked }}</strong>/<span id="link-total">{{ link_state.total }}</span>
+        · 💀 <span id="link-broken">{{ link_state.broken }}</span> gãy
+        · <strong id="link-pct">{% if link_state.total %}{{ (link_state.checked * 100 // link_state.total) }}{% else %}0{% endif %}%</strong>
+      </span>
+    </div>
+    <div class="seo-progress-bar">
+      <div id="link-progress-fill" class="seo-progress-fill"
+           style="width: {% if link_state.total %}{{ (link_state.checked * 100 // link_state.total) }}{% else %}0{% endif %}%"></div>
+    </div>
+  </div>
+</section>
+
+{# ───────────── 3. TOP ISSUES (Vấn đề ưu tiên sửa) ───────────── #}
+{% if top_issues %}
+<section class="card" style="margin-top:14px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+    <div>
+      <h3 style="margin:0;font-size:15px">🎯 Vấn đề ưu tiên sửa</h3>
+      <small class="muted">Click 1 vấn đề → filter list URL có lỗi đó.</small>
+    </div>
+    {% if filters.issue %}
+      <a href="?" class="btn btn-sm">✕ Bỏ filter "{{ filters.issue }}"</a>
+    {% endif %}
+  </div>
+  <div class="seo-issue-chips">
+    {% for it in top_issues %}
+      <a href="?issue={{ it.code }}" class="seo-issue-chip seo-issue-{{ it.level }}{% if filters.issue == it.code %} seo-chip-active{% endif %}">
+        <span>{{ it.icon }}</span>
+        <span>{{ it.label }}</span>
+        <span class="seo-issue-count">{{ it.count }}</span>
+      </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{# ───────────── 4. BÁO CÁO CHUYÊN SÂU (4 ô grid) ───────────── #}
+<section class="card" style="margin-top:14px">
+  <h3 style="margin:0 0 12px 0;font-size:15px">🔧 Báo cáo chuyên sâu</h3>
+  <div class="seo-deep-grid">
+    <a href="{{ url_for('seo_duplicates') }}" class="seo-deep-cell">
+      <div class="seo-deep-icon">🔁</div>
+      <div class="seo-deep-body">
+        <div class="seo-deep-title">Duplicate detection</div>
+        <div class="seo-deep-desc">Title / meta / H1 trùng giữa các trang.</div>
+      </div>
+    </a>
+    <a href="{{ url_for('seo_broken_links_page') }}" class="seo-deep-cell">
+      <div class="seo-deep-icon">🔗</div>
+      <div class="seo-deep-body">
+        <div class="seo-deep-title">Broken links</div>
+        <div class="seo-deep-desc">Link gãy 404, 5xx — internal &amp; external.</div>
+      </div>
+    </a>
+    <a href="{{ url_for('seo_rules_page') }}" class="seo-deep-cell">
+      <div class="seo-deep-icon">⚙️</div>
+      <div class="seo-deep-body">
+        <div class="seo-deep-title">Rules config</div>
+        <div class="seo-deep-desc">Bật/tắt rule, sửa threshold/score/message — apply khi crawl sau.</div>
+      </div>
+    </a>
+    <a href="{{ url_for('seo_indexability_page') }}" class="seo-deep-cell">
+      <div class="seo-deep-icon">🚫</div>
+      <div class="seo-deep-body">
+        <div class="seo-deep-title">Indexability</div>
+        <div class="seo-deep-desc">Trang status 200 nhưng "vô hình" với Google.</div>
+      </div>
+    </a>
+    <a href="{{ url_for('seo_inlinks_page') }}" class="seo-deep-cell">
+      <div class="seo-deep-icon">🕸️</div>
+      <div class="seo-deep-body">
+        <div class="seo-deep-title">Inlinks &amp; Orphans</div>
+        <div class="seo-deep-desc">Trang nào không có link nội bộ trỏ tới.</div>
+      </div>
+    </a>
+  </div>
+</section>
+
+{# ───────────── 5. FILTER + PAGE LIST ───────────── #}
+<section class="card seo-list-section" style="margin-top:14px">
+  <div class="seo-list-head">
+    <h3 style="margin:0;font-size:15px">
+      📋 Danh sách URL
+      <span class="muted" style="font-weight:400;font-size:13px">
+        — {{ total_filtered }} kết quả{% if total_pages > 1 %} · trang {{ page_num }}/{{ total_pages }}{% endif %}
+      </span>
+    </h3>
+  </div>
+
+  <form method="get" class="seo-filter-form seo-filter-sticky">
+    <input type="text" name="q" value="{{ filters.q }}"
+           placeholder="🔍 Tìm URL hoặc title..." class="seo-filter-input">
+    <select name="type" class="seo-filter-select">
+      <option value="">Tất cả loại</option>
+      <option value="product"    {% if filters.type == 'product' %}selected{% endif %}>🛍️ Sản phẩm</option>
+      <option value="collection" {% if filters.type == 'collection' %}selected{% endif %}>📂 Collection</option>
+      <option value="blog"       {% if filters.type == 'blog' %}selected{% endif %}>📝 Blog</option>
+      <option value="page"       {% if filters.type == 'page' %}selected{% endif %}>📄 Page</option>
+      <option value="other"      {% if filters.type == 'other' %}selected{% endif %}>❓ Other</option>
+    </select>
+    <select name="band" class="seo-filter-select">
+      <option value="">Tất cả điểm</option>
+      <option value="bad"  {% if filters.band == 'bad'  %}selected{% endif %}>🔴 Cần sửa</option>
+      <option value="ok"   {% if filters.band == 'ok'   %}selected{% endif %}>🟡 OK</option>
+      <option value="good" {% if filters.band == 'good' %}selected{% endif %}>🟢 Tốt</option>
+    </select>
+    <select name="sort" class="seo-filter-select">
+      <option value="score_asc"  {% if filters.sort == 'score_asc'  %}selected{% endif %}>↑ Điểm thấp trước</option>
+      <option value="score_desc" {% if filters.sort == 'score_desc' %}selected{% endif %}>↓ Điểm cao trước</option>
+      <option value="recent"     {% if filters.sort == 'recent'     %}selected{% endif %}>🕐 Crawl gần nhất</option>
+      <option value="url"        {% if filters.sort == 'url'        %}selected{% endif %}>🔤 URL A→Z</option>
+    </select>
+    {% if filters.issue %}
+      <input type="hidden" name="issue" value="{{ filters.issue }}">
+    {% endif %}
+    <button class="btn btn-primary btn-sm" type="submit">Lọc</button>
+    <a href="{{ url_for('seo_dashboard') }}" class="btn btn-sm btn-ghost">Reset</a>
+  </form>
+
+  {% if pages %}
+    <div class="table-wrap">
+    <table class="table seo-table">
+      <thead>
+        <tr>
+          <th class="col-stt">STT</th>
+          <th>URL</th>
+          <th>Loại</th>
+          <th>Status</th>
+          <th>Điểm</th>
+          <th>Vấn đề</th>
+          <th>Hành động</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in pages %}
+        {% set issue_list = (p.issues|from_json) if p.issues else [] %}
+        <tr>
+          <td class="col-stt">{{ (page_num - 1) * 50 + loop.index }}</td>
+          <td class="seo-url-cell">
+            <a href="{{ p.url }}" target="_blank" rel="noopener" class="seo-url-link">{{ p.url }}</a>
+            {% if p.title %}<div class="seo-url-title">{{ p.title }}</div>{% endif %}
+          </td>
+          <td><span class="seo-type seo-type-{{ p.url_type or 'other' }}">{{ p.url_type or '—' }}</span></td>
+          <td>
+            {% if p.status_code %}
+              {% if p.status_code < 400 %}
+                <span class="pill" style="background:rgba(34,197,94,0.15);color:#86efac">{{ p.status_code }}</span>
+              {% else %}
+                <span class="pill" style="background:rgba(239,68,68,0.15);color:#fca5a5">{{ p.status_code }}</span>
+              {% endif %}
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if p.score is not none and p.last_crawled %}
+              {% if p.score >= 80 %}<span class="seo-score seo-score-good">{{ p.score }}</span>
+              {% elif p.score >= 60 %}<span class="seo-score seo-score-ok">{{ p.score }}</span>
+              {% else %}<span class="seo-score seo-score-bad">{{ p.score }}</span>
+              {% endif %}
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+          <td>
+            {% set errors = issue_list | selectattr('level', 'equalto', 'error') | list %}
+            {% set warns  = issue_list | selectattr('level', 'equalto', 'warn')  | list %}
+            {% if errors %}<span class="pill pill-error">{{ errors|length }} lỗi</span>{% endif %}
+            {% if warns  %}<span class="pill pill-warn">{{ warns|length }} cảnh báo</span>{% endif %}
+            {% if not errors and not warns and p.last_crawled %}
+              <span class="pill" style="background:rgba(34,197,94,0.15);color:#4ade80">tốt</span>
+            {% endif %}
+            {% if not p.last_crawled %}<span class="muted">chưa crawl</span>{% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('seo_url_detail', page_id=p.id) }}" class="btn btn-sm">Chi tiết →</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+
+    {% if total_pages > 1 %}
+      {% set qs = request.args.to_dict() %}
+      <div class="seo-pagination">
+        {% if page_num > 1 %}
+          {% set _ = qs.update({'page': page_num - 1}) %}
+          <a class="btn btn-sm" href="?{{ qs|urlencode }}">← Trước</a>
+        {% endif %}
+        <span class="muted">Trang {{ page_num }}/{{ total_pages }}</span>
+        {% if page_num < total_pages %}
+          {% set _ = qs.update({'page': page_num + 1}) %}
+          <a class="btn btn-sm" href="?{{ qs|urlencode }}">Sau →</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% else %}
+    <div style="padding:40px 12px;text-align:center">
+      <div style="font-size:36px;margin-bottom:8px">🪶</div>
+      <p class="muted" style="margin:0">
+        Không có URL nào khớp filter.<br>
+        {% if stats.total == 0 %}
+          Bấm <strong>"🔄 Sitemap"</strong> ở trên để load URL từ sintech.vn.
+        {% else %}
+          <a href="{{ url_for('seo_dashboard') }}">Reset filter</a> để xem tất cả.
+        {% endif %}
+      </p>
+    </div>
+  {% endif %}
+</section>
+
+{# ───────────── 6. QUẢN LÝ DATA (collapsible) ───────────── #}
+<details class="card seo-admin-card" style="margin-top:14px"{% if not snapshots and stats.total == 0 %} open{% endif %}>
+  <summary class="seo-admin-summary">
+    <span style="font-size:15px;font-weight:600">⚙️ Quản lý data</span>
+    <span class="muted" style="font-size:13px">
+      Snapshot · Export · Clear · Run gần nhất
+      {% if latest_run %}#{{ latest_run.id }}{% endif %}
+    </span>
+  </summary>
+
+  <div class="seo-admin-body">
+    {# ─── 6a. SNAPSHOT ─── #}
+    <div class="seo-admin-section">
+      <div class="seo-admin-h">💾 Snapshot — lưu trạng thái crawl ra file local</div>
+      <p class="muted" style="font-size:13px;margin:0 0 8px 0">
+        Save trước khi sửa SEO → so sánh sau / rollback / khỏi crawl lại.
+      </p>
+
+      <form action="{{ url_for('seo_snapshot_save') }}" method="post"
+            style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="text" name="label"
+               placeholder="Tên snapshot (vd: truoc-khi-sua-meta)"
+               class="seo-filter-input" style="flex:1;min-width:240px" maxlength="40">
+        <button class="btn btn-primary btn-sm" type="submit"
+                {% if stats.total == 0 %}disabled title="Chưa có data crawl để save"{% endif %}>
+          💾 Save snapshot
+        </button>
+      </form>
+
+      {% if snapshots %}
+        <div class="table-wrap" style="margin-top:10px">
+          <table class="table" style="font-size:12px;margin:0">
+            <thead>
+              <tr>
+                <th class="col-stt">STT</th>
+                <th>Snapshot</th>
+                <th>Thời điểm</th>
+                <th>URL</th>
+                <th>Size</th>
+                <th>Hành động</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for s in snapshots %}
+              <tr>
+                <td class="col-stt">{{ loop.index }}</td>
+                <td>
+                  <div style="font-weight:500">{{ s.label or s.filename }}</div>
+                  {% if s.label %}<small class="muted">{{ s.filename }}</small>{% endif %}
+                </td>
+                <td><small class="muted">{{ s.exported_at }}</small></td>
+                <td>{{ s.pages }}</td>
+                <td><small class="muted">
+                  {% if s.size_kb >= 1024 %}{{ "%.1f MB"|format(s.size_kb/1024) }}
+                  {% else %}{{ s.size_kb }} KB{% endif %}
+                </small></td>
+                <td style="white-space:nowrap;text-align:right">
+                  <form action="{{ url_for('seo_snapshot_load', filename=s.filename) }}" method="post"
+                        style="display:inline"
+                        onsubmit="return confirm('Load snapshot này? Data crawl HIỆN TẠI sẽ bị thay thế.');">
+                    <button class="btn btn-sm" type="submit">📂 Load</button>
+                  </form>
+                  <form action="{{ url_for('seo_snapshot_delete', filename=s.filename) }}" method="post"
+                        style="display:inline"
+                        onsubmit="return confirm('Xoá file snapshot này? (Không khôi phục được)');">
+                    <button class="btn btn-sm btn-danger" type="submit">🗑️</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+    </div>
+
+    {# ─── 6b. EXPORT ─── #}
+    <div class="seo-admin-section">
+      <div class="seo-admin-h">📥 Export báo cáo (CSV / JSON)</div>
+      <p class="muted" style="font-size:13px;margin:0 0 8px 0">
+        Tải file để gửi team / mở Excel. CSV có UTF-8 BOM nên Excel đọc tiếng Việt đúng.
+      </p>
+      <div class="seo-issue-chips">
+        <a href="{{ url_for('seo_export', kind='pages') }}" class="seo-issue-chip seo-issue-info" download>
+          <span>📄</span><span>seo-pages.csv</span>
+          <span class="seo-issue-count">{{ stats.total }}</span>
+        </a>
+        <a href="{{ url_for('seo_export', kind='issues') }}" class="seo-issue-chip seo-issue-info" download>
+          <span>⚠️</span><span>seo-issues.csv</span>
+        </a>
+        <a href="{{ url_for('seo_export', kind='summary') }}" class="seo-issue-chip seo-issue-info" download>
+          <span>📊</span><span>seo-summary.json</span>
+        </a>
+      </div>
+    </div>
+
+    {# ─── 6c. RUN HISTORY ─── #}
+    {% if latest_run %}
+    <div class="seo-admin-section">
+      <div class="seo-admin-h">🕐 Run gần nhất</div>
+      <small class="muted">
+        #{{ latest_run.id }} — <strong>{{ latest_run.status }}</strong> —
+        {{ latest_run.success }}/{{ latest_run.total }} OK ·
+        {{ latest_run.failed }} fail ·
+        bắt đầu {{ latest_run.started_at }}
+        {% if latest_run.finished_at %} → kết thúc {{ latest_run.finished_at }}{% endif %}
+      </small>
+    </div>
+    {% endif %}
+
+    {# ─── 6d. DANGER ZONE ─── #}
+    <div class="seo-admin-section seo-danger-zone">
+      <div class="seo-admin-h" style="color:#fca5a5">⚠️ Danger zone</div>
+      <form action="{{ url_for('seo_clear') }}" method="post"
+            onsubmit="return confirm('CLEAR toàn bộ data crawl SEO?\n\n{{ stats.total }} URL + tất cả run sẽ bị XOÁ KHỎI DB.\n\nSnapshot đã save vẫn còn nguyên. Tiếp tục?');"
+            style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="hidden" name="confirm" value="yes">
+        <button class="btn btn-danger btn-sm" type="submit"
+                {% if stats.total == 0 %}disabled{% endif %}>
+          ⚠️ Clear toàn bộ data crawl
+        </button>
+        <small class="muted">
+          Xoá hết {{ stats.total }} URL khỏi DB. Snapshot không bị ảnh hưởng.
+        </small>
+      </form>
+    </div>
+  </div>
+</details>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+/* ─────────── Redesigned SEO page styles ─────────── */
+
+/* Trang SEO: bỏ giới hạn 1400px của .content để giàn hết ra mép phải */
+.content { max-width: none !important; }
+
+/* Bảng SEO — width cột đặc trưng (style Excel chung trong style.css) */
+.seo-table { table-layout: fixed; }
+.seo-table .seo-url-cell { max-width: none !important; width: auto; }
+.seo-table .seo-url-link {
+  display: block;
+  word-break: break-all;
+  max-width: 100%;
+  font-size: 13px;
+}
+.seo-table .seo-url-title { font-size: 11.5px; margin-top: 3px; color: var(--text-muted); }
+
+/* Cột widths áp riêng cho bảng URL chính trong section list (cột 1=STT, 2=URL, 3=Loại...) */
+.seo-list-section .seo-table th:nth-child(3),
+.seo-list-section .seo-table td:nth-child(3) { width: 130px; text-align: center; }
+.seo-list-section .seo-table th:nth-child(4),
+.seo-list-section .seo-table td:nth-child(4) { width: 90px;  text-align: center; }
+.seo-list-section .seo-table th:nth-child(5),
+.seo-list-section .seo-table td:nth-child(5) { width: 80px;  text-align: center; }
+.seo-list-section .seo-table th:nth-child(6),
+.seo-list-section .seo-table td:nth-child(6) { width: 200px; text-align: center; }
+.seo-list-section .seo-table th:nth-child(7),
+.seo-list-section .seo-table td:nth-child(7) { width: 110px; text-align: center; }
+
+.seo-table .pill, .seo-table .seo-score, .seo-table .seo-type { display: inline-flex; }
+.seo-pagination { margin-top: 12px; }
+
+.seo-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+.seo-kpi-cell {
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  text-decoration: none;
+  color: inherit;
+  transition: transform .12s, border-color .12s, background .12s;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+a.seo-kpi-cell:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+.seo-kpi-num {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -.5px;
+}
+.seo-kpi-unit { font-size: 14px; color: var(--text-muted); font-weight: 500; margin-left: 2px; }
+.seo-kpi-label { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
+.seo-kpi-good { border-color: rgba(34,197,94,0.35); }
+.seo-kpi-good .seo-kpi-num { color: #4ade80; }
+.seo-kpi-ok { border-color: rgba(234,179,8,0.35); }
+.seo-kpi-ok .seo-kpi-num { color: #facc15; }
+.seo-kpi-bad { border-color: rgba(239,68,68,0.35); }
+.seo-kpi-bad .seo-kpi-num { color: #f87171; }
+
+.seo-kpi-types { padding: 12px 14px; }
+.seo-mini-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-3, rgba(255,255,255,0.05));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  text-decoration: none;
+  color: inherit;
+}
+.seo-mini-pill:hover { border-color: var(--accent); }
+
+/* progress card */
+.seo-progress-card.hidden { display: none; }
+
+/* pipeline phases */
+.pipeline-phase {
+  background: rgba(255,255,255,0.015);
+  border: 1px solid var(--border-soft, var(--border));
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.pipeline-phase-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.pipeline-phase-title { font-weight: 600; }
+.pipeline-phase-msg { flex: 1; min-width: 200px; font-size: 12px; }
+.pipeline-phase-meta {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.pipeline-badge {
+  font-size: 11px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* deep grid */
+.seo-deep-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+.seo-deep-cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color .12s, transform .12s;
+}
+.seo-deep-cell:hover { border-color: var(--accent); transform: translateY(-2px); }
+.seo-deep-icon { font-size: 24px; line-height: 1; flex-shrink: 0; }
+.seo-deep-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.seo-deep-desc { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+/* sticky filter */
+.seo-list-section { padding-top: 12px; }
+.seo-list-head { padding: 0 4px 8px; }
+.seo-filter-sticky {
+  position: sticky;
+  top: 0;
+  background: var(--surface, #1a1a1a);
+  z-index: 10;
+  padding: 10px 4px;
+  margin: 0 -4px 10px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.seo-chip-active {
+  border-color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+}
+
+/* admin collapsible */
+.seo-admin-card { padding: 0; }
+.seo-admin-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 14px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  user-select: none;
+}
+.seo-admin-summary::-webkit-details-marker { display: none; }
+.seo-admin-summary::before {
+  content: "▶";
+  display: inline-block;
+  margin-right: 8px;
+  transition: transform .15s;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.seo-admin-card[open] .seo-admin-summary::before { transform: rotate(90deg); }
+.seo-admin-summary:hover { background: rgba(255,255,255,0.02); }
+.seo-admin-body {
+  padding: 0 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.seo-admin-section {
+  padding: 14px;
+  background: rgba(255,255,255,0.015);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.seo-admin-h { font-weight: 600; font-size: 14px; margin-bottom: 6px; }
+.seo-danger-zone { border-color: rgba(239,68,68,0.25); background: rgba(239,68,68,0.04); }
+
+/* hide top_issues active state nicer */
+.seo-issue-chip { transition: transform .12s; }
+.seo-issue-chip:hover { transform: translateY(-1px); }
+
+@media (max-width: 720px) {
+  .seo-kpi-num { font-size: 22px; }
+  .seo-filter-sticky { position: static; }
+}
+</style>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  let timer = null;
+  let lastDone = -1;
+
+  function badgeFor(running, doneCondition, status) {
+    if (running) return "🔄 Đang chạy";
+    if (status === "failed") return "❌ Lỗi";
+    if (doneCondition) return "✅ Hoàn tất";
+    return "⏸ Idle";
+  }
+
+  async function tick() {
+    try {
+      const r = await fetch("{{ url_for('seo_status') }}", { cache: "no-store" });
+      const data = await r.json();
+      const s = data.state || {};
+      const ls = data.link_state || {};
+
+      // Phase 1 - crawl
+      $("seo-state-msg") && ($("seo-state-msg").textContent = s.message || "");
+      $("seo-state-done") && ($("seo-state-done").textContent = s.done || 0);
+      $("seo-state-total") && ($("seo-state-total").textContent = s.total || 0);
+      $("seo-state-success") && ($("seo-state-success").textContent = s.success || 0);
+      $("seo-state-failed") && ($("seo-state-failed").textContent = s.failed || 0);
+      const sTotal = s.total || 0, sDone = s.done || 0;
+      const sPct = sTotal > 0 ? Math.floor((sDone * 100) / sTotal) : 0;
+      $("seo-progress-fill") && ($("seo-progress-fill").style.width = sPct + "%");
+      $("seo-progress-pct") && ($("seo-progress-pct").textContent = sPct + "%");
+      const crawlRunning = s.status === "fetching_sitemap" || s.status === "crawling";
+      $("phase1-badge") && ($("phase1-badge").textContent = badgeFor(crawlRunning, s.status === "done", s.status));
+
+      // Phase 2 - link check
+      $("link-checked") && ($("link-checked").textContent = ls.checked || 0);
+      $("link-total") && ($("link-total").textContent = ls.total || 0);
+      $("link-broken") && ($("link-broken").textContent = ls.broken || 0);
+      const lTotal = ls.total || 0, lDone = ls.checked || 0;
+      const lPct = lTotal > 0 ? Math.floor((lDone * 100) / lTotal) : 0;
+      $("link-progress-fill") && ($("link-progress-fill").style.width = lPct + "%");
+      $("link-pct") && ($("link-pct").textContent = lPct + "%");
+      $("phase2-badge") && ($("phase2-badge").textContent = badgeFor(ls.running, ls.checked > 0, null));
+
+      // Card visibility
+      const card = $("seo-progress-card");
+      if (card) {
+        if (crawlRunning || ls.running) {
+          card.classList.remove("hidden");
+        }
+      }
+
+      // Stop polling khi cả 2 phase đều xong (hoặc fail)
+      const allDone = !crawlRunning && !ls.running;
+      if (allDone && (s.done > 0 || ls.checked > 0)) {
+        clearInterval(timer);
+        if (s.done !== lastDone) setTimeout(() => location.reload(), 800);
+      }
+      lastDone = s.done;
+    } catch (e) { /* ignore */ }
+  }
+
+  const initialCrawl = "{{ state.status }}";
+  const initialLinkRunning = {{ 'true' if link_state and link_state.running else 'false' }};
+  if (initialCrawl === "fetching_sitemap" || initialCrawl === "crawling" || initialLinkRunning) {
+    timer = setInterval(tick, 1500);
+  }
+})();
+</script>
+{% endblock %}

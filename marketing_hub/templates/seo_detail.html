@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}{{ p.title or p.url }} · SEO · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
+<span class="crumb"></span>
+<span style="font-weight:600">Chi tiết URL</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ p.url }}" target="_blank" rel="noopener">↗ Mở trang</a>
+<form action="{{ url_for('seo_url_recrawl', page_id=p.id) }}" method="post" style="display:inline">
+  <button class="btn btn-primary" type="submit">🔄 Crawl lại</button>
+</form>
+{% endblock %}
+
+{% block content %}
+
+{# ───── HERO ───── #}
+<section class="card seo-detail-hero">
+  <div class="seo-detail-head">
+    <div style="flex:1;min-width:0">
+      <div class="muted" style="font-size:13px">{{ p.url_type or 'unknown' }}</div>
+      <h2 style="margin:4px 0 8px 0;font-size:22px">{{ p.title or '(không có title)' }}</h2>
+      <a href="{{ p.url }}" target="_blank" rel="noopener" class="seo-url-link" style="word-break:break-all">{{ p.url }}</a>
+    </div>
+    <div class="seo-detail-score">
+      {% if p.score is not none and p.last_crawled %}
+        {% if p.score >= 80 %}
+          <div class="seo-bigscore seo-score-good">{{ p.score }}</div>
+        {% elif p.score >= 60 %}
+          <div class="seo-bigscore seo-score-ok">{{ p.score }}</div>
+        {% else %}
+          <div class="seo-bigscore seo-score-bad">{{ p.score }}</div>
+        {% endif %}
+        <div class="muted" style="text-align:center;font-size:12px">/ 100</div>
+      {% else %}
+        <div class="muted">Chưa crawl</div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{# ───── METRICS GRID ───── #}
+<div class="kpi-grid" style="margin-top:16px">
+  <div class="kpi">
+    <div class="kpi-label">HTTP Status</div>
+    <div class="kpi-num" style="font-size:24px">
+      {% if p.status_code %}
+        {% if p.status_code < 400 %}<span style="color:#4ade80">{{ p.status_code }}</span>
+        {% else %}<span style="color:#f87171">{{ p.status_code }}</span>{% endif %}
+      {% else %}—{% endif %}
+    </div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Word count</div>
+    <div class="kpi-num" style="font-size:24px">{{ p.word_count or 0 }}</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Load time</div>
+    <div class="kpi-num" style="font-size:24px">{{ p.load_ms or 0 }} <small style="font-size:14px">ms</small></div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-label">Internal / External link</div>
+    <div class="kpi-num" style="font-size:24px">{{ p.internal_links or 0 }} / {{ p.external_links or 0 }}</div>
+  </div>
+</div>
+
+{# ───── METADATA ───── #}
+<section class="card" style="margin-top:16px">
+  <h3 style="margin-top:0">Metadata</h3>
+  <table class="table table-plain seo-meta-table">
+    <tbody>
+      <tr>
+        <td class="seo-meta-key">Title</td>
+        <td>
+          {{ p.title or '(thiếu)' }}
+          <div class="muted" style="font-size:12px">{{ p.title_len or 0 }} ký tự — nên 30-60</div>
+        </td>
+      </tr>
+      <tr>
+        <td class="seo-meta-key">Meta description</td>
+        <td>
+          {{ p.meta_desc or '(thiếu)' }}
+          <div class="muted" style="font-size:12px">{{ p.meta_desc_len or 0 }} ký tự — nên 120-160</div>
+        </td>
+      </tr>
+      <tr>
+        <td class="seo-meta-key">H1</td>
+        <td>
+          {{ p.h1 or '(thiếu)' }}
+          <div class="muted" style="font-size:12px">{{ p.h1_count or 0 }} thẻ H1 — nên đúng 1</div>
+        </td>
+      </tr>
+      <tr>
+        <td class="seo-meta-key">Ảnh</td>
+        <td>{{ p.images_total or 0 }} ảnh — {{ p.images_no_alt or 0 }} thiếu alt</td>
+      </tr>
+      <tr>
+        <td class="seo-meta-key">Canonical</td>
+        <td>{% if p.has_canonical %}✅ Có{% else %}❌ Thiếu{% endif %}</td>
+      </tr>
+      <tr>
+        <td class="seo-meta-key">Open Graph</td>
+        <td>{% if p.has_og %}✅ Có (og:title){% else %}❌ Thiếu{% endif %}</td>
+      </tr>
+      <tr>
+        <td class="seo-meta-key">Schema.org</td>
+        <td>{% if p.has_schema %}✅ Có JSON-LD{% else %}❌ Thiếu{% endif %}</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+{# ───── HEADING HIERARCHY ───── #}
+<section class="card" style="margin-top:16px">
+  <h3 style="margin-top:0">Heading hierarchy</h3>
+  {% set h2_arr = (p.h2_list|from_json) if p.h2_list else [] %}
+  <div class="muted" style="font-size:13px;margin-bottom:10px">
+    H1: <strong>{{ p.h1_count or 0 }}</strong> · H2: <strong>{{ h2_arr|length }}</strong>
+  </div>
+  {% if p.h1 %}
+    <div style="padding:8px 12px;background:rgba(122,122,255,0.08);border-left:3px solid #7a7aff;border-radius:4px;margin-bottom:8px">
+      <strong style="color:#7a7aff">H1</strong> — {{ p.h1 }}
+    </div>
+  {% endif %}
+  {% if h2_arr %}
+    <ul style="margin:0;padding-left:20px;list-style:none">
+      {% for h in h2_arr %}
+        <li style="padding:6px 10px;margin:4px 0;background:rgba(255,255,255,0.03);border-left:3px solid #4ade80;border-radius:4px">
+          <span style="color:#4ade80;font-size:12px;font-weight:600">H2</span> — {{ h }}
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted" style="margin:0">Không có thẻ H2 nào — nội dung không chia section.</p>
+  {% endif %}
+</section>
+
+{# ───── REDIRECT CHAIN ───── #}
+{% set chain = (p.redirect_chain|from_json) if p.redirect_chain else [] %}
+{% if chain %}
+<section class="card" style="margin-top:16px">
+  <h3 style="margin-top:0">
+    Redirect chain
+    <span class="muted" style="font-weight:400;font-size:14px">— {{ chain|length }} hop</span>
+  </h3>
+  <ol style="margin:0;padding-left:20px">
+    {% for hop in chain %}
+      <li style="padding:6px 0">
+        <span class="pill {% if hop.status_code in [301, 308] %}pill-warn{% else %}pill-error{% endif %}">{{ hop.status_code }}</span>
+        <code style="word-break:break-all">{{ hop.url }}</code>
+        {% if hop.to %}
+          <div class="muted" style="font-size:12px;margin-left:8px">↪ <code>{{ hop.to }}</code></div>
+        {% endif %}
+      </li>
+    {% endfor %}
+    <li style="padding:6px 0">
+      <span class="pill" style="background:rgba(34,197,94,0.15);color:#4ade80">200</span>
+      <code style="word-break:break-all">{{ p.final_url or p.url }}</code>
+      <small class="muted" style="margin-left:8px">(URL cuối)</small>
+    </li>
+  </ol>
+  <p class="muted" style="margin:10px 0 0 0;font-size:13px">
+    💡 Mỗi redirect làm chậm site và mất một phần "link juice". Nếu chain ≥2 hop, sửa redirect 301 trỏ trực tiếp tới URL cuối.
+  </p>
+</section>
+{% endif %}
+
+{# ───── ISSUES ───── #}
+<section class="card" style="margin-top:16px">
+  <h3 style="margin-top:0">Vấn đề &amp; gợi ý sửa</h3>
+  {% if issues %}
+    <div class="seo-issue-list">
+      {% for it in issues %}
+        <div class="seo-issue-row seo-issue-{{ it.level }}">
+          <div class="seo-issue-icon">{{ it.icon }}</div>
+          <div class="seo-issue-body">
+            <div class="seo-issue-label">
+              {{ it.label }}
+              <span class="seo-issue-level seo-issue-level-{{ it.level }}">{{ it.level }}</span>
+            </div>
+            <div class="muted" style="margin-top:2px">{{ it.msg }}</div>
+            <div class="seo-issue-fix">💡 <strong>Cách sửa:</strong> {{ it.fix }}</div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted">Không có vấn đề nào — trang đạt chuẩn 🎉</p>
+  {% endif %}
+</section>
+
+<p style="margin-top:16px"><small class="muted">Lần crawl cuối: {{ p.last_crawled or '—' }}</small></p>
+
+{% endblock %}

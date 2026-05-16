@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Posts · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span>📝 Posts</span>
+<span class="crumb"></span>
+<span class="muted" style="font-weight:400">{{ posts|length }} bài</span>
+{% endblock %}
+
+{% block content %}
+
+<div class="section-head" style="margin-bottom:14px">
+  <div class="sh-left">
+    <h2 style="margin:0">📝 Bài trong tuần</h2>
+    <div class="week-nav">
+      <a class="wn-arrow" href="?week={{ prev_week }}{% if f_type %}&type={{ f_type }}{% endif %}{% if f_status %}&status={{ f_status }}{% endif %}" title="Tuần trước">◀</a>
+      <form method="get" class="wn-pick" action="">
+        <select name="month" onchange="this.form.submit()" aria-label="Tháng">
+          {% for m in range(1, 13) %}
+            <option value="{{ m }}" {% if m == display_month %}selected{% endif %}>Tháng {{ m }}</option>
+          {% endfor %}
+        </select>
+        <select name="year" onchange="this.form.submit()" aria-label="Năm">
+          {% for y in year_options %}
+            <option value="{{ y }}" {% if y == display_year %}selected{% endif %}>{{ y }}</option>
+          {% endfor %}
+        </select>
+        {% if f_type %}<input type="hidden" name="type" value="{{ f_type }}">{% endif %}
+        {% if f_status %}<input type="hidden" name="status" value="{{ f_status }}">{% endif %}
+      </form>
+      <a class="wn-arrow" href="?week={{ next_week }}{% if f_type %}&type={{ f_type }}{% endif %}{% if f_status %}&status={{ f_status }}{% endif %}" title="Tuần sau">▶</a>
+      <span class="wn-range">{{ week_start_disp }} → {{ week_end_disp }}</span>
+      {% if not is_current_week %}
+        <a class="wn-today" href="?week={{ this_week }}{% if f_type %}&type={{ f_type }}{% endif %}{% if f_status %}&status={{ f_status }}{% endif %}" title="Về tuần hiện tại">Hôm nay</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<form class="filter-bar" method="get">
+  <input type="hidden" name="week" value="{{ week_start }}">
+  <select name="type">
+    <option value="">— Loại —</option>
+    {% for v, label in types %}
+      <option value="{{ v }}" {% if f_type == v %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <select name="status">
+    <option value="">— Trạng thái —</option>
+    {% for v, label in statuses %}
+      <option value="{{ v }}" {% if f_status == v %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn">Lọc</button>
+  <a class="btn btn-ghost" href="{{ url_for('posts_page') }}?week={{ week_start }}">Xóa lọc</a>
+</form>
+
+<div class="legend" style="margin-bottom:10px">
+  <span><span class="legend-dot" style="background:var(--st-draft)"></span>Draft</span>
+  <span><span class="legend-dot" style="background:var(--st-ready)"></span>Ready</span>
+  <span><span class="legend-dot" style="background:var(--st-scheduled)"></span>Scheduled</span>
+  <span><span class="legend-dot" style="background:var(--st-posted)"></span>Posted</span>
+</div>
+
+<div id="bulk-bar" class="bulk-bar" style="display:none">
+  <span>✅ <b id="bulk-count">0</b> bài đã chọn</span>
+  <button type="button" class="btn btn-sm btn-ghost" id="bulk-clear">Bỏ chọn</button>
+  <span class="bulk-sep">|</span>
+  <span class="bulk-label">Đổi status:</span>
+  <select id="bulk-status">
+    {% for v, label in statuses %}
+      <option value="{{ v }}">{{ label }}</option>
+    {% endfor %}
+  </select>
+  <button type="button" class="btn btn-sm" id="bulk-apply-status">Áp dụng</button>
+  <span class="bulk-sep">|</span>
+  <button type="button" class="btn btn-sm btn-danger" id="bulk-delete">🗑 Xoá đã chọn</button>
+</div>
+
+<div class="week-grid week-board">
+  {% for u in days %}
+  <div class="day-col" data-date="{{ u.date }}">
+    <div class="day-head{% if u.is_today %} is-today{% endif %}">
+      <span class="dow">{{ u.dow_long }}</span>
+      <span class="dnum">{{ u.dnum }}/{{ u.month }}</span>
+    </div>
+    <div class="day-body">
+    {% if u.posts %}
+      {% for p in u.posts %}
+        <div class="day-post status-{{ p.status }}"
+             data-pid="{{ p.id }}"
+             data-time="{{ p.scheduled_time or '' }}"
+             data-date="{{ u.date }}"
+             data-code="{{ p.code }}">
+          <label class="dp-check-wrap" title="Chọn bài">
+            <input type="checkbox" class="dp-check" data-pid="{{ p.id }}">
+            <span class="dp-check-box"></span>
+          </label>
+          <div class="dp-row">
+            <span class="dp-time">{{ p.scheduled_time or '--:--' }}</span>
+            <span class="dp-code">{{ p.code }}</span>
+          </div>
+          <div class="dp-cap">{{ (p.caption or '(trống)')[:60] }}{% if p.caption and p.caption|length > 60 %}…{% endif %}</div>
+          <a class="dp-open" href="{{ url_for('post_detail', post_id=p.id) }}" title="Mở bài">↗</a>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="day-empty">— trống —</div>
+    {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if not posts %}
+<div class="empty-state" style="margin-top:16px">
+  <div class="empty-state-icon">📭</div>
+  <p>Tuần này chưa có bài nào khớp bộ lọc.</p>
+  <a class="btn btn-primary mt-2" href="{{ url_for('post_new') }}">+ Tạo bài mới</a>
+</div>
+{% endif %}
+
+<script>
+(function(){
+  const bulkBar = document.getElementById('bulk-bar');
+  const bulkCount = document.getElementById('bulk-count');
+  const bulkStatus = document.getElementById('bulk-status');
+
+  function selectedIds() {
+    return Array.from(document.querySelectorAll('.dp-check:checked'))
+      .map(c => parseInt(c.dataset.pid, 10)).filter(Boolean);
+  }
+  function refreshBar() {
+    const ids = selectedIds();
+    bulkCount.textContent = ids.length;
+    bulkBar.style.display = ids.length ? 'flex' : 'none';
+    document.querySelectorAll('.day-post').forEach(card => {
+      const c = card.querySelector('.dp-check');
+      card.classList.toggle('is-selected', !!(c && c.checked));
+    });
+  }
+  document.addEventListener('change', e => {
+    if (e.target.classList && e.target.classList.contains('dp-check')) refreshBar();
+  });
+  document.getElementById('bulk-clear')?.addEventListener('click', () => {
+    document.querySelectorAll('.dp-check').forEach(c => c.checked = false);
+    refreshBar();
+  });
+
+  async function callBulk(action, payload) {
+    const ids = selectedIds();
+    if (!ids.length) return;
+    const r = await fetch('/api/posts/bulk', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ids, action, payload: payload || {}}),
+    });
+    const j = await r.json();
+    if (j.ok) { location.reload(); }
+    else alert('❌ ' + (j.error || 'Lỗi không xác định'));
+  }
+  document.getElementById('bulk-apply-status')?.addEventListener('click', () => {
+    const ids = selectedIds();
+    if (!ids.length) return;
+    const status = bulkStatus.value;
+    if (!confirm(`Đổi status của ${ids.length} bài thành "${status}"?`)) return;
+    callBulk('status', {status});
+  });
+  document.getElementById('bulk-delete')?.addEventListener('click', () => {
+    const ids = selectedIds();
+    if (!ids.length) return;
+    if (!confirm(`⚠️ Xoá ${ids.length} bài đã chọn? Không hoàn tác được!`)) return;
+    callBulk('delete');
+  });
+
+  refreshBar();
+})();
+</script>
+
+{% endblock %}
