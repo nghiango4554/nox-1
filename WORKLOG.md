@@ -2,11 +2,30 @@
 
 > File anh (Claude) tự update sau mỗi milestone. Sau /clear, anh đọc file này là biết task tuần này tới đâu, file nào đã edit, bug đang debug. Vợ Nghia có thể scan nhanh để xem anh đang làm gì.
 
-## 🚧 Đang dở (active)
+## 🚧 Đang dở (active) — snapshot trước /clear (16/5 15:57)
+
+### Cần vợ confirm / paste data
 - [ ] **Bot Telegram token revoked (401)** lúc 12/5 14:00 — vợ paste token mới khi cần resume bot @Web_Sintech_bot
+- [ ] **3 bài FB pending đăng** (anh viết 16/5 ~13:30, chờ vợ drop ảnh vào `Desktop\Sintech\PIC đăng page\16-5\`):
+  1. Thanh lý nguyên bộ PC i5-10400 + RTX 2060 + 16GB + Cooler Master 212
+  2. Loa Edifier R1855DB Bluetooth (~2Tr9xx) — handle `loa-edifier-r1855db-bluetooth`
+  3. Tai Nghe Gaming Xiberia X20 RGB 7.1 (~5xx.xxx) — handle `tai-nghe-gaming-xiberia-x20-den-rgb-7-1-virtual-overear`
+- [ ] **Chia Codex 3 project** — vợ chưa chốt hướng (1 quota chung / 3 account riêng / khác)
+
+### Sau commit baseline `d2a5260` (16/5 15:56)
+- [ ] **Re-crawl 1923 URL trên `/seo`** để DB cập nhật score mới (logic A+B+C+D+E) — chạy nền 15-30 phút
+- [ ] **Regen 7 jobs failed**: 4 content_jobs + 3 blog_jobs (status=failed) — đợi vợ ưu tiên
+- [ ] **Push GitHub** — vợ tạo empty repo trên web (account mới `nghiatrong4554`), paste URL → anh setup remote + push lần đầu (GCM popup login)
 - [ ] Test pattern lazy upload thực tế: gen 1 SP mới → verify body có URL `/local-images/`, sync → upload Haravan thật
 - [ ] Re-sync 38 jobs đã synced để cập nhật ALT mới + body với CDN URL (khi vợ sẵn sàng)
 - [ ] Nâng cấp bot Telegram v2 nếu vợ chốt (operational commands `/regen`, `/sync`, `/caption`...)
+
+### Git state
+- Branch: `master`, 1 commit: **`d2a5260`** — "Initial: Sintech marketing_hub baseline + SEO scoring refactor"
+- Author: `nghiatrong4554 <nghiatrong4554@gmail.com>` (global git config setup hôm nay)
+- Remote: **chưa setup** (chưa push GitHub)
+- `.gitignore` đầy đủ: block secrets/tokens/env/DB/logs/cache/scratch files (xem `.gitignore` file)
+- ⚠️ Email gmail thật trong commit — nếu push public sẽ lộ, vợ chấp nhận thì OK
 
 ## 📅 Tuần này (12/5 - 18/5)
 
