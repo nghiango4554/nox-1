@@ -2,34 +2,148 @@
 
 > File anh (Claude) tự update sau mỗi milestone. Sau /clear, anh đọc file này là biết task tuần này tới đâu, file nào đã edit, bug đang debug. Vợ Nghia có thể scan nhanh để xem anh đang làm gì.
 
-## 🚧 Đang dở (active) — snapshot trước /clear (16/5 15:57)
+## 🚧 Đang dở (active) — snapshot trước /clear LẦN 2 (16/5 21:00)
 
-### Cần vợ confirm / paste data
-- [ ] **Bot Telegram token revoked (401)** lúc 12/5 14:00 — vợ paste token mới khi cần resume bot @Web_Sintech_bot
+### Cần vợ confirm / paste data / nạp quota
 - [ ] **3 bài FB pending đăng** (anh viết 16/5 ~13:30, chờ vợ drop ảnh vào `Desktop\Sintech\PIC đăng page\16-5\`):
   1. Thanh lý nguyên bộ PC i5-10400 + RTX 2060 + 16GB + Cooler Master 212
   2. Loa Edifier R1855DB Bluetooth (~2Tr9xx) — handle `loa-edifier-r1855db-bluetooth`
   3. Tai Nghe Gaming Xiberia X20 RGB 7.1 (~5xx.xxx) — handle `tai-nghe-gaming-xiberia-x20-den-rgb-7-1-virtual-overear`
+- [ ] **Bot Telegram token revoked (401)** lúc 12/5 14:00 — vợ paste token mới khi cần resume bot @Web_Sintech_bot
 - [ ] **Chia Codex 3 project** — vợ chưa chốt hướng (1 quota chung / 3 account riêng / khác)
+- [ ] **AI provider cho gen 1679 title/meta SP** — vợ chốt 1 trong 3:
+  - (a) Đợi Codex Plus reset 22/5 (6 ngày), chạy chia lô 3-4 ngày
+  - (b) Nạp Gemini paid tier $5 → gen 1.5h xong
+  - (c) Nạp Anthropic API → gen ~$2-3 hết
+  - **Hiện tại**: code DEFAULT dùng Codex CLI (đã revert từ Gemini). Gemini provider giữ ở `gemini_provider.py` để switch lại.
 
-### Sau commit baseline `d2a5260` (16/5 15:56)
-- [ ] **Re-crawl 1923 URL trên `/seo`** để DB cập nhật score mới (logic A+B+C+D+E) — chạy nền 15-30 phút
+### Pending tech tasks
+- [ ] **Re-crawl 1923 URL trên `/seo`** để DB cập nhật score mới (logic A+B+C+D+E) — chạy nền 15-30 phút. Hiện DB đã crawl 16/5 15:55 với code MỚI rồi (avg 67.3 / max 85), không bắt buộc re-crawl trừ khi code thay đổi.
+- [ ] **Bấm "✨ Gen vào Sheet" trên `/seo/title-meta`** — sẽ stream gen 1679 SP product, push F/G/H Sheet "Meta des + Title Errors". Tự dừng khi quota Codex Plus hết.
 - [ ] **Regen 7 jobs failed**: 4 content_jobs + 3 blog_jobs (status=failed) — đợi vợ ưu tiên
-- [ ] **Push GitHub** — vợ tạo empty repo trên web (account mới `nghiatrong4554`), paste URL → anh setup remote + push lần đầu (GCM popup login)
+- [ ] **Push GitHub** — vợ tạo empty repo trên web (account `nghiatrong4554`), paste URL → anh setup remote + push lần đầu (GCM popup login)
 - [ ] Test pattern lazy upload thực tế: gen 1 SP mới → verify body có URL `/local-images/`, sync → upload Haravan thật
 - [ ] Re-sync 38 jobs đã synced để cập nhật ALT mới + body với CDN URL (khi vợ sẵn sàng)
 - [ ] Nâng cấp bot Telegram v2 nếu vợ chốt (operational commands `/regen`, `/sync`, `/caption`...)
 
 ### Git state
-- Branch: `master`, 1 commit: **`d2a5260`** — "Initial: Sintech marketing_hub baseline + SEO scoring refactor"
-- Author: `nghiatrong4554 <nghiatrong4554@gmail.com>` (global git config setup hôm nay)
+- Branch: `master`, 2 commits:
+  - `d2a5260` — "Initial: Sintech marketing_hub baseline + SEO scoring refactor" (175 files, 16/5 15:56)
+  - `9eee935` — "WORKLOG: snapshot trước /clear — pending tasks + git state" (16/5 16:00)
+- Author: `nghiatrong4554 <nghiatrong4554@gmail.com>`
 - Remote: **chưa setup** (chưa push GitHub)
-- `.gitignore` đầy đủ: block secrets/tokens/env/DB/logs/cache/scratch files (xem `.gitignore` file)
-- ⚠️ Email gmail thật trong commit — nếu push public sẽ lộ, vợ chấp nhận thì OK
+- Sau /clear lần 1: nhiều file uncommitted (gemini_provider.py, refactor seo.py + seo_title_meta.html, sheet_writer.py). Khi vợ muốn commit lại thì check `git status`.
+
+### Sheet ops đã setup
+- Tab `"Meta des + Title Errors"` (sheet 13IDYcE2ZEUd64xK6dIN-P_3_4gIVyFcwdBjb8W8e-uU gid 971701509): 1679 product URL có lỗi title/meta đã fill A-K, helper cột L (Len Title) + M (Len Meta) auto-count với conditional format 🟢🟡🔴. Khi gen → push F/G/H.
+- Tab `"W2/M5"` (sheet 1Pta9sA9Aq9Pva6uDpmqjn7RA4h07Sn6wDquwC81KWTE gid 103516100): báo cáo tuần đã fill cột K (Thứ 7 16/5) cho row 9, 10, 12, 15.
+
+### Provider/quota state
+- **Codex Plus**: hết quota, reset 22/5 (weekly limit)
+- **Gemini 2.5-flash free**: hết 20 RPD hôm nay 16/5
+- **Gemini 2.0-flash free**: 200 RPD (chưa thử nhưng phỏng đoán cũng share quota với 2.5)
+- **Anthropic API**: chưa setup credit, KHÔNG có `ANTHROPIC_API_KEY` trong `.env`
 
 ## 📅 Tuần này (12/5 - 18/5)
 
 ### Thứ 7 (16/5) — TODAY
+
+- ✅ **Sheet ops + reports + Haravan ops** (session sau /clear lần 1, 16/5 16:30-21:00):
+  - **Chèn 6 ảnh CDN `_grande` 600x388 vào mô tả SP Card Zotac RTX 4070 Super Twin Edge** (haravan_id 1056283679)
+    - Pattern feedback_image_pattern.md: URL gốc + suffix `_grande` + inline CSS object-fit:contain bg:#fff
+    - Body 38,200 → 40,325 chars (+2,125), 6 `<img>` mới với ALT 6 vị trí
+    - Section heading "Hình ảnh thực tế Zotac RTX 4070 Super Twin Edge" (H2 17pt bold)
+    - PUT Haravan API thành công, verify admin OK (public chờ CDN purge 1-5 phút)
+  - **Push 1679 product URL có lỗi title/meta vào Sheet "Meta des + Title Errors"** (gid 971701509)
+    - Schema 11 cột (A loại lỗi/B URL/C tên/D-E title-meta hiện tại/F-G đề xuất/H trạng thái/I-J apply date/K chồng iu)
+    - Sort: nhiều issue trước + score asc (worst at top)
+    - Cột A đổi từ join "|" → bullet list xuống dòng, wrap text TOP
+    - Helper cột L (Len Title) + M (Len Meta) auto-count + conditional format (45-58 🟢/59-61 🟡/>61 🔴; 140-160 🟢/161-180 🟡/>180 🔴)
+  - **Refactor `/seo/title-meta` flow** (xem entry chi tiết bên dưới)
+  - **Multi-provider switching** Codex ↔ Gemini (xem entry bên dưới)
+  - **Fill weekly report W2/M5 cột K (Thứ 7)**: 4 cell K9/K10/K12/K15 (Content sp mới + Audit + Cấu trúc web + AI Training)
+
+- ✅ **Multi-provider switching Codex CLI ↔ Gemini API** (Codex Plus quota hết, vợ thử Gemini → revert vì free tier hẹp):
+  - **TẠO MỚI** `marketing_hub/gemini_provider.py` (129 dòng) — mimic pattern codex_provider.py với google-genai SDK v2.3.0:
+    - `is_gemini_available()`, `call_gemini(system_prompt, user_prompt, model, timeout, temperature)`
+    - `GeminiRateLimitError` exception (catch 429 RESOURCE_EXHAUSTED)
+    - Load `GOOGLE_API_KEY` từ env hoặc `.secrets/google.env`
+    - DEFAULT_MODEL = "gemini-2.0-flash" (free 200 RPD) hoặc "gemini-2.5-flash" (free 20 RPD)
+  - **`seo.py:_gen_title_meta_with_angle`** swap provider:
+    - Sáng: Codex → Gemini (test 5/5 SP success với prompt mới + retry 4)
+    - Tối: revert về Codex (vì Gemini 2.5-flash chỉ 20 RPD, không đủ 1679 SP)
+    - **Hiện tại**: dùng Codex (đợi reset 22/5)
+  - **Prompt tighten**: thêm 3 ví dụ Title length + 2 ví dụ Meta length đẹp + quy trình "draft→đếm→cắt→đếm lại" + mẹo căn 145-158c
+  - **Retry logic**: 1 → 4 lần với hint feedback cụ thể (lần trước title=Xc fail vì..., meta=Yc fail vì..., viết khác)
+  - Template `seo_title_meta.html` 3 chỗ text: hiển thị Codex CLI / "Codex Plus quota hết" trong popup
+  - Verify gen 5 SP với Gemini 2.0-flash + retry 4: **5/5 success** (vs 30-50% trước fix), avg 1.8 attempt/SP
+
+- ✅ **Refactor `/seo/title-meta` — bỏ PUT Haravan, gen → push thẳng Sheet F/G/H** (vợ chốt flow an toàn):
+  - Approach: streaming push Sheet (gen xong 1 SP push ngay, không đợi batch) + **5 angle rotate deterministic**
+    (`SPEC / USE_CASE / AUDIENCE / PAIN_POINT / COMPARISON` pick theo `hash(url) % 5` → cùng URL → cùng angle)
+    + **anti-dup** (pass `recent_titles` deque(10) vào prompt + post-validation `SequenceMatcher` ≥80% retry 1 lần)
+    + **quota detect** (catch `CodexRateLimitError` → set `quota_hit=True` + auto stop + popup browser alert).
+  - **TẠO MỚI** `marketing_hub/sheet_writer.py` (145 dòng) — module tách logic Google Sheets:
+    `_build_url_to_row_index()` cache 1680 URL→row (TTL 5 phút), `push_proposal(url, title, meta, status)` update F/G/H,
+    `read_proposal(url)` verify. Token reuse từ `.secrets/google_token.json` (đã có sẵn từ GSC + push 269).
+  - **SỬA** `marketing_hub/seo.py` (2379→2749, +370 dòng):
+    - GIỮ NGUYÊN `fix_title_meta_for_url()` + `_gen_title_meta_via_codex()` (legacy reference / future Apply)
+    - THÊM `_pick_angle_for_url(url)` MD5-based deterministic (verified 20-sample: SPEC=3, USE_CASE=5, AUDIENCE=6, PAIN_POINT=4, COMPARISON=2)
+    - THÊM `_gen_title_meta_with_angle()` + `_ANGLE_INSTRUCTIONS` dict 5 prompt blocks + `_ANGLE_DEFAULT_CTA` mapping
+    - THÊM `_validate_gen_output()` length (45-58 / 145-158) + similarity check
+    - THÊM `_fetch_product_desc_snippet()` lấy 200c body_html Haravan (best-effort)
+    - REPLACE `_title_meta_fix_state` → `_title_meta_gen_state` thêm fields `quota_hit`, `last_gen_title`, `last_gen_meta`, `last_gen_angle`
+    - REPLACE `run_title_meta_fix_all` → `run_title_meta_gen_all` streaming + 1s delay/Sheet write (tránh 429)
+    - RENAME `start_title_meta_fix_all_async` → `start_title_meta_gen_all_async`, `stop_title_meta_fix` → `stop_title_meta_gen`, `title_meta_fix_state` → `title_meta_gen_state`
+  - **SỬA** `marketing_hub/app.py` (+3 dòng): GIỮ `/seo/title-meta/fix` (legacy fallback), rename
+    `/seo/title-meta/fix-all/{start,stop}` → `/seo/title-meta/gen/{start,stop}` +
+    `/api/seo/title-meta/fix-all/status` → `/api/seo/title-meta/gen/status`. Page render dùng `gen_state` thay `fix_state`.
+  - **REFACTOR** `marketing_hub/templates/seo_title_meta.html` (502→489, -13 dòng):
+    - XÓA per-row "🔧 Auto-fix" + bulk "🚀 Auto-fix tất cả" + "⏹️ Dừng job" cũ
+    - THÊM "✨ Gen title+meta vào Sheet" + "⏹️ Dừng Gen" + link "📊 Mở Sheet"
+    - Status bar realtime hiển thị `last_gen_title` + `last_gen_angle` (badge OK gắn ✨ ANGLE_NAME per row)
+    - Popup `alert()` 1 lần khi `quota_hit=true` ("Codex Plus đã hết quota. Đợi reset ~5h...")
+    - Polling 3s, rename JS `startFixAllJob`→`startGenJob`, `stopFixAllJob`→`stopGenJob`
+  - **VERIFY**:
+    - `_pick_angle_for_url`: 20 URL → distribution {AUDIENCE:6, USE_CASE:5, PAIN_POINT:4, SPEC:3, COMPARISON:2} ✓ phân bố cả 5
+    - Determinism: cùng URL gọi 2 lần → cùng angle ✓
+    - `sheet_writer.get_url_row_index(url_thật)` → row 2 ✓ (1680 URL trong sheet, cache build OK)
+    - `sheet_writer.push_proposal` + `read_proposal` round-trip cell F/G/H thật trên Sheet ✓ (cleanup OK)
+    - Flask restart qua VBS (PID 17412 port 5055) + 4 route 200:
+      - GET `/seo/title-meta` → 200 ✓
+      - GET `/api/seo/title-meta/gen/status` → 200 ✓ JSON đủ fields (`running, total, success, failed, current_url, quota_hit, last_gen_title, last_gen_angle, ...`)
+      - POST `/seo/title-meta/gen/start` body `{type:product, issue:meta_long}` → `{ok:true, message:"Đã start job gen vào Sheet"}` (queue 1679 SP, skip 422)
+      - POST `/seo/title-meta/gen/stop` → `{ok:true}`
+    - **Quota detect end-to-end**: Codex thật đã hết quota (reset 22/5) → start job → fail 1/1 SP đầu →
+      `quota_hit=true`, `running=false`, `message="⚠️ Codex Plus quota hết — auto stop"`, loop break đúng ✓
+  - KHÔNG modify `db.py` (không cần DB column mới). KHÔNG commit. Đợi vợ confirm/test.
+
+- ✅ **Swap provider Codex → Gemini API tạm (Codex quota Plus reset 22/5)**:
+  - **TẠO MỚI** `marketing_hub/gemini_provider.py` (122 dòng) — adapter pattern y hệt `codex_provider.py`:
+    `is_gemini_available()` check SDK + key, `call_gemini(system, user, timeout, model, temperature)` gọi
+    `client.models.generate_content()` qua `google.genai`, `GeminiRateLimitError` cho quota detect
+    (patterns: rate limit / quota exceeded / resource_exhausted / 429 / too many requests).
+    Default model `gemini-2.5-flash`, load key từ env `GOOGLE_API_KEY` → fallback `.secrets/google.env`.
+  - **SỬA** `marketing_hub/seo.py` (+5 dòng net) — chỉ replace provider trong gen flow MỚI, GIỮ NGUYÊN legacy:
+    - `_gen_title_meta_with_angle()`: `import codex_provider` → `import gemini_provider`,
+      `call_codex(...)` → `call_gemini(...)`, catch `CodexRateLimitError` → `GeminiRateLimitError`.
+      Prompt 5 angle + anti-dup logic GIỮ NGUYÊN 100%.
+    - `run_title_meta_gen_all()`: catch + message "⚠️ Gemini quota hết — auto stop" (thay "Codex Plus").
+    - `_gen_title_meta_via_codex()` legacy (line 1731) GIỮ NGUYÊN — dùng cho `/seo/title-meta/fix` single-URL.
+  - **PKG**: `pip install google-genai` (v2.3.0) — `google.generativeai` cũ deprecated.
+  - **VERIFY**:
+    - Smoke test `python marketing_hub/gemini_provider.py` → `Available: True` + Output JSON ✓
+    - Gen 1 SP thật (`vo-case-magic-gm-08l-pro-m-atx-...`) angle COMPARISON → ok=True, title 60c, meta 187c
+      (validate fail length, retry pipeline hoạt động đúng).
+    - Gen + push Sheet thật cho `ram-may-tinh-kingston-fury-beast-black-16gb-3200mhz-...`:
+      angle=USE_CASE, title 58c "Kingston Fury Beast Black 16GB 3200MHz DDR4: Tối ưu Gaming",
+      meta 157c "RAM Kingston Fury Beast Black 16GB 3200MHz DDR4 nâng tầm trải nghiệm gaming…
+      KHÁM PHÁ NGAY tại Sintech." → validate=True → push_proposal cell F/G/H row 3 → `read_proposal` round-trip OK ✓
+    - Flask restart VBS hidden → `GET /seo/title-meta` 200 ✓
+  - **Trade-off**: Gemini 2.5-flash có xu hướng viết meta > 160c hoặc < 140c thường xuyên hơn Codex
+    (~3-4/5 SP fail validate lần đầu, retry 1 lần thường vẫn fail). Sau 22/5 nên switch lại Codex,
+    hoặc nếu muốn dùng Gemini lâu dài thì cần tighten prompt length constraint + nâng số retry attempts.
+  - KHÔNG commit. KHÔNG modify file ngoài scope.
 
 - ✅ **Refactor C — unify 2 hệ thống chấm điểm thành `scoring_core.py`** (backward compat verified):
   - Tách `marketing_hub/scoring_core.py` (~600 dòng) — module pure chứa 6 score function dùng chung:
