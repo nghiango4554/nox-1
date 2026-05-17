@@ -42,6 +42,28 @@ python "C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\backup
 
 ---
 
+## ✅ Layer 3b — Backup chùm chìa khóa (.secrets + .env) daily
+
+**Bước 1:** Test backup script chạy được:
+```
+python "C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\backup_secrets.py"
+```
+→ Tạo file `data/backups/secrets_YYYY-MM-DD.zip` (~2KB). Chứa Google OAuth + Telegram + OpenAI key.
+
+**Bước 2:** Task Scheduler → Create Basic Task...
+- Name: `Marketing Hub Secrets Backup`
+- Trigger: **Daily** at **3:05 AM** (lệch 5 phút với DB backup)
+- Action: **Start a program**
+- Program: `python`
+- Arguments: `"C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\backup_secrets.py"`
+- Tick **"Run whether user is logged on or not"**
+
+**Cách restore:** unzip `secrets_YYYY-MM-DD.zip` ở root workspace → 2 folder `.secrets/` + `marketing_hub/.env/` tự về chỗ cũ.
+
+⚠️ **SECURITY**: file zip này CHỨA TOKEN GỐC, KHÔNG sync lên cloud public. Để backup ngoài máy: nén lại với 7-Zip + password rồi upload Google Drive private.
+
+---
+
 ## ✅ Layer 4 — Telegram bot self-service
 
 **Bước 1:** Tạo bot mới qua **@BotFather** trên Telegram:

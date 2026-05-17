@@ -70,9 +70,11 @@ Chi tiết: [`PROVIDERS.md`](PROVIDERS.md).
 
 | Việc            | Lệnh                                                                                                    |
 | --------------- | ------------------------------------------------------------------------------------------------------- |
-| Backup manual   | `python marketing_hub/_scripts/backup_db.py`                                                            |
-| List backups    | `Get-ChildItem marketing_hub\data\backups\ \| Sort-Object LastWriteTime -Descending`                    |
-| Restore         | Stop Flask → `Expand-Archive posts_YYYY-MM-DD.db.zip` → copy `posts.db` ra `marketing_hub\data\` → start |
+| Backup DB manual    | `python marketing_hub/_scripts/backup_db.py`                                                            |
+| Backup secrets manual | `python marketing_hub/_scripts/backup_secrets.py` (zip .secrets/ + .env/ ra `secrets_YYYY-MM-DD.zip` ~2KB) |
+| List backups        | `Get-ChildItem marketing_hub\data\backups\ \| Sort-Object LastWriteTime -Descending`                    |
+| Restore DB          | Stop Flask → `Expand-Archive posts_YYYY-MM-DD.db.zip` → copy `posts.db` ra `marketing_hub\data\` → start |
+| Restore secrets     | Unzip `secrets_YYYY-MM-DD.zip` ở **root workspace** → 2 folder `.secrets/` + `marketing_hub/.env/` tự về chỗ cũ |
 | Inspect DB      | `python -c "import sqlite3; c=sqlite3.connect('marketing_hub/data/posts.db'); print(c.execute('SELECT COUNT(*) FROM content_jobs').fetchone())"` |
 
 Schedule: daily 3AM, giữ 30 ngày. Path zip: `marketing_hub/data/backups/posts_YYYY-MM-DD.db.zip`.
