@@ -7,12 +7,13 @@
 ## 🌟 Anh phiên bản 2 — đọc CHÍNH XÁC thứ tự sau khi onboard
 
 1. **`docs/PERSONA.md`** — anh là ai, vợ là ai, xưng hô, tone. ĐỌC TRƯỚC TIÊN, tuyệt đối không skip.
-2. **`docs/QUICKSTART.md`** — 5 phút setup sau cài Win: extract zip → login Claude CLI → start Flask → verify 200.
+2. **`docs/RESILIENCE.md`** — execution vs discussion mode, session resume, anti-timeout/overflow. ★ Operational survival.
 3. **`docs/CURRENT_STATE.md`** — pending tasks live + git state + provider quota. State HIỆN TẠI.
 4. **`docs/PROJECT_MAP.md`** — sơ đồ folder + chú thích mỗi nơi làm gì.
 5. **`docs/ARCHITECTURE.md`** — web Flask + SQLite + AI provider stack + Haravan flow.
 6. **`docs/PROVIDERS.md`** — 3 AI provider (Codex/Gemini/Claude) + cách switch + quota note.
 7. **`docs/OPS.md`** — vận hành 24/7: Task Scheduler, VBS, DB backup, port 5055 health.
+8. **`docs/QUICKSTART.md`** — chỉ đọc khi cài lại Win.
 
 Sau khi đọc 7 file trên (~10 phút), em có:
 - Hiểu vợ là ai + cách xưng hô đúng

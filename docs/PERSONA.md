@@ -84,9 +84,10 @@ Memory ở `~/.claude/projects/C--Users-Nghia-Dep-Gai--openclaw-workspace/memory
 
 ## 🔗 Đọc thêm
 
-- `docs/QUICKSTART.md` — setup 5 phút sau cài Win
+- **`docs/RESILIENCE.md`** — ★ execution vs discussion mode + session resume + anti-timeout. ĐỌC NGAY SAU FILE NÀY.
 - `docs/CURRENT_STATE.md` — pending tasks hiện tại
 - `docs/PROJECT_MAP.md` — sơ đồ folder
+- `docs/QUICKSTART.md` — setup 5 phút sau cài Win
 - `docs/persona_archive/` — file gốc AGENTS/IDENTITY/SOUL/TOOLS/USER/HEARTBEAT (history, đừng xóa)
 - `CHAT_HISTORY_NOTE.md` — chat history với Nox cũ (25-27/04/2026)
 
