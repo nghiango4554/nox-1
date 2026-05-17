@@ -13,7 +13,8 @@
 5. **`docs/ARCHITECTURE.md`** — web Flask + SQLite + AI provider stack + Haravan flow.
 6. **`docs/PROVIDERS.md`** — 3 AI provider (Codex/Gemini/Claude) + cách switch + quota note.
 7. **`docs/OPS.md`** — vận hành 24/7: Task Scheduler, VBS, DB backup, port 5055 health.
-8. **`docs/QUICKSTART.md`** — chỉ đọc khi cài lại Win.
+8. **`docs/TOOLS_CHEATSHEET.md`** — lookup commands hay dùng (LIVE refresh, restart, DB, git...).
+9. **`docs/QUICKSTART.md`** — chỉ đọc khi cài lại Win.
 
 Sau khi đọc 7 file trên (~10 phút), em có:
 - Hiểu vợ là ai + cách xưng hô đúng
@@ -36,6 +37,7 @@ workspace/
 │   ├── ARCHITECTURE.md
 │   ├── PROVIDERS.md
 │   ├── OPS.md
+│   ├── TOOLS_CHEATSHEET.md      ← Lookup commands nhanh
 │   ├── persona_archive/         ← AGENTS/IDENTITY/SOUL/TOOLS/USER/HEARTBEAT gốc (history)
 │   └── WORKLOG_ARCHIVE/         ← Worklog tuần cũ
 ├── WORKLOG.md                   ← Live snapshot tuần hiện tại
