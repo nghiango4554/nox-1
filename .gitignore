@@ -16,6 +16,14 @@ credentials*.json
 .claude/
 claude/
 
+# ─── OpenClaw runtime persona files (auto-recreated each session, archived ở docs/persona_archive/) ───
+/AGENTS.md
+/SOUL.md
+/USER.md
+/IDENTITY.md
+/HEARTBEAT.md
+/TOOLS.md
+
 # ─── Python ───
 __pycache__/
 *.pyc

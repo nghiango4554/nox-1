@@ -270,27 +270,10 @@
 - ✅ Fill weekly report sheet `W1/M5` (Thứ 7 + CN cho rows 9, 10, 15)
 - ✅ Update WORKLOG.md + memory `project_status.md` (để recover context sau /clear)
 
-## 📅 Tuần trước (5-11/5)
+## 📅 Tuần trước
 
-### CN 10/5 — bão lớn nhất
-- ✅ Regen 220 jobs meta sai length (~498 meta) — pattern M1 SPEC / M2 SETUP / M3 GIẢI PHÁP
-- ✅ Update rules SEO v2026-05-10 (mục 4: pattern M1/M2/M3 + CTA mapping + filler cấm; mục 10: format SPEC-FIRST cho money product; mục 18: ALT template 6 vị trí)
-- ✅ Code `ai_writer.auto_fix_metas()` validator: quick suffix " với giá tốt" + AI regen max 2 lần
-- ✅ Money product detection: auto-flag SP có keyword qd-oled/240Hz/RTX 4070+/MacBook/iPhone/ROG/...
-- ✅ Logic chèn ảnh động `pick_target_image_count()`: ≤4 ảnh → hết, ≥5 → 4-6 tùy main H2
-- ✅ Fix title case 812 titles (rule-based, BRANDS + ACRONYMS whitelist)
-- ✅ Multi-storage Haravan asset upload ⚠️ TÁI INCIDENT race condition tạo 8+ SP rác → vợ pause Haravan + xóa sub-bot Nghia_subSEO
-- ✅ Combo Layer 1+3+4: Task Scheduler auto-start (At startup), DB backup 3AM daily zip giữ 30 ngày, Telegram bot @Web_Sintech_bot
-- ✅ Update ALT 590 ảnh theo template 6 vị trí (rules mục 18)
-- ✅ Filter category trong `/content-jobs?cate=...`
-- ✅ Dump `Past.txt` full prompt train AI
-
-### T7 9/5
-- ✅ Push 12 SP money product vào queue, gen content cho QD-OLED, RTX 5070, Laptop HP G10
-- ✅ Audit 295 bài AI gen → phát hiện 184 meta sai length
-
-### T6 8/5
-- ✅ Build pipeline content_jobs hoàn chỉnh: text phase + image phase + sync
+Đã archive sang `docs/WORKLOG_ARCHIVE/`:
+- [`2026-W1-M5.md`](docs/WORKLOG_ARCHIVE/2026-W1-M5.md) — Tuần 5-11/5 (CN bão lớn nhất 10/5, T7 9/5, T6 8/5)
 
 ## 📂 File modified gần đây (tuần này)
 
