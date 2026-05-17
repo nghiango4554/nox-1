@@ -4,27 +4,23 @@
 
 ## 🚧 Đang dở (active) — snapshot trước /clear LẦN 2 (16/5 21:00)
 
-### Cần vợ confirm / paste data / nạp quota
-- [ ] **3 bài FB pending đăng** (anh viết 16/5 ~13:30, chờ vợ drop ảnh vào `Desktop\Sintech\PIC đăng page\16-5\`):
+### 🔴 Active — có thể trigger NGAY (anh hoặc vợ 1-click)
+- [ ] **Bấm "✨ Gen vào Sheet" trên `/seo/title-meta`** — stream gen 1679 SP, push F/G/H Sheet `Meta des + Title Errors`. Auto stop khi quota Claude hit.
+- [ ] **Re-crawl 1923 URL trên `/seo`** để DB cập nhật score mới (logic A+B+C+D+E) — chạy nền 15-30 phút. Không bắt buộc (DB đã crawl 16/5 15:55 với code MỚI: avg 67.3 / max 85).
+- [ ] **Test pattern lazy upload thực tế**: gen 1 SP mới → verify body có URL `/local-images/`, sync → upload Haravan thật. Anh tự test được.
+
+### 🟡 Blocked — chờ vợ confirm / paste data / chốt hướng
+- [ ] **3 bài FB pending đăng** — chờ vợ drop ảnh vào `Desktop\Sintech\PIC đăng page\16-5\`:
   1. Thanh lý nguyên bộ PC i5-10400 + RTX 2060 + 16GB + Cooler Master 212
   2. Loa Edifier R1855DB Bluetooth (~2Tr9xx) — handle `loa-edifier-r1855db-bluetooth`
   3. Tai Nghe Gaming Xiberia X20 RGB 7.1 (~5xx.xxx) — handle `tai-nghe-gaming-xiberia-x20-den-rgb-7-1-virtual-overear`
-- [ ] **Bot Telegram token revoked (401)** lúc 12/5 14:00 — vợ paste token mới khi cần resume bot @Web_Sintech_bot
-- [ ] **Chia Codex 3 project** — vợ chưa chốt hướng (1 quota chung / 3 account riêng / khác)
-- [ ] **AI provider cho gen 1679 title/meta SP** — vợ chốt 1 trong 3:
-  - (a) Đợi Codex Plus reset 22/5 (6 ngày), chạy chia lô 3-4 ngày
-  - (b) Nạp Gemini paid tier $5 → gen 1.5h xong
-  - (c) Nạp Anthropic API → gen ~$2-3 hết
-  - **Hiện tại**: code DEFAULT dùng Codex CLI (đã revert từ Gemini). Gemini provider giữ ở `gemini_provider.py` để switch lại.
-
-### Pending tech tasks
-- [ ] **Re-crawl 1923 URL trên `/seo`** để DB cập nhật score mới (logic A+B+C+D+E) — chạy nền 15-30 phút. Hiện DB đã crawl 16/5 15:55 với code MỚI rồi (avg 67.3 / max 85), không bắt buộc re-crawl trừ khi code thay đổi.
-- [ ] **Bấm "✨ Gen vào Sheet" trên `/seo/title-meta`** — sẽ stream gen 1679 SP product, push F/G/H Sheet "Meta des + Title Errors". Tự dừng khi quota Codex Plus hết.
-- [ ] **Regen 7 jobs failed**: 4 content_jobs + 3 blog_jobs (status=failed) — đợi vợ ưu tiên
-- [ ] **Push GitHub** — vợ tạo empty repo trên web (account `nghiatrong4554`), paste URL → anh setup remote + push lần đầu (GCM popup login)
-- [ ] Test pattern lazy upload thực tế: gen 1 SP mới → verify body có URL `/local-images/`, sync → upload Haravan thật
-- [ ] Re-sync 38 jobs đã synced để cập nhật ALT mới + body với CDN URL (khi vợ sẵn sàng)
-- [ ] Nâng cấp bot Telegram v2 nếu vợ chốt (operational commands `/regen`, `/sync`, `/caption`...)
+- [ ] **Bot Telegram token revoked (401)** từ 12/5 14:00 — vợ paste token mới để resume `@Web_Sintech_bot`.
+- [ ] **AI provider cho gen 1679 title/meta SP** — đã switch Claude CLI 17/5. Vợ confirm tiếp dùng Claude hay revert Codex sau 22/5.
+- [ ] **Chia Codex 3 project** — vợ chưa chốt (1 quota chung / 3 account riêng / khác).
+- [ ] **Regen 7 jobs failed** — 4 content_jobs + 3 blog_jobs (status=failed). Chờ vợ ưu tiên.
+- [ ] **Push GitHub** — repo `git@github.com:nghiango4554/nox-1.git` đã accessible SSH. Vợ chốt: push full workspace hay split repo.
+- [ ] **Re-sync 38 jobs đã synced** — cập nhật ALT mới + body với CDN URL khi vợ sẵn sàng.
+- [ ] **Nâng cấp bot Telegram v2** — nếu vợ chốt (commands `/regen`, `/sync`, `/caption`...).
 
 ### Git state
 - Branch: `master`, 2 commits:
@@ -327,3 +323,34 @@
 2. Move items từ "Đang dở" → "Hôm nay" khi xong
 3. Mỗi cuối tuần (CN), move "Tuần này" → "Tuần trước"
 4. Vợ có thể edit thẳng tay vào file này nếu thấy thiếu việc của vợ
+
+---
+
+## 📸 Checkpoint snapshot template (copy khi cần)
+
+> Anh dùng template này TRƯỚC mỗi `/clear`, `/compact`, hoặc handoff task dài. Copy block dưới → fill → paste lên đầu section "Đang dở" hoặc commit riêng `git commit -m "checkpoint: <ngắn>"`.
+
+```markdown
+## 📸 Checkpoint YYYY-MM-DD HH:MM
+
+### ✅ What completed (since last checkpoint)
+- ...
+
+### 🔴 Current blockers
+- ...
+
+### 📝 Modified files (uncommitted)
+- `path/to/file` — gì đã đổi
+- ...
+
+### ⏭ Exact next action
+- Bước cụ thể tiếp theo, không vague ("test", "review") mà cụ thể ("chạy `python X.py` rồi verify Y").
+
+### 🔁 Resume prompt (paste vào session mới)
+> "Tiếp tục task <tên>. Anh đã làm xong A+B, đang kẹt ở C vì <reason>. File modified: <list>. Next: <bước cụ thể>. Đọc WORKLOG.md checkpoint <timestamp> để full context."
+```
+
+**Quy ước:**
+- Mỗi checkpoint = 1 commit riêng `git commit -m "checkpoint: <ngắn>"` để git log dễ scan
+- KHÔNG tạo file riêng trong `checkpoints/` folder — append vào WORKLOG.md để 1 nguồn truth
+- Sau khi session sau resume xong → có thể xóa checkpoint cũ (giữ ≤3 checkpoint gần nhất trong WORKLOG)
