@@ -3,6 +3,8 @@
 > Snapshot pending tasks + git + provider quota. Cập nhật mỗi khi có thay đổi lớn. Lần update gần nhất: **17/5/2026**.
 >
 > Sau /clear, "anh phiên bản 2" đọc file này → biết task nào đang chờ, provider nào còn quota, git đang ở đâu.
+>
+> ⚠️ **Source of truth**: `../WORKLOG.md` (lịch sử + pending tuần này). File này là **derivative ngắn gọn**. Nếu drift giữa 2 file → WORKLOG.md thắng.
 
 ---
 
@@ -37,16 +39,17 @@
 
 ## 🔧 Git state
 
-- Branch: `master`, 3 commits:
+- Branch: `master`, 4 commits:
   - `d2a5260` — Initial baseline + SEO scoring refactor (16/5 15:56, 175 files)
   - `9eee935` — WORKLOG snapshot trước /clear lần 1
   - `519d2ba` — WORKLOG snapshot trước /clear lần 2 — session 16/5 16:30-21:00
-- Author: `nghiango4554` (chú ý: memory cũ ghi `nghiatrong4554` — sai)
+  - `cf6fda2` — docs reorganize: README + docs/ + persona archive + WORKLOG split (17/5)
+- Author: `nghiango4554` (`ngo` chứ không phải `trong` — memory cũ ghi nhầm, đã fix)
 - Remote: chưa setup. Repo target `git@github.com:nghiango4554/nox-1.git` đã accessible qua SSH (test 17/5).
-- **Uncommitted files** (17/5):
-  - Modified: `WORKLOG.md`, `marketing_hub/{app.py,collection_content_writer.py,db.py,seo.py}`, 3 template
-  - Renamed (Phase E reorg): 6 file `AGENTS/IDENTITY/SOUL/TOOLS/USER/HEARTBEAT.md` → `docs/persona_archive/`
-  - Untracked: `README.md`, `docs/{ARCHITECTURE,PERSONA,PROJECT_MAP,QUICKSTART,CURRENT_STATE,PROVIDERS,OPS}.md`, `docs/WORKLOG_ARCHIVE/`, `marketing_hub/{claude_provider,gemini_provider,sheet_writer}.py`
+- **Uncommitted files** (17/5 sau commit cf6fda2):
+  - Modified: `marketing_hub/{app.py,collection_content_writer.py,db.py,seo.py}` + 3 template (`collection_content.html`, `collection_content_detail.html`, `seo_title_meta.html`)
+  - Untracked: `marketing_hub/{claude_provider,gemini_provider,sheet_writer}.py`
+  - Đều là dev work tách riêng — không bundle vào commit reorg docs
 
 ---
 

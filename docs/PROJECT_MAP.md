@@ -11,7 +11,7 @@ workspace/
 ├── README.md                       # Entry point — đọc đầu tiên
 ├── WORKLOG.md                      # Live snapshot tuần hiện tại
 ├── .gitignore                      # Block secrets/tokens/DB/cache
-├── .git/                           # Git repo (master branch, account nghiatrong4554)
+├── .git/                           # Git repo (master branch, account nghiango4554)
 │
 ├── docs/                           # 📘 ONBOARDING DOCS (folder mới 17/5)
 │   ├── PERSONA.md                  # ★ Anh là ai + xưng hô + tone — đọc TRƯỚC

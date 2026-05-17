@@ -30,7 +30,7 @@
 - Branch: `master`, 2 commits:
   - `d2a5260` — "Initial: Sintech marketing_hub baseline + SEO scoring refactor" (175 files, 16/5 15:56)
   - `9eee935` — "WORKLOG: snapshot trước /clear — pending tasks + git state" (16/5 16:00)
-- Author: `nghiatrong4554 <nghiatrong4554@gmail.com>`
+- Author: `nghiango4554 <nghiatrong4554@gmail.com>` (name = ngo, không phải trong)
 - Remote: **chưa setup** (chưa push GitHub)
 - Sau /clear lần 1: nhiều file uncommitted (gemini_provider.py, refactor seo.py + seo_title_meta.html, sheet_writer.py). Khi vợ muốn commit lại thì check `git status`.
 

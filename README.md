@@ -84,7 +84,7 @@ workspace/
 - **FB Page** Sintech PC Gaming & Gear (id 1090726624121895) — 3 bài/ngày
 - **Google Sheet "Audit"** — 8 tabs (Carte / Click cao / Broken link / SEO Duplicates / Meta des + Title Errors / Multi H1 / Missing content / Query search)
 - **Google Sheet "Weekly Report"** — báo cáo tuần W?/M?
-- **GitHub account**: `nghiatrong4554` (mới tạo 16/5)
+- **GitHub account**: `nghiango4554` (mới tạo 16/5) — repo `git@github.com:nghiango4554/nox-1.git` đã accessible qua SSH (chưa push)
 
 ---
 
