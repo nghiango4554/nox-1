@@ -16,7 +16,7 @@ API_KEY = "AIzaSyAXk2hMOvGUi5h4ekXmT-gmCKG5COPN6_4"
 MODEL = "gemini-2.5-flash-lite"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
 
-WS = r"C:\Users\Nghia Dep Gai\.openclaw\workspace"
+WS = r"C:\Users\NGHIANGO\.openclaw\workspace"
 TSV_FILE = os.path.join(WS, "seo_duplicates.tsv")
 TOKEN = os.path.join(WS, ".secrets", "google_token.json")
 PROGRESS_DIR = os.path.join(WS, "seo_rewrite", "auto_run")

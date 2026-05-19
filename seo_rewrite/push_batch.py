@@ -5,7 +5,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-TOKEN = r"C:\Users\Nghia Dep Gai\.openclaw\workspace\.secrets\google_token.json"
+TOKEN = r"C:\Users\NGHIANGO\.openclaw\workspace\.secrets\google_token.json"
 SHEET_ID = "13IDYcE2ZEUd64xK6dIN-P_3_4gIVyFcwdBjb8W8e-uU"
 TAB = "SEO Duplicates"
 

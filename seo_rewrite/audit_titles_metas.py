@@ -21,7 +21,7 @@ import os, sys, re
 from collections import defaultdict
 sys.stdout.reconfigure(encoding="utf-8")
 
-WS = r"C:\Users\Nghia Dep Gai\.openclaw\workspace"
+WS = r"C:\Users\NGHIANGO\.openclaw\workspace"
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 

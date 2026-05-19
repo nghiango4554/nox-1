@@ -9,7 +9,7 @@ API_KEY = "AIzaSyAXk2hMOvGUi5h4ekXmT-gmCKG5COPN6_4"
 MODEL = "gemini-2.5-flash-lite"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
 
-WS = r"C:\Users\Nghia Dep Gai\.openclaw\workspace"
+WS = r"C:\Users\NGHIANGO\.openclaw\workspace"
 TOKEN = os.path.join(WS, ".secrets", "google_token.json")
 SHEET_ID = "13IDYcE2ZEUd64xK6dIN-P_3_4gIVyFcwdBjb8W8e-uU"
 TAB = "2. URL Rewrite"

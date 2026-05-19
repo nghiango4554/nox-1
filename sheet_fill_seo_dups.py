@@ -10,7 +10,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-SECRETS_DIR = r"C:\Users\Nghia Dep Gai\.openclaw\workspace\.secrets"
+SECRETS_DIR = r"C:\Users\NGHIANGO\.openclaw\workspace\.secrets"
 OAUTH_FILE = os.path.join(SECRETS_DIR, "google_oauth.json")
 TOKEN_FILE = os.path.join(SECRETS_DIR, "google_token.json")
 
@@ -18,7 +18,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 SHEET_ID = "13IDYcE2ZEUd64xK6dIN-P_3_4gIVyFcwdBjb8W8e-uU"
 TAB_NAME = "SEO Duplicates"
-TSV_FILE = r"C:\Users\Nghia Dep Gai\.openclaw\workspace\seo_duplicates.tsv"
+TSV_FILE = r"C:\Users\NGHIANGO\.openclaw\workspace\seo_duplicates.tsv"
 
 
 def get_creds():

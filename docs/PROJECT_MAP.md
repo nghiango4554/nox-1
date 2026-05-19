@@ -4,7 +4,7 @@
 
 ---
 
-## 🗂 Root (`C:\Users\Nghia Dep Gai\.openclaw\workspace\`)
+## 🗂 Root (`C:\Users\NGHIANGO\.openclaw\workspace\`)
 
 ```
 workspace/

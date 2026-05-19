@@ -2,7 +2,7 @@
 import os, sys, json, csv, re, urllib.request
 sys.stdout.reconfigure(encoding="utf-8")
 
-WS = r"C:\Users\Nghia Dep Gai\.openclaw\workspace"
+WS = r"C:\Users\NGHIANGO\.openclaw\workspace"
 PROCESSED = os.path.join(WS, "seo_rewrite", "auto_run", "processed.json")
 TSV = os.path.join(WS, "seo_duplicates.tsv")
 

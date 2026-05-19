@@ -11,7 +11,7 @@ sys.stdout.reconfigure(encoding="utf-8")
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-WS = r"C:\Users\Nghia Dep Gai\.openclaw\workspace"
+WS = r"C:\Users\NGHIANGO\.openclaw\workspace"
 TOKEN = os.path.join(WS, ".secrets", "google_token.json")
 SHEET_ID = "13IDYcE2ZEUd64xK6dIN-P_3_4gIVyFcwdBjb8W8e-uU"
 TAB = "2. URL Rewrite"

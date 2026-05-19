@@ -5,7 +5,7 @@ import requests
 
 UA = "Mozilla/5.0"
 EDRA_URL = "https://edravn.com/man-hinh-gaming-edra-egm27f144pvs"
-PIC_FOLDER = r"C:\Users\Nghia Dep Gai\Desktop\Sintech\PIC đăng page\6-5"
+PIC_FOLDER = r"C:\Users\NGHIANGO\Desktop\Sintech\PIC đăng page\6-5"
 os.makedirs(PIC_FOLDER, exist_ok=True)
 
 # 1. Fetch og:image từ trang chính hãng EDRA

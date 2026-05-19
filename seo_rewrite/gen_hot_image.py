@@ -6,7 +6,7 @@ API_KEY = "AIzaSyAXk2hMOvGUi5h4ekXmT-gmCKG5COPN6_4"
 MODEL = "gemini-2.5-flash-image"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
 
-OUT_DIR = r"C:\Users\Nghia Dep Gai\.openclaw\workspace\.openclaw-cli-images"
+OUT_DIR = r"C:\Users\NGHIANGO\.openclaw\workspace\.openclaw-cli-images"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 PROMPT = """Cinematic ultra-realistic editorial portrait of a stunning Asian young CEO

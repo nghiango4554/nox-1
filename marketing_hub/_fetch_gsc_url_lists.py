@@ -12,7 +12,7 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-TOKEN = r"C:\Users\Nghia Dep Gai\.openclaw\workspace\.secrets\google_token.json"
+TOKEN = r"C:\Users\NGHIANGO\.openclaw\workspace\.secrets\google_token.json"
 CACHE_PATH = Path(__file__).parent / "data" / "gsc_cache.json"
 
 # Mapping task_id (giống trong seo.py) → sheet_id

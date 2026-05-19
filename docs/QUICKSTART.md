@@ -29,7 +29,7 @@ codex --version
 
 ```powershell
 # Giả sử file zip ở Desktop
-cd "C:\Users\Nghia Dep Gai\"
+cd "C:\Users\NGHIANGO\"
 mkdir .openclaw -ErrorAction SilentlyContinue
 # Extract sintech_backup_*.zip vào .openclaw\workspace\
 # (dùng 7-Zip / WinRAR / built-in extract)
@@ -37,7 +37,7 @@ mkdir .openclaw -ErrorAction SilentlyContinue
 
 Cấu trúc sau extract:
 ```
-C:\Users\Nghia Dep Gai\.openclaw\workspace\
+C:\Users\NGHIANGO\.openclaw\workspace\
 ├── marketing_hub\
 ├── .secrets\
 ├── state\
@@ -50,19 +50,19 @@ C:\Users\Nghia Dep Gai\.openclaw\workspace\
 ## 🧠 Restore Claude memory
 
 ```powershell
-mkdir "C:\Users\Nghia Dep Gai\.claude\projects\C--Users-Nghia-Dep-Gai--openclaw-workspace\" -Force
+mkdir "C:\Users\NGHIANGO\.claude\projects\C--Users-Nghia-Dep-Gai--openclaw-workspace\" -Force
 
 # Move memory folder
-Move-Item "C:\Users\Nghia Dep Gai\.openclaw\workspace\claude_memory\" "C:\Users\Nghia Dep Gai\.claude\projects\C--Users-Nghia-Dep-Gai--openclaw-workspace\memory\"
+Move-Item "C:\Users\NGHIANGO\.openclaw\workspace\claude_memory\" "C:\Users\NGHIANGO\.claude\projects\C--Users-Nghia-Dep-Gai--openclaw-workspace\memory\"
 
 # Move settings
-Move-Item "C:\Users\Nghia Dep Gai\.openclaw\workspace\claude_settings.json" "C:\Users\Nghia Dep Gai\.claude\settings.json"
+Move-Item "C:\Users\NGHIANGO\.openclaw\workspace\claude_settings.json" "C:\Users\NGHIANGO\.claude\settings.json"
 ```
 
 ## 🐍 Install Python deps
 
 ```powershell
-cd "C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub"
+cd "C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub"
 pip install -r requirements.txt
 pip install google-genai   # provider Gemini mới (deprecated 'google-generativeai')
 ```
@@ -81,12 +81,12 @@ claude
 
 ```powershell
 # Option A: foreground (test)
-cd "C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub"
+cd "C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub"
 python app.py
 # → mở browser http://localhost:5055
 
 # Option B: hidden background qua VBS
-wscript.exe "C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\start_marketing_hub_hidden.vbs"
+wscript.exe "C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\_scripts\start_marketing_hub_hidden.vbs"
 ```
 
 Verify: `curl http://localhost:5055/` phải HTTP 200.

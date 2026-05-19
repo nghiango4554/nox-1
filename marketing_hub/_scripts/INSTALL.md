@@ -10,7 +10,7 @@ Mục tiêu: web tự chạy 24/7, có backup DB, có Telegram bot self-service.
 - Name: `Marketing Hub Web`
 - Trigger: **When the computer starts**
 - Action: **Start a program**
-- Program: `C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\start_marketing_hub.bat`
+- Program: `C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\_scripts\start_marketing_hub.bat`
 - Tick **"Run whether user is logged on or not"** → khi máy boot, web bật ngay (không cần login)
 - Tick **"Run with highest privileges"**
 
@@ -24,7 +24,7 @@ Mục tiêu: web tự chạy 24/7, có backup DB, có Telegram bot self-service.
 
 **Bước 1:** Test backup script chạy được:
 ```
-python "C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\backup_db.py"
+python "C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\_scripts\backup_db.py"
 ```
 → Sẽ tạo file `data/backups/posts_2026-MM-DD.db.zip` (~44MB)
 
@@ -33,7 +33,7 @@ python "C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\backup
 - Trigger: **Daily** at **3:00 AM**
 - Action: **Start a program**
 - Program: `python`
-- Arguments: `"C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\backup_db.py"`
+- Arguments: `"C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\_scripts\backup_db.py"`
 - Tick **"Run whether user is logged on or not"**
 
 **Cách restore:** unzip file `posts_YYYY-MM-DD.db.zip` → copy ra `data/posts.db` (stop Flask trước khi copy).
@@ -46,7 +46,7 @@ python "C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\backup
 
 **Bước 1:** Test backup script chạy được:
 ```
-python "C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\backup_secrets.py"
+python "C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\_scripts\backup_secrets.py"
 ```
 → Tạo file `data/backups/secrets_YYYY-MM-DD.zip` (~2KB). Chứa Google OAuth + Telegram + OpenAI key.
 
@@ -55,7 +55,7 @@ python "C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\backup
 - Trigger: **Daily** at **3:05 AM** (lệch 5 phút với DB backup)
 - Action: **Start a program**
 - Program: `python`
-- Arguments: `"C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\backup_secrets.py"`
+- Arguments: `"C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\_scripts\backup_secrets.py"`
 - Tick **"Run whether user is logged on or not"**
 
 **Cách restore:** unzip `secrets_YYYY-MM-DD.zip` ở root workspace → 2 folder `.secrets/` + `marketing_hub/.env/` tự về chỗ cũ.
@@ -75,13 +75,13 @@ python "C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\backup
 
 **Bước 2:** Paste token vào file:
 ```
-C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\.env\telegram_bot_token.txt
+C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\.env\telegram_bot_token.txt
 ```
 Mở bằng Notepad → xóa text mẫu → paste token → save (UTF-8).
 
 **Bước 3:** Test bot chạy:
 ```
-python "C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\telegram_bot.py"
+python "C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\telegram_bot.py"
 ```
 → Console log "Logged in as @sintech_hub_bot ... Polling..."
 
@@ -94,7 +94,7 @@ python "C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\telegram_bot.py
 **Bước 5:** Auto-start bot khi máy boot — Task Scheduler:
 - Name: `Marketing Hub Bot`
 - Trigger: **At startup**
-- Program: `C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\start_telegram_bot.bat`
+- Program: `C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\_scripts\start_telegram_bot.bat`
 - Tick **"Run whether user is logged on or not"**
 
 → Vợ chat bot là biết status, không cần mở Claude Code → tiết kiệm session.

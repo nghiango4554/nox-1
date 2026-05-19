@@ -135,7 +135,7 @@ def validate_and_format_row(p, gen):
 
 if __name__ == "__main__":
     # Test 3 sản phẩm từ batch_01_data
-    with open(r"C:\Users\Nghia Dep Gai\.openclaw\workspace\seo_rewrite\batch_01_data.json", encoding="utf-8") as f:
+    with open(r"C:\Users\NGHIANGO\.openclaw\workspace\nox-1\seo_rewrite\batch_01_data.json", encoding="utf-8") as f:
         items = json.load(f)
     test_items = [items[0], items[3], items[4]]  # Delta L24 trắng, Sigma L36 PRO, Segotep MU-360
 

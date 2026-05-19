@@ -4,7 +4,7 @@
 import os, sys, re, time
 sys.stdout.reconfigure(encoding="utf-8")
 
-WS = r"C:\Users\Nghia Dep Gai\.openclaw\workspace"
+WS = r"C:\Users\NGHIANGO\.openclaw\workspace"
 sys.path.insert(0, os.path.join(WS, "marketing_hub"))
 from haravan_client import _request
 

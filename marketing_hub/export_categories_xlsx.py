@@ -5,7 +5,7 @@ from openpyxl.styles import Font, Alignment, PatternFill
 import os
 
 SITEMAP_URL = "https://sintech.vn/sitemap_collections_1.xml"
-OUT_DIR = r"C:\Users\Nghia Dep Gai\Desktop\Sintech\Chồng iu\Tài liệu"
+OUT_DIR = r"C:\Users\NGHIANGO\Desktop\Sintech\Chồng iu\Tài liệu"
 OUT_FILE = os.path.join(OUT_DIR, "Sintech_Categories.xlsx")
 
 NAME_MAP = {

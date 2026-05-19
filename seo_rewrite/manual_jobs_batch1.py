@@ -433,7 +433,7 @@ if errs:
 
 # Apply nếu pass + có flag --apply
 if "--apply" in sys.argv:
-    DB = r"C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\data\posts.db"
+    DB = r"C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\data\posts.db"
     con = sqlite3.connect(DB)
     cur = con.cursor()
     n = 0

@@ -2,7 +2,7 @@
 
 > Lookup nhanh. Sau /clear, mở file này thay vì scroll WORKLOG tìm lệnh.
 >
-> Quy ước: lệnh chạy ở **root workspace** (`C:\Users\Nghia Dep Gai\.openclaw\workspace`) trừ khi note khác. Python path mặc định `C:\Users\Nghia Dep Gai\AppData\Local\Programs\Python\Python312\python.exe`.
+> Quy ước: lệnh chạy ở **root workspace** (`C:\Users\NGHIANGO\.openclaw\workspace`) trừ khi note khác. Python path mặc định `C:\Users\NGHIANGO\AppData\Local\Programs\Python\Python312\python.exe`.
 
 ---
 

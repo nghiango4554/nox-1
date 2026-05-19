@@ -54,7 +54,7 @@ Cần restart Flask sau khi modify code Python (Flask không hot-reload trong pr
 
 ```powershell
 # Option 1: qua VBS wrapper (giữ hidden)
-& "C:\Users\Nghia Dep Gai\.openclaw\workspace\marketing_hub\_scripts\start_marketing_hub_hidden.vbs"
+& "C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\_scripts\start_marketing_hub_hidden.vbs"
 
 # Option 2: kill PID cũ + start mới
 Get-Process python | Where-Object { $_.MainWindowTitle -like "*marketing_hub*" } | Stop-Process -Force

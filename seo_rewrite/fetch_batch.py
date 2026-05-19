@@ -38,7 +38,7 @@ DEMO_DONE = {
 
 urls_seen = []
 seen_set = set()
-with open(r"C:\Users\Nghia Dep Gai\.openclaw\workspace\seo_duplicates.tsv", encoding="utf-8") as f:
+with open(r"C:\Users\NGHIANGO\.openclaw\workspace\seo_duplicates.tsv", encoding="utf-8") as f:
     rd = csv.reader(f, delimiter="\t")
     next(rd)
     for row in rd:
@@ -78,7 +78,7 @@ for i, url in enumerate(batch, start=1):
     }
     out.append(item)
 
-OUT_DIR = r"C:\Users\Nghia Dep Gai\.openclaw\workspace\seo_rewrite"
+OUT_DIR = r"C:\Users\NGHIANGO\.openclaw\workspace\nox-1\seo_rewrite"
 os.makedirs(OUT_DIR, exist_ok=True)
 with open(os.path.join(OUT_DIR, f"batch_{batch_idx:02d}_data.json"), "w", encoding="utf-8") as f:
     json.dump(out, f, ensure_ascii=False, indent=2)

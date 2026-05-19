@@ -6,7 +6,7 @@ Chỉ update cell title đang được PICK (cell đầu tiên có content trong
 import os, sys, re
 sys.stdout.reconfigure(encoding="utf-8")
 
-WS = r"C:\Users\Nghia Dep Gai\.openclaw\workspace"
+WS = r"C:\Users\NGHIANGO\.openclaw\workspace"
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 

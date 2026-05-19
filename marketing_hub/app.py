@@ -34,7 +34,7 @@ import competitors as competitors_mod
 
 ROOT = Path(__file__).parent
 ALLOWED_EXT = {"jpg", "jpeg", "png", "gif", "webp", "mp4"}
-LIBRARY_ROOT = Path(r"C:\Users\Nghia Dep Gai\Desktop\Sintech\FB-Library")
+LIBRARY_ROOT = Path(r"C:\Users\NGHIANGO\Desktop\Sintech\FB-Library")
 # Ảnh upload trực tiếp từ Hub → vào _inbox dưới FB-Library (gộp 2 chỗ thành 1).
 # Em có thể move file sang subfolder code SP (vd "FB0003 - Laptop X/") sau khi
 # categorize — filename không đổi nên bài cũ vẫn đọc được nếu app fallback search.

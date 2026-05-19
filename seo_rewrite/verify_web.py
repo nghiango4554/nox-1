@@ -4,7 +4,7 @@ So sánh với expected trong sheet '2. URL Rewrite'.
 import os, sys, re, time, urllib.request, html as htmllib
 sys.stdout.reconfigure(encoding="utf-8")
 
-WS = r"C:\Users\Nghia Dep Gai\.openclaw\workspace"
+WS = r"C:\Users\NGHIANGO\.openclaw\workspace"
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
