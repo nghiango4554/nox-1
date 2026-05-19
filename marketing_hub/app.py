@@ -31,6 +31,10 @@ import seo as seo_mod
 import haravan_sync as hv_sync
 import notifier
 import competitors as competitors_mod
+import product_parser as pp
+import product_writer as pw
+import claude_provider as cp
+import haravan_client as hv_client
 
 ROOT = Path(__file__).parent
 ALLOWED_EXT = {"jpg", "jpeg", "png", "gif", "webp", "mp4"}
@@ -3188,6 +3192,150 @@ def inject_globals():
         "POST_TYPES": POST_TYPES,
         "POST_STATUSES": POST_STATUSES,
     }
+
+
+# ──────────────────────────────────────────────────────────────
+#  /products/new — Phase 1: form + parser preview (no Haravan POST yet)
+# ──────────────────────────────────────────────────────────────
+
+@app.route("/products/new", methods=["GET"])
+def products_new_form():
+    return render_template("products_new.html")
+
+
+@app.route("/products/new/preview", methods=["POST"])
+def products_new_preview():
+    body = request.get_json(silent=True) or {}
+    name = (body.get("name") or "").strip()
+    warranty = (body.get("warranty_months") or "").strip()
+
+    parsed = pp.parse(name)
+
+    all_tags = []
+    if warranty and warranty.isdigit() and 1 <= int(warranty) <= 120:
+        all_tags.append(f"bh_{int(warranty):02d}_tháng")
+    all_tags.extend(parsed.get("tags") or [])
+
+    return jsonify({
+        **parsed,
+        "all_tags": all_tags,
+        "warranty_months": warranty,
+        "price": body.get("price"),
+        "compare_price": body.get("compare_price"),
+        "stock": body.get("stock"),
+    })
+
+
+@app.route("/products/new/generate", methods=["POST"])
+def products_new_generate():
+    """Phase 2 — gọi Claude gen body_html + excerpt + SEO title + SEO meta."""
+    body = request.get_json(silent=True) or {}
+    name = (body.get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Thiếu tên SP"}), 400
+    parsed = pp.parse(name)
+    if not parsed.get("loai"):
+        return jsonify({"ok": False, "error": parsed.get("note") or "Tên SP không hợp lệ"}), 400
+
+    try:
+        gen = pw.generate(
+            name=name,
+            parsed=parsed,
+            price=(body.get("price") or "").strip(),
+            warranty_months=(body.get("warranty_months") or "").strip(),
+        )
+        return jsonify({"ok": True, **gen})
+    except cp.ClaudeRateLimitError as e:
+        return jsonify({"ok": False, "error": f"Claude quota hết — đợi reset rồi thử lại. ({e})"}), 503
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Gen fail: {e}"}), 500
+
+
+@app.route("/products/new/create", methods=["POST"])
+def products_new_create():
+    """Phase 3 — POST Haravan tạo SP thật. Lift permission gate cho route này."""
+    body = request.get_json(silent=True) or {}
+    name = (body.get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Thiếu tên SP"}), 400
+
+    parsed = pp.parse(name)
+    if not parsed.get("loai"):
+        return jsonify({"ok": False, "error": parsed.get("note") or "Tên SP không hợp lệ"}), 400
+
+    warranty = (body.get("warranty_months") or "").strip()
+    price = body.get("price")
+    compare_price = body.get("compare_price")
+    body_html = (body.get("body_html") or "").strip()
+    excerpt = (body.get("excerpt") or "").strip()
+    seo_title = (body.get("seo_title") or "").strip()
+    seo_meta = (body.get("seo_meta") or "").strip()
+
+    if not body_html:
+        return jsonify({"ok": False, "error": "Body HTML rỗng — chạy AI gen trước"}), 400
+
+    # Tags = bh_ tag + parsed tags
+    tags_list = []
+    if warranty and str(warranty).isdigit() and 1 <= int(warranty) <= 120:
+        tags_list.append(f"bh_{int(warranty):02d}_tháng")
+    tags_list.extend(parsed.get("tags") or [])
+
+    # Variant: 1 biến thể "Bảo hành NN tháng" — stock + Google visibility TẠM TẮT theo yêu cầu vợ
+    variant_title = f"Bảo hành {int(warranty)} tháng" if warranty and str(warranty).isdigit() else "Mặc định"
+    variant = {
+        "option1": variant_title,
+        "requires_shipping": False,  # vợ bỏ tick "cho phép giao hàng"
+    }
+    if price and str(price).replace(".", "").isdigit():
+        variant["price"] = float(price)
+    if compare_price and str(compare_price).replace(".", "").isdigit():
+        variant["compare_at_price"] = float(compare_price)
+
+    product_fields = {
+        "title": name,
+        "body_html": body_html,
+        "vendor": parsed.get("hang") or "",
+        "product_type": parsed.get("loai") or "",
+        "tags": ", ".join(tags_list),
+        # published_scope: tắt — vợ tick "Hiển thị Google" tay sau trong admin Haravan
+        "summary_html": excerpt,
+        "options": [{"name": "Kích thước", "values": [variant_title]}],
+        "variants": [variant],
+    }
+
+    try:
+        with hv_client.allow_blocked_operations("ui_form:/products/new"):
+            created = hv_client.create_product(product_fields)
+        product_id = created.get("id")
+        if not product_id:
+            return jsonify({"ok": False, "error": "Tạo SP OK nhưng không có id trả về", "raw": created}), 500
+
+        # SEO metafields
+        if seo_title:
+            try:
+                with hv_client.allow_blocked_operations("ui_form:/products/new"):
+                    hv_client.upsert_metafield("products", product_id, "global", "title_tag", seo_title)
+            except Exception as e:
+                print(f"[products_new_create] upsert seo_title fail: {e}")
+        if seo_meta:
+            try:
+                with hv_client.allow_blocked_operations("ui_form:/products/new"):
+                    hv_client.upsert_metafield("products", product_id, "global", "description_tag", seo_meta)
+            except Exception as e:
+                print(f"[products_new_create] upsert seo_meta fail: {e}")
+
+        handle = created.get("handle") or parsed.get("slug") or ""
+        return jsonify({
+            "ok": True,
+            "product_id": product_id,
+            "handle": handle,
+            "admin_url": f"https://admin.haravan.com/admin/products/{product_id}",
+            "live_url": f"https://sintech.vn/products/{handle}" if handle else None,
+        })
+    except hv_client.HaravanError as e:
+        return jsonify({"ok": False, "error": f"Haravan: {e}"}), 502
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Unexpected: {e}"}), 500
 
 
 if __name__ == "__main__":

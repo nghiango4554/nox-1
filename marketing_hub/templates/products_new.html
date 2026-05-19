@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+{% block title %}Tạo SP mới — Sintech Hub{% endblock %}
+{% block page_title %}<span>➕ Tạo sản phẩm mới</span>{% endblock %}
+
+{% block content %}
+<style>
+  .pnew-card{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:20px;margin-bottom:16px;}
+  .pnew-card h2{margin:0 0 14px;font-size:16px;color:#374151;}
+  .pnew-label{display:block;font-weight:600;margin-bottom:4px;font-size:13px;}
+  .pnew-input{width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:4px;font-size:14px;box-sizing:border-box;font-family:inherit;}
+  .pnew-row{margin-bottom:12px;}
+  .pnew-2col{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+  .pnew-btn{padding:10px 24px;border:none;border-radius:4px;cursor:pointer;font-weight:600;font-size:14px;}
+  .pnew-btn-primary{background:#7c3aed;color:#fff;}
+  .pnew-btn-primary:hover{background:#6d28d9;}
+  .pnew-btn-success{background:#16a34a;color:#fff;}
+  .pnew-btn-success:hover{background:#15803d;}
+  .pnew-btn:disabled{opacity:.5;cursor:not-allowed;}
+  .pnew-table{width:100%;border-collapse:collapse;font-size:14px;}
+  .pnew-table td{padding:8px;border-bottom:1px solid #f3f4f6;vertical-align:top;}
+  .pnew-table .lbl{font-weight:600;color:#6b7280;width:180px;}
+  .pnew-tag{display:inline-block;background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:10px;margin:2px 4px 2px 0;font-family:monospace;font-size:12px;}
+  .pnew-counter{font-size:12px;color:#6b7280;margin-top:2px;}
+  .pnew-counter.ok{color:#16a34a;}
+  .pnew-counter.warn{color:#ca8a04;}
+  .pnew-counter.bad{color:#dc2626;}
+  .pnew-banner{padding:12px 14px;border-radius:6px;margin-bottom:12px;font-size:14px;}
+  .pnew-banner-info{background:#dbeafe;color:#1e40af;}
+  .pnew-banner-warn{background:#fef3c7;color:#92400e;}
+  .pnew-banner-error{background:#fee2e2;color:#991b1b;}
+  .pnew-banner-success{background:#dcfce7;color:#14532d;}
+  /* Preview render — gần với style Sintech.vn (link đỏ + bold) */
+  #body_preview a{color:#dc2626 !important;text-decoration:underline;}
+  #body_preview a strong{color:inherit;font-weight:700;}
+  #body_preview h2{font-size:18px;margin:18px 0 8px;color:#111827;}
+  #body_preview h3{font-size:15px;margin:14px 0 6px;color:#374151;}
+  #body_preview p{margin:8px 0;}
+  #body_preview ul{padding-left:22px;margin:8px 0;}
+  #body_preview li{margin:3px 0;}
+  #body_preview table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px;}
+  #body_preview table th,#body_preview table td{border:1px solid #e5e7eb;padding:6px 10px;text-align:left;}
+  #body_preview table th{background:#f9fafb;font-weight:600;}
+  #body_preview em{color:#6b7280;font-size:13px;}
+</style>
+
+<div style="max-width:920px;">
+
+  <!-- ──────────── STEP 1: FORM ──────────── -->
+  <div class="pnew-card">
+    <h2>📝 Thông tin SP</h2>
+
+    <div class="pnew-row">
+      <label class="pnew-label">Tên SP <span style="color:#dc2626;">*</span></label>
+      <input type="text" id="name" class="pnew-input"
+             placeholder="vd: Card Màn Hình Asus Dual RTX 3060 12GB V1" />
+      <small style="color:#6b7280;font-size:12px;">Theo <code>product_naming_rules.md</code>. <strong>Mainboard</strong> skip — vợ tự viết.</small>
+    </div>
+
+    <div class="pnew-row">
+      <label class="pnew-label">Bảo hành (tháng)</label>
+      <input type="number" id="warranty_months" min="1" max="120" class="pnew-input" placeholder="36" />
+      <small style="color:#6b7280;font-size:12px;">Sẽ thành tag <code>bh_NN_tháng</code></small>
+    </div>
+
+    <div class="pnew-2col">
+      <div>
+        <label class="pnew-label">Giá bán (đ)</label>
+        <input type="number" id="price" class="pnew-input" placeholder="1690000" />
+      </div>
+      <div>
+        <label class="pnew-label">Giá so sánh (đ) <span style="font-weight:normal;color:#9ca3af;">— optional</span></label>
+        <input type="number" id="compare_price" class="pnew-input" placeholder="1990000" />
+      </div>
+    </div>
+
+    <p style="font-size:12px;color:#9ca3af;margin:8px 0 0;">
+      <span style="background:#f3f4f6;padding:2px 8px;border-radius:4px;">⚠️ Phase 2.1</span> Stock + "Hiển thị Google" tạm tắt — vợ tick tay trong admin Haravan sau.
+    </p>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
+      <button type="button" id="btnPreview" class="pnew-btn pnew-btn-primary" onclick="doPreview()">✨ Preview parse</button>
+      <button type="button" id="btnGen" class="pnew-btn pnew-btn-primary" onclick="doGenerate()" disabled>🤖 Gen body + SEO (AI)</button>
+    </div>
+  </div>
+
+  <!-- ──────────── STEP 2: PARSE PREVIEW ──────────── -->
+  <div id="parseResult" class="pnew-card" style="display:none;">
+    <h2>📋 Parsed structure</h2>
+    <table class="pnew-table">
+      <tr><td class="lbl">Loại</td><td id="r_loai"></td></tr>
+      <tr><td class="lbl">Tính chất (sub-loại)</td><td id="r_sub"></td></tr>
+      <tr id="r_hang_row"><td class="lbl">Hãng</td><td id="r_hang"></td></tr>
+      <tr><td class="lbl">Tags auto</td><td id="r_tags"></td></tr>
+      <tr><td class="lbl">Slug</td><td id="r_slug" style="font-family:monospace;color:#7c3aed;"></td></tr>
+    </table>
+    <div id="r_note" class="pnew-banner pnew-banner-warn" style="margin-top:12px;display:none;"></div>
+  </div>
+
+  <!-- ──────────── STEP 3: AI GEN OUTPUT (editable) ──────────── -->
+  <div id="genResult" class="pnew-card" style="display:none;">
+    <h2>🤖 AI-generated content <span id="r_angle" style="background:#fde68a;color:#92400e;font-size:12px;padding:2px 8px;border-radius:10px;margin-left:8px;font-weight:600;"></span></h2>
+
+    <div class="pnew-row">
+      <label class="pnew-label">SEO Title <small style="font-weight:normal;color:#9ca3af;">(≤61c, sweet 50-58)</small></label>
+      <input type="text" id="seo_title" class="pnew-input" oninput="updateCounters()" />
+      <div id="cnt_title" class="pnew-counter"></div>
+    </div>
+
+    <div class="pnew-row">
+      <label class="pnew-label">SEO Meta description <small style="font-weight:normal;color:#9ca3af;">(145-158c, đủ "KHÁM PHÁ NGAY")</small></label>
+      <textarea id="seo_meta" class="pnew-input" rows="3" oninput="updateCounters()"></textarea>
+      <div id="cnt_meta" class="pnew-counter"></div>
+    </div>
+
+    <div class="pnew-row">
+      <label class="pnew-label">Trích dẫn (excerpt) <small style="font-weight:normal;color:#9ca3af;">(~160c)</small></label>
+      <textarea id="excerpt" class="pnew-input" rows="2" oninput="updateCounters()"></textarea>
+      <div id="cnt_excerpt" class="pnew-counter"></div>
+    </div>
+
+    <div class="pnew-row">
+      <label class="pnew-label">Body HTML <small style="font-weight:normal;color:#9ca3af;">(edit được, preview render bên dưới)</small></label>
+      <textarea id="body_html" class="pnew-input" rows="12" style="font-family:monospace;font-size:12px;" oninput="updateBodyPreview()"></textarea>
+    </div>
+
+    <details>
+      <summary style="cursor:pointer;font-weight:600;color:#7c3aed;font-size:13px;margin-bottom:8px;">👁 Preview HTML render</summary>
+      <div id="body_preview" style="border:1px solid #e5e7eb;border-radius:4px;padding:14px;background:#fafafa;font-size:14px;line-height:1.6;"></div>
+    </details>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
+      <button type="button" class="pnew-btn pnew-btn-primary" onclick="doGenerate()">🔁 Gen lại</button>
+      <button type="button" id="btnCreate" class="pnew-btn pnew-btn-success" onclick="doCreate()">🚀 Tạo SP trên Haravan</button>
+    </div>
+  </div>
+
+  <!-- ──────────── STEP 4: CREATE RESULT ──────────── -->
+  <div id="createResult" class="pnew-card" style="display:none;"></div>
+
+  <!-- ──────────── STATUS BANNER ──────────── -->
+  <div id="statusBanner" style="display:none;"></div>
+
+</div>
+
+<script>
+let lastParsed = null;
+
+function setStatus(kind, text) {
+  const el = document.getElementById('statusBanner');
+  if (!text) { el.style.display = 'none'; return; }
+  el.className = 'pnew-banner pnew-banner-' + kind;
+  el.textContent = text;
+  el.style.display = 'block';
+}
+
+function getFormPayload() {
+  return {
+    name: document.getElementById('name').value.trim(),
+    warranty_months: document.getElementById('warranty_months').value,
+    price: document.getElementById('price').value,
+    compare_price: document.getElementById('compare_price').value,
+  };
+}
+
+async function doPreview() {
+  const payload = getFormPayload();
+  if (!payload.name) { setStatus('error', 'Nhập tên SP trước nha'); return; }
+  setStatus('info', 'Parsing...');
+  try {
+    const res = await fetch('/products/new/preview', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const j = await res.json();
+    lastParsed = j;
+    renderParsed(j);
+    if (j.loai) {
+      document.getElementById('btnGen').disabled = false;
+      setStatus('info', 'Parse OK — bấm "Gen body + SEO (AI)" để Claude tạo content');
+    } else {
+      document.getElementById('btnGen').disabled = true;
+      setStatus('error', j.note || 'Parse fail');
+    }
+  } catch (e) {
+    setStatus('error', 'Lỗi: ' + e.message);
+  }
+}
+
+function renderParsed(j) {
+  document.getElementById('parseResult').style.display = 'block';
+  document.getElementById('r_loai').textContent = j.loai || '—';
+  document.getElementById('r_sub').textContent = j.sub_loai || '—';
+
+  const hangCell = document.getElementById('r_hang');
+  const hangRow = document.getElementById('r_hang_row');
+  hangCell.innerHTML = '';
+  if (j.hang) {
+    hangCell.append(document.createTextNode(j.hang));
+    if (j.brand_is_new) {
+      const badge = document.createElement('span');
+      badge.textContent = '⚠️ HÃNG MỚI — chưa có trong list';
+      badge.style.cssText = 'display:inline-block;background:#fee2e2;color:#991b1b;padding:2px 10px;border-radius:10px;margin-left:10px;font-size:12px;font-weight:600;';
+      hangCell.appendChild(badge);
+      hangRow.style.background = '#fef9c3';
+    } else {
+      hangRow.style.background = '';
+    }
+  } else {
+    hangCell.textContent = '—';
+    hangRow.style.background = '';
+  }
+
+  const tagsEl = document.getElementById('r_tags');
+  tagsEl.innerHTML = '';
+  (j.all_tags || []).forEach(t => {
+    const span = document.createElement('span');
+    span.textContent = t;
+    span.className = 'pnew-tag';
+    tagsEl.appendChild(span);
+  });
+  if (!(j.all_tags || []).length) tagsEl.textContent = '—';
+
+  document.getElementById('r_slug').textContent = j.slug || '—';
+
+  const noteEl = document.getElementById('r_note');
+  if (j.note) { noteEl.textContent = '⚠️ ' + j.note; noteEl.style.display = 'block'; }
+  else noteEl.style.display = 'none';
+}
+
+async function doGenerate() {
+  if (!lastParsed || !lastParsed.loai) { setStatus('error', 'Preview parse trước đã'); return; }
+  if (lastParsed.brand_is_new) {
+    if (!confirm(`⚠️ Hãng "${lastParsed.hang}" chưa có trong list master.\n\nNếu chốt tạo SP, Haravan sẽ thêm hãng mới (có thể trùng nếu typo).\n\nVẫn tiếp tục gen AI + tạo SP?`)) return;
+  }
+  setStatus('info', '🤖 Đang gọi Claude (~30-90s)...');
+  document.getElementById('btnGen').disabled = true;
+  try {
+    const payload = getFormPayload();
+    const res = await fetch('/products/new/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const j = await res.json();
+    if (!j.ok) {
+      setStatus('error', j.error || 'Gen fail');
+      return;
+    }
+    document.getElementById('genResult').style.display = 'block';
+    document.getElementById('r_angle').textContent = 'Angle: ' + (j.angle || '?');
+    document.getElementById('seo_title').value = j.seo_title || '';
+    document.getElementById('seo_meta').value = j.seo_meta || '';
+    document.getElementById('excerpt').value = j.excerpt || '';
+    document.getElementById('body_html').value = j.body_html || '';
+    updateCounters();
+    updateBodyPreview();
+    setStatus('success', '✅ AI gen xong. Vợ review + edit (nếu cần) rồi bấm "🚀 Tạo SP trên Haravan"');
+  } catch (e) {
+    setStatus('error', 'Lỗi: ' + e.message);
+  } finally {
+    document.getElementById('btnGen').disabled = false;
+  }
+}
+
+function updateCounters() {
+  const t = document.getElementById('seo_title').value;
+  const m = document.getElementById('seo_meta').value;
+  const e = document.getElementById('excerpt').value;
+
+  const tCnt = document.getElementById('cnt_title');
+  tCnt.textContent = `${t.length} ký tự`;
+  tCnt.className = 'pnew-counter ' + (t.length >= 45 && t.length <= 58 ? 'ok' : t.length <= 61 ? 'warn' : 'bad');
+
+  const mCnt = document.getElementById('cnt_meta');
+  const CTAS = ['KHÁM PHÁ NGAY', 'XEM NGAY', 'THAM KHẢO NGAY', 'CHỌN NGAY'];
+  const foundCTA = CTAS.find(p => m.toUpperCase().includes(p));
+  mCnt.textContent = `${m.length} ký tự` + (foundCTA ? ` • có CTA "${foundCTA}"` : ' • ⚠️ THIẾU CTA HOA (XEM/THAM KHẢO/CHỌN/KHÁM PHÁ NGAY)');
+  mCnt.className = 'pnew-counter ' + (m.length >= 145 && m.length <= 158 && foundCTA ? 'ok' : (m.length >= 140 && m.length <= 160 && foundCTA) ? 'warn' : 'bad');
+
+  const eCnt = document.getElementById('cnt_excerpt');
+  eCnt.textContent = `${e.length} ký tự`;
+  eCnt.className = 'pnew-counter ' + (e.length <= 160 ? 'ok' : 'warn');
+}
+
+function updateBodyPreview() {
+  document.getElementById('body_preview').innerHTML = document.getElementById('body_html').value;
+}
+
+async function doCreate() {
+  if (!confirm('🚀 Xác nhận tạo SP MỚI trên Haravan?\n\nLưu ý: hành động này thật sự POST lên store sintech.vn — không thể undo từ Hub (phải vào admin xóa thủ công nếu sai).')) return;
+  setStatus('info', '🚀 Đang POST Haravan...');
+  document.getElementById('btnCreate').disabled = true;
+  try {
+    const payload = {
+      ...getFormPayload(),
+      body_html: document.getElementById('body_html').value,
+      excerpt: document.getElementById('excerpt').value,
+      seo_title: document.getElementById('seo_title').value,
+      seo_meta: document.getElementById('seo_meta').value,
+    };
+    const res = await fetch('/products/new/create', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const j = await res.json();
+    if (!j.ok) {
+      setStatus('error', j.error || 'Create fail');
+      return;
+    }
+    const cr = document.getElementById('createResult');
+    cr.style.display = 'block';
+    cr.className = 'pnew-card';
+    cr.innerHTML = `
+      <h2 style="color:#16a34a;">🎉 Tạo SP thành công!</h2>
+      <table class="pnew-table">
+        <tr><td class="lbl">Product ID</td><td><code>${j.product_id}</code></td></tr>
+        <tr><td class="lbl">Handle</td><td><code>${j.handle || ''}</code></td></tr>
+        <tr><td class="lbl">Admin Haravan</td><td><a href="${j.admin_url}" target="_blank">${j.admin_url}</a></td></tr>
+        ${j.live_url ? `<tr><td class="lbl">Live URL</td><td><a href="${j.live_url}" target="_blank">${j.live_url}</a></td></tr>` : ''}
+      </table>
+      <p style="margin-top:14px;color:#6b7280;">⚠️ Vào admin Haravan kiểm tra lại: tags / bảo hành / SEO / variants / kho. Nếu OK thì publish + upload ảnh SP.</p>
+    `;
+    cr.scrollIntoView({behavior:'smooth'});
+    setStatus('success', '✅ SP đã được tạo trên Haravan');
+  } catch (e) {
+    setStatus('error', 'Lỗi: ' + e.message);
+  } finally {
+    document.getElementById('btnCreate').disabled = false;
+  }
+}
+</script>
+{% endblock %}

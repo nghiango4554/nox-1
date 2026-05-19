@@ -61,14 +61,45 @@ _BLOCKED_OPERATIONS = [
 ]
 
 
+import contextlib
+import threading
+
+_permission_override = threading.local()
+
+
+@contextlib.contextmanager
+def allow_blocked_operations(reason: str):
+    """Tạm thời lift permission gate cho block code cụ thể.
+
+    Chỉ dùng cho explicit user-initiated action qua UI (vd /products/new).
+    KHÔNG dùng cho automated script — gate cố ý chặn auto-create.
+
+    Usage:
+        with hv_client.allow_blocked_operations("ui_form:/products/new"):
+            hv_client.create_product(fields)
+    """
+    prev = getattr(_permission_override, "active", None)
+    _permission_override.active = reason
+    try:
+        yield
+    finally:
+        _permission_override.active = prev
+
+
 def _check_permission(method: str, path: str):
-    """Raise nếu method+path nằm trong blocklist (create/delete SP+bài viết)."""
+    """Raise nếu method+path nằm trong blocklist (create/delete SP+bài viết).
+
+    Bỏ qua nếu đang trong block `allow_blocked_operations(...)` — explicit override.
+    """
+    if getattr(_permission_override, "active", None):
+        return  # explicit override active
     method_up = method.upper()
     for blocked_method, pattern, label in _BLOCKED_OPERATIONS:
         if method_up == blocked_method and pattern.match(path):
             raise HaravanError(
                 f"🔒 PERMISSION DENIED: {method} {path} — thao tác '{label}' bị cấm. "
-                f"Chỉ có quyền CHỈNH SỬA (PUT/PATCH) + upload ảnh vào SP existing."
+                f"Chỉ có quyền CHỈNH SỬA (PUT/PATCH) + upload ảnh vào SP existing. "
+                f"Nếu cần override → wrap trong hv_client.allow_blocked_operations('reason')."
             )
 
 

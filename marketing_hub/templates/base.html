@@ -81,6 +81,9 @@
   <a href="{{ url_for('post_new') }}" class="sb-link {% if request.endpoint == 'post_new' %}active{% endif %}">
     <span class="sb-icon">➕</span><span>Bài mới</span>
   </a>
+  <a href="{{ url_for('products_new_form') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('products_new') %}active{% endif %}">
+    <span class="sb-icon">🛍️</span><span>SP mới (Haravan)</span>
+  </a>
   <a href="{{ url_for('content_jobs_list_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('content_jobs') %}active{% endif %}">
     <span class="sb-icon">📝</span><span>Content Jobs</span>
   </a>
