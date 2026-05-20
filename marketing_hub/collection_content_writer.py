@@ -436,6 +436,124 @@ Trả JSON thuần."""
     }
 
 
+_TITLE_META_SYSTEM_PROMPT = """Bạn là chuyên gia SEO copywriter cho Sintech.vn (PC, laptop, gaming gear, 457 Trần Xuân Soạn Q7 TP.HCM, hotline 0911 713 000).
+
+Nhiệm vụ: Gen LẠI title + meta description CHO 1 collection. KHÔNG cần body.
+
+RULES CỨNG:
+- TITLE: 48-58 ký tự (sweet 50-56). KHÔNG chứa "Sintech" (Haravan auto-suffix " - Sintech").
+  KHÔNG capitalize từng từ ("Máy Bộ Rosa Chính Hãng" SAI). Tone phân tích lợi ích, không SEOer.
+- META: 140-160 ký tự. BẮT BUỘC kết thúc bằng CTA HOA:
+  "XEM NGAY tại Sintech" / "THAM KHẢO NGAY tại Sintech" / "CHỌN NGAY mẫu phù hợp tại Sintech" / "KHÁM PHÁ NGAY tại Sintech".
+- Tone tư vấn, KHÔNG SEOer.
+- KHÔNG filler banned: "bền bỉ", "đẹp mắt", "tốt nhất 2026", "đáng mua nhất", "khôn nhất", "vượt trội", "đỉnh cao", "Free ship".
+- KHÔNG bịa giá / mã giảm giá / % giảm.
+- ĐẾM len() trước khi trả — TITLE 48-58, META 140-160 STRICT.
+
+NẾU đã có title/meta hiện tại trong input → bản gen lại PHẢI KHÁC GÓC NHÌN với bản cũ
+(thay angle: từ SPEC → USE CASE / từ AUDIENCE → SO SÁNH / etc.).
+
+OUTPUT: JSON thuần {"title": "...", "meta": "..."} — KHÔNG markdown fence, không text giải thích."""
+
+
+def gen_title_meta_only(collection_url: str, collection_name: str,
+                        page_title: str = "", admin_desc: str = "",
+                        sp_names: list = None,
+                        existing_title: str = "", existing_meta: str = "",
+                        field: str = "both") -> dict:
+    """Gen LẠI title hoặc meta hoặc cả 2 cho collection — lightweight, không gen body.
+
+    field: "title" | "meta" | "both"
+    existing_title/meta: nếu có sẽ feed vào prompt để AI tránh lặp + đổi góc nhìn.
+
+    Returns: {ok: bool, title?, meta?, title_len?, meta_len?, error?}
+    """
+    if field not in ("title", "meta", "both"):
+        field = "both"
+    # Default: Claude CLI (Codex chưa cài trên máy này). Fallback Codex nếu Claude fail.
+    try:
+        import claude_provider as cp_claude
+        use_claude = cp_claude.is_claude_available()
+    except Exception:
+        use_claude = False
+    use_codex = codex_provider.is_codex_available()
+    if not (use_claude or use_codex):
+        return {"ok": False, "error": "Cả Claude CLI và Codex CLI đều chưa cài."}
+
+    sp_names = sp_names or []
+
+    if field == "title":
+        focus_line = "CHỈ gen lại TITLE (KHÔNG cần meta). Title 48-58 ký tự, KHÔNG \"Sintech\"."
+        schema = '{"title": "..."}'
+        old_block_lines = [f"  TITLE cũ: {existing_title or '(rỗng)'}"] if existing_title else []
+    elif field == "meta":
+        focus_line = "CHỈ gen lại META DESCRIPTION (KHÔNG cần title). Meta 140-160 ký tự, kết bằng CTA HOA."
+        schema = '{"meta": "..."}'
+        old_block_lines = [f"  META cũ: {existing_meta or '(rỗng)'}"] if existing_meta else []
+    else:
+        focus_line = "Gen lại CẢ title VÀ meta."
+        schema = '{"title": "...", "meta": "..."}'
+        old_block_lines = []
+        if existing_title: old_block_lines.append(f"  TITLE cũ: {existing_title}")
+        if existing_meta:  old_block_lines.append(f"  META cũ:  {existing_meta}")
+
+    existing_block = ""
+    if old_block_lines:
+        existing_block = (
+            "\n\nBẢN HIỆN TẠI (gen lần này PHẢI KHÁC GÓC NHÌN — không lặp):\n"
+            + "\n".join(old_block_lines)
+            + "\n→ Bản mới phải đổi angle (vd cũ nhấn SPEC thì mới nhấn USE CASE / AUDIENCE / SO SÁNH)."
+        )
+
+    user_msg = f"""COLLECTION cần gen lại {field}:
+- Tên: {collection_name}
+- URL: {collection_url}
+- Page title hiện tại (Haravan): {page_title or '(rỗng)'}
+- Description admin: {(admin_desc or '')[:400]}
+- Top SP trong collection ({len(sp_names)} mẫu): {', '.join(sp_names[:6]) if sp_names else '(chưa có)'}{existing_block}
+
+{focus_line}
+Trả JSON {schema} duy nhất."""
+
+    try:
+        if use_claude:
+            raw = cp_claude.call_claude(_TITLE_META_SYSTEM_PROMPT, user_msg, timeout=90)
+        else:
+            raw = codex_provider.call_codex(_TITLE_META_SYSTEM_PROMPT, user_msg, timeout=90)
+    except Exception as e:
+        return {"ok": False, "error": f"AI provider fail: {e}"}
+
+    text = raw.strip()
+    text = re.sub(r"^```(?:json)?\s*", "", text)
+    text = re.sub(r"\s*```\s*$", "", text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        m = re.search(r"\{[\s\S]*\}", text)
+        if not m:
+            return {"ok": False, "error": "Codex không trả JSON.", "raw": text[:500]}
+        try:
+            data = json.loads(m.group(0))
+        except Exception as e:
+            return {"ok": False, "error": f"JSON parse: {e}", "raw": text[:500]}
+
+    title = (data.get("title") or "").strip()
+    meta = (data.get("meta") or "").strip()
+
+    out = {"ok": True}
+    if field in ("title", "both"):
+        if not title:
+            return {"ok": False, "error": "AI trả thiếu title.", "raw": text[:500]}
+        out["title"] = title
+        out["title_len"] = len(title)
+    if field in ("meta", "both"):
+        if not meta:
+            return {"ok": False, "error": "AI trả thiếu meta.", "raw": text[:500]}
+        out["meta"] = meta
+        out["meta_len"] = len(meta)
+    return out
+
+
 def sanitize_pasted_html(html: str) -> str:
     """Strip wrapper junk khi paste từ ChatGPT/AI chat trước khi sync Haravan.
 

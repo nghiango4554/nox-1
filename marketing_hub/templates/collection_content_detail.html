@@ -163,9 +163,14 @@
     <span>📝 Title (45-61 ký tự)</span>
     <span class="cd-section-hint">SEO title hiển thị trên Google · KHÔNG chứa "Sintech"</span>
   </div>
-  <input type="text" class="cd-input" id="f-title" name="title"
-         value="{{ job.edited_title or '' }}" maxlength="80"
-         oninput="updateMeter('f-title', 'meter-title', 45, 61)">
+  <div style="display:flex;gap:8px;align-items:stretch">
+    <input type="text" class="cd-input" id="f-title" name="title" style="flex:1"
+           value="{{ job.edited_title or '' }}" maxlength="80"
+           oninput="updateMeter('f-title', 'meter-title', 45, 61)">
+    <button class="btn" type="button" onclick="genFieldOnly(this, 'title')"
+            style="background:#0891b2;color:white;font-weight:600;white-space:nowrap;padding:0 14px"
+            title="Gen lại chỉ title qua AI (~15s)">⚡ Gen Title</button>
+  </div>
   <div class="cd-meter" id="meter-title">{{ (job.edited_title or '')|length }}c</div>
 </div>
 
@@ -174,9 +179,21 @@
     <span>📄 Meta description (140-160 ký tự)</span>
     <span class="cd-section-hint">CTA HOA cuối câu: XEM NGAY / THAM KHẢO NGAY / CHỌN NGAY / KHÁM PHÁ NGAY</span>
   </div>
-  <textarea class="cd-textarea" id="f-meta" name="meta" rows="3"
-            oninput="updateMeter('f-meta', 'meter-meta', 140, 160)">{{ job.edited_meta or '' }}</textarea>
+  <div style="display:flex;gap:8px;align-items:stretch">
+    <textarea class="cd-textarea" id="f-meta" name="meta" rows="3" style="flex:1"
+              oninput="updateMeter('f-meta', 'meter-meta', 140, 160)">{{ job.edited_meta or '' }}</textarea>
+    <button class="btn" type="button" onclick="genFieldOnly(this, 'meta')"
+            style="background:#0891b2;color:white;font-weight:600;white-space:nowrap;padding:0 14px;align-self:flex-start"
+            title="Gen lại chỉ meta qua AI (~15s)">⚡ Gen Meta</button>
+  </div>
   <div class="cd-meter" id="meter-meta">{{ (job.edited_meta or '')|length }}c</div>
+</div>
+
+<div class="cd-actions" style="margin:18px 0 14px">
+  <button class="btn btn-primary" type="button" onclick="genAI()">🤖 AI gen lại bài</button>
+  <button class="btn" type="button" onclick="saveEdit(this)">💾 Lưu edit</button>
+  <button class="btn btn-primary" type="button" onclick="syncJob()"
+          {% if not job.haravan_id %}disabled title="Thiếu haravan_id"{% endif %}>🚀 Sync lên Haravan</button>
 </div>
 
 <div class="cd-section">
@@ -222,10 +239,6 @@
 </div>
 
 <div class="cd-actions">
-  <button class="btn btn-primary" type="button" onclick="genAI()">🤖 AI gen lại bài</button>
-  <button class="btn" type="button" onclick="saveEdit(this)">💾 Lưu edit</button>
-  <button class="btn btn-primary" type="button" onclick="syncJob()"
-          {% if not job.haravan_id %}disabled title="Thiếu haravan_id"{% endif %}>🚀 Sync lên Haravan</button>
   <a class="btn" href="{{ url_for('collection_content_page') }}" style="margin-left:auto">← Danh sách</a>
 </div>
 
@@ -643,6 +656,40 @@ function getBodyHTML() {
     return source.value;
   }
   return document.getElementById('f-body').innerHTML;
+}
+
+async function genFieldOnly(btn, field) {
+  // field = "title" | "meta"
+  const label = field === 'title' ? 'Title' : 'Meta description';
+  if (!confirm(`⚡ Gen LẠI chỉ ${label}? (~15-25s, AI sẽ đổi angle khác bản hiện tại)`)) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳ Đang gen...';
+  try {
+    const r = await fetch(`/collection-content/${JOB_ID}/gen-title-meta`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({field: field}),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      if (field === 'title' && d.title !== undefined) {
+        document.getElementById('f-title').value = d.title;
+        updateMeter('f-title', 'meter-title', 45, 61);
+        btn.textContent = `✅ ${d.title_len}c`;
+      } else if (field === 'meta' && d.meta !== undefined) {
+        document.getElementById('f-meta').value = d.meta;
+        updateMeter('f-meta', 'meter-meta', 140, 160);
+        btn.textContent = `✅ ${d.meta_len}c`;
+      }
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2200);
+    } else {
+      alert('❌ ' + (d.error || 'unknown'));
+      btn.textContent = orig; btn.disabled = false;
+    }
+  } catch (e) {
+    alert('❌ ' + e);
+    btn.textContent = orig; btn.disabled = false;
+  }
 }
 
 async function genAI() {

@@ -2243,6 +2243,42 @@ def collection_content_gen(job_id):
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/collection-content/<int:job_id>/gen-title-meta", methods=["POST"])
+def collection_content_gen_title_meta(job_id):
+    """Gen LẠI title HOẶC meta HOẶC cả 2 — payload {field: 'title'|'meta'|'both'}."""
+    job = _collection_jobs_get(job_id)
+    if not job:
+        return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
+    payload = request.get_json(silent=True) or {}
+    field = payload.get("field", "both")
+    if field not in ("title", "meta", "both"):
+        field = "both"
+    import collection_content_writer as ccw
+    try:
+        ctx = ccw.fetch_collection_context(job["collection_url"])
+        gen = ccw.gen_title_meta_only(
+            job["collection_url"],
+            job["collection_title"] or (ctx.get("h1") if ctx.get("ok") else ""),
+            page_title=ctx.get("page_title", "") if ctx.get("ok") else "",
+            admin_desc=ctx.get("admin_desc", "") if ctx.get("ok") else "",
+            sp_names=ctx.get("sp_names", []) if ctx.get("ok") else [],
+            existing_title=job.get("edited_title") or "",
+            existing_meta=job.get("edited_meta") or "",
+            field=field,
+        )
+        if not gen.get("ok"):
+            return jsonify(gen), 500
+        update_kwargs = {"ai_generated_at": datetime.now().isoformat(timespec="seconds")}
+        if "title" in gen:
+            update_kwargs["edited_title"] = gen["title"]
+        if "meta" in gen:
+            update_kwargs["edited_meta"] = gen["meta"]
+        _collection_jobs_update(job_id, **update_kwargs)
+        return jsonify({"ok": True, **gen})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/collection-content/<int:job_id>/save", methods=["POST"])
 def collection_content_save(job_id):
     payload = request.get_json(silent=True) or request.form
