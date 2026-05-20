@@ -77,8 +77,18 @@
       <span style="background:#f3f4f6;padding:2px 8px;border-radius:4px;">⚠️ Phase 2.1</span> Stock + "Hiển thị Google" tạm tắt — vợ tick tay trong admin Haravan sau.
     </p>
 
+    <hr style="margin:18px 0;border:none;border-top:1px solid #e5e7eb;">
+
+    <div class="pnew-row">
+      <label class="pnew-label">Spec nguồn (paste raw, lộn xộn OK) <span style="font-weight:normal;color:#9ca3af;">— optional, recommend</span></label>
+      <textarea id="spec_raw" class="pnew-input" rows="8" style="font-family:monospace;font-size:12px;"
+                placeholder="Paste spec từ trang hãng / tinhocngoisao / anphat / supplier... &#10;Không cần format, AI sẽ tự dedupe + sắp xếp.&#10;&#10;Ví dụ:&#10;Chipset: H510&#10;CPU Socket LGA1200&#10;Memory: 2x DDR4, max 64GB, supports 3200MHz&#10;Storage 4 x SATA 6Gbps, 1 x M.2 PCIe Gen3 x4&#10;Hỗ trợ HDMI VGA USB 3.2 LAN&#10;..."></textarea>
+      <small style="color:#6b7280;font-size:12px;">Bấm "🔄 Sắp xếp spec" để AI clean up + dedupe + structure thành table. Nếu bỏ trống → body gen general (không bám sát spec cụ thể).</small>
+    </div>
+
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
       <button type="button" id="btnPreview" class="pnew-btn pnew-btn-primary" onclick="doPreview()">✨ Preview parse</button>
+      <button type="button" id="btnOrganize" class="pnew-btn pnew-btn-primary" onclick="doOrganizeSpec()" disabled style="background:#0891b2;">🔄 Sắp xếp spec</button>
       <button type="button" id="btnGen" class="pnew-btn pnew-btn-primary" onclick="doGenerate()" disabled>🤖 Gen body + SEO (AI)</button>
     </div>
   </div>
@@ -94,6 +104,32 @@
       <tr><td class="lbl">Slug</td><td id="r_slug" style="font-family:monospace;color:#7c3aed;"></td></tr>
     </table>
     <div id="r_note" class="pnew-banner pnew-banner-warn" style="margin-top:12px;display:none;"></div>
+  </div>
+
+  <!-- ──────────── STEP 2.5: ORGANIZED SPEC ──────────── -->
+  <div id="organizeResult" class="pnew-card" style="display:none;">
+    <h2>🔄 Spec đã tổng hợp <span id="org_status" style="background:#dbeafe;color:#1e40af;font-size:12px;padding:2px 8px;border-radius:10px;margin-left:8px;font-weight:600;">AI source of truth</span></h2>
+
+    <div id="org_warnings" style="display:none;margin-bottom:12px;padding:10px;background:#fef3c7;border-radius:4px;color:#92400e;font-size:13px;"></div>
+
+    <h3 style="font-size:14px;margin:12px 0 6px;color:#6b7280;">📋 Bảng thông số (sẽ render <code>&lt;table&gt;</code> trong body)</h3>
+    <table id="org_spec_table" style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:12px;">
+      <thead><tr style="background:#f9fafb;"><th style="padding:6px 10px;text-align:left;border:1px solid #e5e7eb;width:30%;">Thông số</th><th style="padding:6px 10px;text-align:left;border:1px solid #e5e7eb;">Chi tiết</th></tr></thead>
+      <tbody id="org_spec_tbody"></tbody>
+    </table>
+
+    <h3 style="font-size:14px;margin:12px 0 6px;color:#6b7280;">🔑 Tính năng chính (khung "Điểm nổi bật")</h3>
+    <ul id="org_features" style="margin:0 0 12px;padding-left:22px;font-size:14px;"></ul>
+
+    <h3 style="font-size:14px;margin:12px 0 6px;color:#6b7280;">🎯 Use cases (khung "Phù hợp với ai")</h3>
+    <ul id="org_use_cases" style="margin:0 0 12px;padding-left:22px;font-size:14px;"></ul>
+
+    <h3 style="font-size:14px;margin:12px 0 6px;color:#6b7280;">⚙️ Tương thích / lưu ý</h3>
+    <ul id="org_compat" style="margin:0 0 12px;padding-left:22px;font-size:14px;"></ul>
+
+    <p style="margin-top:12px;color:#6b7280;font-size:12px;">
+      Spec này sẽ được Claude dùng làm <strong>source of truth</strong> khi gen body — KHÔNG bịa thêm row ngoài bảng. Muốn sửa → paste lại spec raw + bấm "Sắp xếp" lại.
+    </p>
   </div>
 
   <!-- ──────────── STEP 3: AI GEN OUTPUT (editable) ──────────── -->
@@ -153,6 +189,9 @@ function setStatus(kind, text) {
   el.style.display = 'block';
 }
 
+let lastOrganizedSpec = null;
+let lastAngle = null;  // track for "Gen lại" → rotate next angle
+
 function getFormPayload() {
   return {
     name: document.getElementById('name').value.trim(),
@@ -177,9 +216,14 @@ async function doPreview() {
     renderParsed(j);
     if (j.loai) {
       document.getElementById('btnGen').disabled = false;
-      setStatus('info', 'Parse OK — bấm "Gen body + SEO (AI)" để Claude tạo content');
+      document.getElementById('btnOrganize').disabled = false;
+      const hasSpec = document.getElementById('spec_raw').value.trim().length > 0;
+      setStatus('info', hasSpec
+        ? 'Parse OK — bấm "🔄 Sắp xếp spec" trước (để body bám sát spec) → rồi "🤖 Gen body"'
+        : 'Parse OK — bấm "🤖 Gen body" (hoặc paste spec rồi "🔄 Sắp xếp" cho body chính xác hơn)');
     } else {
       document.getElementById('btnGen').disabled = true;
+      document.getElementById('btnOrganize').disabled = true;
       setStatus('error', j.note || 'Parse fail');
     }
   } catch (e) {
@@ -228,15 +272,90 @@ function renderParsed(j) {
   else noteEl.style.display = 'none';
 }
 
+async function doOrganizeSpec() {
+  const spec_raw = document.getElementById('spec_raw').value.trim();
+  if (!spec_raw) { setStatus('error', 'Paste spec vào textarea trước'); return; }
+  if (!lastParsed || !lastParsed.loai) { setStatus('error', 'Preview parse trước đã'); return; }
+
+  setStatus('info', '🔄 Đang gọi Claude organize spec (~15-30s)...');
+  document.getElementById('btnOrganize').disabled = true;
+  try {
+    const payload = { name: document.getElementById('name').value.trim(), spec_raw };
+    const res = await fetch('/products/new/organize-spec', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const j = await res.json();
+    if (!j.ok) { setStatus('error', j.error || 'Organize fail'); return; }
+
+    lastOrganizedSpec = {
+      spec_table: j.spec_table || [],
+      key_features: j.key_features || [],
+      use_cases: j.use_cases || [],
+      compatibility_notes: j.compatibility_notes || [],
+      warnings: j.warnings || [],
+    };
+
+    // Render
+    const tbody = document.getElementById('org_spec_tbody');
+    tbody.innerHTML = '';
+    lastOrganizedSpec.spec_table.forEach(row => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td style="padding:6px 10px;border:1px solid #e5e7eb;font-weight:600;">${row.label || '?'}</td><td style="padding:6px 10px;border:1px solid #e5e7eb;">${row.value || '?'}</td>`;
+      tbody.appendChild(tr);
+    });
+    const fillList = (id, items) => {
+      const ul = document.getElementById(id);
+      ul.innerHTML = '';
+      items.forEach(x => {
+        const li = document.createElement('li');
+        li.textContent = x;
+        li.style.margin = '3px 0';
+        ul.appendChild(li);
+      });
+      if (!items.length) ul.innerHTML = '<li style="color:#9ca3af;font-style:italic;">(không có)</li>';
+    };
+    fillList('org_features', lastOrganizedSpec.key_features);
+    fillList('org_use_cases', lastOrganizedSpec.use_cases);
+    fillList('org_compat', lastOrganizedSpec.compatibility_notes);
+
+    const warnEl = document.getElementById('org_warnings');
+    if (lastOrganizedSpec.warnings.length) {
+      warnEl.innerHTML = '<strong>⚠️ Conflict / Warnings (vợ verify):</strong><br>' +
+        lastOrganizedSpec.warnings.map(w => '• ' + w).join('<br>');
+      warnEl.style.display = 'block';
+    } else {
+      warnEl.style.display = 'none';
+    }
+
+    document.getElementById('organizeResult').style.display = 'block';
+    document.getElementById('organizeResult').scrollIntoView({behavior:'smooth', block:'start'});
+    setStatus('success', `✅ Sắp xếp xong — ${lastOrganizedSpec.spec_table.length} spec, ${lastOrganizedSpec.key_features.length} features. Giờ bấm "🤖 Gen body" để Claude viết bám sát spec này.`);
+  } catch (e) {
+    setStatus('error', 'Lỗi: ' + e.message);
+  } finally {
+    document.getElementById('btnOrganize').disabled = false;
+  }
+}
+
 async function doGenerate() {
   if (!lastParsed || !lastParsed.loai) { setStatus('error', 'Preview parse trước đã'); return; }
   if (lastParsed.brand_is_new) {
     if (!confirm(`⚠️ Hãng "${lastParsed.hang}" chưa có trong list master.\n\nNếu chốt tạo SP, Haravan sẽ thêm hãng mới (có thể trùng nếu typo).\n\nVẫn tiếp tục gen AI + tạo SP?`)) return;
   }
-  setStatus('info', '🤖 Đang gọi Claude (~30-90s)...');
+  if (!lastOrganizedSpec && document.getElementById('spec_raw').value.trim()) {
+    if (!confirm('⚠️ Đã paste spec_raw nhưng chưa "Sắp xếp" → AI sẽ KHÔNG dùng spec này, viết general.\n\nTiếp tục không? (Bấm Hủy để sắp xếp spec trước cho body chính xác hơn.)')) return;
+  }
+  const regenLabel = lastAngle ? ` (Gen lại — rotate khỏi ${lastAngle})` : '';
+  setStatus('info', '🤖 Đang gọi Claude gen body+SEO (~40-90s)' + regenLabel + '...');
   document.getElementById('btnGen').disabled = true;
   try {
-    const payload = getFormPayload();
+    const payload = {
+      ...getFormPayload(),
+      organized_spec: lastOrganizedSpec,
+      prev_angle: lastAngle,  // rotate sang angle kế tiếp khi gen lại
+    };
     const res = await fetch('/products/new/generate', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -248,7 +367,8 @@ async function doGenerate() {
       return;
     }
     document.getElementById('genResult').style.display = 'block';
-    document.getElementById('r_angle').textContent = 'Angle: ' + (j.angle || '?');
+    lastAngle = j.angle || null;
+    document.getElementById('r_angle').textContent = 'Angle: ' + (j.angle || '?') + ' • Gen lại sẽ rotate sang angle kế tiếp';
     document.getElementById('seo_title').value = j.seo_title || '';
     document.getElementById('seo_meta').value = j.seo_meta || '';
     document.getElementById('excerpt').value = j.excerpt || '';
@@ -312,15 +432,46 @@ async function doCreate() {
     const cr = document.getElementById('createResult');
     cr.style.display = 'block';
     cr.className = 'pnew-card';
+    const bc = j.body_check || {};
+    const sc = j.seo_check || {};
+    const bodyOk = bc.has_h2 && bc.has_table && bc.stored_length > 100;
+    const seoOk = sc.title_tag_present && sc.description_tag_present;
     cr.innerHTML = `
-      <h2 style="color:#16a34a;">🎉 Tạo SP thành công!</h2>
+      <h2 style="color:${(j.errors||[]).length ? '#ca8a04' : '#16a34a'};">${(j.errors||[]).length ? '⚠️' : '🎉'} Tạo SP — ${j.errors?.length ? 'có cảnh báo' : 'thành công'}</h2>
       <table class="pnew-table">
         <tr><td class="lbl">Product ID</td><td><code>${j.product_id}</code></td></tr>
         <tr><td class="lbl">Handle</td><td><code>${j.handle || ''}</code></td></tr>
         <tr><td class="lbl">Admin Haravan</td><td><a href="${j.admin_url}" target="_blank">${j.admin_url}</a></td></tr>
         ${j.live_url ? `<tr><td class="lbl">Live URL</td><td><a href="${j.live_url}" target="_blank">${j.live_url}</a></td></tr>` : ''}
+        <tr><td class="lbl">Published</td><td>${bc.haravan_published_at || '<em>draft?</em>'}</td></tr>
       </table>
-      <p style="margin-top:14px;color:#6b7280;">⚠️ Vào admin Haravan kiểm tra lại: tags / bảo hành / SEO / variants / kho. Nếu OK thì publish + upload ảnh SP.</p>
+
+      <h3 style="margin:18px 0 8px;font-size:14px;color:${bodyOk?'#16a34a':'#dc2626'};">📄 Body verify (GET sau khi POST):</h3>
+      <table class="pnew-table" style="font-size:13px;">
+        <tr><td class="lbl">Length sent / stored</td><td>${bc.sent_length || '?'} / <strong>${bc.stored_length || '?'}</strong></td></tr>
+        <tr><td class="lbl">Có &lt;h2&gt;</td><td>${bc.has_h2 ? '✅' : '❌'}</td></tr>
+        <tr><td class="lbl">Có &lt;h3&gt;</td><td>${bc.has_h3 ? '✅' : '❌'}</td></tr>
+        <tr><td class="lbl">Có &lt;table&gt;</td><td>${bc.has_table ? '✅' : '❌'}</td></tr>
+        <tr><td class="lbl">Có &lt;ul&gt;</td><td>${bc.has_ul ? '✅' : '❌'}</td></tr>
+        <tr><td class="lbl">Có link &lt;a&gt;</td><td>${bc.has_link ? '✅' : '❌'}</td></tr>
+        <tr><td class="lbl">First 200c stored</td><td><code style="font-size:11px;white-space:pre-wrap;">${(bc.first_200 || '').replace(/</g,'&lt;')}</code></td></tr>
+      </table>
+
+      <h3 style="margin:18px 0 8px;font-size:14px;color:${seoOk?'#16a34a':'#dc2626'};">🏷 SEO metafield verify:</h3>
+      <table class="pnew-table" style="font-size:13px;">
+        <tr><td class="lbl">Total metafields</td><td>${sc.metafield_count ?? '?'}</td></tr>
+        <tr><td class="lbl">SEO title (title_tag)</td><td>${sc.title_tag_present ? '✅ ' + (sc.title_tag_value || '') : '❌ thiếu'}</td></tr>
+        <tr><td class="lbl">SEO meta (description_tag)</td><td>${sc.description_tag_present ? '✅ ' + (sc.description_tag_value || '') : '❌ thiếu'}</td></tr>
+      </table>
+
+      ${(j.errors||[]).length ? `
+        <h3 style="margin:18px 0 8px;font-size:14px;color:#dc2626;">⚠️ Errors:</h3>
+        <ul style="color:#991b1b;font-size:13px;">
+          ${j.errors.map(e => '<li>' + e + '</li>').join('')}
+        </ul>
+      ` : ''}
+
+      <p style="margin-top:14px;color:#6b7280;font-size:12px;">⚠️ Vào admin Haravan kiểm tra: tags / bảo hành / variants / SEO. Nếu Body verify pass ✅ mà admin vẫn show plain text → có thể theme Sintech.vn render khác trên public; thử mở Admin Haravan WYSIWYG.</p>
     `;
     cr.scrollIntoView({behavior:'smooth'});
     setStatus('success', '✅ SP đã được tạo trên Haravan');

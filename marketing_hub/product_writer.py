@@ -43,9 +43,176 @@ _ANGLE_META_PATTERN = {
 }
 
 
-def pick_angle(name: str) -> str:
-    h = int(hashlib.md5((name or "").encode("utf-8")).hexdigest(), 16)
-    return ANGLES[h % len(ANGLES)]
+# ═══════════════════════════════════════════════════════════════
+# Sintech inline styles — applied trước khi POST Haravan, để body render
+# đúng trên theme (không bị plain text). Mẫu rút từ bài cũ vợ đã làm.
+# ═══════════════════════════════════════════════════════════════
+
+_SINTECH_RED = "rgb(231, 76, 60)"
+_BLACK = "rgb(0, 0, 0)"
+_GREY_BORDER = "rgb(204, 204, 204)"
+_GREY_HEADER = "rgb(244, 244, 244)"
+_GREY_MUTED = "rgb(107, 114, 128)"
+
+# Style rút từ bài cũ vợ Nghĩa cung cấp (sample 2026-05-19). KHÔNG đổi tự ý
+# trừ khi vợ confirm — các giá trị này phải match style đã dùng trong store.
+_SINTECH_STYLES = {
+    "p":      f"font-family: Arial, sans-serif; font-size: 12pt; font-weight: 500; line-height: 1.65; margin: 10px 0px; color: {_BLACK};",
+    "h2":     f"font-size: 17pt; font-weight: 700; color: {_BLACK}; margin: 24px 0px 5px; line-height: 1.38; font-family: Arial, sans-serif; font-style: normal; text-decoration: none;",
+    "h3":     f"font-size: 14pt; font-weight: 700; color: {_BLACK}; margin: 20px 0px 6px; line-height: 1.4; font-family: Arial, sans-serif; font-style: normal;",
+    "ul":     f"font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.65; margin: 10px 0px 10px 20px; color: {_BLACK};",
+    "ol":     f"font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.65; margin: 10px 0px 10px 20px; color: {_BLACK};",
+    "li":     "margin: 4px 0px;",
+    "table":  "border-collapse: collapse; width: 100%; margin: 14px 0px; font-size: 11pt; font-family: Arial, sans-serif;",
+    "th":     f"border: 1px solid {_GREY_BORDER}; padding: 8px 10px; vertical-align: top; color: {_BLACK}; font-family: Arial, sans-serif; font-weight: 700; background: {_GREY_HEADER}; text-align: left;",
+    "td":     f"border: 1px solid {_GREY_BORDER}; padding: 8px 10px; vertical-align: top; color: {_BLACK}; font-family: Arial, sans-serif;",
+    "a":      f"color: {_SINTECH_RED}; text-decoration: underline; font-weight: 700;",
+    "em":     f"font-family: Arial, sans-serif; font-size: 11pt; font-style: italic; color: {_GREY_MUTED};",
+}
+
+
+def inject_sintech_styles(html: str) -> str:
+    """Áp dụng inline style chuẩn Sintech cho từng tag trong body_html.
+
+    Mục đích: body render đúng trên Haravan/Sintech theme thay vì plain text
+    (theme không có default style cho h2/h3/table/a inside product description).
+    """
+    if not html or "<" not in html:
+        return html
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        return html  # bs4 không có → return unchanged
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    for tag_name, style in _SINTECH_STYLES.items():
+        for tag in soup.find_all(tag_name):
+            existing = tag.get("style", "")
+            if not existing:
+                tag["style"] = style
+
+    # <strong> bên trong <a> → áp đồng style với <a> (link đỏ bold)
+    for a_tag in soup.find_all("a"):
+        for strong in a_tag.find_all("strong"):
+            if not strong.get("style"):
+                strong["style"] = _SINTECH_STYLES["a"]
+
+    return str(soup)
+
+
+def pick_angle(name: str, prev_angle: str | None = None) -> str:
+    """Default: deterministic theo hash(name) % 5.
+
+    Nếu `prev_angle` truyền vào (= angle vừa gen lần trước) → rotate sang angle
+    kế tiếp trong ANGLES (cycle). Cho phép "Gen lại" lấy angle khác → body
+    đa dạng cho mỗi attempt.
+    """
+    default = ANGLES[int(hashlib.md5((name or "").encode("utf-8")).hexdigest(), 16) % len(ANGLES)]
+    if not prev_angle:
+        return default
+    try:
+        idx = ANGLES.index(prev_angle)
+    except ValueError:
+        return default
+    return ANGLES[(idx + 1) % len(ANGLES)]
+
+
+# ═══════════════════════════════════════════════════════════════
+# organize_spec — Phase 5: clean up + structure spec từ paste raw
+# ═══════════════════════════════════════════════════════════════
+
+_ORGANIZE_SYSTEM_PROMPT = """Bạn là chuyên viên tổng hợp thông số kỹ thuật cho Sintech.vn.
+Vợ Nghĩa paste spec SP từ nhiều nguồn (trang hãng, đối thủ, supplier) — văn bản
+có thể lộn xộn, trùng lặp, multilingual, có ký tự lạ.
+
+Task: clean up + dedupe + tổ chức thành JSON.
+
+RULES:
+- KHÔNG bịa thông số. Nếu nguồn không có → bỏ qua, KHÔNG tự thêm.
+- Nếu 2 nguồn conflict → ghi cả 2 vào `warnings`, KHÔNG tự chọn.
+- Dedupe: cùng 1 spec ghi khác cách → merge thành 1 row tốt nhất.
+- Standardize unit: "12GB", "256GB", "144Hz", "DDR4-3200", "650W 80+ Bronze".
+- Translate sang Việt nếu nguồn EN, GIỮ tech term EN (CPU/GPU/RAM/PCIe/M.2/NVMe...).
+- KHÔNG đưa GIÁ vào spec_table hoặc bất kỳ field nào.
+- Label spec ngắn (vd "Chipset", "Socket", "Bộ nhớ"), value cụ thể có số.
+
+OUTPUT: 1 JSON object DUY NHẤT, KHÔNG markdown fence:
+{
+  "spec_table": [
+    {"label": "Chipset", "value": "Intel H510"},
+    {"label": "Socket", "value": "LGA 1200"},
+    ...
+  ],
+  "key_features": [
+    "Mặt mesh thoáng khí, đẩy nhiệt nhanh",
+    "Hỗ trợ tối đa 4 quạt 120mm",
+    ...
+  ],
+  "use_cases": [
+    "Build PC văn phòng, gọn nhẹ",
+    "Gaming entry-level i3/i5 + GPU tầm trung",
+    ...
+  ],
+  "compatibility_notes": [
+    "Khoảng không max VGA 320mm, đủ cho RTX 4060",
+    "Tản CPU max 160mm",
+    ...
+  ],
+  "warnings": [
+    "Nguồn 1 ghi RAM max 64GB, nguồn 2 ghi 32GB — vợ verify"
+  ]
+}
+
+Mỗi list 3-10 mục là đủ. Nếu không có info cho list nào → trả `[]` (array rỗng)."""
+
+
+def organize_spec(name: str, parsed: dict, spec_raw: str) -> dict:
+    """Parse spec raw paste → structured JSON via Claude.
+
+    Trả về dict với schema spec_table/key_features/use_cases/compatibility_notes/warnings.
+    Nếu spec_raw rỗng → trả về schema với array rỗng (no AI call).
+    """
+    if not (spec_raw or "").strip():
+        return {
+            "spec_table": [], "key_features": [], "use_cases": [],
+            "compatibility_notes": [], "warnings": [],
+            "_skipped": "spec_raw rỗng — no AI call",
+        }
+
+    loai = parsed.get("loai") or "(không xác định)"
+    hang = parsed.get("hang") or "(không xác định)"
+
+    user = f"""SP:
+- Tên: {name}
+- Loại: {loai}
+- Hãng: {hang}
+
+Spec raw paste từ nhiều nguồn (lộn xộn OK):
+═══════════════════════════════════════════════════════════════
+{spec_raw}
+═══════════════════════════════════════════════════════════════
+
+Organize thành JSON theo schema trong system. Strict no-fabricate."""
+
+    raw = cp.call_claude(_ORGANIZE_SYSTEM_PROMPT, user, timeout=120)
+
+    # Strip markdown fence
+    cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip())
+    cleaned = re.sub(r"\s*```\s*$", "", cleaned)
+
+    try:
+        m = re.search(r"\{[\s\S]+\}", cleaned)
+        data = json.loads(m.group(0)) if m else json.loads(cleaned)
+    except Exception:
+        raise RuntimeError(f"organize_spec: Claude trả output không parse được JSON. Tail: {cleaned[-400:]}")
+
+    # Defensive — ensure all 5 keys exist as lists
+    for k in ("spec_table", "key_features", "use_cases", "compatibility_notes", "warnings"):
+        if k not in data or not isinstance(data[k], list):
+            data[k] = []
+
+    return data
 
 
 _SYSTEM_PROMPT = """Bạn là chuyên viên content + SEO cho Sintech.vn (PC Gaming & Gear, 457 Trần Xuân Soạn Q7 TP.HCM, hotline 0911 713 000).
@@ -233,7 +400,50 @@ OUTPUT: trả về DUY NHẤT 1 JSON object (KHÔNG markdown fence, KHÔNG text 
 """
 
 
-def _user_prompt(name: str, parsed: dict, price: str, warranty_months: str, angle: str) -> str:
+def _format_organized_spec(spec: dict | None) -> str:
+    """Render organized_spec dict thành text block để inject vào user_prompt."""
+    if not spec or not any(spec.get(k) for k in ("spec_table", "key_features", "use_cases", "compatibility_notes")):
+        return ""
+
+    parts = ["", "═══════════════════════════════════════════════════════════════",
+             "SPEC ĐÃ TỔNG HỢP (vợ paste + AI organize — DÙNG LÀM SOURCE OF TRUTH):",
+             "═══════════════════════════════════════════════════════════════"]
+
+    if spec.get("spec_table"):
+        parts.append("\n📋 Bảng thông số:")
+        for row in spec["spec_table"]:
+            parts.append(f"  - {row.get('label', '?')}: {row.get('value', '?')}")
+
+    if spec.get("key_features"):
+        parts.append("\n🔑 Tính năng chính:")
+        for f in spec["key_features"]:
+            parts.append(f"  - {f}")
+
+    if spec.get("use_cases"):
+        parts.append("\n🎯 Use case (giúp viết 'Phù hợp với ai'):")
+        for u in spec["use_cases"]:
+            parts.append(f"  - {u}")
+
+    if spec.get("compatibility_notes"):
+        parts.append("\n⚙️ Tương thích / lưu ý:")
+        for n in spec["compatibility_notes"]:
+            parts.append(f"  - {n}")
+
+    if spec.get("warnings"):
+        parts.append("\n⚠️ Cảnh báo conflict spec (CẨN THẬN, có thể vợ phải verify):")
+        for w in spec["warnings"]:
+            parts.append(f"  - {w}")
+
+    parts.append("\n→ Khi viết <table> 'Thông số nổi bật cần biết': dùng EXACT spec_table này.")
+    parts.append("→ Khi viết 'Điểm nổi bật': dùng key_features làm khung 3-5 H3.")
+    parts.append("→ Khi viết 'Phù hợp với ai': dùng use_cases cụ thể.")
+    parts.append("→ FAQ có thể trích từ compatibility_notes.")
+    parts.append("→ CẤM bịa spec/feature/use_case NGOÀI danh sách trên.")
+    parts.append("")
+    return "\n".join(parts)
+
+
+def _user_prompt(name: str, parsed: dict, warranty_months: str, angle: str, organized_spec: dict | None = None) -> str:
     loai = parsed.get("loai") or "(không xác định)"
     hang = parsed.get("hang") or "(không xác định)"
     sub  = parsed.get("sub_loai") or ""
@@ -251,9 +461,9 @@ def _user_prompt(name: str, parsed: dict, price: str, warranty_months: str, angl
     sub_text = f"- Tính chất: {sub}\n" if sub else ""
     warranty_text = f"{warranty_months} tháng" if warranty_months else "(chưa rõ)"
     tags_text = ", ".join(tags) if tags else "(không có)"
+    organized_block = _format_organized_spec(organized_spec)
 
     # CỐ Ý không pass price vào prompt — rule cấm đề cập giá trong content.
-    # Giá set ở variant Haravan ngoài route /create, không cần AI biết.
 
     return f"""SP cần gen content:
 
@@ -262,6 +472,7 @@ def _user_prompt(name: str, parsed: dict, price: str, warranty_months: str, angl
 {sub_text}- Hãng: {hang}
 - Tags auto đã parse: {tags_text}
 - Bảo hành: {warranty_text}
+{organized_block}
 
 ═══════════════════════════════════════════════════════════════
 ANGLE PICK = {angle}
@@ -291,11 +502,19 @@ ANGLE PICK = {angle}
 Trả về JSON duy nhất, đúng schema. Không kèm gì khác."""
 
 
-def generate(name: str, parsed: dict, price: str = "", warranty_months: str = "") -> dict:
-    """Gọi Claude CLI gen content. Raise ClaudeRateLimitError nếu hết quota."""
-    angle = pick_angle(name)
+def generate(name: str, parsed: dict, price: str = "", warranty_months: str = "",
+             organized_spec: dict | None = None, prev_angle: str | None = None) -> dict:
+    """Gọi Claude CLI gen content. Raise ClaudeRateLimitError nếu hết quota.
+
+    organized_spec (optional): output từ organize_spec(). Nếu có → AI dùng làm
+    source of truth cho spec/features/use_cases, KHÔNG bịa.
+
+    prev_angle (optional): angle của lần gen trước. Truyền vào để rotate sang
+    angle kế tiếp (Gen lại → body khác góc nhìn).
+    """
+    angle = pick_angle(name, prev_angle=prev_angle)
     system = _SYSTEM_PROMPT
-    user = _user_prompt(name, parsed, price, warranty_months, angle)
+    user = _user_prompt(name, parsed, warranty_months, angle, organized_spec=organized_spec)
 
     raw = cp.call_claude(system, user, timeout=240)
 
@@ -310,8 +529,10 @@ def generate(name: str, parsed: dict, price: str = "", warranty_months: str = ""
         raise RuntimeError(f"Claude trả output không parse được JSON. Tail: {cleaned[-400:]}")
 
     pattern, cta = _ANGLE_META_PATTERN[angle]
+    body_raw = data.get("body_html") or ""
+    body_styled = inject_sintech_styles(body_raw)
     return {
-        "body_html": data.get("body_html") or "",
+        "body_html": body_styled,
         "excerpt":   data.get("excerpt") or "",
         "seo_title": data.get("seo_title") or "",
         "seo_meta":  data.get("seo_meta") or "",

@@ -3226,9 +3226,39 @@ def products_new_preview():
     })
 
 
+@app.route("/products/new/organize-spec", methods=["POST"])
+def products_new_organize_spec():
+    """Phase 5 — clean up + structure spec_raw qua Claude.
+
+    Body: {name, spec_raw} → trả {spec_table, key_features, use_cases, compatibility_notes, warnings}.
+    """
+    body = request.get_json(silent=True) or {}
+    name = (body.get("name") or "").strip()
+    spec_raw = (body.get("spec_raw") or "").strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Thiếu tên SP"}), 400
+    if not spec_raw:
+        return jsonify({"ok": False, "error": "Spec_raw rỗng — paste spec trước"}), 400
+
+    parsed = pp.parse(name)
+    if not parsed.get("loai"):
+        return jsonify({"ok": False, "error": parsed.get("note") or "Tên SP không hợp lệ"}), 400
+
+    try:
+        organized = pw.organize_spec(name=name, parsed=parsed, spec_raw=spec_raw)
+        return jsonify({"ok": True, **organized})
+    except cp.ClaudeRateLimitError as e:
+        return jsonify({"ok": False, "error": f"Claude quota hết. ({e})"}), 503
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Organize fail: {e}"}), 500
+
+
 @app.route("/products/new/generate", methods=["POST"])
 def products_new_generate():
-    """Phase 2 — gọi Claude gen body_html + excerpt + SEO title + SEO meta."""
+    """Phase 2 — gọi Claude gen body_html + excerpt + SEO title + SEO meta.
+
+    Nếu body chứa `organized_spec` (từ /organize-spec) → AI dùng làm source of truth.
+    """
     body = request.get_json(silent=True) or {}
     name = (body.get("name") or "").strip()
     if not name:
@@ -3237,12 +3267,18 @@ def products_new_generate():
     if not parsed.get("loai"):
         return jsonify({"ok": False, "error": parsed.get("note") or "Tên SP không hợp lệ"}), 400
 
+    organized_spec = body.get("organized_spec")
+    if isinstance(organized_spec, dict) and not any(organized_spec.get(k) for k in ("spec_table", "key_features", "use_cases", "compatibility_notes")):
+        organized_spec = None  # treat empty dict as None
+
     try:
         gen = pw.generate(
             name=name,
             parsed=parsed,
             price=(body.get("price") or "").strip(),
             warranty_months=(body.get("warranty_months") or "").strip(),
+            organized_spec=organized_spec,
+            prev_angle=(body.get("prev_angle") or None),
         )
         return jsonify({"ok": True, **gen})
     except cp.ClaudeRateLimitError as e:
@@ -3291,6 +3327,7 @@ def products_new_create():
     if compare_price and str(compare_price).replace(".", "").isdigit():
         variant["compare_at_price"] = float(compare_price)
 
+    from datetime import timezone
     product_fields = {
         "title": name,
         "body_html": body_html,
@@ -3298,10 +3335,14 @@ def products_new_create():
         "product_type": parsed.get("loai") or "",
         "tags": ", ".join(tags_list),
         # published_scope: tắt — vợ tick "Hiển thị Google" tay sau trong admin Haravan
+        # published_at: publish SP ngay (không để draft) → SEO metafields hiển thị được
+        "published_at": datetime.now(timezone.utc).isoformat(),
         "summary_html": excerpt,
         "options": [{"name": "Kích thước", "values": [variant_title]}],
         "variants": [variant],
     }
+
+    errors = []
 
     try:
         with hv_client.allow_blocked_operations("ui_form:/products/new"):
@@ -3310,19 +3351,56 @@ def products_new_create():
         if not product_id:
             return jsonify({"ok": False, "error": "Tạo SP OK nhưng không có id trả về", "raw": created}), 500
 
-        # SEO metafields
+        # SEO metafields — errors propagate to response (not silent)
+        seo_results = {"title": None, "description": None}
         if seo_title:
             try:
                 with hv_client.allow_blocked_operations("ui_form:/products/new"):
-                    hv_client.upsert_metafield("products", product_id, "global", "title_tag", seo_title)
+                    seo_results["title"] = hv_client.upsert_metafield(
+                        "products", product_id, "global", "title_tag", seo_title)
             except Exception as e:
-                print(f"[products_new_create] upsert seo_title fail: {e}")
+                errors.append(f"upsert SEO title fail: {e}")
         if seo_meta:
             try:
                 with hv_client.allow_blocked_operations("ui_form:/products/new"):
-                    hv_client.upsert_metafield("products", product_id, "global", "description_tag", seo_meta)
+                    seo_results["description"] = hv_client.upsert_metafield(
+                        "products", product_id, "global", "description_tag", seo_meta)
             except Exception as e:
-                print(f"[products_new_create] upsert seo_meta fail: {e}")
+                errors.append(f"upsert SEO meta fail: {e}")
+
+        # Verify body_html stored correctly
+        body_check = {}
+        try:
+            with hv_client.allow_blocked_operations("ui_form:/products/new"):
+                verified = hv_client.get_product(product_id)
+            stored_body = verified.get("body_html") or ""
+            body_check = {
+                "stored_length": len(stored_body),
+                "sent_length": len(body_html),
+                "has_h2": "<h2" in stored_body,
+                "has_h3": "<h3" in stored_body,
+                "has_table": "<table" in stored_body,
+                "has_ul": "<ul" in stored_body,
+                "has_link": "<a " in stored_body,
+                "first_200": stored_body[:200],
+                "haravan_published_at": verified.get("published_at"),
+            }
+        except Exception as e:
+            errors.append(f"verify body fail: {e}")
+
+        # Verify SEO metafields — trust upsert response, KHÔNG re-GET (Haravan có cache delay
+        # ~3min cho list_metafields ngay sau POST → returns empty cho dù upsert đã tạo OK).
+        title_resp = seo_results.get("title") or {}
+        desc_resp = seo_results.get("description") or {}
+        seo_check = {
+            "title_tag_present": bool(title_resp.get("id")),
+            "title_tag_id": title_resp.get("id"),
+            "title_tag_value": (title_resp.get("value") or "")[:100] if title_resp else None,
+            "description_tag_present": bool(desc_resp.get("id")),
+            "description_tag_id": desc_resp.get("id"),
+            "description_tag_value": (desc_resp.get("value") or "")[:160] if desc_resp else None,
+            "note": "Verified from upsert response (Haravan list cache ~3min, sẽ hiện trong admin sau vài phút)",
+        }
 
         handle = created.get("handle") or parsed.get("slug") or ""
         return jsonify({
@@ -3331,11 +3409,14 @@ def products_new_create():
             "handle": handle,
             "admin_url": f"https://admin.haravan.com/admin/products/{product_id}",
             "live_url": f"https://sintech.vn/products/{handle}" if handle else None,
+            "body_check": body_check,
+            "seo_check": seo_check,
+            "errors": errors,
         })
     except hv_client.HaravanError as e:
-        return jsonify({"ok": False, "error": f"Haravan: {e}"}), 502
+        return jsonify({"ok": False, "error": f"Haravan: {e}", "errors": errors}), 502
     except Exception as e:
-        return jsonify({"ok": False, "error": f"Unexpected: {e}"}), 500
+        return jsonify({"ok": False, "error": f"Unexpected: {e}", "errors": errors}), 500
 
 
 if __name__ == "__main__":
