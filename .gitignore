@@ -37,10 +37,14 @@ venv/
 # ─── Databases ───
 *.db
 *.db.bak*
+*.db-wal
+*.db-shm
+*.db-journal
 *.sqlite
 *.sqlite3
 marketing_hub/data/*.db
 marketing_hub/data/*.db.bak*
+marketing_hub/data/*.db-*
 
 # ─── Logs ───
 *.log
