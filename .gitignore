@@ -62,6 +62,7 @@ server.err.log
 marketing_hub/data/images/
 marketing_hub/data/backups/
 marketing_hub/data/seo_snapshots/
+marketing_hub/data/job_state/
 marketing_hub/data/gsc_cache.json
 marketing_hub/data/haravan_collections.json
 marketing_hub/data/carte_audit_report.json

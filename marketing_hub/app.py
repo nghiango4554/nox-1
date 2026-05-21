@@ -1345,9 +1345,8 @@ def jobs_center_page():
     return render_template("jobs_center.html")
 
 
-@app.route("/api/jobs")
-def api_jobs():
-    """Tổng hợp trạng thái mọi job nền → 1 list chuẩn hoá cho Job Center."""
+def _collect_jobs():
+    """Thu thập trạng thái mọi job nền → list chuẩn hoá (dùng cho /api/jobs + job_monitor)."""
     def J(key, name, icon, page, running, total, done, extra, message,
           started_at, finished_at, current, stop):
         return {"key": key, "name": name, "icon": icon, "page": page,
@@ -1438,7 +1437,20 @@ def api_jobs():
     except Exception:
         pass
 
-    return jsonify({"jobs": jobs, "running_count": sum(1 for j in jobs if j["running"])})
+    return jobs
+
+
+@app.route("/api/jobs")
+def api_jobs():
+    import job_monitor
+    jobs = job_monitor.enrich(_collect_jobs())
+    merged = job_monitor.merge_with_snapshot(jobs)
+    snap = job_monitor.read_snapshot()
+    return jsonify({
+        "jobs": merged,
+        "running_count": sum(1 for j in merged if j.get("running")),
+        "snapshot_saved_at": (snap or {}).get("saved_at"),
+    })
 
 
 @app.route("/seo/recompute-dup", methods=["POST"])
@@ -3590,6 +3602,8 @@ def products_new_create():
 
 if __name__ == "__main__":
     db.init_db()
+    import job_monitor
+    job_monitor.start_monitor(_collect_jobs)
     sched = BackgroundScheduler()
     sched.add_job(auto_post_due, "interval", minutes=1, id="auto_post_due")
     sched.add_job(

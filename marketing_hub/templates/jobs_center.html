@@ -45,6 +45,12 @@
   .jc-actions { display:flex; gap:8px; margin-top:2px; }
   .jc-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
   .jc-dot.run { background:#34d399; } .jc-dot.done { background:#60a5fa; } .jc-dot.idle { background:#64748b; }
+  .jc-card.stuck { border-color:rgba(239,68,68,.5); background:rgba(239,68,68,.07);
+    box-shadow:0 0 0 1px rgba(239,68,68,.3); }
+  .jc-card.stuck .jc-dot { background:#f87171; animation:jcpulse 1s infinite; }
+  .jc-badge.stuck { background:rgba(239,68,68,.18); color:#f87171; }
+  .jc-card.intr { border-color:rgba(245,158,11,.4); background:rgba(245,158,11,.05); }
+  .jc-badge.intr { background:rgba(245,158,11,.18); color:#fbbf24; }
 </style>
 
 <script>
@@ -61,8 +67,11 @@ async function loadJobs() {
 function renderJobs(data) {
   const jobs = (data.jobs || []).slice().sort((a,b) => (b.running?1:0) - (a.running?1:0));
   const rc = data.running_count || 0;
-  document.getElementById('jc-summary').textContent =
-    rc > 0 ? `🟢 ${rc} job đang chạy` : '💤 Không có job nào đang chạy';
+  const stuckN = jobs.filter(j => j.stuck).length;
+  let txt = rc > 0 ? `🟢 ${rc} job đang chạy` : '💤 Không có job nào đang chạy';
+  if (stuckN > 0) txt += ` · ⚠️ ${stuckN} treo!`;
+  if (data.snapshot_saved_at) txt += `  ·  💾 lưu lúc ${String(data.snapshot_saved_at).replace('T',' ').slice(0,16)}`;
+  document.getElementById('jc-summary').textContent = txt;
   const grid = document.getElementById('jc-grid');
   grid.innerHTML = jobs.map(cardHtml).join('');
 }
@@ -70,9 +79,11 @@ function renderJobs(data) {
 function cardHtml(j) {
   const pct = j.total > 0 ? Math.min(100, Math.round(j.done * 100 / j.total)) : (j.running ? 0 : 0);
   let cls, badge, dot;
-  if (j.running)      { cls='run';  badge='▶️ Đang chạy'; dot='run'; }
-  else if (j.finished_at) { cls='done'; badge='🏁 Đã xong'; dot='done'; }
-  else                { cls='idle'; badge='💤 Nghỉ';     dot='idle'; }
+  if (j.running && j.stuck) { cls='stuck'; badge='⚠️ Treo ~'+Math.round((j.stuck_seconds||0)/60)+'m'; dot='run'; }
+  else if (j.running)       { cls='run';  badge='▶️ Đang chạy'; dot='run'; }
+  else if (j.interrupted)   { cls='intr'; badge='⚠️ Ngắt (restart)'; dot='idle'; }
+  else if (j.finished_at)   { cls='done'; badge='🏁 Đã xong'; dot='done'; }
+  else                      { cls='idle'; badge='💤 Nghỉ';     dot='idle'; }
   const stopBtn = (j.running && j.stop)
     ? `<button class="btn btn-sm" style="background:#dc2626;color:#fff" onclick="stopJob('${j.stop}','${j.key}')">⏹ Dừng</button>`
     : '';
