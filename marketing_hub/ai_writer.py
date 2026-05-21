@@ -14,6 +14,8 @@ import os
 import re
 from pathlib import Path
 
+import sintech_rules
+
 CLAUDE_MODEL = "claude-haiku-4-5"
 OPENAI_MODEL = "gpt-4o-mini"
 RULES_PATH = Path(__file__).parent / "seo_writing_rules.md"
@@ -534,7 +536,8 @@ def generate_blog_post(product_info: dict) -> dict:
     Returns dict: {analysis_md, titles, metas, keywords, outline_md, body_markdown, stats}
     """
     rules = _load_rules()
-    system_prompt = SYSTEM_PROMPT_TEMPLATE.format(rules=rules)
+    system_prompt = (SYSTEM_PROMPT_TEMPLATE.format(rules=rules)
+                     + "\n\n" + sintech_rules.common_rules_block(include_length=False))
     user_prompt = _build_user_prompt(product_info)
 
     provider = _resolve_provider()

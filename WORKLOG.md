@@ -2,6 +2,19 @@
 
 > File anh (Claude) tự update sau mỗi milestone. Sau /clear, anh đọc file này là biết task tuần này tới đâu, file nào đã edit, bug đang debug. Vợ Nghia có thể scan nhanh để xem anh đang làm gì.
 
+## ✅ Task #8 — Gộp rule content về 1 nguồn (Phase 1 + 1.5 + 1b) — 21/5 19:xx
+
+- **Phase 1.5 (provider) — gần như đã xong từ trước**: `ai_provider.call_ai` là điểm switch DUY NHẤT (chain Codex→Claude→Gemini). Mọi writer reach nó: blog/collection/product/seo qua `call_ai`; `ai_writer._call_codex` cũng delegate sang `ai_provider`. content_writer route gen qua ai_writer + đã catch `AIQuotaError` (713-718). Còn lại (low-pri, KHÔNG đụng vì risk): ai_writer còn nhánh `_call_openai/_call_anthropic` (chỉ chạy nếu vợ set key OpenAI/Anthropic — hiện không).
+- **Dead import cleanup**: xóa `import codex_provider` chết ở `blog_content_writer.py` + `product_writer.py` (`as cp`, 0 dùng). GIỮ ở collection (dùng `is_codex_available()` 528/640) + content_writer (dùng `_is_rate_limit_message`).
+- **Phase 1 (rule chung) — `sintech_rules.py` là nguồn chân lý**:
+  - Thêm param `common_rules_block(include_length=False)` → bỏ rule độ dài title/meta chung để KHỎI mâu thuẫn với writer có length riêng chặt hơn (collection 48-58, title-meta 45-58). Vẫn giữ: chống bịa spec / filler / xưng hô / CTA link / signature.
+  - Append `common_rules_block(include_length=False)` vào **product / collection / ai_writer** (blog đã dùng từ trước). Sửa filler/CTA/spec-safety/hotline/signature ở `sintech_rules.py` 1 lần → ăn cả 4 writer body.
+  - **Zero behavior change**: đã verify cả 4 writer vốn tuân thủ y hệt từng dòng common block (signature verbatim, pronoun, filler superset, spec-safety) — append = reinforcement, KHÔNG nới/đổi rule. Length riêng từng loại giữ nguyên.
+- **✅ Phase 1b (gộp block title/meta) — XONG 21/5**: thêm `sintech_rules.title_meta_rules_block()` (KHÔNG kèm length/schema/angle — chỉ phần GIỐNG nhau: cấm 'Sintech' trong title, pool CTA HOA, chống bịa spec, filler, cấm bịa giá). Rút phần trùng khỏi `seo.py _TITLE_META_SYSTEM_PROMPT` + `collection_content_writer._TITLE_META_SYSTEM_PROMPT`, mỗi nơi GIỮ length riêng (seo 45-58/145-158 + 3 meta M1/M2/M3; collection 48-58/140-160 + 1 meta) + schema + angle inline. Sửa filler/CTA/spec-safety 1 lần ở `sintech_rules.py` → giờ ăn cả **body + title/meta**.
+  - **Thêm filler canonical**: `FORBIDDEN_FILLER` += "vượt trội", "đỉnh cao" (trước chỉ collection title/meta cấm 2 cụm này inline → giờ mọi writer cấm). Collection title/meta GỘP THÊM được spec-safety (trước không có). Không mất rule nào.
+- **product_writer.py KHÔNG phải legacy** (đã verify): `app.py` gọi `pw.organize_spec` (3429) + `pw.generate` (3456) cho route `/products/new`. 2 writer cố ý tách: `ai_writer`=/content-jobs (viết mô tả SP đã có), `product_writer`=/products/new (tạo SP mới từ spec nhập tay).
+- **Verify**: py_compile 7 file OK; import + render dưới Python 3.12 OK (cả body-writer RULE CHUNG inject đúng 1 lần/writer + 2 prompt title/meta có block chung, length riêng giữ nguyên 45-58/145-158 & 48-58/140-160, schema JSON nguyên); restart server (watchdog .bat, PID mới **12488**) → routes `/content-jobs /collection-content /blog-content /products/new /seo/title-meta /` = **200**. **Đã commit** Task #8 Phase 1+1.5+1b.
+
 ## 🚧 Đang dở (active) — snapshot trước /clear LẦN 2 (16/5 21:00)
 
 ### 🔴 Active — có thể trigger NGAY (anh hoặc vợ 1-click)

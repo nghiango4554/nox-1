@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 
 import codex_provider
 import ai_provider
+import sintech_rules
 import haravan_client
 
 HEAD = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
@@ -328,6 +329,9 @@ CHECKLIST TRƯỚC KHI TRẢ
 ☑ Không tag <section>/<article>/<div>, không data-*, không class Tailwind
 
 ═══════════════════════════════════════════════════
+""" + "\n\n" + sintech_rules.common_rules_block(include_length=False) + """
+
+═══════════════════════════════════════════════════
 OUTPUT BẮT BUỘC: CHỈ JSON THUẦN — KHÔNG markdown code fence, KHÔNG text giải thích trước/sau.
 ═══════════════════════════════════════════════════
 {
@@ -605,15 +609,13 @@ _TITLE_META_SYSTEM_PROMPT = """Bạn là chuyên gia SEO copywriter cho Sintech.
 
 Nhiệm vụ: Gen LẠI title + meta description CHO 1 collection. KHÔNG cần body.
 
-RULES CỨNG:
-- TITLE: 48-58 ký tự (sweet 50-56). KHÔNG chứa "Sintech" (Haravan auto-suffix " - Sintech").
-  KHÔNG capitalize từng từ ("Máy Bộ Rosa Chính Hãng" SAI). Tone phân tích lợi ích, không SEOer.
-- META: 140-160 ký tự. BẮT BUỘC kết thúc bằng CTA HOA:
-  "XEM NGAY tại Sintech" / "THAM KHẢO NGAY tại Sintech" / "CHỌN NGAY mẫu phù hợp tại Sintech" / "KHÁM PHÁ NGAY tại Sintech".
+RULES CỨNG (length riêng cho collection):
+- TITLE: 48-58 ký tự (sweet 50-56). KHÔNG capitalize từng từ ("Máy Bộ Rosa Chính Hãng" SAI). Tone phân tích lợi ích, không SEOer.
+- META: 140-160 ký tự, kết thúc bằng CTA HOA (xem pool ở RULE CHUNG bên dưới).
 - Tone tư vấn, KHÔNG SEOer.
-- KHÔNG filler banned: "bền bỉ", "đẹp mắt", "tốt nhất 2026", "đáng mua nhất", "khôn nhất", "vượt trội", "đỉnh cao", "Free ship".
-- KHÔNG bịa giá / mã giảm giá / % giảm.
 - ĐẾM len() trước khi trả — TITLE 48-58, META 140-160 STRICT.
+
+""" + sintech_rules.title_meta_rules_block() + """
 
 NẾU đã có title/meta hiện tại trong input → bản gen lại PHẢI KHÁC GÓC NHÌN với bản cũ
 (thay angle: từ SPEC → USE CASE / từ AUDIENCE → SO SÁNH / etc.).

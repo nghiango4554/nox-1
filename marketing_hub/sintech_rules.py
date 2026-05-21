@@ -27,6 +27,7 @@ CTA_POOL = [
 FORBIDDEN_FILLER = [
     "bền bỉ", "đẹp mắt", "Free ship", "Free ship nội thành",
     "đáng mua nhất", "tốt nhất 2026", "khôn nhất", "rẻ nhất",
+    "vượt trội", "đỉnh cao",
 ]
 
 SIGNATURE = f"Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline {HOTLINE} · {ADDRESS}."
@@ -61,15 +62,22 @@ def forbidden_block() -> str:
     return "CẤM filler (vợ rate 0%): " + ", ".join(f'"{x}"' for x in FORBIDDEN_FILLER) + "."
 
 
-def common_rules_block(cta_note: str = "") -> str:
-    """Khối RULE CHUNG để chèn vào mọi prompt content gen.
+def common_rules_block(cta_note: str = "", include_length: bool = True) -> str:
+    """Khối RULE CHUNG để chèn vào mọi prompt content gen (body dài).
 
     cta_note: ghi chú CTA riêng theo loại (vd blog cho thêm 'TÌM HIỂU NGAY').
+    include_length: True → kèm rule độ dài title/meta chung (45-61 / 140-160).
+        Đặt False cho writer đã có rule length RIÊNG chặt hơn (vd collection 48-58,
+        title-meta gen 45-58/145-158) để KHỎI mâu thuẫn — vẫn giữ các rule chung
+        còn lại (chống bịa spec, filler, xưng hô, CTA link, signature).
     """
-    lines = [
-        "=== RULE CHUNG SINTECH (nguồn: sintech_rules.py) ===",
-        "- " + TITLE_RULES,
-        "- " + META_RULES + ((" " + cta_note) if cta_note else ""),
+    lines = ["=== RULE CHUNG SINTECH (nguồn: sintech_rules.py) ==="]
+    if include_length:
+        lines.append("- " + TITLE_RULES)
+        lines.append("- " + META_RULES + ((" " + cta_note) if cta_note else ""))
+    elif cta_note:
+        lines.append("- " + cta_note)
+    lines += [
         "- " + SPEC_SAFETY,
         "- " + forbidden_block(),
         "- " + PRONOUN,
@@ -77,3 +85,25 @@ def common_rules_block(cta_note: str = "") -> str:
         f"- Signature CỐ ĐỊNH cuối bài (in nghiêng): {SIGNATURE}",
     ]
     return "\n".join(lines)
+
+
+def title_meta_rules_block() -> str:
+    """Khối RULE CHUNG cho prompt gen TITLE/META (seo.py + collection).
+
+    KHÔNG kèm độ dài & schema & angle — mỗi caller tự giữ riêng:
+        seo.py        title 45-58 / meta 145-158, 3 title + 3 meta (M1/M2/M3)
+        collection    title 48-58 / meta 140-160, 1 title + 1 meta
+    Chỉ chứa các rule GIỐNG NHAU giữa 2 nơi: cấm 'Sintech' trong title, pool CTA HOA,
+    chống bịa spec, cấm filler, cấm bịa giá. Đổi 1 lần ở đây → cả 2 nơi ăn theo.
+    """
+    cta_list = " / ".join(f'"{c} tại Sintech"' for c in CTA_POOL)
+    return "\n".join([
+        "=== RULE CHUNG TITLE/META (nguồn: sintech_rules.py) ===",
+        '- TITLE KHÔNG chứa "Sintech" (Haravan tự thêm hậu tố " - Sintech"); '
+        "KHÔNG nhồi keyword / lặp từ / lan man.",
+        f"- META kết bằng CTA HOA (cụm hành động IN HOA, KHÔNG in hoa cả câu). "
+        f'Pool: {cta_list}. "KHÁM PHÁ NGAY" chỉ dành SP cao cấp/độc lạ.',
+        "- " + SPEC_SAFETY,
+        "- " + forbidden_block(),
+        "- KHÔNG bịa giá / mã giảm / % giảm nếu input không cung cấp.",
+    ])

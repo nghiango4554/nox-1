@@ -17,6 +17,7 @@ from bs4 import BeautifulSoup
 
 import db
 import haravan_client
+import sintech_rules
 from pathlib import Path
 
 # Readability scorer cho tiếng Việt (refactor C: moved to scoring_core).
@@ -1704,26 +1705,19 @@ NHIỆM VỤ: Viết 3 title + 3 meta description khác nhau cho 1 trang sản p
 - TRƯỚC KHI TRẢ VỀ: tự đếm len(title) và len(meta), nếu vi phạm phải sửa.
 
 LUẬT TITLE:
-- KHÔNG chứa từ "Sintech" (Haravan tự thêm " - Sintech" sau)
 - BẮT BUỘC có: tên model/sản phẩm + lợi ích chính hoặc ngữ cảnh dùng/mua
 - Bổ sung spec nổi bật / "chính hãng" / "cho [nhu cầu]" nếu length cho phép
 - Chuẩn hóa kỹ thuật: GDDR6 (không viết DDR6), giữ đúng độ phân giải/tỷ lệ thật
-- TRÁNH: nhồi keyword, lặp từ, lan man, spec không chắc
 
 LUẬT META DESCRIPTION (3 cái KHÁC GÓC NHÌN — KHÔNG được giống nhau):
 - M1 = SPEC: `[Tên SP] [màu] [size], [spec chính 1-2 con số], [đặc điểm]. XEM NGAY tại Sintech.`
 - M2 = NHU CẦU/SETUP: `Setup/Build [tone/use case] cùng [SP] - [tính năng], [đặc điểm]. THAM KHẢO NGAY tại Sintech.`
 - M3 = GIẢI PHÁP: `[SP ngắn] - giải pháp [phục vụ ai], [đặc điểm chốt]. CHỌN NGAY mẫu phù hợp tại Sintech.`
-- CTA viết IN HOA cụm hành động — KHÔNG in hoa toàn câu. 3 meta dùng 3 CTA KHÁC nhau.
-- POOL CTA: "XEM NGAY tại Sintech" (default M1) | "THAM KHẢO NGAY tại Sintech" (default M2) | "CHỌN NGAY mẫu phù hợp tại Sintech" (default M3) | "KHÁM PHÁ NGAY tại Sintech" (CHỈ cho SP cao cấp/độc lạ: QD-OLED, MacBook, RTX flagship, case galaxy, ghế Esports — tối đa 1/3 meta).
+- 3 meta dùng 3 CTA KHÁC nhau (default M1=XEM NGAY, M2=THAM KHẢO NGAY, M3=CHỌN NGAY mẫu phù hợp).
 
-⛔ QUY TẮC CỨNG VỀ THÔNG SỐ — TUYỆT ĐỐI KHÔNG BỊA:
-- CHỈ dùng spec số có sẵn trong TÊN SP hoặc input. Ngoài ra → CẤM tuyệt đối.
-- CẤM tự thêm các con số sau nếu CHƯA xuất hiện trong tên SP/input: tần số quét (Hz), điện áp (V)/dòng (A)/công suất (W), dung lượng (GB/TB), kích thước (inch/mm), tốc độ (MHz/GHz/MB/s), số cổng/chân/nhân-luồng, bảo hành (tháng/năm).
-- Nếu tên SP CÓ spec (vd "27 inch 165Hz IPS") → CHỈ dùng đúng spec đó, không thêm.
-- Nếu tên SP KHÔNG có spec → viết theo công năng + ngữ cảnh dùng, KHÔNG bịa số.
+""" + sintech_rules.title_meta_rules_block() + """
 
-CẤM TRONG META: "bền bỉ", "đẹp mắt", "Free ship", "đáng mua nhất", "tốt nhất 2026", "khôn nhất", "rẻ nhất"; "Sintech" trong title; ghi giá/khuyến mãi nếu user không cung cấp; >3 cụm số liền kề; dùng nhiều dấu ";" ngắt câu; in hoa toàn câu.
+CẤM THÊM TRONG META: >3 cụm số liền kề; dùng nhiều dấu ";" ngắt câu; in hoa toàn câu.
 
 QUY TẮC NGHIÊM:
 - 3 title phải KHÁC nhau rõ rệt (theo spec / theo nhu cầu / theo brand)

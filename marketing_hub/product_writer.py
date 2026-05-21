@@ -20,8 +20,8 @@ import hashlib
 import json
 import re
 
-import codex_provider as cp
 import ai_provider
+import sintech_rules
 
 
 ANGLES = ["SPEC", "USE_CASE", "AUDIENCE", "PAIN_POINT", "COMPARISON"]
@@ -389,6 +389,9 @@ EXCERPT (≤160 ký tự):
 ═══════════════════════════════════════════════════════════════
 - 1 câu, gọn, KHÔNG lặp seo_title
 - Tóm tắt SP + đối tượng + 1 lợi ích chính
+
+═══════════════════════════════════════════════════════════════
+""" + "\n\n" + sintech_rules.common_rules_block(include_length=False) + """
 
 ═══════════════════════════════════════════════════════════════
 OUTPUT: trả về DUY NHẤT 1 JSON object (KHÔNG markdown fence, KHÔNG text trước/sau):

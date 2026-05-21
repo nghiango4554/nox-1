@@ -11,7 +11,6 @@ from typing import Optional
 import requests
 from bs4 import BeautifulSoup
 
-import codex_provider
 import sintech_rules
 import haravan_client
 from collection_content_writer import compress_html, sanitize_pasted_html  # reuse
