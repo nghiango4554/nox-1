@@ -1339,6 +1339,108 @@ def seo_status():
     })
 
 
+# ─────────────────────── JOB CENTER (gộp mọi job nền 1 chỗ) ───────────────────────
+@app.route("/jobs")
+def jobs_center_page():
+    return render_template("jobs_center.html")
+
+
+@app.route("/api/jobs")
+def api_jobs():
+    """Tổng hợp trạng thái mọi job nền → 1 list chuẩn hoá cho Job Center."""
+    def J(key, name, icon, page, running, total, done, extra, message,
+          started_at, finished_at, current, stop):
+        return {"key": key, "name": name, "icon": icon, "page": page,
+                "running": bool(running), "total": int(total or 0), "done": int(done or 0),
+                "extra": extra or "", "message": message or "",
+                "started_at": started_at, "finished_at": finished_at,
+                "current": current or "", "stop": stop}
+
+    jobs = []
+    try:
+        s = seo_mod.state_snapshot()
+        run = s.get("status") in ("fetching_sitemap", "crawling", "stopping")
+        jobs.append(J("crawl", "SEO Crawl", "🕷️", "/seo", run, s.get("total"), s.get("done"),
+                      f"✅ {s.get('success',0)} · ❌ {s.get('failed',0)} · {s.get('status','')}",
+                      s.get("message"), s.get("started_at"), None, "",
+                      "/seo/stop-crawl" if run else None))
+    except Exception:
+        pass
+    try:
+        s = seo_mod.link_check_state()
+        jobs.append(J("links", "Kiểm tra link gãy", "🔗", "/seo/broken-links", s.get("running"),
+                      s.get("total"), s.get("checked"), f"🔴 gãy: {s.get('broken',0)}",
+                      "", None, None, "", None))
+    except Exception:
+        pass
+    try:
+        s = seo_mod.title_meta_fix_state()
+        jobs.append(J("title_meta", "Auto-fix Title/Meta", "📝", "/seo/title-meta", s.get("running"),
+                      s.get("total"), s.get("checked"),
+                      f"✅ {s.get('success',0)} · ❌ {s.get('failed',0)} · ⏭️ {s.get('skipped',0)}",
+                      s.get("message"), s.get("started_at"), s.get("finished_at"),
+                      s.get("current_url", ""),
+                      "/seo/title-meta/fix-all/stop" if s.get("running") else None))
+    except Exception:
+        pass
+    try:
+        s = seo_mod.desc_h1_state()
+        jobs.append(J("h1_scan", "Quét H1 trong mô tả", "🔎", "/seo/h1-in-desc", s.get("running"),
+                      s.get("total"), s.get("checked"), f"⚠️ vi phạm: {s.get('violations',0)}",
+                      s.get("message"), s.get("started_at"), None, "", None))
+    except Exception:
+        pass
+    try:
+        s = seo_mod.h1_fix_all_state()
+        jobs.append(J("h1_fix", "Auto-fix H1", "🔧", "/seo/h1-in-desc", s.get("running"),
+                      s.get("total"), s.get("checked"),
+                      f"✅ {s.get('success',0)} · ◐ {s.get('partial',0)} · ❌ {s.get('failed',0)}",
+                      s.get("message"), s.get("started_at"), s.get("finished_at"),
+                      s.get("current_url", ""),
+                      "/seo/h1-in-desc/fix-all/stop" if s.get("running") else None))
+    except Exception:
+        pass
+    try:
+        s = seo_mod.empty_desc_state()
+        jobs.append(J("empty_desc", "Quét SP thiếu mô tả", "📭", "/seo/empty-desc", s.get("running"),
+                      s.get("total"), s.get("checked"),
+                      f"rỗng {s.get('empty',0)} · ngắn {s.get('short',0)} · đủ {s.get('ok',0)}",
+                      s.get("message"), s.get("started_at"), None, "", None))
+    except Exception:
+        pass
+    try:
+        s = content_writer.queue_state()
+        pend = s.get("pending_in_db", 0) or 0
+        done = s.get("completed", 0) or 0
+        jobs.append(J("content_queue", "Hàng đợi gen Content SP", "🏭", "/content-jobs", s.get("running"),
+                      done + (s.get("failed", 0) or 0) + pend, done,
+                      f"❌ {s.get('failed',0)} · ⏳ chờ: {pend}",
+                      s.get("last_message"), s.get("started_at"), None,
+                      s.get("current_job_url", ""),
+                      "/content-jobs/queue/stop" if s.get("running") else None))
+    except Exception:
+        pass
+    try:
+        s = dict(_GEN_BG)
+        jobs.append(J("collection_gen", "Gen Content Collection", "📂", "/collection-content", s.get("running"),
+                      s.get("total"), s.get("done"),
+                      f"✅ {s.get('ok',0)} · ❌ {s.get('fail',0)}",
+                      "", s.get("started_at"), s.get("finished_at"),
+                      s.get("current_name") or "",
+                      "/collection-content/gen-stop" if s.get("running") else None))
+    except Exception:
+        pass
+    try:
+        s = competitors_mod.state_snapshot()
+        jobs.append(J("competitors", "Crawl đối thủ", "🥷", "/competitors", s.get("running"),
+                      s.get("total"), s.get("fetched"), s.get("competitor") or "",
+                      s.get("message"), s.get("started_at"), None, "", None))
+    except Exception:
+        pass
+
+    return jsonify({"jobs": jobs, "running_count": sum(1 for j in jobs if j["running"])})
+
+
 @app.route("/seo/recompute-dup", methods=["POST"])
 def seo_recompute_dup():
     """Detect dup title/meta cross-site, trừ điểm + cập nhật issues vào seo_pages."""

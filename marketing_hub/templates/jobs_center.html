@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Job Center · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span style="font-weight:600">⚙️ Job Center</span>
+{% endblock %}
+
+{% block page_actions %}
+<button class="btn btn-sm" onclick="loadJobs()">🔄 Làm mới</button>
+{% endblock %}
+
+{% block content %}
+
+<section class="card" style="margin-top:0">
+  <p class="muted" style="margin:0">
+    Tổng hợp <strong>mọi job nền</strong> ở 1 chỗ — đang chạy, tiến độ, báo cáo, nút dừng.
+    Tự cập nhật mỗi 3 giây.
+    <span id="jc-summary" style="font-weight:600;margin-left:8px"></span>
+  </p>
+</section>
+
+<div id="jc-grid" class="kpi-grid" style="margin-top:14px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))">
+  <p class="muted" style="padding:20px">Đang tải...</p>
+</div>
+
+<style>
+  .jc-card { border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:14px 16px;
+    background:rgba(255,255,255,.02); display:flex; flex-direction:column; gap:8px; }
+  .jc-card.run { border-color:rgba(34,197,94,.45); background:rgba(34,197,94,.06);
+    box-shadow:0 0 0 1px rgba(34,197,94,.25); }
+  .jc-card.run .jc-dot { animation:jcpulse 1.2s infinite; }
+  @keyframes jcpulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .jc-head { display:flex; align-items:center; gap:8px; }
+  .jc-name { font-weight:600; font-size:14px; }
+  .jc-badge { margin-left:auto; font-size:11px; padding:2px 9px; border-radius:11px; font-weight:600; white-space:nowrap; }
+  .jc-badge.run { background:rgba(34,197,94,.18); color:#34d399; }
+  .jc-badge.done { background:rgba(59,130,246,.18); color:#60a5fa; }
+  .jc-badge.idle { background:rgba(148,163,184,.16); color:#94a3b8; }
+  .jc-bar { height:7px; border-radius:4px; background:rgba(148,163,184,.18); overflow:hidden; }
+  .jc-bar > div { height:100%; background:linear-gradient(90deg,#34d399,#60a5fa); transition:width .4s; }
+  .jc-meta { font-size:11.5px; color:var(--text-muted,#94a3b8); display:flex; flex-wrap:wrap; gap:10px; }
+  .jc-extra { font-size:12px; font-weight:500; }
+  .jc-msg { font-size:11px; color:var(--text-muted); font-style:italic; min-height:1em; }
+  .jc-cur { font-size:10.5px; color:#a78bfa; word-break:break-all; }
+  .jc-actions { display:flex; gap:8px; margin-top:2px; }
+  .jc-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .jc-dot.run { background:#34d399; } .jc-dot.done { background:#60a5fa; } .jc-dot.idle { background:#64748b; }
+</style>
+
+<script>
+let _jcTimer = null;
+
+async function loadJobs() {
+  try {
+    const r = await fetch('{{ url_for("api_jobs") }}');
+    const data = await r.json();
+    renderJobs(data);
+  } catch (e) { console.error(e); }
+}
+
+function renderJobs(data) {
+  const jobs = (data.jobs || []).slice().sort((a,b) => (b.running?1:0) - (a.running?1:0));
+  const rc = data.running_count || 0;
+  document.getElementById('jc-summary').textContent =
+    rc > 0 ? `🟢 ${rc} job đang chạy` : '💤 Không có job nào đang chạy';
+  const grid = document.getElementById('jc-grid');
+  grid.innerHTML = jobs.map(cardHtml).join('');
+}
+
+function cardHtml(j) {
+  const pct = j.total > 0 ? Math.min(100, Math.round(j.done * 100 / j.total)) : (j.running ? 0 : 0);
+  let cls, badge, dot;
+  if (j.running)      { cls='run';  badge='▶️ Đang chạy'; dot='run'; }
+  else if (j.finished_at) { cls='done'; badge='🏁 Đã xong'; dot='done'; }
+  else                { cls='idle'; badge='💤 Nghỉ';     dot='idle'; }
+  const stopBtn = (j.running && j.stop)
+    ? `<button class="btn btn-sm" style="background:#dc2626;color:#fff" onclick="stopJob('${j.stop}','${j.key}')">⏹ Dừng</button>`
+    : '';
+  const cur = (j.running && j.current)
+    ? `<div class="jc-cur" title="${esc(j.current)}">⏳ ${esc(j.current).replace('https://sintech.vn','').slice(0,60)}</div>` : '';
+  const times = [];
+  if (j.started_at)  times.push('▶ ' + String(j.started_at).replace('T',' ').slice(0,16));
+  if (j.finished_at) times.push('🏁 ' + String(j.finished_at).replace('T',' ').slice(0,16));
+  return `
+  <div class="jc-card ${cls}">
+    <div class="jc-head">
+      <span class="jc-dot ${dot}"></span>
+      <span style="font-size:17px">${j.icon||'⚙️'}</span>
+      <span class="jc-name">${esc(j.name)}</span>
+      <span class="jc-badge ${cls}">${badge}</span>
+    </div>
+    <div class="jc-bar"><div style="width:${pct}%"></div></div>
+    <div class="jc-meta">
+      <span><strong>${j.done}</strong>/${j.total} (${pct}%)</span>
+      <span class="jc-extra">${esc(j.extra)}</span>
+    </div>
+    ${cur}
+    <div class="jc-msg">${esc(j.message)}</div>
+    <div class="jc-meta">${times.join(' · ')}</div>
+    <div class="jc-actions">
+      <a class="btn btn-sm btn-ghost" href="${j.page}">Mở trang →</a>
+      ${stopBtn}
+    </div>
+  </div>`;
+}
+
+async function stopJob(url, key) {
+  if (!confirm('⏹ Dừng job này? Item đang chạy sẽ xong rồi mới dừng.')) return;
+  try { await fetch(url, {method:'POST'}); } catch(e) {}
+  setTimeout(loadJobs, 800);
+}
+
+function esc(s) {
+  return (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+loadJobs();
+_jcTimer = setInterval(loadJobs, 3000);
+</script>
+
+{% endblock %}
