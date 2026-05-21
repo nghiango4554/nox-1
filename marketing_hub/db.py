@@ -234,7 +234,7 @@ def get_conn():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode=WAL")      # WAL cho concurrent read/write
-    conn.execute("PRAGMA busy_timeout=5000")     # retry 5s nếu DB locked
+    conn.execute("PRAGMA busy_timeout=30000")    # retry 30s nếu DB locked (tránh lock khi nhiều job cùng ghi)
     conn.execute("PRAGMA synchronous=NORMAL")    # nhanh hơn FULL, vẫn safe với WAL
     return conn
 

@@ -142,9 +142,24 @@ def html_to_text(html: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def strip_tables(html: str) -> str:
+    """Remove <table>...</table> blocks.
+
+    Bảng là dữ liệu dạng cột (KHÔNG có dấu câu giữa các ô) → khi flatten thành
+    text sẽ thành 1 'câu' giả dài 100+ token, làm tụt readability oan. Strip
+    bảng TRƯỚC khi chấm readability (bảng vẫn được tính ở structure score).
+    """
+    if not html:
+        return html
+    return re.sub(r"<table[\s\S]*?</table>", " ", html, flags=re.IGNORECASE)
+
+
 # ─────────────────────────── Readability VN ───────────────────────────
 
-_PASSIVE_MARKERS = re.compile(r"\b(được|bị)\s+\w+", re.IGNORECASE)
+# Chỉ đếm "bị + động từ" (passive tiêu cực: bị hỏng/bị chậm/bị nhiễu). Bỏ "được"
+# vì tiếng Việt "được" thường trung tính/tích cực ("được tư vấn", "được trang bị")
+# → không phải passive xấu, đếm "được" làm tụt điểm oan.
+_PASSIVE_MARKERS = re.compile(r"\bbị\s+\w+", re.IGNORECASE)
 _FILLER_PHRASES = [
     "trong bài này", "sản phẩm này mang lại", "người dùng sẽ", "category này",
     "search intent", "khôn nhất", "carte này", "chia sẻ với bạn", "đem đến",
@@ -169,7 +184,10 @@ def readability_metrics(text: str) -> dict:
     avg_sentence_len = n_words / n_sentences
     avg_word_len = sum(len(w) for w in words) / n_words
 
-    complex_count = sum(1 for s in sentences if len(re.findall(r"\w+", s)) > 25)
+    # NGƯỠNG câu phức 35 (không phải 25): tiếng Việt đếm theo ÂM TIẾT (\w+), 1 từ
+    # thực tế ~1.5-1.8 âm tiết → 1 câu Việt ~20 từ thật = ~30-35 token. Ngưỡng 25
+    # cũ phạt oan câu bình thường.
+    complex_count = sum(1 for s in sentences if len(re.findall(r"\w+", s)) > 35)
     complex_pct = complex_count * 100 / n_sentences
 
     passive_count = len(_PASSIVE_MARKERS.findall(text))
@@ -178,7 +196,9 @@ def readability_metrics(text: str) -> dict:
     tl = text.lower()
     filler_count = sum(tl.count(p) for p in _FILLER_PHRASES)
 
-    base = 100 - (avg_sentence_len * 1.5) - (max(0, avg_word_len - 5) * 3) - (complex_pct * 0.3)
+    # HỆ SỐ avg_sentence_len 0.9 (không phải 1.5): hiệu chỉnh cho tiếng Việt —
+    # đếm âm tiết làm avg phồng ~1.6x so với English. 1.5 cũ phạt quá nặng.
+    base = 100 - (avg_sentence_len * 0.9) - (max(0, avg_word_len - 5) * 3) - (complex_pct * 0.3)
     base -= min(passive_pct * 0.5, 15)
     base -= min(filler_count * 3, 20)
     score = max(0, min(100, round(base, 1)))

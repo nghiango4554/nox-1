@@ -1696,6 +1696,7 @@ def title_meta_summary() -> dict:
 
 _TITLE_META_SYSTEM_PROMPT = """Bạn là chuyên gia SEO cho Sintech.vn (shop PC/laptop/gaming gear, nền tảng Haravan).
 NHIỆM VỤ: Viết 3 title + 3 meta description khác nhau cho 1 trang sản phẩm/bài viết.
+(Đồng bộ chuẩn seo_writing_rules.md v2026-05-08.)
 
 ⚠️ LIMIT KÝ TỰ — TUÂN THỦ TUYỆT ĐỐI:
 - Mỗi TITLE: 45-58 ký tự (TỐI ĐA TUYỆT ĐỐI là 61). Nếu vượt 58 → REWRITE NGẮN.
@@ -1704,22 +1705,29 @@ NHIỆM VỤ: Viết 3 title + 3 meta description khác nhau cho 1 trang sản p
 
 LUẬT TITLE:
 - KHÔNG chứa từ "Sintech" (Haravan tự thêm " - Sintech" sau)
-- BẮT BUỘC có: tên model/sản phẩm + spec mạnh nhất + ngữ cảnh dùng/mua
+- BẮT BUỘC có: tên model/sản phẩm + lợi ích chính hoặc ngữ cảnh dùng/mua
+- Bổ sung spec nổi bật / "chính hãng" / "cho [nhu cầu]" nếu length cho phép
 - Chuẩn hóa kỹ thuật: GDDR6 (không viết DDR6), giữ đúng độ phân giải/tỷ lệ thật
 - TRÁNH: nhồi keyword, lặp từ, lan man, spec không chắc
 
-LUẬT META DESCRIPTION (3 cái KHÁC GÓC NHÌN):
-- M1 = SPEC: format `[Tên SP] [spec chính], [đặc điểm]. XEM NGAY tại Sintech.`
-- M2 = SETUP/NHU CẦU: format `Setup/Build [tone/use case] cùng [SP] - [tính năng]. THAM KHẢO NGAY tại Sintech.`
-- M3 = GIẢI PHÁP: format `[SP] - giải pháp [phục vụ ai], [đặc điểm]. CHỌN NGAY mẫu phù hợp tại Sintech.`
-- CTA viết IN HOA cụm hành động — KHÔNG in hoa toàn câu
-- 3 meta dùng 3 CTA khác nhau
+LUẬT META DESCRIPTION (3 cái KHÁC GÓC NHÌN — KHÔNG được giống nhau):
+- M1 = SPEC: `[Tên SP] [màu] [size], [spec chính 1-2 con số], [đặc điểm]. XEM NGAY tại Sintech.`
+- M2 = NHU CẦU/SETUP: `Setup/Build [tone/use case] cùng [SP] - [tính năng], [đặc điểm]. THAM KHẢO NGAY tại Sintech.`
+- M3 = GIẢI PHÁP: `[SP ngắn] - giải pháp [phục vụ ai], [đặc điểm chốt]. CHỌN NGAY mẫu phù hợp tại Sintech.`
+- CTA viết IN HOA cụm hành động — KHÔNG in hoa toàn câu. 3 meta dùng 3 CTA KHÁC nhau.
+- POOL CTA: "XEM NGAY tại Sintech" (default M1) | "THAM KHẢO NGAY tại Sintech" (default M2) | "CHỌN NGAY mẫu phù hợp tại Sintech" (default M3) | "KHÁM PHÁ NGAY tại Sintech" (CHỈ cho SP cao cấp/độc lạ: QD-OLED, MacBook, RTX flagship, case galaxy, ghế Esports — tối đa 1/3 meta).
 
-CẤM TRONG META: "bền bỉ", "đẹp mắt", "Free ship", "đáng mua nhất", "tốt nhất 2026", "khôn nhất", "rẻ nhất", "Sintech" trong title, ghi giá nếu user không cung cấp.
+⛔ QUY TẮC CỨNG VỀ THÔNG SỐ — TUYỆT ĐỐI KHÔNG BỊA:
+- CHỈ dùng spec số có sẵn trong TÊN SP hoặc input. Ngoài ra → CẤM tuyệt đối.
+- CẤM tự thêm các con số sau nếu CHƯA xuất hiện trong tên SP/input: tần số quét (Hz), điện áp (V)/dòng (A)/công suất (W), dung lượng (GB/TB), kích thước (inch/mm), tốc độ (MHz/GHz/MB/s), số cổng/chân/nhân-luồng, bảo hành (tháng/năm).
+- Nếu tên SP CÓ spec (vd "27 inch 165Hz IPS") → CHỈ dùng đúng spec đó, không thêm.
+- Nếu tên SP KHÔNG có spec → viết theo công năng + ngữ cảnh dùng, KHÔNG bịa số.
+
+CẤM TRONG META: "bền bỉ", "đẹp mắt", "Free ship", "đáng mua nhất", "tốt nhất 2026", "khôn nhất", "rẻ nhất"; "Sintech" trong title; ghi giá/khuyến mãi nếu user không cung cấp; >3 cụm số liền kề; dùng nhiều dấu ";" ngắt câu; in hoa toàn câu.
 
 QUY TẮC NGHIÊM:
-- Nếu spec không chắc → viết an toàn theo tên + nhu cầu, KHÔNG bịa
 - 3 title phải KHÁC nhau rõ rệt (theo spec / theo nhu cầu / theo brand)
+- Mỗi meta phải đủ: tên SP + spec/lợi ích chính + ngữ cảnh dùng + CTA HOA, dài 140-160c.
 
 OUTPUT BẮT BUỘC: chỉ JSON thuần (KHÔNG markdown code fence, KHÔNG text gì khác).
 {
@@ -1849,6 +1857,16 @@ def fix_title_meta_for_url(url: str, force_title: str = None, force_meta: str = 
     except Exception as e:
         return {"ok": False, "error": f"PUT Haravan lỗi: {e}", "backup": backup_file.name}
 
+    # Báo cáo real-time sang Google Sheet (best-effort — KHÔNG fail nếu Sheet lỗi,
+    # vì Haravan đã update thành công). Ghi cột F/G + trạng thái "✅ Up Haravan ...".
+    sheet_report = None
+    try:
+        import sheet_writer
+        _status = f"✅ Up Haravan {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        sheet_report = "pushed" if sheet_writer.push_proposal(url, new_title, new_meta, _status) else "url_not_in_sheet"
+    except Exception as e:
+        sheet_report = f"err: {str(e)[:80]}"
+
     return {
         "ok": True,
         "url": url,
@@ -1860,7 +1878,8 @@ def fix_title_meta_for_url(url: str, force_title: str = None, force_meta: str = 
         "title_len": len(new_title),
         "meta_len": len(new_meta),
         "backup": backup_file.name,
-        "message": f"Đã update title ({len(new_title)}c) + meta ({len(new_meta)}c) lên Haravan.",
+        "sheet_report": sheet_report,
+        "message": f"Đã update title ({len(new_title)}c) + meta ({len(new_meta)}c) lên Haravan + ghi Sheet.",
     }
 
 

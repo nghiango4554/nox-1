@@ -1,6 +1,6 @@
 # PROVIDERS — 3 AI provider (Claude / Codex / Gemini)
 
-> Marketing Hub có **3 adapter** chạy song song để gen content SEO. Default hiện tại (17/5/2026): **Claude CLI**. Code 2 provider còn lại giữ nguyên — chỉ cần đổi `import` để switch.
+> Marketing Hub có **3 adapter** chạy song song để gen content SEO. Default hiện tại (20/5/2026): **Codex CLI** — toàn bộ task gen (`product_writer`, `collection_content_writer`, `seo`, `content_writer`, `blog_content_writer`, `ai_writer`) gọi `codex_provider`. `claude_provider.py` + `gemini_provider.py` giữ nguyên làm fallback — đổi `import` để switch.
 
 ---
 

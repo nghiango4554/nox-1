@@ -82,8 +82,8 @@ body_html PHẢI bắt đầu NGAY bằng <p> (intro) — KHÔNG wrap thêm <div
 ⚠️ LIMIT KÝ TỰ — ĐẾM len() TRƯỚC KHI TRẢ
 ═══════════════════════════════════════════════════
 - TITLE: 48-58 ký tự (chặt hơn để chắc ăn). KHÔNG chứa "Sintech" (Haravan auto-suffix " - Sintech"). Format câu phân tích lợi ích, KHÔNG "Chính Hãng" / "Giá Rẻ" / capitalize từng từ.
-- META: 140-160 ký tự. BẮT BUỘC kết thúc bằng 1 CTA viết HOA: "XEM NGAY tại Sintech" / "THAM KHẢO NGAY tại Sintech" / "CHỌN NGAY mẫu phù hợp tại Sintech" / "KHÁM PHÁ NGAY tại Sintech".
-- BODY HTML: 1700-2200 từ (match chuẩn baseline). Đủ chiều sâu phân tích. KHÔNG H1.
+- META: NHẮM 148-158 ký tự (đếm len(); tối thiểu 140, tối đa 160 — viết DÀI TAY vì hay bị hụt dưới 140). BẮT BUỘC kết thúc bằng 1 CTA viết HOA: "XEM NGAY tại Sintech" / "THAM KHẢO NGAY tại Sintech" / "CHỌN NGAY mẫu phù hợp tại Sintech" / "KHÁM PHÁ NGAY tại Sintech".
+- BODY HTML: 2000-2500 từ. TỐI THIỂU 2000 từ — bài dưới 2000 từ bị tính FAIL, phải viết thêm phân tích cho đủ. Đủ chiều sâu, KHÔNG nhồi heading rỗng để chữa cháy số từ. KHÔNG H1.
 
 ═══════════════════════════════════════════════════
 ⚠️ READABILITY — CÂU NGẮN, ĐOẠN NGẮN
@@ -102,7 +102,7 @@ body_html PHẢI bắt đầu NGAY bằng <p> (intro) — KHÔNG wrap thêm <div
 YÊU CẦU MỖI BẢNG:
 - 3 cột (KHÔNG 2, KHÔNG 4+)
 - 5-8 hàng tổng (gồm 1 header <th>)
-- Đặt trong section H2 phù hợp, sau 1-2 câu dẫn
+- Đặt trong section H2 phù hợp — CHỈ từ H2 THỨ 3 trở đi (2 H2 đầu sau intro PHẢI text-only), sau 1-2 câu dẫn
 
 4 PATTERN BẢNG (chọn 3-4 cái áp dụng cho collection cụ thể):
 
@@ -187,35 +187,42 @@ KHÔNG style inline cho table (theme sẽ apply). KHÔNG dùng <thead>/<tbody> p
 ═══════════════════════════════════════════════════
 CẤU TRÚC BODY — STYLE CHUYÊN GIA PHÂN TÍCH (KHÔNG TEMPLATE SEO 101)
 ═══════════════════════════════════════════════════
-⚠️ TUYỆT ĐỐI KHÔNG dùng H2 template generic: "Vì sao chọn X tại Sintech?", "Các mẫu nổi bật trong X", "Cách chọn X phù hợp" — đây là style SEO 101 chán, không phải style Sintech.
+⚠️ TUYỆT ĐỐI KHÔNG dùng H2 generic dài dòng ("Cách chọn X phù hợp", "Các mẫu nổi bật trong X"), VÀ KHÔNG biến mọi H2 thành câu hỏi ghép dài lặp khuôn ("Trước khi chọn X cần nhìn vào tiêu chí nào?", "X nên ưu tiên gì trước?"). Đó là style cứng, lan man, volume search THẤP.
 
-THAY VÀO ĐÓ: 7-9 H2 dạng CÂU HỎI TỰ NHIÊN / GÓC NHÌN PHÂN TÍCH cụ thể, mỗi H2 giải quyết 1 vấn đề thật khách hay thắc mắc.
+✅ STYLE CHUẨN (học trang TMĐT mạnh như Minh Tuấn Mobile): H2 NGẮN GỌN — là CHỦ ĐỀ/CỤM DANH TỪ hoặc CÂU HỎI NGẮN bám đúng từ khoá người ta search nhiều. Trộn 3 loại H2:
+  (a) H2 TAXONOMY — phân rã danh mục thành nhóm THẬT, bẻ xuống H3:
+      vd "Các dòng [SP]" → H3 từng dòng/model thật; "Phân loại [SP] theo [tiêu chí]" → H3 từng loại.
+  (b) H2 TOPICAL ngắn — "Bảng giá [SP] mới nhất tại Sintech", "Kinh nghiệm chọn [SP] phù hợp", "[SP] nào đáng mua nhất hiện nay?", "Vì sao nên mua [SP] tại Sintech?".
+  (c) H2 CÂU HỎI NGẮN volume cao — câu thật khách gõ Google: "[SP] bao nhiêu [đơn vị] là đủ?", "[SP] A khác B thế nào?", "[SP] có [tính năng] không?", "[SP] bảo hành mấy năm?".
 
-VÍ DỤ H2 PATTERN (bài PC RTX 4060/5060 đã sync) — học theo style này:
-- "PC RTX 4060 / 5060 nằm ở phân khúc nào?"           ← định vị phân khúc
-- "RTX 4060 và RTX 5060 nên hiểu sao cho đúng?"        ← so sánh ngang
-- "Chọn theo màn hình sẽ dễ đúng hơn"                  ← cách chọn theo 1 tiêu chí thực tế
-- "Trải nghiệm game thực tế nên kỳ vọng ra sao?"       ← kỳ vọng thực tế
-- "Cấu hình nên ưu tiên khi mua PC RTX 4060 / 5060"    ← tiêu chí cấu hình
-- "Khi nào nên chọn RTX 4060 / 5060 thay vì RTX 3050?" ← so sánh up/down
-- "Lỗi dễ gặp khi mua PC RTX 4060 / 5060"              ← cảnh báo sai lầm
-- "Mua PC RTX 4060 / 5060 tại Sintech"                 ← brand + dịch vụ
-- "Câu hỏi thường gặp về PC RTX 4060 / 5060"           ← FAQ (BẮT BUỘC, 4-6 H3)
+VÍ DỤ BLUEPRINT (collection "Màn Hình Asus") — học BỐ CỤC + ĐỘ NGẮN này:
+- H2 Các dòng màn hình Asus
+    H3 TUF Gaming · H3 ROG Strix · H3 ProArt · H3 Eye Care · H3 ZenScreen di động
+- H2 Phân loại theo tấm nền & tần số quét
+    H3 IPS / Fast IPS · H3 VA · H3 OLED · H3 dải tần số 75-180Hz vs 240Hz+
+- H2 Bảng giá màn hình Asus mới nhất tại Sintech      (BẢNG phân khúc giá — H2#3)
+- H2 Kinh nghiệm chọn màn hình Asus phù hợp           (kèm bảng tiêu chí)
+- H2 Màn hình Asus nào đáng mua nhất hiện nay?
+- H2 Vì sao nên mua màn hình Asus tại Sintech?
+- H2 Màn Asus bao nhiêu Hz hợp gaming?
+- H2 Câu hỏi thường gặp về màn hình Asus              (H3 FAQ)
 
-ÁP DỤNG CHO COLLECTION KHÁC: chế biến lại 7-9 H2 theo cùng tinh thần — câu hỏi tự nhiên, phân tích góc nhìn cụ thể, KHÔNG generic.
-Ví dụ collection "máy bộ" có thể có H2 như:
-- "Máy bộ phù hợp với ai thay vì laptop?"
-- "Cấu hình tối thiểu cho công việc văn phòng hằng ngày"
-- "Khi nào nên đầu tư cấu hình cao hơn?"
-- "Lỗi dễ gặp khi chọn máy bộ giá rẻ"
-- "Mua máy bộ tại Sintech"
-- "Câu hỏi thường gặp về máy bộ"
-(Đây chỉ là gợi ý — tự sáng tạo theo collection cụ thể)
+CHỌN TRỤC TAXONOMY theo loại collection (CẤM bịa — chỉ dùng dòng/model/loại CÓ THẬT):
+- Theo hãng/dòng con: Asus TUF/ROG/ProArt; Acer Nitro/Predator/Aspire; MSI/Dell tương tự.
+- Theo linh kiện/chip: VGA theo chip (RTX 4060/4070...), CPU theo đời/socket, RAM theo DDR4/DDR5, SSD theo Gen3/Gen4.
+- Theo tấm nền/độ phân giải/tần số (màn hình); theo nhu cầu (gaming/văn phòng/đồ hoạ); theo phân khúc giá.
+- Theo tình trạng (mới/cũ/like-new) — CHỈ khi danh mục thật sự có bán dạng đó.
+- Collection hẹp (vd "Pin Laptop", "Laptop Dưới 15 Triệu") → trục taxonomy = phân loại theo công năng / nhu cầu / phân khúc giá thay cho dòng con.
 
 THỨ TỰ NỘI DUNG:
 1. <p> Intro 3-4 câu: định vị collection + ai dùng + lợi ích chính + chốt bằng "...có thể tham khảo tại <a href='https://sintech.vn'><strong>Sintech</strong></a>."
 
-2. 6-8 <h2> phân tích (như pattern trên). MỖI H2 phải có ≥2 đoạn <p>, mỗi đoạn 2-4 câu. Có thể có <ul> trong section nếu cần liệt kê.
+2. 10-12 <h2> theo STYLE CHUẨN ở trên (taxonomy + topical ngắn + câu hỏi volume cao). H2 NGẮN — tối đa ~8-10 từ; dùng TÊN SP NGẮN ("màn hình Asus", "MacBook Air") chứ KHÔNG nhồi full title collection dài vào mọi H2. THỨ TỰ + RULE BẮT BUỘC:
+   ⚠️ 2 H2 ĐẦU TIÊN (ngay sau intro) PHẢI là H2 TAXONOMY (loại a) — bẻ xuống H3, KHÔNG chứa <table>. Vừa định hướng vừa giàu entity/từ khoá:
+     • H2 #1 — "Các dòng [SP]" hoặc "Các loại [SP]": 1 đoạn <p> dẫn (2 câu), RỒI 4-6 <h3>, mỗi H3 là 1 dòng/model/loại CÓ THẬT + 1-2 câu <p> mô tả ngắn (hợp ai, khác gì).
+     • H2 #2 — "Phân loại [SP] theo [tiêu chí]" (tấm nền/chip/nhu cầu/phân khúc): 1 đoạn <p> dẫn, RỒI 3-5 <h3> + <p> ngắn. Đoạn cuối làm cầu nối sang bảng giá.
+   → Bảng <table> ĐẦU TIÊN chỉ xuất hiện TỪ H2 THỨ 3 ("Bảng giá [SP] mới nhất tại Sintech"). 3-4 bảng đặt ở H2 #3 trở đi. Bảng nằm ở H2 #1/#2 = FAIL.
+   → Các H2 phân tích còn lại: mỗi H2 có 3-4 đoạn <p> (2-3 câu/đoạn) — phân tích đủ sâu (so sánh, ví dụ thực tế, lưu ý khi chọn), KHÔNG viết hời hợt 1-2 câu rồi nhảy section. H2 dạng câu hỏi ngắn cần 2-3 đoạn. <h3> CHỈ dùng cho 2 H2 taxonomy đầu + FAQ cuối, KHÔNG rải H3 lung tung.
 
 3. <h2>Mua [tên collection] tại Sintech</h2> — section riêng giới thiệu dịch vụ Sintech (tư vấn, bảo hành, giao hàng, hỗ trợ kỹ thuật).
 
@@ -234,15 +241,11 @@ THỨ TỰ NỘI DUNG:
 ═══════════════════════════════════════════════════
 Bài nào cũng giống bài nào = vô dụng cho SEO + người đọc. Quy tắc CỨNG:
 
-1. ÍT NHẤT 5 H2 phải chứa TÊN COLLECTION CỤ THỂ (vd: "Máy bộ Rosa", "PC RTX 4060", "Laptop Lenovo gaming"):
-   ❌ "Phù hợp với ai?" → ✅ "Máy bộ Rosa phù hợp với ai hơn laptop?"
-   ❌ "Lỗi dễ gặp" → ✅ "Lỗi dễ gặp khi mua máy bộ Rosa giá thấp"
+1. H2 dùng TÊN SP NGẮN GỌN ("màn hình Asus", "PC RTX 4060", "MacBook Air") — KHÔNG lặp nguyên full title collection dài vào MỌI H2 (gây cứng, lan man). ~4-5 H2 có tên SP ngắn là đủ; H2 taxonomy/câu hỏi ngắn gọn tự nhiên là được.
+   ❌ "Phù hợp với ai?" (generic) → ✅ "Màn Asus nào hợp dân thiết kế?"
+   ❌ Lặp "Trước khi chọn [full title] cần nhìn tiêu chí nào?" ở mọi bài → ✅ taxonomy "Các dòng [SP]" / "Phân loại [SP] theo..."
 
-2. PHẢI có 4 góc nhìn KHÁC NHAU (mỗi góc 1 H2 riêng):
-   - Góc PHÂN KHÚC: định vị collection nằm ở phân khúc nào / phù hợp ngân sách bao nhiêu
-   - Góc SO SÁNH: so với SP/collection ngang hàng hoặc thay thế (laptop, build PC, dòng khác)
-   - Góc TƯ VẤN: cách chọn theo nhu cầu / màn hình / không gian / công việc cụ thể
-   - Góc CẢNH BÁO: lỗi/sai lầm dễ gặp khi mua / khi nâng cấp
+2. ĐA DẠNG góc nhìn — bố cục blueprint đã phủ: taxonomy (dòng/loại) + phân khúc giá + so sánh + kinh nghiệm chọn + recommendation + brand + câu hỏi volume cao. KHÔNG cần ép cứng "Lỗi dễ gặp" mỗi bài (đó là filler volume thấp — chỉ thêm khi thật sự có sai lầm phổ biến đáng nói).
 
 3. NGƯỜI ĐỌC dùng input "danh sách H2 đã dùng" để TRÁNH copy y nguyên cụm headings — tự viết phiên bản khác.
 
@@ -306,15 +309,16 @@ CHECKLIST TRƯỚC KHI TRẢ
 ☑ title len 48-58 (đếm bằng len()), KHÔNG có "Sintech", KHÔNG capitalize từng từ kiểu "Máy Bộ Rosa Chính Hãng"
 ☑ meta len 140-160, có CTA HOA cuối
 ☑ body_html bắt đầu bằng <p>, KHÔNG <div>/<section> wrapper
-☑ body 1700-2200 từ (match baseline)
-☑ Có 7-9 H2 (gồm cả H2 "Mua [X] tại Sintech" và H2 "Câu hỏi thường gặp")
-☑ H2 là CÂU HỎI PHÂN TÍCH tự nhiên, KHÔNG generic "Vì sao chọn / Các mẫu nổi bật / Cách chọn"
+☑ body 2000-2500 từ — ĐẾM số từ, TỐI THIỂU 2000 (dưới 2000 = FAIL, viết thêm phân tích cho đủ, KHÔNG thêm heading rỗng)
+☑ Có 10-12 H2 (gồm 2 H2 taxonomy đầu + "Bảng giá... tại Sintech" + "Mua [X] tại Sintech" + "Câu hỏi thường gặp")
+☑ H2 NGẮN (≤~10 từ): trộn taxonomy + topical ngắn + câu hỏi volume cao. KHÔNG để mọi H2 là câu hỏi ghép dài lặp khuôn ("Trước khi chọn X..."). KHÔNG generic "Vì sao chọn/Các mẫu nổi bật/Cách chọn".
 ☑ Có 4-6 H3 FAQ (mỗi H3 là câu hỏi, <p> theo sau là trả lời 2-4 câu)
 ☑ Mọi H2 có ≥2 câu dẫn trước <h3>/<table>
+☑ 2 H2 ĐẦU (sau intro) là TAXONOMY có H3: H2#1 "Các dòng/loại [SP]" (4-6 H3 dòng/model THẬT), H2#2 "Phân loại [SP] theo [tiêu chí]" (3-5 H3) — KHÔNG <table>. H3 taxonomy CẤM bịa dòng/model không có thật.
 ☑ Có 4 BẢNG <table> 3-cột — BẮT BUỘC gồm Pattern 5 (BẢNG PHÂN KHÚC GIÁ) + 3 pattern khác (phân khúc nhu cầu / so sánh SP / chọn theo input / tiêu chí cấu hình)
-☑ Có H2 riêng "Phân khúc giá [tên collection]" hoặc "[Tên collection] có những phân khúc giá nào?"
-☑ ≥5 H2 chứa tên collection cụ thể (không generic "Phù hợp với ai?" mà phải "[Tên collection] phù hợp với ai hơn laptop?")
-☑ Có 4 góc nhìn riêng: PHÂN KHÚC / SO SÁNH / TƯ VẤN / CẢNH BÁO
+☑ Có H2 "Bảng giá [SP] mới nhất tại Sintech" ở H2#3 (chứa BẢNG phân khúc giá)
+☑ H2 dùng TÊN SP NGẮN (~4-5 H2 là đủ), KHÔNG nhồi full title collection dài vào mọi H2
+☑ Đa dạng: taxonomy(H3) + bảng giá + so sánh + kinh nghiệm chọn + "nào đáng mua nhất" + brand + ≥1 câu hỏi volume cao. KHÔNG ép "Lỗi dễ gặp" mỗi bài.
 ☑ Câu ≤20 từ, đoạn 2-3 câu — readability ≥65
 ☑ Có ≥6 internal link <a> (1 intro, ≥4 body, 1 outro), link đa dạng collection ngang hàng + /pages/xay-dung-cau-hinh
 ☑ Có signature italic cuối
@@ -365,6 +369,157 @@ def _get_used_h2_pool(limit: int = 60) -> list:
         return []
 
 
+# ─────────── AUTO-FIX META LENGTH (đưa meta về 140-160c) ───────────
+_META_CTAS = ["XEM NGAY tại Sintech", "THAM KHẢO NGAY tại Sintech",
+              "CHỌN NGAY mẫu phù hợp tại Sintech", "KHÁM PHÁ NGAY tại Sintech"]
+_META_PADS = [" với mức giá hợp lý", " cùng nhiều mức giá", " phù hợp nhiều ngân sách",
+              " kèm tư vấn chọn cấu hình", " cùng đội kỹ thuật Sintech"]
+
+
+def _meta_ok(m: str) -> bool:
+    return 140 <= len(m or "") <= 160
+
+
+def _quick_extend_meta(meta: str) -> str:
+    """Chèn 1 cụm ngữ cảnh TRƯỚC câu CTA cuối để kéo meta tới 140-160c, giữ CTA HOA ở cuối."""
+    for cta in _META_CTAS:
+        idx = meta.rfind(cta)
+        if idx <= 0:
+            continue
+        head = meta[:idx].rstrip()
+        tail = meta[idx:].strip()
+        head_core = head[:-1].rstrip() if head.endswith(".") else head
+        for pad in _META_PADS:
+            cand = f"{head_core}{pad}. {tail}"
+            if _meta_ok(cand):
+                return cand
+    return meta
+
+
+def _ai_regen_meta(old_meta: str, collection_name: str) -> str:
+    """Nhờ Codex viết lại meta đúng 145-158c. Trả '' nếu fail."""
+    sysp = ("Bạn viết meta description SEO tiếng Việt cho Sintech (PC/laptop/gaming gear). "
+            "Trả về DUY NHẤT 1 dòng meta, CHÍNH XÁC 145-158 ký tự (đếm cả khoảng trắng + dấu câu), "
+            "kết bằng CTA HOA 'XEM NGAY tại Sintech'. Văn tự nhiên, có ngữ cảnh dùng. "
+            "CẤM bịa số liệu/giá, CẤM 'bền bỉ'/'Free ship'. KHÔNG giải thích, KHÔNG markdown.")
+    usr = (f"Collection: {collection_name}\n"
+           f"Meta cũ (sai length {len(old_meta)}c): {old_meta}\n"
+           "Viết lại đúng 145-158 ký tự, giữ ý chính.")
+    try:
+        raw = codex_provider.call_codex(sysp, usr, timeout=60, reasoning_effort="low")
+    except Exception:
+        return ""
+    for ln in raw.strip().splitlines():
+        ln = ln.strip().strip("`").strip('"').strip()
+        if len(ln) >= 80:
+            return ln
+    return raw.strip().strip("`").strip('"').strip()
+
+
+def _fix_meta_length(meta: str, collection_name: str, max_ai_retries: int = 2) -> tuple:
+    """Đưa meta về 140-160c: quick-suffix → AI regen → giữ nguyên nếu fail.
+
+    Trả (meta_mới, cách_fix). cách_fix ∈ {ok, quick_suffix, ai_regen1/2, still_bad}.
+    """
+    meta = (meta or "").strip()
+    if _meta_ok(meta):
+        return meta, "ok"
+    if len(meta) < 140:
+        q = _quick_extend_meta(meta)
+        if _meta_ok(q):
+            return q, "quick_suffix"
+    for i in range(max_ai_retries):
+        new = _ai_regen_meta(meta, collection_name)
+        if _meta_ok(new):
+            return new, f"ai_regen{i+1}"
+    return meta, "still_bad"
+
+
+# ─────────── GUARD WORD-COUNT (ép body ≥2000 từ — bài chất lượng) ───────────
+_WORD_FLOOR = 2000  # vợ yêu cầu: bài collection chất lượng phải ≥2000 từ
+
+_EXPAND_SYSTEM_PROMPT = """Bạn là chuyên gia SEO + copywriter cho Sintech.vn (PC, laptop, gaming gear, 457 Trần Xuân Soạn Q7 TP.HCM, hotline 0911 713 000).
+NHIỆM VỤ DUY NHẤT: MỞ RỘNG một body HTML collection đã có cho ĐỦ 2000-2500 TỪ (nhắm ~2200), giữ NGUYÊN cấu trúc + chất lượng. KHÔNG viết lại từ đầu. KHÔNG vượt quá 2500 từ.
+
+CÁCH MỞ RỘNG (chỉ THÊM, không xoá nội dung cũ):
+- Mỗi section H2 phân tích (không phải taxonomy/FAQ): thêm 1-2 đoạn <p> phân tích sâu hơn — so sánh thực tế, ví dụ cấu hình/use case cụ thể, lưu ý khi chọn. Mỗi đoạn 2-3 câu, mỗi câu ≤20 từ.
+- Có thể thêm 1-2 H2 CÂU HỎI volume cao MỚI (câu thật khách search Google) + 2-3 đoạn trả lời.
+- Có thể thêm 1-2 cặp <h3>câu hỏi</h3><p>trả lời</p> vào section FAQ cuối.
+- GIỮ NGUYÊN: intro, 2 H2 taxonomy đầu (kèm H3), TOÀN BỘ <table> hiện có, mọi internal link <a>, signature italic cuối, và thứ tự các section.
+- KHÔNG đổi/xoá title/meta. KHÔNG thêm H1. KHÔNG nhồi heading rỗng chỉ để tăng số từ.
+
+RULE HTML (CỰC QUAN TRỌNG — sai là Haravan strip mất nội dung trên web):
+- CHỈ tag: <p> <h2> <h3> <ul> <ol> <li> <a> <strong> <em> <table> <tr> <td> <th> <br>.
+- CẤM <div> <section> <article>, mọi attribute data-*, mọi class Tailwind/markdown/prose. body PHẢI bắt đầu NGAY bằng <p>.
+- Internal link format: <a href="URL"><strong>anchor</strong></a>.
+- CẤM forbidden phrases: "bền bỉ","đẹp mắt","tốt nhất 2026","đáng mua nhất","vượt trội","đỉnh cao","Free ship", giá tiền cụ thể.
+- Xưng "bạn". Readability ≥65 (câu ≤20 từ, đoạn 2-3 câu).
+
+OUTPUT: CHỈ JSON thuần {"body_html": "..."} chứa body ĐẦY ĐỦ (cũ + phần thêm) — KHÔNG markdown fence, KHÔNG giải thích."""
+
+
+def _count_body_words(html: str) -> int:
+    """Đếm số từ trong body HTML (strip tag) — đồng nhất với audit DB."""
+    if not html:
+        return 0
+    text = re.sub(r"<[^>]+>", " ", html)
+    text = re.sub(r"\s+", " ", text).strip()
+    return len(text.split()) if text else 0
+
+
+def _body_html_valid(html: str) -> bool:
+    """Body hợp lệ: bắt đầu bằng <p>, không wrapper cấm."""
+    if not html:
+        return False
+    low = html.lstrip().lower()
+    if not low.startswith("<p"):
+        return False
+    if "<div" in low or "<section" in low or "<article" in low:
+        return False
+    return True
+
+
+def _expand_body_to_floor(body_html: str, collection_name: str, max_retries: int = 1) -> tuple:
+    """Nếu body < _WORD_FLOOR từ → nhờ Codex mở rộng cho đủ ≥2000 từ.
+
+    Trả (body_mới, n_words, đã_expand). Chỉ nhận bản expand nếu DÀI HƠN + hợp lệ HTML.
+    """
+    best = body_html
+    best_w = _count_body_words(body_html)
+    if best_w >= _WORD_FLOOR:
+        return best, best_w, False
+
+    for _ in range(max_retries):
+        usr = (f"COLLECTION: {collection_name}\n"
+               f"Body hiện tại MỚI CÓ {best_w} từ — CẦN đạt 2000-2500 từ (nhắm ~2200). Mở rộng theo hướng dẫn, "
+               f"trả về body ĐẦY ĐỦ (cũ + phần thêm) dạng JSON {{\"body_html\":\"...\"}}.\n\n"
+               f"--- BODY HIỆN TẠI ---\n{best}")
+        try:
+            raw = codex_provider.call_codex(_EXPAND_SYSTEM_PROMPT, usr, timeout=180)
+        except Exception:
+            break
+        text = raw.strip()
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```\s*$", "", text)
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            m = re.search(r"\{[\s\S]*\}", text)
+            if not m:
+                break
+            try:
+                data = json.loads(m.group(0))
+            except Exception:
+                break
+        nb = (data.get("body_html") or "").strip()
+        nw = _count_body_words(nb)
+        if nb and nw > best_w and _body_html_valid(nb):
+            best, best_w = nb, nw
+            if best_w >= _WORD_FLOOR:
+                break
+    return best, best_w, (best_w > _count_body_words(body_html))
+
+
 def gen_collection_content(collection_url: str, collection_name: str,
                            page_title: str = "", admin_desc: str = "",
                            sp_names: list = None) -> dict:
@@ -391,12 +546,12 @@ def gen_collection_content(collection_url: str, collection_name: str,
 - Top SP trong collection ({len(sp_names)} mẫu): {', '.join(sp_names[:8])}{used_h2_block}
 
 YÊU CẦU CỨNG:
-1. ≥5/9 H2 phải chứa cụm "{collection_name}" rõ ràng — KHÔNG H2 generic kiểu "Phù hợp với ai?".
-2. Bắt buộc 1 H2 + 1 BẢNG PHÂN KHÚC GIÁ (Pattern 5: Tiết kiệm / Tầm trung / Cao cấp / Ngân sách dư).
-3. Bắt buộc 4 BẢNG tổng (1 phân khúc giá + 3 trong: nhu cầu / so sánh SP / chọn theo input / tiêu chí cấu hình).
-4. Bắt buộc 4 góc nhìn riêng: PHÂN KHÚC GIÁ + SO SÁNH + TƯ VẤN + CẢNH BÁO LỖI.
-5. Body 1700-2200 từ, readability ≥65 (câu ≤20 từ, đoạn 2-3 câu).
-6. Intro KHÔNG bắt đầu giống bài cũ — mở câu với context thực tế riêng của {collection_name}.
+1. 2 H2 ĐẦU = TAXONOMY có H3: "Các dòng/loại [SP ngắn]" (4-6 H3 dòng/model CÓ THẬT) + "Phân loại [SP] theo [tiêu chí]" (3-5 H3). CẤM bịa dòng/model không tồn tại.
+2. H2#3 = "Bảng giá [SP ngắn] mới nhất tại Sintech" chứa BẢNG PHÂN KHÚC GIÁ (Pattern 5: Tiết kiệm / Tầm trung / Cao cấp / Ngân sách dư).
+3. Tổng 4 BẢNG (1 phân khúc giá ở H2#3 + 3 trong: nhu cầu / so sánh dòng / chọn theo input / tiêu chí cấu hình). Bảng CHỈ từ H2#3 trở đi — H2#1/#2 không bảng.
+4. 10-12 H2 NGẮN (≤~10 từ), dùng TÊN SP NGẮN (KHÔNG nhồi full title "{collection_name}" vào mọi H2). Trộn taxonomy + topical ngắn + ≥1 câu hỏi volume cao. KHÔNG ép "Lỗi dễ gặp" mỗi bài.
+5. Body 2000-2500 từ — TỐI THIỂU 2000 từ (KHÔNG được dưới; mỗi H2 phân tích viết 3-4 đoạn sâu). Readability ≥65 (câu ≤20 từ, đoạn 2-3 câu).
+6. META nhắm 148-158 ký tự (KHÔNG dưới 140), kết bằng CTA HOA. Intro mở câu với context riêng của {collection_name}, KHÔNG giống bài cũ.
 
 Trả JSON thuần."""
 
@@ -426,6 +581,12 @@ Trả JSON thuần."""
     if not title or not meta or not body_html:
         return {"ok": False, "error": "Codex trả thiếu field.", "raw": text[:500]}
 
+    # Auto-fix meta về 140-160c (quick-suffix → AI regen)
+    meta, meta_fix = _fix_meta_length(meta, collection_name)
+
+    # Guard word-count: ép body ≥2000 từ (bài chất lượng) — mở rộng nếu hụt
+    body_html, body_words, body_expanded = _expand_body_to_floor(body_html, collection_name)
+
     return {
         "ok": True,
         "title": title,
@@ -433,6 +594,9 @@ Trả JSON thuần."""
         "body_html": body_html,
         "title_len": len(title),
         "meta_len": len(meta),
+        "meta_fix": meta_fix,
+        "body_words": body_words,
+        "body_expanded": body_expanded,
     }
 
 
@@ -470,15 +634,17 @@ def gen_title_meta_only(collection_url: str, collection_name: str,
     """
     if field not in ("title", "meta", "both"):
         field = "both"
-    # Default: Claude CLI (Codex chưa cài trên máy này). Fallback Codex nếu Claude fail.
+    # Default: Codex CLI (ưu tiên — dùng quota ChatGPT, không tốn API credit).
+    # Fallback Claude CLI chỉ khi Codex chưa cài.
+    use_codex = codex_provider.is_codex_available()
     try:
         import claude_provider as cp_claude
         use_claude = cp_claude.is_claude_available()
     except Exception:
+        cp_claude = None
         use_claude = False
-    use_codex = codex_provider.is_codex_available()
-    if not (use_claude or use_codex):
-        return {"ok": False, "error": "Cả Claude CLI và Codex CLI đều chưa cài."}
+    if not (use_codex or use_claude):
+        return {"ok": False, "error": "Cả Codex CLI và Claude CLI đều chưa cài."}
 
     sp_names = sp_names or []
 
@@ -516,10 +682,10 @@ def gen_title_meta_only(collection_url: str, collection_name: str,
 Trả JSON {schema} duy nhất."""
 
     try:
-        if use_claude:
-            raw = cp_claude.call_claude(_TITLE_META_SYSTEM_PROMPT, user_msg, timeout=90)
-        else:
+        if use_codex:
             raw = codex_provider.call_codex(_TITLE_META_SYSTEM_PROMPT, user_msg, timeout=90)
+        else:
+            raw = cp_claude.call_claude(_TITLE_META_SYSTEM_PROMPT, user_msg, timeout=90)
     except Exception as e:
         return {"ok": False, "error": f"AI provider fail: {e}"}
 

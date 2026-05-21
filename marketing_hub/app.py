@@ -33,7 +33,7 @@ import notifier
 import competitors as competitors_mod
 import product_parser as pp
 import product_writer as pw
-import claude_provider as cp
+import codex_provider as cp
 import haravan_client as hv_client
 
 ROOT = Path(__file__).parent
@@ -2091,25 +2091,41 @@ _GEN_BG = {
 _GEN_BG_LOCK = _threading.Lock()
 
 
-def _gen_bg_worker_collection(job_ids):
-    """Background worker — gen sequential từng job, update _GEN_BG state."""
+def _gen_bg_worker_collection_loop():
+    """Background worker — consume hàng đợi ĐỘNG: pop job từ _GEN_BG['queue'] cho tới khi cạn.
+
+    Cho phép enqueue thêm job trong lúc đang chạy (gen lẻ / gen lại / bulk đều nối đuôi vào đây).
+    """
     import collection_content_writer as ccw
-    for jid in job_ids:
+    while True:
         with _GEN_BG_LOCK:
             if _GEN_BG["stopped"]:
+                _GEN_BG["queue"] = []
+                _GEN_BG["running"] = False
+                _GEN_BG["finished_at"] = datetime.now().isoformat(timespec="seconds")
+                _GEN_BG["current_id"] = None
+                _GEN_BG["current_name"] = None
+                _GEN_BG["job_started_at"] = None
                 break
-        job = _collection_jobs_get(jid)
-        if not job:
-            with _GEN_BG_LOCK:
+            if not _GEN_BG["queue"]:
+                _GEN_BG["running"] = False
+                _GEN_BG["finished_at"] = datetime.now().isoformat(timespec="seconds")
+                _GEN_BG["current_id"] = None
+                _GEN_BG["current_name"] = None
+                _GEN_BG["job_started_at"] = None
+                break
+            jid = _GEN_BG["queue"][0]  # peek — giữ trong queue để UI vẫn thấy đang xử lý
+            job = _collection_jobs_get(jid)
+            if not job:
                 _GEN_BG["fail"] += 1
                 _GEN_BG["done"] += 1
                 _GEN_BG["errors"].append(f"#{jid}: Job not found")
                 _GEN_BG["queue"] = [x for x in _GEN_BG["queue"] if x != jid]
-            continue
-        with _GEN_BG_LOCK:
+                continue
             _GEN_BG["current_id"] = jid
             _GEN_BG["current_name"] = job.get("collection_title") or job.get("handle") or f"#{jid}"
             _GEN_BG["job_started_at"] = datetime.now().isoformat(timespec="seconds")
+
         t0 = _time_bg.time()
         _collection_jobs_update(jid, status="drafting", error=None)
         try:
@@ -2155,22 +2171,48 @@ def _gen_bg_worker_collection(job_ids):
             _GEN_BG["current_id"] = None
             _GEN_BG["current_name"] = None
             _GEN_BG["job_started_at"] = None
-            # Cap errors tail
             if len(_GEN_BG["errors"]) > 20:
                 _GEN_BG["errors"] = _GEN_BG["errors"][-20:]
-        _time_bg.sleep(2)
+        _time_bg.sleep(1)
+
+
+def _enqueue_collection_gen(ids):
+    """Thêm job_ids vào hàng đợi gen nền; khởi động worker nếu đang idle.
+
+    Idle → reset counters + start worker. Đang chạy → chỉ nối đuôi (dedup current + queue).
+    Trả snapshot _GEN_BG.
+    """
+    try:
+        ids = [int(x) for x in ids]
+    except Exception:
+        ids = []
+    start_worker = False
     with _GEN_BG_LOCK:
-        _GEN_BG["running"] = False
-        _GEN_BG["finished_at"] = datetime.now().isoformat(timespec="seconds")
-        _GEN_BG["current_id"] = None
-        _GEN_BG["current_name"] = None
+        if not _GEN_BG.get("running"):
+            _GEN_BG.update({
+                "running": True, "stopped": False, "kind": "collection",
+                "queue": [], "total": 0,
+                "current_id": None, "current_name": None, "job_started_at": None,
+                "started_at": datetime.now().isoformat(timespec="seconds"),
+                "finished_at": None,
+                "ok": 0, "fail": 0, "done": 0,
+                "completed_durations": [], "errors": [],
+            })
+            start_worker = True
+        for jid in ids:
+            if jid == _GEN_BG.get("current_id") or jid in _GEN_BG["queue"]:
+                continue
+            _GEN_BG["queue"].append(jid)
+            _GEN_BG["total"] += 1
+        snapshot = dict(_GEN_BG)
+    if start_worker:
+        t = _threading.Thread(target=_gen_bg_worker_collection_loop, daemon=True)
+        t.start()
+    return snapshot
 
 
 @app.route("/collection-content/gen-bg", methods=["POST"])
 def collection_content_gen_bg():
-    if _GEN_BG.get("running"):
-        return jsonify({"ok": False, "error": "Đã có background job đang chạy",
-                        "state": _GEN_BG}), 409
     payload = request.get_json(silent=True) or {}
     ids = payload.get("ids") or []
     try:
@@ -2179,19 +2221,8 @@ def collection_content_gen_bg():
         return jsonify({"ok": False, "error": "ids phải là list int"}), 400
     if not ids:
         return jsonify({"ok": False, "error": "Thiếu list ids"}), 400
-    with _GEN_BG_LOCK:
-        _GEN_BG.update({
-            "running": True, "stopped": False, "kind": "collection",
-            "queue": list(ids), "total": len(ids),
-            "current_id": None, "current_name": None, "job_started_at": None,
-            "started_at": datetime.now().isoformat(timespec="seconds"),
-            "finished_at": None,
-            "ok": 0, "fail": 0, "done": 0,
-            "completed_durations": [], "errors": [],
-        })
-    t = _threading.Thread(target=_gen_bg_worker_collection, args=(list(ids),), daemon=True)
-    t.start()
-    return jsonify({"ok": True, "state": dict(_GEN_BG)})
+    state = _enqueue_collection_gen(ids)
+    return jsonify({"ok": True, "state": state})
 
 
 @app.route("/collection-content/gen-status")
@@ -2208,39 +2239,28 @@ def collection_content_gen_stop():
 
 @app.route("/collection-content/<int:job_id>/gen", methods=["POST"])
 def collection_content_gen(job_id):
+    """Gen lẻ / gen lại 1 collection — KHÔNG chạy đồng bộ nữa mà ĐẨY VÀO HÀNG ĐỢI nền.
+
+    Bấm nhiều bài liên tiếp → nối đuôi nhau, worker xử lý tuần tự. Client poll /gen-status.
+    """
     job = _collection_jobs_get(job_id)
     if not job:
         return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
-    import collection_content_writer as ccw
-    _collection_jobs_update(job_id, status="drafting", error=None)
-    try:
-        ctx = ccw.fetch_collection_context(job["collection_url"])
-        if not ctx.get("ok"):
-            _collection_jobs_update(job_id, status="failed", error=f"Fetch ctx: {ctx.get('error')}")
-            return jsonify({"ok": False, "error": ctx.get("error")}), 500
-        gen = ccw.gen_collection_content(
-            job["collection_url"],
-            job["collection_title"] or ctx.get("h1", ""),
-            page_title=ctx.get("page_title", ""),
-            admin_desc=ctx.get("admin_desc", ""),
-            sp_names=ctx.get("sp_names", []),
-        )
-        if not gen.get("ok"):
-            _collection_jobs_update(job_id, status="failed", error=gen.get("error"))
-            return jsonify(gen), 500
-        _collection_jobs_update(
-            job_id,
-            edited_title=gen["title"],
-            edited_meta=gen["meta"],
-            edited_body_html=gen["body_html"],
-            status="draft",
-            ai_generated_at=datetime.now().isoformat(timespec="seconds"),
-            error=None,
-        )
-        return jsonify({"ok": True, **gen})
-    except Exception as e:
-        _collection_jobs_update(job_id, status="failed", error=str(e)[:300])
-        return jsonify({"ok": False, "error": str(e)}), 500
+    state = _enqueue_collection_gen([job_id])
+    queue = state.get("queue", [])
+    if state.get("current_id") == job_id:
+        position = 0  # đang gen ngay
+    elif job_id in queue:
+        position = queue.index(job_id) + 1
+    else:
+        position = 0
+    return jsonify({
+        "ok": True, "queued": True,
+        "position": position,
+        "queue_len": len(queue),
+        "running": state.get("running", False),
+        "state": state,
+    })
 
 
 @app.route("/collection-content/<int:job_id>/gen-title-meta", methods=["POST"])
@@ -3283,8 +3303,8 @@ def products_new_organize_spec():
     try:
         organized = pw.organize_spec(name=name, parsed=parsed, spec_raw=spec_raw)
         return jsonify({"ok": True, **organized})
-    except cp.ClaudeRateLimitError as e:
-        return jsonify({"ok": False, "error": f"Claude quota hết. ({e})"}), 503
+    except cp.CodexRateLimitError as e:
+        return jsonify({"ok": False, "error": f"Codex quota hết. ({e})"}), 503
     except Exception as e:
         return jsonify({"ok": False, "error": f"Organize fail: {e}"}), 500
 
@@ -3317,8 +3337,8 @@ def products_new_generate():
             prev_angle=(body.get("prev_angle") or None),
         )
         return jsonify({"ok": True, **gen})
-    except cp.ClaudeRateLimitError as e:
-        return jsonify({"ok": False, "error": f"Claude quota hết — đợi reset rồi thử lại. ({e})"}), 503
+    except cp.CodexRateLimitError as e:
+        return jsonify({"ok": False, "error": f"Codex quota hết — đợi reset rồi thử lại. ({e})"}), 503
     except Exception as e:
         return jsonify({"ok": False, "error": f"Gen fail: {e}"}), 500
 

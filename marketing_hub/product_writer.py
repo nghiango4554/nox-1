@@ -20,7 +20,7 @@ import hashlib
 import json
 import re
 
-import claude_provider as cp
+import codex_provider as cp
 
 
 ANGLES = ["SPEC", "USE_CASE", "AUDIENCE", "PAIN_POINT", "COMPARISON"]
@@ -195,7 +195,7 @@ Spec raw paste từ nhiều nguồn (lộn xộn OK):
 
 Organize thành JSON theo schema trong system. Strict no-fabricate."""
 
-    raw = cp.call_claude(_ORGANIZE_SYSTEM_PROMPT, user, timeout=120)
+    raw = cp.call_codex(_ORGANIZE_SYSTEM_PROMPT, user, timeout=120)
 
     # Strip markdown fence
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip())
@@ -504,7 +504,7 @@ Trả về JSON duy nhất, đúng schema. Không kèm gì khác."""
 
 def generate(name: str, parsed: dict, price: str = "", warranty_months: str = "",
              organized_spec: dict | None = None, prev_angle: str | None = None) -> dict:
-    """Gọi Claude CLI gen content. Raise ClaudeRateLimitError nếu hết quota.
+    """Gọi Codex CLI gen content. Raise CodexRateLimitError nếu hết quota.
 
     organized_spec (optional): output từ organize_spec(). Nếu có → AI dùng làm
     source of truth cho spec/features/use_cases, KHÔNG bịa.
@@ -516,7 +516,7 @@ def generate(name: str, parsed: dict, price: str = "", warranty_months: str = ""
     system = _SYSTEM_PROMPT
     user = _user_prompt(name, parsed, warranty_months, angle, organized_spec=organized_spec)
 
-    raw = cp.call_claude(system, user, timeout=240)
+    raw = cp.call_codex(system, user, timeout=240)
 
     # Strip markdown fence nếu lỡ có
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip())

@@ -15,7 +15,10 @@
   2. Loa Edifier R1855DB Bluetooth (~2Tr9xx) — handle `loa-edifier-r1855db-bluetooth`
   3. Tai Nghe Gaming Xiberia X20 RGB 7.1 (~5xx.xxx) — handle `tai-nghe-gaming-xiberia-x20-den-rgb-7-1-virtual-overear`
 - [ ] **Bot Telegram token revoked (401)** từ 12/5 14:00 — vợ paste token mới để resume `@Web_Sintech_bot`.
-- [ ] **AI provider cho gen 1679 title/meta SP** — đã switch Claude CLI 17/5. Vợ confirm tiếp dùng Claude hay revert Codex sau 22/5.
+- [x] **Collection content — blueprint heading kiểu Minh Tuấn Mobile (20/5)** — `collection_content_writer._SYSTEM_PROMPT` rework: H2 NGẮN (avg ~6-7 từ), trộn taxonomy + topical + câu hỏi volume cao; 2 H2 đầu = TAXONOMY có H3 ("Các dòng [SP]" 4-6 H3 + "Phân loại [SP] theo..." 3-5 H3), bảng giá ở H2#3; dùng TÊN SP NGẮN không nhồi full title; bỏ ép "Lỗi dễ gặp"/"4 góc nhìn". Verified gen Màn Hình Asus + Laptop Acer: H2#1/#2 taxonomy có H3 (15 H3/bài), bảng từ H2#3, heading ngắn gọn. (Trước đó 20/5 đã có rule text-first, nay nâng cấp lên taxonomy-first.)
+- [x] **Auto-fix meta length collection (20/5)** — thêm `_fix_meta_length()` vào `gen_collection_content`: quick-suffix chèn cụm ngữ cảnh trước CTA (138c→157c, 135c→154c, giữ CTA HOA cuối) → fallback AI regen qua Codex 145-158c → giữ nguyên nếu fail. Trả thêm field `meta_fix`. Prompt cũng nhắm meta 148-158c (viết dài tay). Unit-test PASS. Server restart PID 22076 16:12.
+  → Mai vợ gen lại 10 bài (#19-28) trên web là ăn luôn blueprint heading mới + meta chuẩn 140-160. (Anh KHÔNG regen hôm nay theo yêu cầu vợ.)
+- [x] **AI provider cho gen** — 20/5 vợ chốt: TẤT CẢ task gen về Codex CLI. Đã swap `product_writer.py`, `collection_content_writer.py`, `app.py` (catch `CodexRateLimitError`). `seo.py`/`content_writer.py`/`blog_content_writer.py`/`ai_writer.py` vốn đã Codex. `claude_provider.py` giữ làm fallback (chỉ chạy khi Codex chưa cài).
 - [ ] **Chia Codex 3 project** — vợ chưa chốt (1 quota chung / 3 account riêng / khác).
 - [ ] **Regen 7 jobs failed** — 4 content_jobs + 3 blog_jobs (status=failed). Chờ vợ ưu tiên.
 - [ ] **Push GitHub** — repo `git@github.com:nghiango4554/nox-1.git` đã accessible SSH. Vợ chốt: push full workspace hay split repo.

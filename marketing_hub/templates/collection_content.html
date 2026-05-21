@@ -226,15 +226,18 @@
 
 <script>
 async function genAIInline(id, btn) {
-  if (!confirm(`🤖 AI gen content cho collection #${id}? (~30-60s)`)) return;
+  if (!confirm(`🤖 Thêm collection #${id} vào hàng đợi gen? Chạy ngầm — em có thể bấm gen thêm bài khác, chúng sẽ nối đuôi nhau.`)) return;
   const orig = btn.textContent;
-  btn.disabled = true; btn.textContent = '⏳ Đang gen...';
+  btn.disabled = true; btn.textContent = '⏳ Vào hàng đợi...';
   try {
     const r = await fetch(`/collection-content/${id}/gen`, {method: 'POST'});
     const d = await r.json();
     if (d.ok) {
-      btn.textContent = '✅ Done';
-      setTimeout(() => location.reload(), 1200);
+      btn.textContent = d.position > 0 ? `✅ Hàng đợi #${d.position}` : '✅ Đang gen';
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2500);
+      // Bật progress bar + poll (giống bulk) — hàng đợi dùng chung 1 worker nền
+      if (_pollTimer) clearTimeout(_pollTimer);
+      _pollBGStatus();
     } else {
       btn.textContent = orig; btn.disabled = false;
       alert('❌ Lỗi: ' + (d.error || 'unknown'));
@@ -346,6 +349,19 @@ function _renderBGProgress(s) {
       }
     }
   }
+
+  // Đánh dấu các row đang CHỜ trong hàng đợi (trừ job đang gen)
+  const queue = s.queue || [];
+  queue.forEach((qid, i) => {
+    if (qid === s.current_id) return;
+    const row = document.querySelector(`tr[data-job-id="${qid}"]`);
+    if (!row) return;
+    const pill = row.querySelector('.cc-status-pill');
+    if (pill && !pill.textContent.includes('drafting')) {
+      pill.textContent = `⏳ chờ #${i + 1}`;
+      pill.className = 'cc-status-pill cc-status-pending';
+    }
+  });
 }
 
 function dismissProgressBar() {

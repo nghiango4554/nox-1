@@ -61,6 +61,10 @@ def rate_content(title: str, meta: str, body_html: str, url_type: str = "product
     text = html_to_text(body_html)
     n_words = len(re.findall(r"\w+", text))
 
+    # Readability: chấm trên text ĐÃ STRIP BẢNG (bảng là dữ liệu cột, không phải
+    # văn xuôi — flatten thành câu giả dài làm tụt điểm oan). Bảng vẫn tính ở structure.
+    readability_text = html_to_text(scoring_core.strip_tables(body_html))
+
     # ─── Delegate to scoring_core ───
     t = scoring_core.score_title(title, max_score=_WEIGHTS["title"])
     m = scoring_core.score_meta(meta, max_score=_WEIGHTS["meta"], require_cta=True)
@@ -69,8 +73,8 @@ def rate_content(title: str, meta: str, body_html: str, url_type: str = "product
                                      require_sections=True)
     l = scoring_core.score_links(body_html, base_url=None,
                                  max_score=_WEIGHTS["links"])
-    rd_full = readability_metrics(text)  # raw metrics for `readability` field
-    r = scoring_core.score_readability(text, max_score=_WEIGHTS["readability"])
+    rd_full = readability_metrics(readability_text)  # raw metrics for `readability` field
+    r = scoring_core.score_readability(readability_text, max_score=_WEIGHTS["readability"])
 
     # ─── Bucket issues into high/med/low (legacy str-list format) ───
     issues_high, issues_med, issues_low = scoring_core.bucket_issues(
