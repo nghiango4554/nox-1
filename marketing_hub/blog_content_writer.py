@@ -12,6 +12,7 @@ import requests
 from bs4 import BeautifulSoup
 
 import codex_provider
+import sintech_rules
 import haravan_client
 from collection_content_writer import compress_html, sanitize_pasted_html  # reuse
 
@@ -53,26 +54,20 @@ def fetch_blog_context(url: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
-_SYSTEM_PROMPT = """Bạn là chuyên gia content + SEO cho Sintech.vn (shop PC/laptop/gaming gear, nền tảng Haravan).
+_SYSTEM_PROMPT = (
+    """Bạn là chuyên gia content + SEO cho Sintech.vn (shop PC/laptop/gaming gear, nền tảng Haravan).
 NHIỆM VỤ: Viết bài blog hướng dẫn / tin tức cho khách hàng (1500-3000 từ).
+BODY HTML: viết đủ ý theo cấu trúc, KHÔNG ép độ dài. Mỗi câu có nội dung thật. KHÔNG H1 (page đã có H1 article title).
 
-⚠️ LIMIT KÝ TỰ — TUÂN THỦ TUYỆT ĐỐI:
-- TITLE: 45-61 ký tự (target). KHÔNG chứa "Sintech" (Haravan auto-suffix).
-- META: 140-160 ký tự, có CTA HOA cuối câu (XEM NGAY / THAM KHẢO NGAY / TÌM HIỂU NGAY / KHÁM PHÁ NGAY).
-- BODY HTML: viết đủ ý theo cấu trúc, KHÔNG ép độ dài. Mỗi câu phải có nội dung thật. KHÔNG H1 (page đã có H1 article title).
+"""
+    + sintech_rules.common_rules_block(cta_note="Blog có thể dùng thêm CTA 'TÌM HIỂU NGAY'.")
+    + """
 
 CẤU TRÚC BODY (blog hướng dẫn):
 - Intro 3-4 câu nêu vấn đề + ai phù hợp + tóm tắt giải pháp + CTA <a href="https://sintech.vn"><strong>Sintech</strong></a>
 - 4-6 section H2 phân tích chi tiết (mỗi H2 có 2-4 đoạn + H3 nếu cần)
 - H2 "Câu hỏi thường gặp" — 4-5 FAQ H3
 - Outro 2-3 câu chốt + CTA mua/inbox Sintech
-- Signature cuối: *Bài viết bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Q7, TP.HCM.*
-
-LUẬT NỘI DUNG:
-- Public dùng "bạn", KHÔNG dùng "anh"
-- Đa dạng câu mở: "Hiện nay...", "Đối với...", "Trong khi...", "Nhờ đó..."
-- KHÔNG bịa thông số cụ thể không có trong input
-- CẤM filler: "bền bỉ", "đẹp mắt", "tốt nhất 2026", "đáng mua nhất", "khôn nhất", "trong bài này"
 - Có ít nhất 3 internal link về sintech.vn (collection/product chính)
 
 OUTPUT BẮT BUỘC: chỉ JSON thuần, KHÔNG markdown code fence.
@@ -81,15 +76,13 @@ OUTPUT BẮT BUỘC: chỉ JSON thuần, KHÔNG markdown code fence.
   "meta": "...",
   "body_html": "..."
 }"""
+)
 
 
 def gen_blog_content(blog_url: str, article_title: str,
                      page_title: str = "", existing_meta: str = "",
                      body_snippet: str = "") -> dict:
-    """Gọi Codex CLI sinh title + meta + body HTML cho 1 blog article."""
-    if not codex_provider.is_codex_available():
-        return {"ok": False, "error": "Codex CLI chưa cài."}
-
+    """Gen title + meta + body HTML cho 1 blog article (AI fallback chain Codex→Claude→Gemini)."""
     user_msg = f"""BLOG ARTICLE cần viết:
 - Tiêu đề hiện tại: {article_title}
 - URL: {blog_url}
