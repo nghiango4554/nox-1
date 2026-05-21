@@ -1921,6 +1921,12 @@ def run_title_meta_fix_all(url_type: str = None, issue_filter: str = None):
     pages = list_title_meta_pages(url_type=url_type, issue_filter=issue_filter, limit=10000)
     fixable = [p for p in pages if p["url_type"] == "product"]
     skipped = len(pages) - len(fixable)
+    # Skip SP đã gen trước đó (đã có đề xuất F/G trong Sheet) → tránh gen lại bài cũ
+    try:
+        import sheet_writer
+        done_urls = sheet_writer.list_urls_with_proposal()
+    except Exception:
+        done_urls = set()
 
     with _title_meta_fix_lock:
         _title_meta_fix_state.update({
@@ -1930,7 +1936,7 @@ def run_title_meta_fix_all(url_type: str = None, issue_filter: str = None):
             "current_url": "",
             "started_at": datetime.now().isoformat(timespec="seconds"),
             "finished_at": None,
-            "message": f"Bắt đầu fix {len(fixable)} SP (bỏ qua {skipped} blog/page/collection).",
+            "message": f"Bắt đầu fix {len(fixable)} SP (bỏ {skipped} non-product; skip SP đã gen).",
             "results": {},
         })
 
@@ -1939,6 +1945,14 @@ def run_title_meta_fix_all(url_type: str = None, issue_filter: str = None):
             if _title_meta_fix_state["stop_requested"]:
                 break
             _title_meta_fix_state["current_url"] = p["url"]
+
+        if p["url"] in done_urls:
+            with _title_meta_fix_lock:
+                _title_meta_fix_state["checked"] += 1
+                _title_meta_fix_state["skipped"] += 1
+                _title_meta_fix_state["results"][p["url"]] = {
+                    "status": "skipped", "error": "Đã gen trước đó (có trong Sheet)"}
+            continue
 
         try:
             result = fix_title_meta_for_url(p["url"])

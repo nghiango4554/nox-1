@@ -181,6 +181,7 @@
       <col style="width:28%">
       <col style="width:170px">
       <col style="width:50px">
+      <col style="width:96px">
       <col style="width:130px">
     </colgroup>
     <thead>
@@ -192,6 +193,7 @@
         <th>Meta hiện tại</th>
         <th>Lỗi</th>
         <th style="text-align:center">Điểm</th>
+        <th style="text-align:center">Trạng thái</th>
         <th style="text-align:center">Hành động</th>
       </tr>
     </thead>
@@ -259,6 +261,9 @@
             {% elif it.score >= 60 %}<span class="tm-score ok">{{ it.score }}</span>
             {% else %}<span class="tm-score bad">{{ it.score }}</span>{% endif %}
           {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td class="status-cell" style="text-align:center">
+          <span class="tm-status" data-url="{{ it.url }}" style="font-size:11px;color:var(--text-muted)">⏳</span>
         </td>
         <td class="action-cell" style="text-align:center">
           {% if it.url_type == 'product' %}
@@ -328,6 +333,7 @@ function applyFixResultToRow(row, data) {
   }
   if (issueCell) issueCell.innerHTML = '<span class="tm-chip" style="background:rgba(52,211,153,0.16);border-color:rgba(52,211,153,0.32);color:#86efac">✅ Đã fix</span>';
   if (actionCell) actionCell.innerHTML = '<span style="color:#34d399;font-size:11px;font-weight:600">✅ Done</span>';
+  markStatus(row, 'done');
   row.style.background = 'rgba(52,211,153,0.08)';
 }
 
@@ -395,6 +401,9 @@ async function pollStatus() {
             new_title: res.new_title, new_meta: res.new_meta,
             title_len: res.title_len, meta_len: res.meta_len,
           });
+          markStatus(row, 'done');
+        } else if (res.status === 'skipped') {
+          markStatus(row, 'skipped');
         } else {
           const actionCell = row.querySelector('.action-cell');
           if (actionCell) {
@@ -501,6 +510,35 @@ function copyTitleMetaTable() {
       if (s.running) startPolling();
     }
   } catch (err) { console.error(err); }
+})();
+
+function markStatus(row, kind) {
+  const el = row && row.querySelector('.tm-status');
+  if (!el) return;
+  if (kind === 'done')         el.innerHTML = '<span style="color:#34d399;font-weight:600">✅ Đã gen</span>';
+  else if (kind === 'skipped') el.innerHTML = '<span style="color:#94a3b8">⏭️ Đã gen (skip)</span>';
+  else                         el.innerHTML = '<span style="color:#94a3b8">⬜ Chưa gen</span>';
+}
+
+// ─── Cột Trạng thái: đánh dấu SP đã gen (có đề xuất F/G trong Sheet) ───
+(async function loadGenMap() {
+  try {
+    const r = await fetch('{{ url_for("seo_title_meta_gen_map") }}');
+    const d = await r.json();
+    const done = new Set(d.done || []);
+    document.querySelectorAll('.tm-status').forEach(el => {
+      const row = el.closest('tr');
+      if (done.has(el.dataset.url)) {
+        markStatus(row, 'done');
+        const btn = row.querySelector('.action-cell button');
+        if (btn) { btn.style.opacity = '0.55'; btn.title = 'Đã gen rồi — bấm nếu muốn gen lại'; }
+      } else {
+        markStatus(row, 'todo');
+      }
+    });
+  } catch (e) {
+    document.querySelectorAll('.tm-status').forEach(el => el.textContent = '?');
+  }
 })();
 </script>
 

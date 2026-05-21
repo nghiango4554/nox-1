@@ -1796,6 +1796,17 @@ def seo_title_meta_fix_all_status():
     return jsonify(seo_mod.title_meta_fix_state())
 
 
+@app.route("/api/seo/title-meta/gen-map")
+def seo_title_meta_gen_map():
+    """Set URL đã gen (đã có đề xuất F/G trong Sheet) — cho cột Trạng thái + skip gen lại."""
+    try:
+        import sheet_writer
+        done = sorted(sheet_writer.list_urls_with_proposal())
+        return jsonify({"ok": True, "done": done, "count": len(done)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)[:200], "done": []})
+
+
 # ─────────────────────────── GSC INSIGHTS ───────────────────────────
 
 
