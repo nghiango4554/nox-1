@@ -15,6 +15,20 @@
 - **product_writer.py KHÔNG phải legacy** (đã verify): `app.py` gọi `pw.organize_spec` (3429) + `pw.generate` (3456) cho route `/products/new`. 2 writer cố ý tách: `ai_writer`=/content-jobs (viết mô tả SP đã có), `product_writer`=/products/new (tạo SP mới từ spec nhập tay).
 - **Verify**: py_compile 7 file OK; import + render dưới Python 3.12 OK (cả body-writer RULE CHUNG inject đúng 1 lần/writer + 2 prompt title/meta có block chung, length riêng giữ nguyên 45-58/145-158 & 48-58/140-160, schema JSON nguyên); restart server (watchdog .bat, PID mới **12488**) → routes `/content-jobs /collection-content /blog-content /products/new /seo/title-meta /` = **200**. **Đã commit** Task #8 Phase 1+1.5+1b.
 
+## ✅ Task #8 — Phase 2 (gom tầng sync, behavior-preserving) — 21/5 19:xx
+
+- **Quyết định scope**: 3 gen-engine khác shape thật (content_jobs=2-phase async+image worker; collection/blog=single-phase sync) → KHÔNG ép "1 engine" (over-abstraction, rủi ro cao, lợi ít vì score/provider/rule đã chung). Chỉ gom 2 mối nguy cross-cutting + dedup phần giống hệt.
+- **TẠO `job_sync.py`** (nguồn chung tầng sync):
+  - `SEO_TITLE_FIELD`/`SEO_DESC_FIELD` + `seo_metafields(title, meta)` — hợp đồng flat field theme Sintech đọc SEO (`metafields_global_*`, verified 15/5). Trước lặp magic-string ở 3 nơi.
+  - `apply_sync_result(update_fn, job_id, res, err_len=500)` — map sync→status (synced+synced_at+error=None / failed+error[:N]). 1 nguồn → chặn tái diễn bug "sync fail mà giữ synced".
+- **Refactor dùng chung**:
+  - `collection_content_writer.sync_collection_to_haravan` + `blog_content_writer.sync_blog_to_haravan` → `**job_sync.seo_metafields(title, meta)`.
+  - `content_jobs_sync` (app.py) → field name dùng constant (GIỮ field-flag + lazy image upload + activity_log + err_len 200 riêng).
+  - 4 route collection/blog sync + sync-all → `job_sync.apply_sync_result`.
+  - 2 route save collection/blog (giống hệt) → helper chung `_save_seo_job_edits`.
+- **KHÔNG đụng**: gen-engine, 2-phase worker content_jobs, logic ảnh/bulk/field-flag, schema DB.
+- **Verify**: py_compile 4 file OK; unit-test `job_sync` (seo_metafields strip + None-skip, apply_sync_result synced/failed + truncate 500) PASS; restart server (PID **2732**) → routes `/collection-content /blog-content /content-jobs /seo/title-meta /products/new /` + 3 detail page (315/229/60) = **200**. KHÔNG test sync thật (tránh PUT Haravan) — đổi behavior-preserving, payload key/value y hệt bản cũ.
+
 ## 🚧 Đang dở (active) — snapshot trước /clear LẦN 2 (16/5 21:00)
 
 ### 🔴 Active — có thể trigger NGAY (anh hoặc vợ 1-click)

@@ -136,12 +136,12 @@ def sync_blog_to_haravan(blog_id: int, article_id: int,
     Theme đọc title/meta từ flat field `metafields_global_*` (verified 15/5).
     KHÔNG đổi field `title` (tên bài) để giữ slug.
     """
+    import job_sync
     body_compressed = compress_html(sanitize_pasted_html(body_html))
     try:
         haravan_client.update_article(int(blog_id), int(article_id), {
             "body_html": body_compressed,
-            "metafields_global_title_tag": (title or "").strip(),
-            "metafields_global_description_tag": (meta or "").strip(),
+            **job_sync.seo_metafields(title, meta),
         })
     except Exception as e:
         return {"ok": False, "error": f"PUT article: {e}"}

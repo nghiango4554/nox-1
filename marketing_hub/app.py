@@ -35,6 +35,7 @@ import product_parser as pp
 import product_writer as pw
 import codex_provider as cp
 import haravan_client as hv_client
+import job_sync
 
 ROOT = Path(__file__).parent
 ALLOWED_EXT = {"jpg", "jpeg", "png", "gif", "webp", "mp4"}
@@ -2424,14 +2425,22 @@ def collection_content_gen_title_meta(job_id):
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+def _save_seo_job_edits(update_fn, job_id):
+    """Lưu edit title/meta/body từ form detail (CHUNG cho collection + blog).
+
+    update_fn tự lo recompute quality/readability khi có edited_* (xem _*_jobs_update).
+    """
+    payload = request.get_json(silent=True) or request.form
+    update_fn(job_id,
+              edited_title=(payload.get("title") or "").strip(),
+              edited_meta=(payload.get("meta") or "").strip(),
+              edited_body_html=(payload.get("body") or "").strip())
+    return jsonify({"ok": True})
+
+
 @app.route("/collection-content/<int:job_id>/save", methods=["POST"])
 def collection_content_save(job_id):
-    payload = request.get_json(silent=True) or request.form
-    title = (payload.get("title") or "").strip()
-    meta = (payload.get("meta") or "").strip()
-    body = (payload.get("body") or "").strip()
-    _collection_jobs_update(job_id, edited_title=title, edited_meta=meta, edited_body_html=body)
-    return jsonify({"ok": True})
+    return _save_seo_job_edits(_collection_jobs_update, job_id)
 
 
 @app.route("/collection-content/<int:job_id>/sync", methods=["POST"])
@@ -2450,15 +2459,9 @@ def collection_content_sync(job_id):
         job.get("edited_meta") or "",
         job["edited_body_html"],
     )
-    if res.get("ok"):
-        _collection_jobs_update(job_id, status="synced",
-                                synced_at=datetime.now().isoformat(timespec="seconds"),
-                                error=None)
+    # apply_sync_result reset 'failed' khi fail (kể cả khi trước đó là 'synced')
+    if job_sync.apply_sync_result(_collection_jobs_update, job_id, res):
         return jsonify({"ok": True})
-    # Sync fail — reset status về 'failed' để UI hiện rõ (kể cả khi trước đó là 'synced')
-    _collection_jobs_update(job_id,
-                             status="failed",
-                             error=res.get("error", "")[:500])
     return jsonify(res), 500
 
 
@@ -2479,14 +2482,9 @@ def collection_content_sync_all():
                 job["edited_title"], job.get("edited_meta") or "",
                 job["edited_body_html"],
             )
-            if res.get("ok"):
-                _collection_jobs_update(job["id"], status="synced",
-                                        synced_at=datetime.now().isoformat(timespec="seconds"),
-                                        error=None)
+            if job_sync.apply_sync_result(_collection_jobs_update, job["id"], res):
                 ok += 1
             else:
-                _collection_jobs_update(job["id"], status="failed",
-                                        error=res.get("error", "")[:500])
                 fail += 1; errors.append(f"#{job['id']}: {res.get('error', '')[:80]}")
         except Exception as e:
             fail += 1; errors.append(f"#{job['id']}: {str(e)[:80]}")
@@ -2617,12 +2615,7 @@ def blog_content_gen(job_id):
 
 @app.route("/blog-content/<int:job_id>/save", methods=["POST"])
 def blog_content_save(job_id):
-    payload = request.get_json(silent=True) or request.form
-    title = (payload.get("title") or "").strip()
-    meta = (payload.get("meta") or "").strip()
-    body = (payload.get("body") or "").strip()
-    _blog_jobs_update(job_id, edited_title=title, edited_meta=meta, edited_body_html=body)
-    return jsonify({"ok": True})
+    return _save_seo_job_edits(_blog_jobs_update, job_id)
 
 
 @app.route("/blog-content/<int:job_id>/sync", methods=["POST"])
@@ -2642,12 +2635,8 @@ def blog_content_sync(job_id):
         job.get("edited_meta") or "",
         job["edited_body_html"],
     )
-    if res.get("ok"):
-        _blog_jobs_update(job_id, status="synced",
-                          synced_at=datetime.now().isoformat(timespec="seconds"),
-                          error=None)
+    if job_sync.apply_sync_result(_blog_jobs_update, job_id, res):
         return jsonify({"ok": True})
-    _blog_jobs_update(job_id, status="failed", error=res.get("error", "")[:500])
     return jsonify(res), 500
 
 
@@ -2670,14 +2659,9 @@ def blog_content_sync_all():
                 job["edited_title"], job.get("edited_meta") or "",
                 job["edited_body_html"],
             )
-            if res.get("ok"):
-                _blog_jobs_update(job["id"], status="synced",
-                                  synced_at=datetime.now().isoformat(timespec="seconds"),
-                                  error=None)
+            if job_sync.apply_sync_result(_blog_jobs_update, job["id"], res):
                 ok += 1
             else:
-                _blog_jobs_update(job["id"], status="failed",
-                                  error=res.get("error", "")[:500])
                 fail += 1; errors.append(f"#{job['id']}: {res.get('error', '')[:80]}")
         except Exception as e:
             fail += 1; errors.append(f"#{job['id']}: {str(e)[:80]}")
@@ -3007,9 +2991,9 @@ def content_jobs_sync():
             errors.append(f"#{jid}: chưa tick field nào")
             continue
         if sync_title:
-            payload["metafields_global_title_tag"] = (job.get("edited_title") or "").strip()
+            payload[job_sync.SEO_TITLE_FIELD] = (job.get("edited_title") or "").strip()
         if sync_desc:
-            payload["metafields_global_description_tag"] = (job.get("edited_meta") or "").strip()
+            payload[job_sync.SEO_DESC_FIELD] = (job.get("edited_meta") or "").strip()
         try:
             haravan_client.update_product(int(job["haravan_id"]), payload)
             db.content_job_update(

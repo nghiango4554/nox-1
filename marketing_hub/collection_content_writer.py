@@ -884,12 +884,12 @@ def sync_collection_to_haravan(haravan_id: int, title: str, meta: str, body_html
     `metafields_global_description_tag` (verified 15/5 — endpoint /metafields
     cũng nhận data nhưng theme KHÔNG đọc từ đó).
     """
+    import job_sync
     body_compressed = compress_html(sanitize_pasted_html(body_html))
     payload = {
         "id": haravan_id,
         "body_html": body_compressed,
-        "metafields_global_title_tag": (title or "").strip(),
-        "metafields_global_description_tag": (meta or "").strip(),
+        **job_sync.seo_metafields(title, meta),
     }
 
     try:
