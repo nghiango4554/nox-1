@@ -21,6 +21,7 @@ import json
 import re
 
 import codex_provider as cp
+import ai_provider
 
 
 ANGLES = ["SPEC", "USE_CASE", "AUDIENCE", "PAIN_POINT", "COMPARISON"]
@@ -195,7 +196,7 @@ Spec raw paste từ nhiều nguồn (lộn xộn OK):
 
 Organize thành JSON theo schema trong system. Strict no-fabricate."""
 
-    raw = cp.call_codex(_ORGANIZE_SYSTEM_PROMPT, user, timeout=120)
+    raw = ai_provider.call_ai(_ORGANIZE_SYSTEM_PROMPT, user, timeout=120)
 
     # Strip markdown fence
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip())
@@ -516,7 +517,7 @@ def generate(name: str, parsed: dict, price: str = "", warranty_months: str = ""
     system = _SYSTEM_PROMPT
     user = _user_prompt(name, parsed, warranty_months, angle, organized_spec=organized_spec)
 
-    raw = cp.call_codex(system, user, timeout=240)
+    raw = ai_provider.call_ai(system, user, timeout=240)
 
     # Strip markdown fence nếu lỡ có
     cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip())

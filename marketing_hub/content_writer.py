@@ -706,9 +706,14 @@ def gen_text_phase(job_id: int) -> dict:
         db.content_job_update(job_id, status="pending", error=None)
         return {"ok": False, "rate_limit": True, "error": str(e)[:500]}
     except Exception as e:
-        # Detect bằng substring vì có thể bị wrap trong RuntimeError khác
+        # Detect rate-limit: AIQuotaError (mọi provider cạn) hoặc substring
         msg = str(e)
-        if codex_provider._is_rate_limit_message(msg):
+        try:
+            import ai_provider
+            _is_quota = isinstance(e, ai_provider.AIQuotaError)
+        except Exception:
+            _is_quota = False
+        if _is_quota or codex_provider._is_rate_limit_message(msg):
             db.content_job_update(job_id, status="pending", error=None)
             return {"ok": False, "rate_limit": True, "error": msg[:500]}
         db.content_job_update(job_id, status="failed", error=f"text_phase {e.__class__.__name__}: {e}"[:500])

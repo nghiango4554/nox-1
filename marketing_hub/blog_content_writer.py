@@ -101,9 +101,10 @@ Viết lại: title 45-61c + meta 140-160c + body_html theo cấu trúc blog hư
 Trả JSON thuần."""
 
     try:
-        raw = codex_provider.call_codex(_SYSTEM_PROMPT, user_msg, timeout=240)
+        import ai_provider
+        raw = ai_provider.call_ai(_SYSTEM_PROMPT, user_msg, timeout=240)
     except Exception as e:
-        return {"ok": False, "error": f"Codex: {e}"}
+        return {"ok": False, "error": f"AI: {e}"}
 
     text = raw.strip()
     text = re.sub(r"^```(?:json)?\s*", "", text)

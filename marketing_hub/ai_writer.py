@@ -376,8 +376,9 @@ def _call_openai(system_prompt: str, user_prompt: str) -> str:
 
 
 def _call_codex(system_prompt: str, user_prompt: str, reasoning_effort: str = "low") -> str:
-    import codex_provider
-    return codex_provider.call_codex(
+    # Fallback chain: Codex -> Claude -> Gemini (tự nhảy khi 1 provider hết quota/treo)
+    import ai_provider
+    return ai_provider.call_ai(
         system_prompt, user_prompt,
         timeout=240,
         reasoning_effort=reasoning_effort,

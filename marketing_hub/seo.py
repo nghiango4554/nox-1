@@ -1738,10 +1738,8 @@ OUTPUT BẮT BUỘC: chỉ JSON thuần (KHÔNG markdown code fence, KHÔNG text
 
 def _gen_title_meta_via_codex(product_title: str, url: str,
                               current_title: str = "", current_meta: str = "") -> dict:
-    """Gọi Codex CLI sinh 3 title + 3 meta. Return {ok, titles[], metas[], error}."""
-    import codex_provider
-    if not codex_provider.is_codex_available():
-        return {"ok": False, "error": "Codex CLI chưa cài (npm install -g @openai/codex)."}
+    """Gen 3 title + 3 meta qua AI fallback chain (Codex→Claude→Gemini). Return {ok, titles[], metas[], error}."""
+    import ai_provider
 
     user_msg = f"""SP cần viết:
 - Tên SP / chủ đề: {product_title}
@@ -1752,11 +1750,11 @@ def _gen_title_meta_via_codex(product_title: str, url: str,
 Sinh 3 title + 3 meta mới theo rule. Trả JSON thuần."""
 
     try:
-        raw = codex_provider.call_codex(_TITLE_META_SYSTEM_PROMPT, user_msg, timeout=120)
-    except codex_provider.CodexRateLimitError as e:
-        return {"ok": False, "error": f"Codex rate limit: {e}"}
+        raw = ai_provider.call_ai(_TITLE_META_SYSTEM_PROMPT, user_msg, timeout=120)
+    except ai_provider.AIQuotaError as e:
+        return {"ok": False, "error": f"AI hết quota (mọi provider): {e}"}
     except Exception as e:
-        return {"ok": False, "error": f"Codex error: {e}"}
+        return {"ok": False, "error": f"AI error: {e}"}
 
     text = raw.strip()
     # Strip code fence nếu có

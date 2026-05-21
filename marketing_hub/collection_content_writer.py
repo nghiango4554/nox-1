@@ -12,6 +12,7 @@ import requests
 from bs4 import BeautifulSoup
 
 import codex_provider
+import ai_provider
 import haravan_client
 
 HEAD = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36"}
@@ -406,7 +407,7 @@ def _ai_regen_meta(old_meta: str, collection_name: str) -> str:
            f"Meta cũ (sai length {len(old_meta)}c): {old_meta}\n"
            "Viết lại đúng 145-158 ký tự, giữ ý chính.")
     try:
-        raw = codex_provider.call_codex(sysp, usr, timeout=60, reasoning_effort="low")
+        raw = ai_provider.call_ai(sysp, usr, timeout=60, reasoning_effort="low")
     except Exception:
         return ""
     for ln in raw.strip().splitlines():
@@ -495,7 +496,7 @@ def _expand_body_to_floor(body_html: str, collection_name: str, max_retries: int
                f"trả về body ĐẦY ĐỦ (cũ + phần thêm) dạng JSON {{\"body_html\":\"...\"}}.\n\n"
                f"--- BODY HIỆN TẠI ---\n{best}")
         try:
-            raw = codex_provider.call_codex(_EXPAND_SYSTEM_PROMPT, usr, timeout=180)
+            raw = ai_provider.call_ai(_EXPAND_SYSTEM_PROMPT, usr, timeout=180)
         except Exception:
             break
         text = raw.strip()
@@ -556,7 +557,7 @@ YÊU CẦU CỨNG:
 Trả JSON thuần."""
 
     try:
-        raw = codex_provider.call_codex(_SYSTEM_PROMPT, user_msg, timeout=180)
+        raw = ai_provider.call_ai(_SYSTEM_PROMPT, user_msg, timeout=180)
     except Exception as e:
         return {"ok": False, "error": f"Codex: {e}"}
 
@@ -683,7 +684,7 @@ Trả JSON {schema} duy nhất."""
 
     try:
         if use_codex:
-            raw = codex_provider.call_codex(_TITLE_META_SYSTEM_PROMPT, user_msg, timeout=90)
+            raw = ai_provider.call_ai(_TITLE_META_SYSTEM_PROMPT, user_msg, timeout=90)
         else:
             raw = cp_claude.call_claude(_TITLE_META_SYSTEM_PROMPT, user_msg, timeout=90)
     except Exception as e:
