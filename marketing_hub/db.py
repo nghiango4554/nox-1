@@ -280,6 +280,42 @@ def init_db():
     # Default sync_meta_title + sync_meta_desc = 1 (em đã chốt sync hết, không cần tick)
     conn.execute("UPDATE content_jobs SET sync_meta_title=1, sync_meta_desc=1 WHERE sync_meta_title=0 OR sync_meta_desc=0")
 
+    # ─── Blog Pillar/Cluster (T4) ───
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS blog_pillars (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            intent TEXT,
+            content_group TEXT,
+            audience TEXT,
+            reason TEXT,
+            priority TEXT,
+            target_category TEXT,
+            layer TEXT,
+            cluster_count INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
+    # blog_jobs: cột mới cho bài AI Pillar/Cluster (net-new, chưa có URL thật)
+    bj_cols = {r["name"] for r in conn.execute("PRAGMA table_info(blog_jobs)").fetchall()}
+    bj_new = {
+        "pillar_id": "INTEGER",
+        "pillar": "TEXT",
+        "keyword": "TEXT",
+        "intent": "TEXT",
+        "content_layer": "TEXT",        # money / support / media
+        "unique_angle": "TEXT",
+        "internal_link_hint": "TEXT",
+        "priority": "TEXT",             # Cao / Trung bình / Thấp
+        "article_type": "TEXT",         # Trend / Evergreen / How-to / So sánh / Giải thích
+        "is_external": "INTEGER DEFAULT 0",   # 1 = bài ngoài lề có kiểm soát
+        "source": "TEXT DEFAULT 'seo_seed'",  # seo_seed | ai_pillar
+        "target_blog": "TEXT",          # huong-dan | news (loại blog Haravan dự kiến)
+    }
+    for col, col_type in bj_new.items():
+        if col not in bj_cols:
+            conn.execute(f"ALTER TABLE blog_jobs ADD COLUMN {col} {col_type}")
+
     conn.commit()
     conn.close()
 

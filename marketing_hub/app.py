@@ -262,6 +262,8 @@ def dashboard():
     return render_template(
         "dashboard.html",
         stats=s,
+        health=_dashboard_health(),
+        worklog_tasks=_worklog_tasks(),
         upcoming=upcoming,
         page=page,
         types=POST_TYPES,
@@ -2516,13 +2518,19 @@ def collection_content_sync_all():
 # ─────────────────────────── BLOG CONTENT (bài viết huong-dan/news) ───────────────────────────
 
 
-def _blog_jobs_list(status: str = None):
+def _blog_jobs_list(status: str = None, source: str = None, blog: str = None):
     conn = db.get_conn()
-    sql = "SELECT * FROM blog_jobs"
+    sql = "SELECT * FROM blog_jobs WHERE 1=1"
     args = []
     if status:
-        sql += " WHERE status = ?"
+        sql += " AND status = ?"
         args.append(status)
+    if source:
+        sql += " AND source = ?"
+        args.append(source)
+    if blog:
+        sql += " AND target_blog = ?"
+        args.append(blog)
     sql += " ORDER BY click DESC, id ASC"
     rows = conn.execute(sql, args).fetchall()
     conn.close()
@@ -2576,14 +2584,25 @@ def _blog_jobs_update(job_id: int, **fields):
 @app.route("/blog-content")
 def blog_content_page():
     status_filter = request.args.get("status") or None
-    jobs = _blog_jobs_list(status=status_filter)
+    source_filter = request.args.get("source") or None
+    blog_filter = request.args.get("blog") or None
+    jobs = _blog_jobs_list(status=status_filter, source=source_filter, blog=blog_filter)
+    import image_gather
+    for j in jobs:  # badge ảnh: số đã gom · số đã chọn
+        items = image_gather.load_meta(j["id"]).get("items", [])
+        j["img_count"] = len(items)
+        j["img_selected"] = sum(1 for it in items if it.get("selected"))
     conn = db.get_conn()
     stats = {}
     for s in ("pending", "draft", "synced", "failed"):
         stats[s] = conn.execute("SELECT COUNT(*) FROM blog_jobs WHERE status=?", (s,)).fetchone()[0]
     stats["total"] = conn.execute("SELECT COUNT(*) FROM blog_jobs").fetchone()[0]
+    blog_counts = {r[0]: r[1] for r in conn.execute(
+        "SELECT target_blog, COUNT(*) FROM blog_jobs GROUP BY target_blog").fetchall()}
     conn.close()
-    return render_template("blog_content.html", jobs=jobs, stats=stats, active_status=status_filter)
+    return render_template("blog_content.html", jobs=jobs, stats=stats,
+                           active_status=status_filter, active_blog=blog_filter,
+                           blog_counts=blog_counts, shop="sintech.myharavan.com")
 
 
 @app.route("/blog-content/<int:job_id>")
@@ -2592,44 +2611,69 @@ def blog_content_detail_page(job_id):
     if not job:
         flash("Bài không tồn tại.", "error")
         return redirect(url_for("blog_content_page"))
-    return render_template("blog_content_detail.html", job=job)
+    import image_gather
+    meta = image_gather.load_meta(job_id)
+    images = meta.get("items", []) if meta else []
+    for it in images:
+        it["thumb_url"] = url_for("blog_content_image", job_id=job_id, filename=it["file"])
+    return render_template("blog_content_detail.html", job=job, images=images)
+
+
+def _run_blog_gen(job_id, gather_images=True):
+    """Gen 1 bài blog. ai_pillar → brief-mode (viết mới); seo_seed → scrape-mode (cào URL cũ).
+    Sau khi gen xong tự gom ảnh ứng viên (T2). Trả dict gen ({ok,...} hoặc {ok:False,error})."""
+    job = _blog_jobs_get(job_id)
+    if not job:
+        return {"ok": False, "error": "Job không tồn tại"}
+    import blog_content_writer as bcw
+    _blog_jobs_update(job_id, status="drafting", error=None)
+    try:
+        if job.get("source") == "ai_pillar":
+            gen = bcw.gen_blog_content_from_brief(job)
+        else:
+            ctx = bcw.fetch_blog_context(job["blog_url"])
+            if not ctx.get("ok"):
+                _blog_jobs_update(job_id, status="failed", error=f"Fetch ctx: {ctx.get('error')}")
+                return {"ok": False, "error": ctx.get("error")}
+            gen = bcw.gen_blog_content(
+                job["blog_url"], job["article_title"] or ctx.get("h1", ""),
+                page_title=ctx.get("page_title", ""), existing_meta=ctx.get("existing_meta", ""),
+                body_snippet=ctx.get("body_snippet", ""))
+        if not gen.get("ok"):
+            _blog_jobs_update(job_id, status="failed", error=gen.get("error"))
+            return gen
+        body_html = gen["body_html"]
+        if gather_images:
+            try:
+                import image_gather
+                q = gen["title"] or job.get("article_title") or ""
+                # ai_pillar: handle là slug (không phải SP) → để rỗng, match theo keyword
+                handles = [job["handle"]] if (job.get("source") != "ai_pillar" and job.get("handle")) else []
+                res_img = image_gather.gather(job_id, q, product_handles=handles, max_n=10)
+                # AI tự chọn 2-3 ảnh (ưu tiên ảnh SP Sintech) + tự chèn vào bài → em chỉ vào duyệt
+                picked = image_gather.auto_pick(res_img.get("items", []), n=3)
+                if picked:
+                    body_html, used = image_gather.insert_into_body(gen["body_html"], picked)
+                    image_gather.mark_selected(job_id, [u["idx"] for u in used])
+            except Exception as e:
+                print(f"[blog gen auto-image] #{job_id}: {e}")
+        _blog_jobs_update(
+            job_id, edited_title=gen["title"], edited_meta=gen["meta"],
+            edited_body_html=body_html, status="draft",
+            ai_generated_at=datetime.now().isoformat(timespec="seconds"), error=None)
+        gen["body_html"] = body_html
+        return {"ok": True, **gen}
+    except Exception as e:
+        _blog_jobs_update(job_id, status="failed", error=str(e)[:300])
+        return {"ok": False, "error": str(e)}
 
 
 @app.route("/blog-content/<int:job_id>/gen", methods=["POST"])
 def blog_content_gen(job_id):
-    job = _blog_jobs_get(job_id)
-    if not job:
+    if not _blog_jobs_get(job_id):
         return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
-    import blog_content_writer as bcw
-    _blog_jobs_update(job_id, status="drafting", error=None)
-    try:
-        ctx = bcw.fetch_blog_context(job["blog_url"])
-        if not ctx.get("ok"):
-            _blog_jobs_update(job_id, status="failed", error=f"Fetch ctx: {ctx.get('error')}")
-            return jsonify({"ok": False, "error": ctx.get("error")}), 500
-        gen = bcw.gen_blog_content(
-            job["blog_url"],
-            job["article_title"] or ctx.get("h1", ""),
-            page_title=ctx.get("page_title", ""),
-            existing_meta=ctx.get("existing_meta", ""),
-            body_snippet=ctx.get("body_snippet", ""),
-        )
-        if not gen.get("ok"):
-            _blog_jobs_update(job_id, status="failed", error=gen.get("error"))
-            return jsonify(gen), 500
-        _blog_jobs_update(
-            job_id,
-            edited_title=gen["title"],
-            edited_meta=gen["meta"],
-            edited_body_html=gen["body_html"],
-            status="draft",
-            ai_generated_at=datetime.now().isoformat(timespec="seconds"),
-            error=None,
-        )
-        return jsonify({"ok": True, **gen})
-    except Exception as e:
-        _blog_jobs_update(job_id, status="failed", error=str(e)[:300])
-        return jsonify({"ok": False, "error": str(e)}), 500
+    res = _run_blog_gen(job_id)
+    return jsonify(res) if res.get("ok") else (jsonify(res), 500)
 
 
 @app.route("/blog-content/<int:job_id>/save", methods=["POST"])
@@ -2637,25 +2681,78 @@ def blog_content_save(job_id):
     return _save_seo_job_edits(_blog_jobs_update, job_id)
 
 
+# blog_id Sintech theo loại bài (Open API haravan_blog). huong-dan=Hướng dẫn · news=Tin tức.
+BLOG_ID_BY_TARGET = {"huong-dan": 1000960873, "news": 1000906526}
+
+
+def _push_blog_to_haravan(job, publish=True):
+    """Đẩy 1 bài blog lên Haravan qua Open API (haravan_blog.py — KHÔNG dùng admin metafields).
+    Chưa có haravan_article_id → tạo bài MỚI (hidden = not publish). Đã có → update (giữ trạng thái).
+    Trả {ok, article_id, blog_id, created} hoặc {ok:False, error}."""
+    import haravan_blog
+    import blog_content_writer as bcw
+    title = (job.get("edited_title") or "").strip()
+    body = job.get("edited_body_html") or ""
+    if not title or not body:
+        return {"ok": False, "error": "Chưa có title/body — gen AI trước."}
+    body_html = bcw.compress_html(bcw.sanitize_pasted_html(body))
+    blog_id = job.get("haravan_blog_id") or BLOG_ID_BY_TARGET.get(
+        (job.get("target_blog") or "news").strip(), 1000906526)
+    fields = {
+        "title": title,
+        "author": "Sintech",
+        "body_html": body_html,
+        "page_title": title,
+        "meta_description": (job.get("edited_meta") or "").strip(),
+    }
+    if job.get("handle"):
+        fields["handle"] = job["handle"]
+    if job.get("keyword"):
+        fields["tags"] = job["keyword"]
+    try:  # ảnh đại diện: ưu tiên hero AI (is_hero), sau đó ảnh chọn đầu tiên (URL CDN công khai)
+        import image_gather
+        _items = image_gather.load_meta(job["id"]).get("items", [])
+        _hero = next((it for it in _items if it.get("is_hero") and it.get("origin_url")), None)
+        _sel = [it for it in _items if it.get("selected") and it.get("origin_url")]
+        _chosen = _hero or (_sel[0] if _sel else None)
+        if _chosen:
+            fields["image"] = {"src": _chosen["origin_url"]}
+    except Exception:
+        pass
+    try:
+        aid = job.get("haravan_article_id")
+        if aid:
+            haravan_blog.update_article(int(blog_id), int(aid), fields)
+            return {"ok": True, "article_id": int(aid), "blog_id": int(blog_id), "created": False}
+        art = haravan_blog.create_article(int(blog_id), fields, hidden=not publish)
+        return {"ok": True, "article_id": art.get("id"), "blog_id": int(blog_id), "created": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:300]}
+
+
+def _apply_blog_push(job_id, res):
+    """Map kết quả push → cập nhật blog_jobs (synced + lưu article_id/blog_id nếu vừa tạo)."""
+    if not res.get("ok"):
+        _blog_jobs_update(job_id, status="failed", error=(res.get("error") or "")[:500])
+        return False
+    upd = {"status": "synced", "synced_at": datetime.now().isoformat(timespec="seconds"), "error": None}
+    if res.get("created"):
+        upd["haravan_article_id"] = res.get("article_id")
+        upd["haravan_blog_id"] = res.get("blog_id")
+    _blog_jobs_update(job_id, **upd)
+    return True
+
+
 @app.route("/blog-content/<int:job_id>/sync", methods=["POST"])
 def blog_content_sync(job_id):
+    """Vợ đã duyệt tay → sync thẳng lên Haravan, PUBLISH hiện (Google index được)."""
     job = _blog_jobs_get(job_id)
     if not job:
         return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
-    if not job.get("haravan_article_id") or not job.get("haravan_blog_id"):
-        return jsonify({"ok": False, "error": "Thiếu haravan_article_id/blog_id"}), 400
-    if not job.get("edited_title") or not job.get("edited_body_html"):
-        return jsonify({"ok": False, "error": "Chưa có title/body — gen AI trước"}), 400
-    import blog_content_writer as bcw
-    res = bcw.sync_blog_to_haravan(
-        int(job["haravan_blog_id"]),
-        int(job["haravan_article_id"]),
-        job["edited_title"],
-        job.get("edited_meta") or "",
-        job["edited_body_html"],
-    )
-    if job_sync.apply_sync_result(_blog_jobs_update, job_id, res):
-        return jsonify({"ok": True})
+    res = _push_blog_to_haravan(job, publish=True)
+    if _apply_blog_push(job_id, res):
+        return jsonify({"ok": True, "article_id": res.get("article_id"),
+                        "created": res.get("created"), "published": True})
     return jsonify(res), 500
 
 
@@ -2664,30 +2761,257 @@ def blog_content_sync_all():
     jobs = _blog_jobs_list(status="draft")
     ok = fail = 0
     errors = []
-    import blog_content_writer as bcw
     import time as _t
     for job in jobs:
-        if (not job.get("haravan_article_id") or not job.get("haravan_blog_id")
-                or not job.get("edited_title") or not job.get("edited_body_html")):
-            fail += 1; errors.append(f"#{job['id']}: thiếu data")
-            continue
-        try:
-            res = bcw.sync_blog_to_haravan(
-                int(job["haravan_blog_id"]),
-                int(job["haravan_article_id"]),
-                job["edited_title"], job.get("edited_meta") or "",
-                job["edited_body_html"],
-            )
-            if job_sync.apply_sync_result(_blog_jobs_update, job["id"], res):
-                ok += 1
-            else:
-                fail += 1; errors.append(f"#{job['id']}: {res.get('error', '')[:80]}")
-        except Exception as e:
-            fail += 1; errors.append(f"#{job['id']}: {str(e)[:80]}")
+        res = _push_blog_to_haravan(job, publish=True)
+        if _apply_blog_push(job["id"], res):
+            ok += 1
+        else:
+            fail += 1; errors.append(f"#{job['id']}: {res.get('error', '')[:80]}")
         _t.sleep(0.8)
     flash(f"🚀 Sync xong: {ok} OK, {fail} fail." + (f" Sample lỗi: {errors[0]}" if errors else ""),
           "success" if ok else "error")
     return redirect(url_for("blog_content_page"))
+
+
+# ─────────────────────────── BLOG IMAGES (T1/T3) ───────────────────────────
+
+
+def _blog_image_dir(job_id):
+    return Path(__file__).parent / "data" / "blog_images" / str(job_id)
+
+
+@app.route("/blog-content/<int:job_id>/gather-images", methods=["POST"])
+def blog_content_gather_images(job_id):
+    """Gom ảnh ứng viên về local cho job (T1). Query mặc định = title/article_title,
+    product_handles mặc định = [job.handle]. Trả meta items kèm thumb_url."""
+    job = _blog_jobs_get(job_id)
+    if not job:
+        return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
+    import image_gather
+    data = request.get_json(silent=True) or {}
+    query = (data.get("query") or job.get("edited_title") or job.get("article_title") or "").strip()
+    if not query:
+        return jsonify({"ok": False, "error": "Thiếu query (chưa có title) — gen AI hoặc nhập title trước."}), 400
+    handles = data.get("product_handles")
+    if handles is None:
+        handles = [job["handle"]] if job.get("handle") else []
+    try:
+        max_n = max(1, min(int(data.get("max_n") or 10), 20))
+    except (TypeError, ValueError):
+        max_n = 10
+    try:
+        res = image_gather.gather(job_id, query, product_handles=handles, max_n=max_n)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)[:300]}), 500
+    for it in res.get("items", []):
+        it["thumb_url"] = url_for("blog_content_image", job_id=job_id, filename=it["file"])
+    return jsonify(res)
+
+
+@app.route("/blog-content/<int:job_id>/image/<path:filename>")
+def blog_content_image(job_id, filename):
+    """Serve ảnh ứng viên local: data/blog_images/<job_id>/<filename>."""
+    folder = _blog_image_dir(job_id)
+    safe = secure_filename(filename)
+    if not folder.exists() or not (folder / safe).is_file():
+        return "Not found", 404
+    return send_from_directory(folder, safe)
+
+
+@app.route("/blog-content/<int:job_id>/images/select", methods=["POST"])
+def blog_content_images_select(job_id):
+    """Đánh dấu ảnh đã chọn (selected=true) trong meta.json."""
+    import image_gather
+    meta = image_gather.load_meta(job_id)
+    if not meta:
+        return jsonify({"ok": False, "error": "Chưa gom ảnh cho job này."}), 400
+    data = request.get_json(silent=True) or {}
+    try:
+        selected = {int(i) for i in (data.get("selected") or [])}
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "selected phải là list số idx."}), 400
+    for it in meta.get("items", []):
+        it["selected"] = it["idx"] in selected
+    (_blog_image_dir(job_id) / "meta.json").write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    return jsonify({"ok": True, "selected": sorted(selected)})
+
+
+@app.route("/blog-content/<int:job_id>/image-upload", methods=["POST"])
+def blog_content_image_upload(job_id):
+    """Tải 1 ảnh AI (gen ngoài bằng ChatGPT/Canva) từ máy → auto-scale 1200px →
+    host lên Haravan asset_storage (URL CDN public) → trả src để chèn vào bài.
+    target=hero: đồng thời ghim làm ảnh đại diện (is_hero). target=body: chỉ trả src."""
+    job = _blog_jobs_get(job_id)
+    if not job:
+        return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"ok": False, "error": "Chưa chọn file ảnh."}), 400
+    target = (request.form.get("target") or "body").strip()
+    alt = (request.form.get("alt") or job.get("edited_title") or "").strip()[:180]
+    try:
+        raw = f.read()
+        if not raw:
+            return jsonify({"ok": False, "error": "File ảnh rỗng."}), 400
+        import image_processor
+        scaled = image_processor.process_blog_image(raw, max_w=1200)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Xử lý ảnh lỗi: {str(e)[:200]}"}), 400
+    try:
+        import cloudinary_upload
+        fname = secure_filename(f.filename) or "ai_image.jpg"
+        if not fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+            fname += ".jpg"
+        src = cloudinary_upload.upload(scaled, filename=fname)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Host ảnh lên Cloudinary lỗi: {str(e)[:240]}"}), 500
+    is_hero = target == "hero"
+    if is_hero:
+        try:
+            import image_gather
+            image_gather.set_ai_hero(job_id, src, alt=alt)
+        except Exception as e:
+            print(f"[image-upload hero meta] #{job_id}: {e}")
+    return jsonify({"ok": True, "src": src, "alt": alt, "target": target,
+                    "is_hero": is_hero, "bytes": len(scaled)})
+
+
+@app.route("/blog-content/<int:job_id>/image-url", methods=["POST"])
+def blog_content_image_url(job_id):
+    """Gắn ảnh từ 1 URL công khai có sẵn (vd Haravan Files: cdn.hstatic.net/files/...)
+    vào bài — KHÔNG upload, KHÔNG scale (ảnh đã host sẵn). target=hero ghim featured."""
+    job = _blog_jobs_get(job_id)
+    if not job:
+        return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    target = (data.get("target") or "body").strip()
+    alt = (data.get("alt") or job.get("edited_title") or "").strip()[:180]
+    if not (url.startswith("http://") or url.startswith("https://")):
+        return jsonify({"ok": False, "error": "URL phải bắt đầu bằng http(s)://"}), 400
+    is_hero = target == "hero"
+    if is_hero:
+        try:
+            import image_gather
+            image_gather.set_ai_hero(job_id, url, alt=alt)
+        except Exception as e:
+            print(f"[image-url hero meta] #{job_id}: {e}")
+    return jsonify({"ok": True, "src": url, "alt": alt, "target": target, "is_hero": is_hero})
+
+
+# ─────────────────────────── BLOG PILLARS (T4) ───────────────────────────
+
+_PILLAR_BG = {
+    "running": False, "stopped": False, "phase": None, "msg": "",
+    "n_pillars": 0, "pillar_idx": 0, "pillar_total": 0, "pillar_title": "",
+    "jobs_created": 0, "n_clusters": 0,
+    "auto_gen": False, "gen_total": 0, "gen_done": 0, "gen_ok": 0, "gen_fail": 0,
+    "gen_current": "",
+    "started_at": None, "finished_at": None, "error": None, "result": None,
+}
+_PILLAR_BG_LOCK = _threading.Lock()
+
+
+def _pillar_progress(d):
+    with _PILLAR_BG_LOCK:
+        _PILLAR_BG.update(d)
+
+
+def _pillar_bg_worker(n_pillars, clusters_per_pillar, auto_gen=True):
+    import blog_pillar_writer as bpw
+    try:
+        res = bpw.generate_plan(n_pillars, clusters_per_pillar, progress=_pillar_progress)
+        with _PILLAR_BG_LOCK:
+            _PILLAR_BG["result"] = res
+            _PILLAR_BG["jobs_created"] = res["jobs_created"]
+            _PILLAR_BG["n_clusters"] = res["n_clusters"]
+            _PILLAR_BG["n_pillars"] = res["n_pillars"]
+
+        # Tầng C: auto-gen nội dung từng bài (brief-mode) + tự gom ảnh — em chỉ vào duyệt.
+        job_ids = res.get("job_ids", []) if auto_gen else []
+        if job_ids:
+            with _PILLAR_BG_LOCK:
+                _PILLAR_BG.update({"phase": "gen_content", "gen_total": len(job_ids),
+                                   "gen_done": 0, "gen_ok": 0, "gen_fail": 0})
+            for i, jid in enumerate(job_ids, 1):
+                with _PILLAR_BG_LOCK:
+                    if _PILLAR_BG["stopped"]:
+                        break
+                job = _blog_jobs_get(jid)
+                with _PILLAR_BG_LOCK:
+                    _PILLAR_BG["gen_current"] = (job.get("article_title") if job else f"#{jid}") or f"#{jid}"
+                r = _run_blog_gen(jid)
+                with _PILLAR_BG_LOCK:
+                    _PILLAR_BG["gen_done"] = i
+                    if r.get("ok"):
+                        _PILLAR_BG["gen_ok"] += 1
+                    else:
+                        _PILLAR_BG["gen_fail"] += 1
+    except Exception as e:
+        with _PILLAR_BG_LOCK:
+            _PILLAR_BG["error"] = str(e)[:300]
+    finally:
+        with _PILLAR_BG_LOCK:
+            _PILLAR_BG["running"] = False
+            _PILLAR_BG["phase"] = "done"
+            _PILLAR_BG["finished_at"] = datetime.now().isoformat(timespec="seconds")
+
+
+@app.route("/blog-pillars")
+def blog_pillars_page():
+    conn = db.get_conn()
+    pillars = [dict(r) for r in conn.execute(
+        "SELECT * FROM blog_pillars ORDER BY id DESC").fetchall()]
+    for p in pillars:
+        rows = conn.execute(
+            "SELECT id, article_title, content_layer, article_type, priority, status, is_external "
+            "FROM blog_jobs WHERE pillar_id=? ORDER BY id", (p["id"],)).fetchall()
+        p["clusters"] = [dict(r) for r in rows]
+    total_jobs = conn.execute(
+        "SELECT COUNT(*) FROM blog_jobs WHERE source='ai_pillar'").fetchone()[0]
+    conn.close()
+    return render_template("blog_pillars.html", pillars=pillars, total_jobs=total_jobs)
+
+
+@app.route("/blog-pillars/generate", methods=["POST"])
+def blog_pillars_generate():
+    with _PILLAR_BG_LOCK:
+        if _PILLAR_BG["running"]:
+            return jsonify({"ok": False, "error": "Đang chạy rồi — đợi lượt này xong."}), 409
+        data = request.get_json(silent=True) or {}
+        try:
+            n_pillars = max(1, min(int(data.get("n_pillars") or 12), 20))
+            cpp = max(1, min(int(data.get("clusters_per_pillar") or 10), 15))
+        except (TypeError, ValueError):
+            n_pillars, cpp = 12, 10
+        auto_gen = bool(data.get("auto_gen", True))
+        _PILLAR_BG.update({
+            "running": True, "stopped": False, "phase": "starting", "msg": "Khởi động...",
+            "n_pillars": 0, "pillar_idx": 0, "pillar_total": n_pillars, "pillar_title": "",
+            "jobs_created": 0, "n_clusters": 0,
+            "auto_gen": auto_gen, "gen_total": 0, "gen_done": 0, "gen_ok": 0, "gen_fail": 0, "gen_current": "",
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+            "finished_at": None, "error": None, "result": None,
+        })
+    t = _threading.Thread(target=_pillar_bg_worker, args=(n_pillars, cpp, auto_gen), daemon=True)
+    t.start()
+    suffix = " + tự gen nội dung" if auto_gen else ""
+    return jsonify({"ok": True, "msg": f"Bắt đầu gen {n_pillars} pillar × ~{cpp} cluster{suffix} (chạy nền)."})
+
+
+@app.route("/blog-pillars/stop", methods=["POST"])
+def blog_pillars_stop():
+    with _PILLAR_BG_LOCK:
+        _PILLAR_BG["stopped"] = True
+    return jsonify({"ok": True, "msg": "Đã yêu cầu dừng — sẽ dừng sau bài đang gen."})
+
+
+@app.route("/blog-pillars/status")
+def blog_pillars_status():
+    with _PILLAR_BG_LOCK:
+        return jsonify(dict(_PILLAR_BG))
 
 
 # ─────────────────────────── CONTENT JOBS (SP) ───────────────────────────
@@ -3601,6 +3925,181 @@ def products_new_create():
         return jsonify({"ok": False, "error": f"Haravan: {e}", "errors": errors}), 502
     except Exception as e:
         return jsonify({"ok": False, "error": f"Unexpected: {e}", "errors": errors}), 500
+
+
+# ─────────────────────────── DASHBOARD HEALTH (Ops Center — Phase 1) ───────────────────────────
+# Lớp data gộp cho dashboard "5 giây biết hệ thống ổn/lỗi". Mọi field CÓ fallback, KHÔNG bịa số.
+# Probe chậm (git / bot ping / provider) cache TTL để poll nhẹ.
+
+_HEALTH_CACHE = {}  # key -> (expires_ts, value)
+
+
+def _health_cached(key, ttl, fn):
+    import time as _t
+    now = _t.time()
+    hit = _HEALTH_CACHE.get(key)
+    if hit and hit[0] > now:
+        return hit[1]
+    try:
+        val = fn()
+    except Exception as e:
+        val = {"error": str(e)[:120]}
+    _HEALTH_CACHE[key] = (now + ttl, val)
+    return val
+
+
+def _backup_info(pattern):
+    """File backup mới nhất khớp pattern trong data/backups/ (chỉ trả thời gian, KHÔNG đọc nội dung)."""
+    import glob
+    import os
+    bdir = Path(__file__).parent / "data" / "backups"
+    files = glob.glob(str(bdir / pattern))
+    if not files:
+        return {"ok": False}
+    newest = max(files, key=os.path.getmtime)
+    mt = os.path.getmtime(newest)
+    return {
+        "ok": True,
+        "file": os.path.basename(newest),
+        "at": datetime.fromtimestamp(mt).isoformat(timespec="seconds"),
+        "age_hours": round((datetime.now().timestamp() - mt) / 3600, 1),
+    }
+
+
+def _git_health():
+    import subprocess
+    repo = str(Path(__file__).parent)
+
+    def _g(*args):
+        return subprocess.run(["git", "-C", repo, *args],
+                              capture_output=True, text=True, timeout=8).stdout.strip()
+
+    branch = _g("rev-parse", "--abbrev-ref", "HEAD")
+    if not branch:
+        return {"available": False}
+    dirty = _g("status", "--porcelain")
+    uncommitted = len([l for l in dirty.splitlines() if l.strip()])
+    ahead = behind = None
+    counts = _g("rev-list", "--left-right", "--count", "@{upstream}...HEAD")
+    if counts and "\t" in counts:
+        b, a = counts.split("\t")[:2]
+        try:
+            behind, ahead = int(b), int(a)
+        except ValueError:
+            pass
+    return {"available": True, "branch": branch, "uncommitted": uncommitted,
+            "ahead": ahead, "behind": behind}
+
+
+def _bot_health():
+    import os
+    import requests
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    tok = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if not tok:
+        tf = Path(__file__).parent / ".env" / "telegram_bot_token.txt"
+        if tf.exists():
+            tok = tf.read_text(encoding="utf-8").strip()
+    if not tok:
+        return {"status": "no_token"}
+    try:
+        r = requests.get(f"https://api.telegram.org/bot{tok}/getMe", timeout=5, verify=False)
+        j = r.json() if r.text else {}
+        if r.status_code == 200 and j.get("ok"):
+            return {"status": "ok", "username": j.get("result", {}).get("username")}
+        return {"status": "down", "detail": f"HTTP {r.status_code}"}
+    except Exception as e:
+        return {"status": "down", "detail": str(e)[:80]}
+
+
+def _provider_health():
+    import ai_provider
+    av = ai_provider.available_providers()
+    return {"primary": av[0] if av else None, "available": av}
+
+
+def _dashboard_health():
+    """Gộp toàn bộ chỉ số sức khỏe (data thật + fallback). Không bao giờ raise."""
+    out = {"ts": datetime.now().isoformat(timespec="seconds"), "flask": {"status": "up"}}
+
+    try:
+        out["content_jobs"] = db.content_jobs_stats()
+    except Exception as e:
+        out["content_jobs"] = {"error": str(e)[:100]}
+    try:
+        s = db.seo_stats()
+        out["seo"] = {k: s.get(k) for k in ("total", "avg_score", "good", "ok", "bad", "broken")}
+    except Exception as e:
+        out["seo"] = {"error": str(e)[:100]}
+    try:
+        h = db.hv_stats()
+        out["haravan"] = {"total": h.get("total"), "avg_score": h.get("avg_score"),
+                          "by_status": h.get("by_status")}
+    except Exception as e:
+        out["haravan"] = {"error": str(e)[:100]}
+    try:
+        out["fb_posts"] = db.stats()
+    except Exception as e:
+        out["fb_posts"] = {"error": str(e)[:100]}
+
+    try:  # review queue + pillar progress — chỉ COUNT, nhẹ
+        conn = db.get_conn()
+        blog_draft = conn.execute("SELECT COUNT(*) FROM blog_jobs WHERE status='draft'").fetchone()[0]
+        content_review = conn.execute(
+            "SELECT COUNT(*) FROM content_jobs WHERE status IN ('text_done','draft','approved')").fetchone()[0]
+        pil_total = conn.execute("SELECT COUNT(*) FROM blog_jobs WHERE source='ai_pillar'").fetchone()[0]
+        pil_done = conn.execute(
+            "SELECT COUNT(*) FROM blog_jobs WHERE source='ai_pillar' AND status IN ('draft','synced')").fetchone()[0]
+        conn.close()
+        out["review_queue"] = {"blog_draft": blog_draft, "content_review": content_review,
+                               "total": blog_draft + content_review}
+        out["pillar"] = {"total": pil_total, "done": pil_done, "pending": pil_total - pil_done}
+    except Exception as e:
+        out["review_queue"] = {"error": str(e)[:100]}
+        out["pillar"] = {"error": str(e)[:100]}
+
+    out["backups"] = {"db": _backup_info("posts_*.db.zip"), "secrets": _backup_info("secrets_*.zip")}
+    out["git"] = _health_cached("git", 30, _git_health)
+    out["bot"] = _health_cached("bot", 120, _bot_health)
+    out["provider"] = _health_cached("provider", 120, _provider_health)
+    return out
+
+
+def _worklog_tasks(limit=8):
+    """Parse NHẸ WORKLOG.md: lấy mục chưa xong '- [ ]' + gắn nhãn active/blocked theo
+    heading gần nhất. Fallback {ok:False} nếu không đọc được (không bịa)."""
+    import re
+    p = Path(__file__).parent.parent / "WORKLOG.md"
+    try:
+        lines = p.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return {"ok": False, "tasks": []}
+    bucket = "active"
+    tasks = []
+    for ln in lines:
+        stripped = ln.lstrip()
+        if stripped.startswith("#") or stripped.startswith(">"):
+            low = ln.lower()
+            if "🟡" in ln or "blocked" in low or "chờ vợ" in low:
+                bucket = "blocked"
+            elif "🔴" in ln or "active" in low:
+                bucket = "active"
+            continue
+        m = re.match(r"\s*-\s*\[\s\]\s*(.+)", ln)  # chỉ mục CHƯA xong
+        if m:
+            txt = re.sub(r"[*`\[\]]", "", m.group(1))
+            txt = re.sub(r"\s+", " ", txt).strip()
+            if txt:
+                tasks.append({"text": txt[:150], "bucket": bucket})
+            if len(tasks) >= limit:
+                break
+    return {"ok": True, "tasks": tasks}
+
+
+@app.route("/api/dashboard/health")
+def api_dashboard_health():
+    return jsonify(_dashboard_health())
 
 
 if __name__ == "__main__":

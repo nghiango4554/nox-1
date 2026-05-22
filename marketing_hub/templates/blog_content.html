@@ -6,6 +6,7 @@
 {% endblock %}
 
 {% block page_actions %}
+<a class="btn" href="{{ url_for('blog_pillars_page') }}">🏛️ Kế hoạch Pillar–Cluster</a>
 <form method="post" action="{{ url_for('blog_content_sync_all') }}" style="display:inline"
       onsubmit="return confirm('Sync tất cả bài đang status=draft lên Haravan?');">
   <button class="btn btn-primary" type="submit">🚀 Sync tất cả draft</button>
@@ -43,26 +44,33 @@
 </style>
 
 <div class="bc-kpi">
-  <a href="{{ url_for('blog_content_page') }}" class="bc-kpi-card{% if not active_status %} active{% endif %}">
+  <a href="{% if active_blog %}?blog={{ active_blog }}{% else %}{{ url_for('blog_content_page') }}{% endif %}" class="bc-kpi-card{% if not active_status %} active{% endif %}">
     <div class="bc-kpi-num">{{ stats.total }}</div>
     <div class="bc-kpi-lbl">Tổng bài</div>
   </a>
-  <a href="?status=pending" class="bc-kpi-card{% if active_status == 'pending' %} active{% endif %}">
+  <a href="?status=pending{% if active_blog %}&blog={{ active_blog }}{% endif %}" class="bc-kpi-card{% if active_status == 'pending' %} active{% endif %}">
     <div class="bc-kpi-num" style="color:#94a3b8">{{ stats.pending }}</div>
     <div class="bc-kpi-lbl">⏳ Pending</div>
   </a>
-  <a href="?status=draft" class="bc-kpi-card{% if active_status == 'draft' %} active{% endif %}">
+  <a href="?status=draft{% if active_blog %}&blog={{ active_blog }}{% endif %}" class="bc-kpi-card{% if active_status == 'draft' %} active{% endif %}">
     <div class="bc-kpi-num" style="color:#34d399">{{ stats.draft }}</div>
     <div class="bc-kpi-lbl">📝 Draft</div>
   </a>
-  <a href="?status=synced" class="bc-kpi-card{% if active_status == 'synced' %} active{% endif %}">
+  <a href="?status=synced{% if active_blog %}&blog={{ active_blog }}{% endif %}" class="bc-kpi-card{% if active_status == 'synced' %} active{% endif %}">
     <div class="bc-kpi-num" style="color:#60a5fa">{{ stats.synced }}</div>
     <div class="bc-kpi-lbl">✅ Synced</div>
   </a>
-  <a href="?status=failed" class="bc-kpi-card{% if active_status == 'failed' %} active{% endif %}">
+  <a href="?status=failed{% if active_blog %}&blog={{ active_blog }}{% endif %}" class="bc-kpi-card{% if active_status == 'failed' %} active{% endif %}">
     <div class="bc-kpi-num" style="color:#f87171">{{ stats.failed }}</div>
     <div class="bc-kpi-lbl">❌ Failed</div>
   </a>
+</div>
+
+<div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+  <span style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">Loại blog:</span>
+  <a class="btn btn-sm{% if not active_blog %} btn-primary{% endif %}" href="{% if active_status %}?status={{ active_status }}{% else %}{{ url_for('blog_content_page') }}{% endif %}">Tất cả</a>
+  <a class="btn btn-sm{% if active_blog == 'huong-dan' %} btn-primary{% endif %}" href="?blog=huong-dan{% if active_status %}&status={{ active_status }}{% endif %}">📘 Hướng dẫn ({{ blog_counts.get('huong-dan', 0) }})</a>
+  <a class="btn btn-sm{% if active_blog == 'news' %} btn-primary{% endif %}" href="?blog=news{% if active_status %}&status={{ active_status }}{% endif %}">📰 Tin tức ({{ blog_counts.get('news', 0) }})</a>
 </div>
 
 {% if not jobs %}
@@ -75,15 +83,17 @@
 <table class="bc-table">
   <colgroup>
     <col style="width:42px"><col style="width:78px">
-    <col style="width:24%"><col style="width:60px"><col style="width:60px"><col style="width:65px">
+    <col style="width:22%"><col style="width:60px"><col style="width:60px"><col style="width:60px">
+    <col style="width:58px">
     <col style="width:60px"><col style="width:60px"><col style="width:60px"><col style="width:55px">
-    <col><col style="width:120px"><col style="width:180px">
+    <col><col style="width:110px"><col style="width:215px">
   </colgroup>
   <thead>
     <tr>
       <th>#</th><th>Status</th>
       <th>Tiêu đề bài</th>
       <th class="num">Title</th><th class="num">Meta</th><th class="num">Words</th>
+      <th class="num" title="Ảnh đã gom · đã chọn">📷</th>
       <th class="num" title="SEO quality 0-100">⭐ Q</th>
       <th class="num" title="Readability 0-100">📖 R</th>
       <th class="num" title="GSC click 90d">👆 Clk</th>
@@ -119,6 +129,10 @@
         {% else %}<span>{{ wc }}</span>{% endif %}
       </td>
       <td class="num">
+        {% if j.img_count %}<span title="{{ j.img_selected }} đã chọn / {{ j.img_count }} đã gom">📷{{ j.img_count }}{% if j.img_selected %} <span style="color:#34d399">✓{{ j.img_selected }}</span>{% endif %}</span>
+        {% else %}<span class="bc-len-empty">—</span>{% endif %}
+      </td>
+      <td class="num">
         {% set qs = j.quality_score %}
         {% if not qs %}<span class="bc-len-empty">—</span>
         {% elif qs >= 80 %}<span class="bc-len-good">{{ qs }}</span>
@@ -146,9 +160,15 @@
         <a href="{{ j.blog_url }}" target="_blank" rel="noopener">{{ j.blog_url|replace('https://sintech.vn', '') }}</a>
       </td>
       <td class="muted" style="font-size:11px">{{ j.synced_at[:16] if j.synced_at else '—' }}</td>
-      <td style="text-align:center">
+      <td style="text-align:center;white-space:nowrap">
         <a href="{{ url_for('blog_content_detail_page', job_id=j.id) }}" class="btn btn-sm">✏️ Sửa</a>
         <button class="btn btn-sm btn-primary" onclick="genAIInline({{ j.id }}, this)">🤖 AI</button>
+        {% if j.edited_title and j.edited_body_html %}
+        <button class="btn btn-sm" onclick="syncInline({{ j.id }}, this)" title="Đăng/cập nhật lên Haravan (hiện công khai)">🚀 Đẩy</button>
+        {% endif %}
+        {% if j.haravan_article_id and j.haravan_blog_id %}
+        <a class="btn btn-sm" href="https://{{ shop }}/admin/blogs/{{ j.haravan_blog_id }}/articles/{{ j.haravan_article_id }}" target="_blank" rel="noopener" title="Mở trên admin Haravan">🔗</a>
+        {% endif %}
       </td>
     </tr>
     {% endfor %}
@@ -167,6 +187,23 @@ async function genAIInline(id, btn) {
     const d = await r.json();
     if (d.ok) {
       btn.textContent = '✅';
+      setTimeout(() => location.reload(), 1200);
+    } else {
+      btn.textContent = orig; btn.disabled = false;
+      alert('❌ Lỗi: ' + (d.error || 'unknown'));
+    }
+  } catch (e) { btn.textContent = orig; btn.disabled = false; alert('❌ ' + e); }
+}
+
+async function syncInline(id, btn) {
+  if (!confirm(`🚀 Đăng bài #${id} lên Haravan (hiện công khai, Google index được)?\nChỉ đẩy khi đã duyệt nội dung.`)) return;
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳';
+  try {
+    const r = await fetch(`/blog-content/${id}/sync`, {method: 'POST'});
+    const d = await r.json();
+    if (d.ok) {
+      btn.textContent = d.created ? '✅ Đăng' : '✅';
       setTimeout(() => location.reload(), 1200);
     } else {
       btn.textContent = orig; btn.disabled = false;

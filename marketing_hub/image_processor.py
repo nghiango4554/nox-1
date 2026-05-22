@@ -111,6 +111,31 @@ def process_haravan_image(src_url: str, target: Tuple[int, int] = TARGET_SIZE) -
     return process_to_600x388(raw, target=target)
 
 
+def process_blog_image(img_bytes: bytes, max_w: int = 1200,
+                       bg: Tuple[int, int, int] = WHITE,
+                       quality: int = 85) -> bytes:
+    """Auto fix scale cho ảnh AI/blog: chỉ THU NHỎ về chiều rộng tối đa max_w
+    (giữ tỉ lệ, không phóng to, không crop, không padding), flatten nền trong suốt
+    → trắng, nén JPEG. Trả bytes JPEG. Khác process_to_600x388 (canvas cố định cho ảnh SP).
+    """
+    src = Image.open(io.BytesIO(img_bytes))
+    # Flatten alpha (PNG/WebP trong suốt) lên nền trắng
+    if src.mode in ("RGBA", "LA") or (src.mode == "P" and "transparency" in src.info):
+        src = src.convert("RGBA")
+        base = Image.new("RGB", src.size, bg)
+        base.paste(src, mask=src.split()[-1])
+        src = base
+    elif src.mode != "RGB":
+        src = src.convert("RGB")
+    w, h = src.size
+    if w > max_w:
+        new_h = max(1, round(h * max_w / w))
+        src = src.resize((max_w, new_h), Image.LANCZOS)
+    buf = io.BytesIO()
+    src.save(buf, format="JPEG", quality=quality, optimize=True)
+    return buf.getvalue()
+
+
 def img_to_base64(img_bytes: bytes) -> str:
     """Encode bytes → base64 string cho Haravan upload `attachment` field."""
     return base64.b64encode(img_bytes).decode()

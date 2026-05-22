@@ -60,6 +60,7 @@ server.err.log
 
 # ─── Cache / snapshot / generated data ───
 marketing_hub/data/images/
+marketing_hub/data/blog_images/
 marketing_hub/data/backups/
 marketing_hub/data/seo_snapshots/
 marketing_hub/data/job_state/

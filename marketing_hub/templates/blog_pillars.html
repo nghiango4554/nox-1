@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Pillar–Cluster · Blog Content · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('blog_content_page') }}" class="muted" style="font-weight:500">📰 Blog Content</a>
+<span class="crumb"></span>
+<span style="font-weight:600">🏛️ Kế hoạch Pillar–Cluster</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('blog_content_page') }}">← Danh sách bài</a>
+<a class="btn" href="{{ url_for('blog_content_page') }}?source=ai_pillar">📋 Xem bài AI Pillar</a>
+{% endblock %}
+
+{% block content %}
+<style>
+  .pl-gen { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin-bottom:16px }
+  .pl-gen h3 { font-size:14px; font-weight:700; margin:0 0 4px }
+  .pl-gen .hint { font-size:12px; color:var(--text-muted); margin-bottom:10px }
+  .pl-gen input[type=number] { width:64px; padding:5px 7px; border:1px solid var(--border); border-radius:6px; background:rgba(255,255,255,.02); color:var(--text) }
+  .pl-prog { margin-top:12px; padding:10px 12px; border-radius:8px; background:rgba(96,165,250,.08); border:1px solid var(--border); font-size:13px; display:none }
+  .pl-bar { height:6px; border-radius:4px; background:rgba(255,255,255,.08); overflow:hidden; margin-top:8px }
+  .pl-bar > i { display:block; height:100%; width:0; background:linear-gradient(90deg,#60a5fa,#34d399); transition:width .4s }
+
+  .pl-stats { display:flex; gap:18px; margin-bottom:14px; font-size:13px; color:var(--text-muted) }
+  .pl-stats strong { color:#60a5fa; font-size:16px }
+
+  .pl-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; margin-bottom:12px; overflow:hidden }
+  .pl-head { padding:12px 16px; cursor:pointer; display:flex; align-items:center; gap:10px }
+  .pl-head:hover { background:rgba(255,255,255,.02) }
+  .pl-head .pl-tt { font-weight:700; font-size:14px; flex:1 }
+  .pl-layer { font-size:10.5px; padding:2px 9px; border-radius:12px; font-weight:700; text-transform:uppercase; letter-spacing:.3px }
+  .layer-money  { background:rgba(52,211,153,.18); color:#34d399 }
+  .layer-support{ background:rgba(96,165,250,.18); color:#60a5fa }
+  .layer-media  { background:rgba(250,204,21,.18); color:#facc15 }
+  .pl-cnt { font-size:12px; color:var(--text-muted) }
+  .pl-body { display:none; padding:0 16px 14px; border-top:1px solid var(--border) }
+  .pl-meta { font-size:12px; color:var(--text-muted); margin:10px 0; line-height:1.6 }
+  .pl-meta b { color:var(--text) }
+  .cl-row { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; font-size:12.5px }
+  .cl-row:hover { background:rgba(255,255,255,.03) }
+  .cl-row a { color:var(--text); text-decoration:none; flex:1 }
+  .cl-row a:hover { color:#60a5fa; text-decoration:underline }
+  .cl-tag { font-size:10px; padding:1px 7px; border-radius:10px; background:rgba(255,255,255,.07); color:var(--text-muted) }
+  .cl-ext { font-size:10px; padding:1px 7px; border-radius:10px; background:rgba(168,85,247,.18); color:#c084fc }
+  .cl-prio-Cao { color:#f87171; font-weight:700 }
+</style>
+
+<div class="pl-gen">
+  <h3>🏛️ Tạo kế hoạch nội dung Pillar–Cluster (tự động)</h3>
+  <div class="hint">
+    AI research data Sintech thật (collections + keyword GSC) → đề xuất Pillar + bài Cluster theo mô hình
+    3 lớp Money/Support/Media → tự seed thành <b>blog_jobs</b> (trạng thái <i>pending</i>, chờ gen nội dung).
+    Chạy nền ~10–30 phút tùy số lượng. <b>Không ghi đè</b> kế hoạch cũ — tạo thêm pillar mới.
+  </div>
+  <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+    <label>Số Pillar: <input type="number" id="n-pillars" value="12" min="1" max="20"></label>
+    <label>Cluster/Pillar: <input type="number" id="n-clusters" value="10" min="1" max="15"></label>
+    <label style="display:flex;align-items:center;gap:5px"><input type="checkbox" id="auto-gen" checked> Tự gen nội dung + gom ảnh luôn (em chỉ vào duyệt)</label>
+    <button class="btn btn-primary" type="button" onclick="startGen(this)">⚙️ Tạo kế hoạch (auto)</button>
+    <button class="btn" type="button" id="pl-stop-btn" onclick="stopGen(this)" style="display:none">⏹ Dừng</button>
+  </div>
+  <div class="pl-prog" id="pl-prog">
+    <div id="pl-prog-msg">Đang khởi động...</div>
+    <div class="pl-bar"><i id="pl-bar-fill"></i></div>
+    <div id="pl-prog-stat" style="font-size:11.5px;color:var(--text-muted);margin-top:6px"></div>
+  </div>
+</div>
+
+<div class="pl-stats">
+  <span><strong>{{ pillars|length }}</strong> Pillar</span>
+  <span><strong>{{ total_jobs }}</strong> bài Cluster (AI) đã seed</span>
+</div>
+
+{% if not pillars %}
+<div class="pl-gen" style="text-align:center;color:var(--text-muted)">
+  Chưa có Pillar nào. Bấm <b>"Tạo kế hoạch (auto)"</b> ở trên để AI đề xuất.
+</div>
+{% endif %}
+
+{% for p in pillars %}
+<div class="pl-card">
+  <div class="pl-head" onclick="togglePillar({{ p.id }})">
+    <span class="pl-layer layer-{{ p.layer or 'media' }}">{{ p.layer or '—' }}</span>
+    <span class="pl-tt">{{ p.title }}</span>
+    {% if p.priority == 'Cao' %}<span class="cl-prio-Cao" style="font-size:11px">★ {{ p.priority }}</span>{% endif %}
+    <span class="pl-cnt">{{ p.clusters|length }} bài ▾</span>
+  </div>
+  <div class="pl-body" id="pl-body-{{ p.id }}">
+    <div class="pl-meta">
+      <b>Intent:</b> {{ p.intent or '—' }}<br>
+      <b>Đối tượng:</b> {{ p.audience or '—' }} · <b>Ưu tiên:</b> {{ p.priority or '—' }}<br>
+      <b>Lý do:</b> {{ p.reason or '—' }}<br>
+      <b>Kéo link về:</b> {{ p.target_category or '—' }}
+    </div>
+    {% for c in p.clusters %}
+    <div class="cl-row">
+      <span class="pl-layer layer-{{ c.content_layer or 'media' }}" style="font-size:9px">{{ c.content_layer or '?' }}</span>
+      <a href="{{ url_for('blog_content_detail_page', job_id=c.id) }}">{{ c.article_title }}</a>
+      {% if c.is_external %}<span class="cl-ext">ngoài lề</span>{% endif %}
+      {% if c.article_type %}<span class="cl-tag">{{ c.article_type }}</span>{% endif %}
+      <span class="cl-tag {% if c.priority == 'Cao' %}cl-prio-Cao{% endif %}">{{ c.priority or '—' }}</span>
+      <span class="cl-tag">{{ c.status }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+
+<script>
+function togglePillar(id) {
+  const b = document.getElementById('pl-body-' + id);
+  b.style.display = (b.style.display === 'block') ? 'none' : 'block';
+}
+
+let POLL = null;
+async function startGen(btn) {
+  const nP = parseInt(document.getElementById('n-pillars').value) || 12;
+  const nC = parseInt(document.getElementById('n-clusters').value) || 10;
+  const autoGen = document.getElementById('auto-gen').checked;
+  const note = autoGen
+    ? `Gen ${nP} pillar × ~${nC} cluster (~${nP*nC} bài) + TỰ VIẾT NỘI DUNG + gom ảnh từng bài. Chạy nền có thể vài GIỜ. Bắt đầu?`
+    : `Gen ${nP} pillar × ~${nC} cluster (~${nP*nC} bài), chỉ tạo kế hoạch (chưa viết nội dung). Bắt đầu?`;
+  if (!confirm(note)) return;
+  btn.disabled = true;
+  try {
+    const r = await fetch('/blog-pillars/generate', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({n_pillars: nP, clusters_per_pillar: nC, auto_gen: autoGen}),
+    });
+    const d = await r.json();
+    if (!d.ok) { alert('❌ ' + (d.error || 'lỗi')); btn.disabled = false; return; }
+    document.getElementById('pl-prog').style.display = 'block';
+    document.getElementById('pl-stop-btn').style.display = 'inline-block';
+    pollStatus();
+    POLL = setInterval(pollStatus, 4000);
+  } catch (e) { alert('❌ ' + e); btn.disabled = false; }
+}
+
+async function stopGen(btn) {
+  if (!confirm('Dừng gen sau bài đang chạy?')) return;
+  btn.disabled = true;
+  try { await fetch('/blog-pillars/stop', {method: 'POST'}); } catch (e) {}
+}
+
+async function pollStatus() {
+  try {
+    const d = await (await fetch('/blog-pillars/status')).json();
+    const msg = document.getElementById('pl-prog-msg');
+    const fill = document.getElementById('pl-bar-fill');
+    const stat = document.getElementById('pl-prog-stat');
+    let pct = 0;
+    if (d.phase === 'gen_content') {
+      pct = d.gen_total ? Math.round((d.gen_done || 0) * 100 / d.gen_total) : 50;
+      msg.textContent = `✍️ Viết nội dung ${d.gen_done || 0}/${d.gen_total || 0}: ${(d.gen_current || '').slice(0,55)}`;
+      stat.textContent = `Pillar+cluster đã seed: ${d.jobs_created || 0} · viết OK ${d.gen_ok || 0} · lỗi ${d.gen_fail || 0}`;
+    } else if (d.phase === 'pillars' || d.phase === 'starting') {
+      pct = 4; msg.textContent = '🔎 ' + (d.msg || 'Đang gen Pillar...');
+      stat.textContent = `pha: ${d.phase || '-'}`;
+    } else if (d.pillar_total) {
+      pct = Math.round((d.pillar_idx || 0) * 100 / d.pillar_total);
+      msg.textContent = `🏛️ Pillar ${d.pillar_idx}/${d.pillar_total}: ${d.pillar_title || ''}`;
+      stat.textContent = `Đã tạo ${d.jobs_created || 0} bài cluster · pha: ${d.phase || '-'}`;
+    }
+    fill.style.width = Math.max(pct, 3) + '%';
+    if (!d.running) {
+      clearInterval(POLL);
+      fill.style.width = '100%';
+      document.getElementById('pl-stop-btn').style.display = 'none';
+      if (d.error) { msg.textContent = '❌ Lỗi: ' + d.error; }
+      else {
+        const g = d.gen_total ? ` · viết ${d.gen_ok}/${d.gen_total} bài (lỗi ${d.gen_fail})` : '';
+        msg.textContent = `✅ Xong! ${d.n_pillars} pillar · ${d.jobs_created} cluster${g}.`;
+        setTimeout(() => location.reload(), 2200);
+      }
+    }
+  } catch (e) { /* giữ poll */ }
+}
+
+// Nếu mở trang lúc đang chạy → tự bám tiến độ
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const d = await (await fetch('/blog-pillars/status')).json();
+    if (d.running) {
+      document.getElementById('pl-prog').style.display = 'block';
+      document.getElementById('pl-stop-btn').style.display = 'inline-block';
+      pollStatus(); POLL = setInterval(pollStatus, 4000);
+    }
+  } catch (e) {}
+});
+</script>
+{% endblock %}

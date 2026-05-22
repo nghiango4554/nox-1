@@ -98,7 +98,12 @@ Trả JSON thuần."""
     except Exception as e:
         return {"ok": False, "error": f"AI: {e}"}
 
-    text = raw.strip()
+    return _parse_blog_json(raw)
+
+
+def _parse_blog_json(raw: str) -> dict:
+    """Parse output AI → {ok, title, meta, body_html, title_len, meta_len}."""
+    text = (raw or "").strip()
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```\s*$", "", text)
     try:
@@ -106,7 +111,7 @@ Trả JSON thuần."""
     except json.JSONDecodeError:
         m = re.search(r"\{[\s\S]*\}", text)
         if not m:
-            return {"ok": False, "error": "Codex không trả JSON.", "raw": text[:500]}
+            return {"ok": False, "error": "AI không trả JSON.", "raw": text[:500]}
         try:
             data = json.loads(m.group(0))
         except Exception as e:
@@ -117,7 +122,7 @@ Trả JSON thuần."""
     body_html = (data.get("body_html") or "").strip()
 
     if not title or not meta or not body_html:
-        return {"ok": False, "error": "Codex trả thiếu field.", "raw": text[:500]}
+        return {"ok": False, "error": "AI trả thiếu field.", "raw": text[:500]}
 
     return {
         "ok": True,
@@ -127,6 +132,40 @@ Trả JSON thuần."""
         "title_len": len(title),
         "meta_len": len(meta),
     }
+
+
+def gen_blog_content_from_brief(brief: dict) -> dict:
+    """Gen bài blog MỚI từ brief (KHÔNG cào URL) — dùng cho job ai_pillar (T4 Pillar–Cluster).
+
+    brief lấy từ row blog_jobs: article_title, keyword, intent, content_layer,
+    unique_angle, article_type, pillar, internal_link_hint.
+    """
+    title = (brief.get("article_title") or brief.get("title") or "").strip()
+    link_hint = brief.get("internal_link_hint") or ""
+    layer_note = {
+        "money": "money — sát sản phẩm, intent mua rõ, hướng người đọc tới quyết định mua.",
+        "support": "support — giải quyết vấn đề trước khi mua/nâng cấp, xây niềm tin.",
+        "media": "media — ngoài lề có kiểm soát, kéo traffic rộng nhưng vẫn liên quan tệp khách Sintech.",
+    }.get((brief.get("content_layer") or "").strip(), brief.get("content_layer") or "")
+
+    user_msg = f"""BÀI BLOG MỚI cần viết (VIẾT MỚI HOÀN TOÀN — không có nội dung cũ để tham khảo):
+- Tiêu đề dự kiến: {title}
+- Keyword chính: {brief.get('keyword', '') or '(theo tiêu đề)'}
+- Search intent: {brief.get('intent', '') or '(suy ra từ tiêu đề)'}
+- Lớp nội dung: {layer_note}
+- Góc viết riêng (BẮT BUỘC bám): {brief.get('unique_angle', '') or '(tự chọn góc khác biệt)'}
+- Loại bài: {brief.get('article_type', '')}
+- Thuộc Pillar: {brief.get('pillar', '')}
+- Internal link nên ưu tiên chèn về: {link_hint or '(collection/product Sintech liên quan nhất)'}
+
+Viết: title 45-61c (bám keyword, KHÔNG chứa "Sintech") + meta 140-160c (CTA HOA cuối) + body_html theo đúng cấu trúc blog hướng dẫn ở trên. Bám keyword + intent + góc viết riêng. KHÔNG bịa thông số kỹ thuật. Có ít nhất 3 internal link về sintech.vn (ưu tiên {link_hint or 'collection/product liên quan'}). Trả JSON thuần."""
+
+    try:
+        import ai_provider
+        raw = ai_provider.call_ai(_SYSTEM_PROMPT, user_msg, timeout=240)
+    except Exception as e:
+        return {"ok": False, "error": f"AI: {e}"}
+    return _parse_blog_json(raw)
 
 
 def sync_blog_to_haravan(blog_id: int, article_id: int,

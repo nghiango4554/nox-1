@@ -9,6 +9,175 @@
 
 {% block content %}
 
+{# ═════ OPERATIONS CENTER (Phase 2) — cards + health panel ═════ #}
+<style>
+ .ops{margin-bottom:24px}
+ .ops-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+ .ops-head h2{margin:0;font-size:18px}
+ .ops-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:12px;margin-bottom:14px}
+ .ops-card{background:var(--surface);border:1px solid var(--border);border-left-width:4px;border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;display:flex;flex-direction:column;gap:5px;transition:transform .15s,box-shadow .15s}
+ a.ops-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.18)}
+ .ops-card-top{display:flex;align-items:center;justify-content:space-between}
+ .ops-card-icon{font-size:20px}
+ .ops-card-num{font-size:25px;font-weight:700;line-height:1.05}
+ .ops-card-label{font-size:11.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px}
+ .ops-card-sub{font-size:11.5px;color:var(--text-muted)}
+ .ops-card.s-green{border-left-color:#34d399}
+ .ops-card.s-yellow{border-left-color:#eab308}
+ .ops-card.s-red{border-left-color:#f87171}
+ .ops-card.s-neutral{border-left-color:#7c3aed}
+ .ops-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap}
+ .ops-badge.green{background:rgba(52,211,153,.16);color:#34d399}
+ .ops-badge.yellow{background:rgba(234,179,8,.18);color:#eab308}
+ .ops-badge.red{background:rgba(248,113,113,.16);color:#f87171}
+ .ops-badge.neutral{background:rgba(148,163,184,.16);color:#94a3b8}
+ .ops-health{padding:14px 16px}
+ .ops-health-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0 22px;margin-top:8px}
+ .ops-hrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px}
+ .ops-hrow .lbl{color:var(--text-muted)}
+ .ops-hrow .val{display:flex;align-items:center;gap:8px;font-weight:600}
+ @media(max-width:600px){.ops-card-num{font-size:21px}.ops-cards{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}.ops-health-grid{grid-template-columns:1fr}}
+</style>
+
+{% set cj = health.content_jobs %}
+{% set bk = health.backups %}
+{% set bage = bk.db.age_hours if bk.db.get('ok') else 999 %}
+{% set sage = bk.secrets.age_hours if bk.secrets.get('ok') else 999 %}
+{% set bmax = [bage, sage]|max %}
+{% set bkcls = 'green' if bmax < 24 else ('yellow' if bmax < 72 else 'red') %}
+{% set rq = health.review_queue.get('total', 0) %}
+{% set git = health.git %}
+{% set gitdirty = (git.get('uncommitted', 0) or 0) > 0 or (git.get('ahead', 0) or 0) > 0 %}
+{% set botok = health.bot.get('status') == 'ok' %}
+{% set seoavg = health.seo.get('avg_score') or 0 %}
+
+<section class="ops">
+  <div class="ops-head">
+    <h2>🩺 Operations Center</h2>
+    <span class="muted" style="font-size:12px"><span id="ops-updated">cập nhật {{ health.ts[11:16] }}</span> · <span id="ops-live" title="tự cập nhật 30s">🔄</span> · <a href="/api/dashboard/health" target="_blank" style="color:inherit">JSON</a></span>
+  </div>
+
+  <div class="ops-cards">
+    <a class="ops-card s-neutral" href="/content-jobs">
+      <div class="ops-card-top"><span class="ops-card-icon">📝</span><span class="ops-badge neutral">jobs</span></div>
+      <div class="ops-card-num" data-h="content_jobs.total">{{ cj.get('total', '—') }}</div>
+      <div class="ops-card-label">Content jobs</div>
+      <div class="ops-card-sub">synced {{ cj.get('by_status', {}).get('synced', 0) }} · draft {{ cj.get('by_status', {}).get('draft', 0) }}</div>
+    </a>
+
+    <a class="ops-card {{ 's-green' if seoavg >= 65 else 's-yellow' }}" href="/seo">
+      <div class="ops-card-top"><span class="ops-card-icon">🔍</span><span class="ops-badge {{ 'green' if seoavg >= 65 else 'yellow' }}">TB {{ health.seo.get('avg_score', '—') }}</span></div>
+      <div class="ops-card-num" data-h="seo.bad">{{ health.seo.get('bad', '—') }}</div>
+      <div class="ops-card-label">SEO trang điểm kém</div>
+      <div class="ops-card-sub">{{ health.seo.get('total', '—') }} trang · tốt {{ health.seo.get('good', 0) }}</div>
+    </a>
+
+    <a class="ops-card {{ 's-yellow' if rq > 0 else 's-green' }}" href="/blog-content?status=draft">
+      <div class="ops-card-top"><span class="ops-card-icon">✅</span><span class="ops-badge {{ 'yellow' if rq > 0 else 'green' }}">{{ 'chờ duyệt' if rq > 0 else 'sạch' }}</span></div>
+      <div class="ops-card-num" data-h="review_queue.total">{{ rq }}</div>
+      <div class="ops-card-label">Bài chờ duyệt</div>
+      <div class="ops-card-sub">blog {{ health.review_queue.get('blog_draft', 0) }} · content {{ health.review_queue.get('content_review', 0) }}</div>
+    </a>
+
+    <a class="ops-card s-neutral" href="/haravan">
+      <div class="ops-card-top"><span class="ops-card-icon">🛒</span><span class="ops-badge neutral">audit {{ health.haravan.get('avg_score', '—') }}</span></div>
+      <div class="ops-card-num" data-h="haravan.total">{{ health.haravan.get('total', '—') }}</div>
+      <div class="ops-card-label">SP Haravan</div>
+      <div class="ops-card-sub">điểm audit TB {{ health.haravan.get('avg_score', '—') }}</div>
+    </a>
+
+    <div class="ops-card {{ 's-green' if botok else ('s-yellow' if health.bot.get('status') == 'no_token' else 's-red') }}">
+      <div class="ops-card-top"><span class="ops-card-icon">🤖</span><span class="ops-badge {{ 'green' if botok else ('yellow' if health.bot.get('status') == 'no_token' else 'red') }}">{{ health.bot.get('status', '?') }}</span></div>
+      <div class="ops-card-num">{{ '🟢' if botok else '🔴' }}</div>
+      <div class="ops-card-label">Telegram bot</div>
+      <div class="ops-card-sub">{{ ('@' ~ health.bot.username) if botok else (health.bot.get('detail') or 'chưa kết nối') }}</div>
+    </div>
+
+    <div class="ops-card s-{{ bkcls }}">
+      <div class="ops-card-top"><span class="ops-card-icon">💾</span><span class="ops-badge {{ bkcls }}">{{ 'mới' if bmax < 24 else ('cũ' if bmax < 72 else 'quá cũ') }}</span></div>
+      <div class="ops-card-num">{{ (bage|int ~ 'h') if bk.db.get('ok') else '—' }}</div>
+      <div class="ops-card-label">Backup DB</div>
+      <div class="ops-card-sub">secrets {{ (sage|int ~ 'h') if bk.secrets.get('ok') else '—' }}</div>
+    </div>
+  </div>
+
+  <div class="card ops-health">
+    <div class="card-title" style="font-weight:600">⚙️ Sức khỏe hệ thống &amp; agent</div>
+    <div class="ops-health-grid">
+      <div class="ops-hrow"><span class="lbl">Flask web</span><span class="val"><span class="ops-badge green">Up</span></span></div>
+      <div class="ops-hrow"><span class="lbl">AI provider</span><span class="val">{{ health.provider.get('primary') or '—' }} <span class="ops-badge {{ 'green' if health.provider.get('primary') else 'red' }}">{{ 'sẵn sàng' if health.provider.get('primary') else 'không có' }}</span></span></div>
+      <div class="ops-hrow"><span class="lbl">Telegram bot</span><span class="val"><span class="ops-badge {{ 'green' if botok else ('yellow' if health.bot.get('status') == 'no_token' else 'red') }}">{{ 'OK' if botok else (health.bot.get('detail') or health.bot.get('status')) }}</span></span></div>
+      <div class="ops-hrow"><span class="lbl">Git ({{ git.get('branch', '—') }})</span><span class="val"><span class="ops-badge {{ 'yellow' if gitdirty else 'green' }}">↑{{ git.get('ahead') if git.get('ahead') is not none else '?' }} · {{ git.get('uncommitted', 0) }} chưa commit</span></span></div>
+      <div class="ops-hrow"><span class="lbl">Backup DB</span><span class="val"><span class="ops-badge {{ 'green' if bage < 24 else ('yellow' if bage < 72 else 'red') }}">{{ (bage|int ~ 'h') if bk.db.get('ok') else 'chưa có' }}</span></span></div>
+      <div class="ops-hrow"><span class="lbl">Backup secrets</span><span class="val"><span class="ops-badge {{ 'green' if sage < 24 else ('yellow' if sage < 72 else 'red') }}">{{ (sage|int ~ 'h') if bk.secrets.get('ok') else 'chưa có' }}</span></span></div>
+      <div class="ops-hrow"><span class="lbl">Pillar gen</span><span class="val"><span data-h="pillar.done">{{ health.pillar.get('done', 0) }}</span>/<span data-h="pillar.total">{{ health.pillar.get('total', 0) }}</span> <span class="ops-badge {{ 'yellow' if (health.pillar.get('pending', 0) or 0) > 0 else 'green' }}"><span data-h="pillar.pending">{{ health.pillar.get('pending', 0) }}</span> chờ</span></span></div>
+    </div>
+  </div>
+</section>
+
+{# ═════ QUICK ACTIONS + VIỆC ĐANG MỞ (Phase 3) ═════ #}
+<style>
+ .qa-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+ .qa-group{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+ .qa-title{font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px}
+ .qa-act{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;text-decoration:none;color:inherit;transition:background .12s}
+ .qa-act:hover{background:rgba(255,255,255,.05)}
+ .qa-act>span{font-size:18px;width:24px;text-align:center;flex:none}
+ .qa-act b{font-size:13px;display:block;line-height:1.2}
+ .qa-act small{font-size:11px;color:var(--text-muted)}
+ .wl-list{display:flex;flex-direction:column;gap:9px}
+ .wl-item{display:flex;align-items:flex-start;gap:10px;font-size:13px}
+ .wl-item .ops-badge{flex:none;margin-top:1px}
+ .wl-text{line-height:1.45}
+</style>
+
+<section class="ops">
+  <div class="ops-head"><h2 style="font-size:16px">⚡ Quick actions</h2></div>
+  <div class="qa-groups">
+    <div class="qa-group">
+      <div class="qa-title">🔍 SEO &amp; Content</div>
+      <a class="qa-act" href="/content-jobs"><span>📝</span><div><b>Content jobs</b><small>Viết mô tả sản phẩm</small></div></a>
+      <a class="qa-act" href="/blog-content"><span>📰</span><div><b>Blog content</b><small>Bài blog + duyệt</small></div></a>
+      <a class="qa-act" href="/blog-pillars"><span>🏛️</span><div><b>Pillar plan</b><small>Gen pillar–cluster</small></div></a>
+      <a class="qa-act" href="/seo"><span>🔍</span><div><b>Audit SEO</b><small>Điểm các URL</small></div></a>
+      <a class="qa-act" href="/seo/title-meta"><span>🏷️</span><div><b>Title / Meta</b><small>Sửa SEO hàng loạt</small></div></a>
+      <a class="qa-act" href="/seo/gsc"><span>📈</span><div><b>Search Console</b><small>Task từ GSC</small></div></a>
+      <a class="qa-act" href="/collection-content"><span>🗂️</span><div><b>Collection</b><small>Content danh mục</small></div></a>
+    </div>
+    <div class="qa-group">
+      <div class="qa-title">📘 Facebook</div>
+      <a class="qa-act" href="/posts/new"><span>➕</span><div><b>Tạo bài FB</b><small>Caption + ảnh</small></div></a>
+      <a class="qa-act" href="#week-board"><span>📅</span><div><b>Lịch tuần</b><small>Xem / kéo-thả lịch</small></div></a>
+    </div>
+    <div class="qa-group">
+      <div class="qa-title">🛒 Haravan</div>
+      <a class="qa-act" href="/haravan"><span>🛒</span><div><b>Sản phẩm</b><small>Catalog + audit SEO</small></div></a>
+    </div>
+    <div class="qa-group">
+      <div class="qa-title">⚙️ System</div>
+      <a class="qa-act" href="/api/dashboard/health" target="_blank"><span>🩺</span><div><b>Health JSON</b><small>Số liệu thô (debug)</small></div></a>
+    </div>
+  </div>
+</section>
+
+<section class="ops">
+  <div class="ops-head"><h2 style="font-size:16px">📋 Việc đang mở <span class="muted" style="font-size:12px;font-weight:400">— parse từ WORKLOG.md</span></h2></div>
+  <div class="card" style="padding:14px 16px">
+    {% if worklog_tasks.ok and worklog_tasks.tasks %}
+      <div class="wl-list">
+        {% for t in worklog_tasks.tasks %}
+          <div class="wl-item">
+            <span class="ops-badge {{ 'red' if t.bucket == 'blocked' else 'yellow' }}">{{ 'chờ vợ' if t.bucket == 'blocked' else 'active' }}</span>
+            <span class="wl-text">{{ t.text }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="muted" style="margin:4px 0">Chưa parse được task từ WORKLOG — mở <code>nox-1/WORKLOG.md</code> để xem chi tiết.</p>
+    {% endif %}
+  </div>
+</section>
+
 {# ───── HERO + PAGE HEALTH ───── #}
 <section class="hero-row">
   <div class="welcome">
@@ -151,7 +320,7 @@
 </section>
 
 {# ───── WEEK BOARD ───── #}
-<section>
+<section id="week-board">
   <div class="section-head">
     <div class="sh-left">
       <h2>📅 Các bài trong tuần</h2>
@@ -361,5 +530,25 @@ document.getElementById('resch-save')?.addEventListener('click', async () => {
   if (j.ok) { closeResch(); location.reload(); }
   else alert('❌ ' + (j.error || 'Lỗi'));
 });
+</script>
+
+<script>
+// ───── Auto-refresh Operations Center (Phase 4) — poll /api/dashboard/health 30s ─────
+async function refreshHealth() {
+  try {
+    const r = await fetch('/api/dashboard/health', {cache: 'no-store'});
+    if (!r.ok) return;
+    const h = await r.json();
+    document.querySelectorAll('[data-h]').forEach(el => {
+      const v = el.getAttribute('data-h').split('.').reduce((o, k) => (o == null ? undefined : o[k]), h);
+      if (v !== undefined && v !== null) el.textContent = v;
+    });
+    const u = document.getElementById('ops-updated');
+    if (u && h.ts) u.textContent = 'cập nhật ' + h.ts.slice(11, 16);
+    const live = document.getElementById('ops-live');
+    if (live) { live.style.opacity = '0.35'; setTimeout(() => live.style.opacity = '1', 400); }
+  } catch (e) { /* im lặng, 30s sau thử lại */ }
+}
+setInterval(refreshHealth, 30000);
 </script>
 {% endblock %}

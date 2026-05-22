@@ -144,7 +144,7 @@
 {% endif %}
 
 {% if not job.haravan_article_id %}
-<div class="cd-error">⚠️ Bài này thiếu <code>haravan_article_id</code> — không sync được.</div>
+<div style="background:rgba(96,165,250,0.12);border-left:4px solid #60a5fa;padding:8px 12px;border-radius:6px;margin:8px 0;color:#9cb6d4">🆕 Bài mới — bấm <b>Đăng lên Haravan</b> sẽ TẠO bài và publish (hiển thị công khai, Google index được).</div>
 {% endif %}
 {% if job.error %}
 <div class="cd-error">❌ Lỗi gần nhất: {{ job.error[:500] }}</div>
@@ -172,6 +172,62 @@
             oninput="updateMeter('f-meta', 'meter-meta', 140, 160)">{{ job.edited_meta or '' }}</textarea>
   <div class="cd-meter" id="meter-meta">{{ (job.edited_meta or '')|length }}c</div>
 </div>
+
+<div class="cd-section" id="img-picker">
+  <div class="cd-section-h">
+    <span>🖼️ Ảnh ứng viên cho bài</span>
+    <span class="cd-section-hint">Ưu tiên Sintech → Pexels · tick <strong>2-3 tấm</strong> rồi bấm "Chèn vào bài"</span>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+    <button type="button" class="btn" onclick="gatherImages(this)">🔄 Gom ảnh ứng viên</button>
+    <button type="button" class="btn btn-primary" onclick="insertSelected(this)">⬇️ Chèn ảnh đã chọn vào bài</button>
+    <span id="img-pick-count" class="cd-section-hint" style="margin-left:auto"></span>
+  </div>
+  <div id="img-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px"></div>
+  <div id="img-empty" class="cd-section-hint" style="padding:6px 0">Chưa có ảnh ứng viên — bấm <strong>"Gom ảnh ứng viên"</strong> để tải ~10 tấm về.</div>
+</div>
+
+<div class="cd-section" id="ai-img-box">
+  <div class="cd-section-h">
+    <span>🎨 Ảnh AI — gen ngoài rồi tải vào bài</span>
+    <span class="cd-section-hint">Copy prompt → gen ở ChatGPT/Canva → tải ảnh về → đẩy vào bài (tự scale 1200px + host CDN)</span>
+  </div>
+  <div style="margin-bottom:10px">
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:5px;flex-wrap:wrap">
+      <strong style="font-size:12px">📝 Prompt gợi ý (tự sinh từ title)</strong>
+      <button type="button" class="btn" style="padding:2px 8px;font-size:11px" onclick="rollPrompt()">🎲 Prompt khác</button>
+      <label style="font-size:11px;display:flex;gap:4px;align-items:center;cursor:pointer" title="Đổi sang dạng JSON (hợp khi feed API)">
+        <input type="checkbox" id="ai-json-toggle" onchange="renderPrompt()"> JSON
+      </label>
+      <button type="button" class="btn" style="padding:2px 8px;font-size:11px;margin-left:auto" onclick="copyPrompt(this)">📋 Copy prompt</button>
+    </div>
+    <textarea class="cd-textarea" id="ai-prompt" rows="4" style="font-family:inherit"></textarea>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px;flex-wrap:wrap;font-size:12px">
+      <span>📁 Tên file gợi ý:</span>
+      <code id="ai-fname" style="font-family:Consolas,monospace;color:#a5b4fc;font-weight:600">—</code>
+      <button type="button" class="btn" style="padding:2px 8px;font-size:11px" onclick="copyFname(this)">📋 Copy + tên kế</button>
+      <span class="cd-section-hint">đặt tên này khi up lên Haravan Files — ngắn & không trùng giữa các bài</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--border);padding-top:10px">
+    <input type="text" id="ai-url" placeholder="🔗 Dán URL ảnh — vd Haravan Files: https://cdn.hstatic.net/files/.../nox1.png" class="cd-input" style="flex:1;min-width:240px;font-size:12px">
+    <button type="button" class="btn btn-primary" onclick="insertAIImageByUrl('hero', this)">📌 → hero</button>
+    <button type="button" class="btn btn-primary" onclick="insertAIImageByUrl('body', this)">📥 → thân bài</button>
+    <span id="ai-upload-status" class="cd-section-hint" style="margin-left:auto"></span>
+  </div>
+  <div class="cd-section-hint" style="margin-top:6px">💡 <strong>Hero</strong> = ảnh đại diện bài + tự chèn lên đầu thân bài. <strong>Thân bài</strong> chèn đúng vị trí con trỏ. (Ảnh đã host sẵn — dán link cdn.hstatic.net/files là chèn ngay.)</div>
+</div>
+
+<style>
+  .img-card { position:relative; border:2px solid var(--border); border-radius:8px; overflow:hidden; cursor:pointer; background:rgba(255,255,255,.02); display:flex; flex-direction:column }
+  .img-card.sel { border-color:#34d399; box-shadow:0 0 0 1px #34d399 }
+  .img-card img { width:100%; height:110px; object-fit:cover; display:block; background:#fff }
+  .img-card .img-meta { padding:5px 7px; font-size:10.5px; color:var(--text-muted); display:flex; justify-content:space-between; gap:4px }
+  .img-card .img-src { font-weight:600 }
+  .img-card .img-src.sintech { color:#60a5fa } .img-card .img-src.pexels { color:#34d399 } .img-card .img-src.unsplash { color:#facc15 }
+  .img-card .img-check { position:absolute; top:6px; left:6px; width:20px; height:20px; accent-color:#34d399; cursor:pointer }
+  .img-card .img-zoom { position:absolute; top:5px; right:6px; background:rgba(0,0,0,.55); color:#fff; border-radius:4px; font-size:11px; padding:1px 5px; text-decoration:none }
+</style>
 
 <div class="cd-section">
   <div class="cd-section-h">
@@ -218,8 +274,7 @@
 <div class="cd-actions">
   <button class="btn btn-primary" type="button" onclick="genAI()">🤖 AI gen lại bài</button>
   <button class="btn" type="button" onclick="saveEdit(this)">💾 Lưu edit</button>
-  <button class="btn btn-primary" type="button" onclick="syncJob()"
-          {% if not job.haravan_article_id %}disabled title="Thiếu haravan_article_id"{% endif %}>🚀 Sync lên Haravan</button>
+  <button class="btn btn-primary" type="button" onclick="syncJob()">🚀 {% if job.haravan_article_id %}Cập nhật lên Haravan{% else %}Duyệt &amp; đăng lên Haravan (hiện){% endif %}</button>
   <a class="btn" href="{{ url_for('blog_content_page') }}" style="margin-left:auto">← Danh sách</a>
 </div>
 
@@ -228,6 +283,138 @@
 <script>
 const JOB_ID = {{ job.id }};
 const HARAVAN_BODY_LIMIT = 50000;
+
+// ─────────── Blog image picker (T3) ───────────
+let IMAGES = {{ images|tojson }};
+const SELECTED = new Set((IMAGES || []).filter(im => im.selected).map(im => im.idx));
+
+function renderImgGrid() {
+  const grid = document.getElementById('img-grid');
+  const empty = document.getElementById('img-empty');
+  grid.innerHTML = '';
+  if (!IMAGES || !IMAGES.length) { empty.style.display = 'block'; updatePickCount(); return; }
+  empty.style.display = 'none';
+  IMAGES.forEach(im => {
+    const sel = SELECTED.has(im.idx);
+    const dims = (im.width && im.height) ? `${im.width}×${im.height}` : '';
+    const card = document.createElement('label');
+    card.className = 'img-card' + (sel ? ' sel' : '');
+    card.id = 'imgcard-' + im.idx;
+    card.innerHTML =
+      `<input type="checkbox" class="img-check" ${sel ? 'checked' : ''} onchange="toggleImg(${im.idx}, this)">` +
+      `<a class="img-zoom" href="${im.thumb_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">⤢</a>` +
+      `<img src="${im.thumb_url}" alt="${(im.alt || '').replace(/"/g, '&quot;')}" loading="lazy">` +
+      `<span class="img-meta"><span class="img-src ${im.source}">${im.source}</span><span>${dims}</span></span>`;
+    grid.appendChild(card);
+  });
+  updatePickCount();
+}
+
+function toggleImg(idx, cb) {
+  if (cb.checked) SELECTED.add(idx); else SELECTED.delete(idx);
+  const card = document.getElementById('imgcard-' + idx);
+  if (card) card.classList.toggle('sel', cb.checked);
+  updatePickCount();
+}
+
+function updatePickCount() {
+  const el = document.getElementById('img-pick-count');
+  const n = SELECTED.size;
+  el.textContent = (IMAGES && IMAGES.length ? `${IMAGES.length} ảnh · ` : '') + `đã chọn ${n}`;
+  el.style.color = (n >= 2 && n <= 3) ? '#34d399' : (n > 3 ? '#facc15' : 'var(--text-muted)');
+}
+
+function isMainH2(t) {
+  t = (t || '').toLowerCase();
+  if (/v[ìi].*sao.*sintech/.test(t)) return false;
+  if (/c[âa]u\s*h[ỏo]i.*th[ưuờơ]ng\s*g[ặa]p/.test(t)) return false;
+  if (/\bfaq\b/.test(t)) return false;
+  if (/^\s*c[âa]u\s*h[ỏo]i/.test(t)) return false;
+  return true;
+}
+
+async function gatherImages(btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '⏳ Đang gom...';
+  try {
+    const query = document.getElementById('f-title').value || '';
+    const r = await fetch(`/blog-content/${JOB_ID}/gather-images`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({query}),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      IMAGES = d.items || [];
+      SELECTED.clear();
+      renderImgGrid();
+      const bs = Object.entries(d.by_source || {}).map(([k, v]) => `${k}:${v}`).join(' · ');
+      flashBtn(btn, `✓ ${d.count} ảnh`);
+      if (d.errors && d.errors.length) console.warn('gather errors:', d.errors);
+    } else { alert('❌ ' + (d.error || 'unknown')); }
+  } catch (e) { alert('❌ ' + e); }
+  finally { btn.disabled = false; if (btn.innerHTML === '⏳ Đang gom...') btn.innerHTML = orig; }
+}
+
+function _makeFigure(im) {
+  const fig = document.createElement('figure');
+  fig.setAttribute('data-blog-img', '1');
+  fig.style.cssText = 'margin:18px 0;text-align:center';
+  const img = document.createElement('img');
+  img.src = im.origin_url;                       // URL công khai → dùng được khi sync Haravan
+  img.alt = im.alt || '';
+  img.setAttribute('data-blog-img', '1');
+  img.style.cssText = 'max-width:100%;height:auto;border-radius:8px';
+  fig.appendChild(img);
+  if (im.source !== 'sintech' && im.credit) {    // stock cần ghi nguồn
+    const cap = document.createElement('figcaption');
+    cap.style.cssText = 'font-size:12px;color:#888;margin-top:4px;font-style:italic';
+    cap.textContent = 'Ảnh: ' + im.credit;
+    fig.appendChild(cap);
+  }
+  return fig;
+}
+
+async function insertSelected(btn) {
+  const chosen = (IMAGES || []).filter(im => SELECTED.has(im.idx));
+  if (!chosen.length) { alert('Chưa tick ảnh nào để chèn.'); return; }
+  if (chosen.length > 4 && !confirm(`Bạn chọn ${chosen.length} ảnh — hơi nhiều cho 1 bài. Vẫn chèn?`)) return;
+
+  const editor = document.getElementById('f-body');
+  // Bỏ ảnh blog đã chèn trước đó (re-insert sạch, không nhân đôi)
+  editor.querySelectorAll('figure[data-blog-img], img[data-blog-img]').forEach(el => {
+    const fig = el.closest('figure[data-blog-img]') || el;
+    fig.remove();
+  });
+
+  const heads = Array.from(editor.querySelectorAll('h2')).filter(h => isMainH2(h.textContent));
+  chosen.forEach((im, i) => {
+    const fig = _makeFigure(im);
+    if (i === 0) {                               // tấm đầu: sau intro
+      const firstP = editor.querySelector('p');
+      if (firstP) firstP.after(fig);
+      else if (heads.length) heads[0].before(fig);
+      else editor.appendChild(fig);
+    } else if (heads.length) {                   // còn lại: rải trước các H2 chính
+      heads[Math.min(heads.length - 1, i)].before(fig);
+    } else {
+      editor.appendChild(fig);
+    }
+  });
+
+  onBodyChange();
+  await saveSelection();                         // đánh dấu selected trong meta.json
+  await saveEdit();                              // lưu edited_body_html vào DB
+  if (btn) flashBtn(btn, `✓ Đã chèn ${chosen.length} ảnh`);
+}
+
+async function saveSelection() {
+  try {
+    await fetch(`/blog-content/${JOB_ID}/images/select`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({selected: Array.from(SELECTED)}),
+    });
+  } catch (e) { console.warn('saveSelection:', e); }
+}
 
 function updateMeter(inputId, meterId, min, max) {
   const v = document.getElementById(inputId).value;
@@ -436,9 +623,10 @@ function onBodyChange() {
   warnEl.style.color = blockSync ? '#f87171' : (n > 47000 ? '#f59e0b' : '#34d399');
 
   document.querySelectorAll('button').forEach(b => {
-    if (b.textContent.includes('Sync')) {
+    const oc = b.getAttribute('onclick') || '';
+    if (oc.includes('syncJob')) {
       if (blockSync) { b.disabled = true; b.title = 'Body HTML vượt limit — rút gọn lại'; }
-      else if (!b.title.includes('haravan_article_id')) { b.disabled = false; b.title = ''; }
+      else { b.disabled = false; b.title = ''; }
     }
   });
 }
@@ -509,21 +697,117 @@ async function saveEdit(triggerBtn) {
   } catch (e) { alert('❌ ' + e); return false; }
 }
 
-document.addEventListener('DOMContentLoaded', () => { onBodyChange(); });
+// ─────────── Ảnh AI: prompt gợi ý + upload + chèn ───────────
+let _promptVariant = 0;
+const _PROMPT_STYLES = [
+  'minh hoạ phẳng hiện đại (flat illustration), tông xanh dương công nghệ',
+  'ảnh thực tế (photorealistic), ánh sáng studio, nền sạch',
+  'render 3D bán thực, gradient xanh tím công nghệ',
+  'phong cách isometric gọn gàng, nền sáng',
+];
+function _articleSubject() {
+  return (document.getElementById('f-title').value || '').trim() || 'chủ đề bài viết';
+}
+function buildPrompt() {
+  const subj = _articleSubject();
+  const style = _PROMPT_STYLES[_promptVariant % _PROMPT_STYLES.length];
+  if (document.getElementById('ai-json-toggle').checked) {
+    return JSON.stringify({
+      subject: subj,
+      context: 'ảnh minh hoạ cho bài blog công nghệ / PC gaming (Sintech)',
+      style: style, aspect_ratio: '16:9',
+      no_text: true, no_watermark: true, quality: 'high'
+    }, null, 2);
+  }
+  return `Ảnh minh hoạ cho bài viết "${subj}". Phong cách: ${style}. Bố cục ngang 16:9, chủ thể rõ ràng, nền gọn. KHÔNG chứa chữ, KHÔNG watermark. Chất lượng cao, sắc nét.`;
+}
+function renderPrompt() { document.getElementById('ai-prompt').value = buildPrompt(); }
+function rollPrompt() { _promptVariant++; renderPrompt(); }
+
+// Tên file gợi ý theo mã bài: nox<JOB_ID><a,b,c,...> — ngắn + không trùng giữa các bài
+let _fnameSeq = 0;
+function _fnameLetter(n) { let s = ''; n++; while (n > 0) { n--; s = String.fromCharCode(97 + (n % 26)) + s; n = Math.floor(n / 26); } return s; }
+function currentFname() { return `nox${JOB_ID}${_fnameLetter(_fnameSeq)}`; }
+function renderFname() { document.getElementById('ai-fname').textContent = currentFname(); }
+function copyFname(btn) {
+  const name = currentFname();
+  const done = () => { flashBtn(btn, '✓ ' + name); _fnameSeq++; renderFname(); };
+  (navigator.clipboard ? navigator.clipboard.writeText(name) : Promise.reject()).then(done).catch(done);
+}
+function copyPrompt(btn) {
+  const ta = document.getElementById('ai-prompt');
+  ta.select();
+  (navigator.clipboard ? navigator.clipboard.writeText(ta.value) : Promise.reject())
+    .then(() => flashBtn(btn, '✓ Đã copy'))
+    .catch(() => { document.execCommand('copy'); flashBtn(btn, '✓ Copy'); });
+}
+
+// caret tracking trong editor → chèn ảnh thân bài đúng chỗ con trỏ
+let _savedRange = null;
+function _saveRange() {
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) {
+    const r = sel.getRangeAt(0);
+    if (document.getElementById('f-body').contains(r.commonAncestorContainer)) _savedRange = r.cloneRange();
+  }
+}
+['keyup', 'mouseup', 'blur'].forEach(ev =>
+  document.getElementById('f-body').addEventListener(ev, _saveRange));
+
+function _insertAIFig(im, target) {
+  const editor = document.getElementById('f-body');
+  const fig = _makeFigure(im);   // dùng im.origin_url làm src (URL công khai)
+  if (target === 'hero') {
+    editor.querySelectorAll('figure[data-hero-img]').forEach(el => el.remove());
+    fig.setAttribute('data-hero-img', '1');
+    editor.insertBefore(fig, editor.firstChild);
+  } else if (_savedRange) {
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(_savedRange);
+    _savedRange.insertNode(fig); _savedRange.setStartAfter(fig);
+  } else {
+    editor.appendChild(fig);
+  }
+}
+
+async function insertAIImageByUrl(target, btn) {
+  const urlInput = document.getElementById('ai-url');
+  const url = (urlInput.value || '').trim();
+  if (!url) { alert('Dán URL ảnh trước (link cdn.hstatic.net từ Haravan Files).'); return; }
+  if (!/^https?:\/\//i.test(url)) { alert('URL phải bắt đầu http:// hoặc https://'); return; }
+  const status = document.getElementById('ai-upload-status');
+  const orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = '⏳...';
+  try {
+    const r = await fetch(`/blog-content/${JOB_ID}/image-url`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, target, alt: document.getElementById('f-title').value || '' }),
+    });
+    const d = await r.json();
+    if (!d.ok) { alert('❌ ' + (d.error || 'unknown')); status.textContent = '❌ lỗi'; return; }
+    _insertAIFig({ origin_url: d.src, alt: d.alt || '', source: 'ai', credit: '' }, target);
+    onBodyChange();
+    await saveEdit();
+    urlInput.value = '';
+    status.textContent = `✓ gắn URL · ${target === 'hero' ? 'hero + đầu bài' : 'thân bài'}`;
+    flashBtn(btn, '✓ Xong');
+  } catch (e) { alert('❌ ' + e); status.textContent = '❌ lỗi'; }
+  finally { btn.disabled = false; btn.innerHTML = orig; }
+}
+
+document.addEventListener('DOMContentLoaded', () => { onBodyChange(); renderImgGrid(); renderPrompt(); renderFname(); });
 
 async function syncJob() {
   const bodyLen = getBodyHTML().length;
   if (compressHTMLPreview(getBodyHTML()).length > HARAVAN_BODY_LIMIT) {
     alert(`❌ Body HTML sau compress vẫn vượt Haravan limit ${HARAVAN_BODY_LIMIT.toLocaleString('vi-VN')}.\nRút gọn trước.`); return;
   }
-  if (!confirm('🚀 Sync bài lên Haravan? Body + title + meta sẽ bị ghi đè trên admin.')) return;
+  if (!confirm('🚀 Đăng bài lên Haravan và hiển thị công khai (Google index được)?\nChỉ bấm khi em đã duyệt xong nội dung.')) return;
   await saveEdit();
   const btns = document.querySelectorAll('button');
   btns.forEach(b => b.disabled = true);
   try {
     const r = await fetch(`/blog-content/${JOB_ID}/sync`, {method: 'POST'});
     const d = await r.json();
-    if (d.ok) { alert('✅ Sync xong! Vào sintech.vn xem.'); location.reload(); }
+    if (d.ok) { alert((d.created ? '✅ Đã tạo + đăng bài công khai!' : '✅ Đã cập nhật bài!') + ' Vào sintech.vn xem.'); location.reload(); }
     else { alert('❌ ' + (d.error || 'unknown')); btns.forEach(b => b.disabled = false); }
   } catch (e) { alert('❌ ' + e); btns.forEach(b => b.disabled = false); }
 }

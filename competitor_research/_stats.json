@@ -1,0 +1,494 @@
+{
+  "total": 99,
+  "by_type": {
+    "collection": 7,
+    "product": 40,
+    "news": 52
+  },
+  "collection": {
+    "n": 7,
+    "title_len_avg": 59.9,
+    "title_len_min": 47,
+    "title_len_max": 70,
+    "meta_len_avg": 144.4,
+    "meta_len_min": 119,
+    "meta_len_max": 163,
+    "cta_yes": 3,
+    "title_patterns": [
+      [
+        "[NAME] , chính hãng + giá rẻ/tốt + trả góp 0%",
+        1
+      ],
+      [
+        "[NAME] , bảo hành/1đổi1 + giá rẻ/tốt + trả góp 0%",
+        1
+      ],
+      [
+        "[NAME] | chính hãng + giá rẻ/tốt + miễn phí/giao nhanh + trả góp 0%",
+        1
+      ],
+      [
+        "[NAME] | bảo hành/1đổi1 + chính hãng + giá rẻ/tốt",
+        1
+      ],
+      [
+        "[NAME] - chính hãng + giá rẻ/tốt + trả góp 0%",
+        1
+      ],
+      [
+        "[NAME] - bảo hành/1đổi1 + chính hãng + trả góp 0%",
+        1
+      ],
+      [
+        "[NAME] | chính hãng + giá rẻ/tốt + trả góp 0%",
+        1
+      ]
+    ],
+    "meta_patterns": [
+      [
+        "LEAD=mua | USP=bảo hành/1đổi1+chính hãng+giá rẻ/tốt+thu cũ/trợ giá+trả góp 0% | CTA=no",
+        1
+      ],
+      [
+        "LEAD=mua | USP=bảo hành/1đổi1+chính hãng+giá rẻ/tốt+thu cũ/trợ giá+trả góp 0%+ưu đãi/sốc/sale | CTA=yes",
+        1
+      ],
+      [
+        "LEAD=mua | USP=bảo hành/1đổi1+chính hãng+giá rẻ/tốt+trả góp 0%+ưu đãi/sốc/sale | CTA=no",
+        1
+      ],
+      [
+        "LEAD=[other] | USP=bảo hành/1đổi1+chính hãng+giá rẻ/tốt+miễn phí/giao nhanh+ưu đãi/sốc/sale | CTA=yes",
+        1
+      ],
+      [
+        "LEAD=mua | USP=bảo hành/1đổi1+chính hãng+thu cũ/trợ giá+trả góp 0%+ưu đãi/sốc/sale | CTA=no",
+        1
+      ],
+      [
+        "LEAD=mua | USP=bảo hành/1đổi1+chính hãng+trả góp 0%+ưu đãi/sốc/sale | CTA=yes",
+        1
+      ],
+      [
+        "LEAD=mua | USP=bảo hành/1đổi1+giá rẻ/tốt+trả góp 0% | CTA=no",
+        1
+      ]
+    ],
+    "title_usp_freq": [
+      [
+        "giá rẻ/tốt",
+        6
+      ],
+      [
+        "trả góp 0%",
+        6
+      ],
+      [
+        "chính hãng",
+        6
+      ],
+      [
+        "bảo hành/1đổi1",
+        3
+      ],
+      [
+        "miễn phí/giao nhanh",
+        1
+      ]
+    ],
+    "meta_usp_freq": [
+      [
+        "bảo hành/1đổi1",
+        7
+      ],
+      [
+        "trả góp 0%",
+        6
+      ],
+      [
+        "chính hãng",
+        6
+      ],
+      [
+        "giá rẻ/tốt",
+        5
+      ],
+      [
+        "ưu đãi/sốc/sale",
+        5
+      ],
+      [
+        "thu cũ/trợ giá",
+        3
+      ],
+      [
+        "miễn phí/giao nhanh",
+        1
+      ]
+    ],
+    "schema_freq": [
+      [
+        "BreadcrumbList,ProfessionalService,WebSite",
+        7
+      ]
+    ]
+  },
+  "product": {
+    "n": 40,
+    "title_len_avg": 53.8,
+    "title_len_min": 43,
+    "title_len_max": 60,
+    "meta_len_avg": 128.6,
+    "meta_len_min": 118,
+    "meta_len_max": 139,
+    "cta_yes": 4,
+    "title_patterns": [
+      [
+        "[NAME] none (no-USP)",
+        11
+      ],
+      [
+        "[NAME] - (no-USP)",
+        8
+      ],
+      [
+        "[NAME] - giá rẻ/tốt",
+        6
+      ],
+      [
+        "[NAME] none giá rẻ/tốt",
+        4
+      ],
+      [
+        "[NAME] none chính hãng",
+        3
+      ],
+      [
+        "[NAME] - chính hãng + giá rẻ/tốt",
+        3
+      ],
+      [
+        "[NAME] none chính hãng + giá rẻ/tốt",
+        2
+      ],
+      [
+        "[NAME] none ưu đãi/sốc/sale",
+        2
+      ],
+      [
+        "[NAME] - ưu đãi/sốc/sale",
+        1
+      ]
+    ],
+    "meta_patterns": [
+      [
+        "LEAD=[other] | USP=bảo hành/1đổi1+chính hãng | CTA=no",
+        21
+      ],
+      [
+        "LEAD=[other] | USP=bảo hành/1đổi1+giá rẻ/tốt+trả góp 0% | CTA=no",
+        5
+      ],
+      [
+        "LEAD=[other] | USP=chính hãng+miễn phí/giao nhanh | CTA=yes",
+        4
+      ],
+      [
+        "LEAD=[other] | USP=bảo hành/1đổi1+chính hãng+ưu đãi/sốc/sale | CTA=no",
+        3
+      ],
+      [
+        "LEAD=[other] | USP=chính hãng | CTA=no",
+        2
+      ],
+      [
+        "LEAD=[other] | USP=chính hãng+miễn phí/giao nhanh | CTA=no",
+        2
+      ],
+      [
+        "LEAD=[other] | USP=bảo hành/1đổi1+chính hãng+giá rẻ/tốt | CTA=no",
+        1
+      ],
+      [
+        "LEAD=[other] | USP=giá rẻ/tốt+trả góp 0% | CTA=no",
+        1
+      ],
+      [
+        "LEAD=[other] | USP=none | CTA=no",
+        1
+      ]
+    ],
+    "title_usp_freq": [
+      [
+        "giá rẻ/tốt",
+        15
+      ],
+      [
+        "chính hãng",
+        8
+      ],
+      [
+        "ưu đãi/sốc/sale",
+        3
+      ]
+    ],
+    "meta_usp_freq": [
+      [
+        "chính hãng",
+        33
+      ],
+      [
+        "bảo hành/1đổi1",
+        30
+      ],
+      [
+        "giá rẻ/tốt",
+        7
+      ],
+      [
+        "trả góp 0%",
+        6
+      ],
+      [
+        "miễn phí/giao nhanh",
+        6
+      ],
+      [
+        "ưu đãi/sốc/sale",
+        3
+      ]
+    ],
+    "schema_freq": [
+      [
+        "BreadcrumbList,Product,ProfessionalService,WebSite",
+        30
+      ],
+      [
+        "BreadcrumbList,FAQPage,Product,ProfessionalService,WebSite",
+        10
+      ]
+    ]
+  },
+  "news": {
+    "n": 52,
+    "title_len_avg": 58.5,
+    "title_len_min": 40,
+    "title_len_max": 70,
+    "meta_len_avg": 132.2,
+    "meta_len_min": 89,
+    "meta_len_max": 160,
+    "cta_yes": 13,
+    "title_patterns": [
+      [
+        "[NAME] none (no-USP)",
+        32
+      ],
+      [
+        "[NAME] : (no-USP)",
+        7
+      ],
+      [
+        "[NAME] - (no-USP)",
+        5
+      ],
+      [
+        "[NAME] , (no-USP)",
+        3
+      ],
+      [
+        "[NAME] none ưu đãi/sốc/sale",
+        2
+      ],
+      [
+        "[NAME] : giá rẻ/tốt + ưu đãi/sốc/sale",
+        1
+      ],
+      [
+        "[NAME] : ưu đãi/sốc/sale",
+        1
+      ],
+      [
+        "[NAME] none giá rẻ/tốt + ưu đãi/sốc/sale",
+        1
+      ]
+    ],
+    "meta_patterns": [
+      [
+        "LEAD=[other] | USP=none | CTA=no",
+        33
+      ],
+      [
+        "LEAD=[other] | USP=none | CTA=yes",
+        10
+      ],
+      [
+        "LEAD=[other] | USP=ưu đãi/sốc/sale | CTA=yes",
+        2
+      ],
+      [
+        "LEAD=[other] | USP=ưu đãi/sốc/sale | CTA=no",
+        2
+      ],
+      [
+        "LEAD=cập | USP=thu cũ/trợ giá | CTA=no",
+        1
+      ],
+      [
+        "LEAD=[other] | USP=giá rẻ/tốt | CTA=no",
+        1
+      ],
+      [
+        "LEAD=[other] | USP=trả góp 0%+ưu đãi/sốc/sale | CTA=no",
+        1
+      ],
+      [
+        "LEAD=cập | USP=none | CTA=no",
+        1
+      ],
+      [
+        "LEAD=mua | USP=ưu đãi/sốc/sale | CTA=no",
+        1
+      ]
+    ],
+    "title_usp_freq": [
+      [
+        "ưu đãi/sốc/sale",
+        5
+      ],
+      [
+        "giá rẻ/tốt",
+        2
+      ]
+    ],
+    "meta_usp_freq": [
+      [
+        "ưu đãi/sốc/sale",
+        6
+      ],
+      [
+        "thu cũ/trợ giá",
+        1
+      ],
+      [
+        "giá rẻ/tốt",
+        1
+      ],
+      [
+        "trả góp 0%",
+        1
+      ]
+    ],
+    "schema_freq": [
+      [
+        "BreadcrumbList,ProfessionalService,WebSite",
+        52
+      ]
+    ]
+  },
+  "title_patterns_all": [
+    [
+      "[NAME] none (no-USP)",
+      43
+    ],
+    [
+      "[NAME] - (no-USP)",
+      13
+    ],
+    [
+      "[NAME] : (no-USP)",
+      7
+    ],
+    [
+      "[NAME] - giá rẻ/tốt",
+      6
+    ],
+    [
+      "[NAME] none giá rẻ/tốt",
+      4
+    ],
+    [
+      "[NAME] none ưu đãi/sốc/sale",
+      4
+    ],
+    [
+      "[NAME] none chính hãng",
+      3
+    ],
+    [
+      "[NAME] - chính hãng + giá rẻ/tốt",
+      3
+    ],
+    [
+      "[NAME] , (no-USP)",
+      3
+    ],
+    [
+      "[NAME] none chính hãng + giá rẻ/tốt",
+      2
+    ]
+  ],
+  "meta_patterns_all": [
+    [
+      "LEAD=[other] | USP=none | CTA=no",
+      34
+    ],
+    [
+      "LEAD=[other] | USP=bảo hành/1đổi1+chính hãng | CTA=no",
+      21
+    ],
+    [
+      "LEAD=[other] | USP=none | CTA=yes",
+      10
+    ],
+    [
+      "LEAD=[other] | USP=bảo hành/1đổi1+giá rẻ/tốt+trả góp 0% | CTA=no",
+      5
+    ],
+    [
+      "LEAD=[other] | USP=chính hãng+miễn phí/giao nhanh | CTA=yes",
+      4
+    ],
+    [
+      "LEAD=[other] | USP=bảo hành/1đổi1+chính hãng+ưu đãi/sốc/sale | CTA=no",
+      3
+    ],
+    [
+      "LEAD=[other] | USP=chính hãng | CTA=no",
+      2
+    ],
+    [
+      "LEAD=[other] | USP=chính hãng+miễn phí/giao nhanh | CTA=no",
+      2
+    ],
+    [
+      "LEAD=[other] | USP=ưu đãi/sốc/sale | CTA=yes",
+      2
+    ],
+    [
+      "LEAD=[other] | USP=ưu đãi/sốc/sale | CTA=no",
+      2
+    ]
+  ],
+  "news_categories": [
+    [
+      "tin công nghệ",
+      23
+    ],
+    [
+      "khuyến mãi",
+      8
+    ],
+    [
+      "hướng dẫn",
+      8
+    ],
+    [
+      "so sánh",
+      7
+    ],
+    [
+      "review/đánh giá",
+      6
+    ]
+  ]
+}
