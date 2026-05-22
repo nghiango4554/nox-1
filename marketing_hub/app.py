@@ -1745,14 +1745,18 @@ def seo_title_meta_page():
     url_type = request.args.get("type") or None
     issue_filter = request.args.get("issue") or None
     sort = request.args.get("sort") or "score_asc"
+    sync_filter = request.args.get("sync") or None
     if url_type and url_type not in ("product", "collection", "blog", "page"):
         url_type = None
     if issue_filter and issue_filter not in seo_mod.ALL_TITLE_META_CODES:
         issue_filter = None
     if sort not in ("score_asc", "n_issues_desc", "url"):
         sort = "score_asc"
+    if sync_filter not in ("synced", "unsynced"):
+        sync_filter = None
     items = seo_mod.list_title_meta_pages(
         url_type=url_type, issue_filter=issue_filter, sort=sort, limit=2000,
+        sync_filter=sync_filter,
     )
     summary = seo_mod.title_meta_summary()
     fix_state = seo_mod.title_meta_fix_state()
@@ -1760,6 +1764,7 @@ def seo_title_meta_page():
         "seo_title_meta.html",
         items=items, summary=summary, fix_state=fix_state,
         url_type=url_type, issue_filter=issue_filter, sort=sort,
+        sync_filter=sync_filter,
         issue_labels=seo_mod.TITLE_META_LABELS,
     )
 
@@ -1778,6 +1783,20 @@ def seo_title_meta_fix():
     except Exception as e:
         return jsonify({"ok": False, "error": f"Lỗi server: {e}"}), 500
     return jsonify(result), 200 if result.get("ok") else 400
+
+
+@app.route("/seo/title-meta/regen", methods=["POST"])
+def seo_title_meta_regen():
+    """Đẩy 1 SP vào hàng chờ gen+sync lại — chạy ngầm, frontend poll realtime."""
+    payload = request.get_json(silent=True) or request.form
+    url = (payload.get("url") or "").strip()
+    if not url:
+        return jsonify({"ok": False, "error": "Thiếu url"}), 400
+    try:
+        result = seo_mod.enqueue_title_meta_regen(url)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Lỗi server: {e}"}), 500
+    return jsonify(result), 200 if result.get("ok") else 409
 
 
 @app.route("/seo/title-meta/fix-all/start", methods=["POST"])

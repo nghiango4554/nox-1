@@ -1614,10 +1614,30 @@ TITLE_META_LABELS = {
 }
 
 
+def synced_title_meta_urls() -> set:
+    """Set URL đã từng gen+sync title/meta lên Haravan (căn cứ file backup).
+    Nguồn local, không phụ thuộc Google Sheet → dùng cho cột Trạng thái + filter sync.
+    """
+    urls = set()
+    try:
+        for f in _TITLE_META_BACKUP_DIR.glob("*.json"):
+            try:
+                u = json.loads(f.read_text(encoding="utf-8")).get("url")
+            except Exception:
+                u = None
+            if u:
+                urls.add(u)
+    except Exception:
+        pass
+    return urls
+
+
 def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
-                           sort: str = "score_asc", limit: int = 2000) -> list:
+                           sort: str = "score_asc", limit: int = 2000,
+                           sync_filter: str = None) -> list:
     """Lấy URL có ít nhất 1 lỗi title/meta, kèm full list issue codes.
     Tự tính thêm 2 mã duplicate_title / duplicate_meta từ DB.
+    sync_filter: 'synced' = chỉ SP đã sync · 'unsynced' = chỉ SP chưa sync · None = tất cả.
     """
     conn = db.get_conn()
     rows = conn.execute("""
@@ -1638,6 +1658,8 @@ def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
         for u in grp["urls"]:
             dup_metas.add(u)
 
+    synced_set = synced_title_meta_urls()
+
     out = []
     for r in rows:
         try:
@@ -1655,6 +1677,11 @@ def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
             continue
         if issue_filter and issue_filter not in codes:
             continue
+        is_synced = r["url"] in synced_set
+        if sync_filter == "synced" and not is_synced:
+            continue
+        if sync_filter == "unsynced" and is_synced:
+            continue
         out.append({
             "id": r["id"],
             "url": r["url"],
@@ -1667,6 +1694,7 @@ def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
             "issue_codes": sorted(codes),
             "n_issues": len(codes),
             "last_crawled": r["last_crawled"],
+            "synced": is_synced,
         })
 
     if sort == "score_asc":
@@ -1700,13 +1728,19 @@ NHIỆM VỤ: Viết 3 title + 3 meta description khác nhau cho 1 trang sản p
 (Đồng bộ chuẩn seo_writing_rules.md v2026-05-08.)
 
 ⚠️ LIMIT KÝ TỰ — TUÂN THỦ TUYỆT ĐỐI:
-- Mỗi TITLE: 45-58 ký tự (TỐI ĐA TUYỆT ĐỐI là 61). Nếu vượt 58 → REWRITE NGẮN.
+- Mỗi TITLE: NHẮM 54-60 ký tự để LẤP ĐẦY SERP (TỐI ĐA TUYỆT ĐỐI là 61; vượt 61 → REWRITE NGẮN). KHÔNG để title <50 ký tự khi vẫn còn dư chỗ tới 61.
 - Mỗi META: 145-158 ký tự (min 140, max 160). Nếu ngắn hơn 145 hoặc dài hơn 158 → REWRITE.
 - TRƯỚC KHI TRẢ VỀ: tự đếm len(title) và len(meta), nếu vi phạm phải sửa.
 
 LUẬT TITLE:
 - BẮT BUỘC có: tên model/sản phẩm + lợi ích chính hoặc ngữ cảnh dùng/mua
 - Bổ sung spec nổi bật / "chính hãng" / "cho [nhu cầu]" nếu length cho phép
+- LẤP CHỖ TRỐNG (quan trọng — áp cho MỌI title): ĐẾM ký tự title sau khi viết xong nội dung chính; nếu <54 ký tự và còn dư chỗ tới 61c, BẮT BUỘC chèn thêm 1 tín hiệu tin cậy để đẩy lên 54-60c (miễn ≤61c). Chọn 1 cụm theo THỨ TỰ ƯU TIÊN giảm dần: 1) "giá tốt" → 2) "chính hãng" → 3) "giá rẻ" → 4) "bảo hành chính hãng". Dùng cụm ưu tiên cao nhất mà tổng title vẫn ≤61c; riêng "bảo hành chính hãng" khá dài (~18c) → CHỈ chèn khi còn đủ chỗ ≤61c, nếu vượt thì lùi về cụm ngắn hơn. CẤM superlative: "rẻ nhất / tốt nhất / đáng mua nhất".
+- RIÊNG LAPTOP — format title CỐ ĐỊNH:
+  · Mặc định (≤61c): "Laptop [Hãng] [Dòng] ([chip] | [RAM] | [ROM])" — vd "Laptop Asus Vivobook 15 (i5 | 16GB | 512GB)".
+  · Nếu TỔNG >61c: LƯỢC BỎ chip VÀ bỏ ngoặc → "Laptop [Hãng] [Dòng] [RAM] | [ROM]" — vd "Laptop Asus Vivobook 15 16GB | 512GB".
+  · Hàng CŨ (tên SP có "cũ"/used/like new): thêm " cũ đẹp" ở CUỐI title — vd "Laptop Dell Latitude 5420 (i5 | 8GB | 256GB) cũ đẹp". Hàng mới KHÔNG thêm.
+  · Sau khi dựng xong format, nếu title vẫn <54c và còn dư chỗ ≤61c → áp rule LẤP CHỖ TRỐNG ở trên, điền thêm tín hiệu tin cậy (giá tốt → chính hãng → giá rẻ → bảo hành chính hãng).
 - Chuẩn hóa kỹ thuật: GDDR6 (không viết DDR6), giữ đúng độ phân giải/tỷ lệ thật
 
 LUẬT META DESCRIPTION (3 cái KHÁC GÓC NHÌN — KHÔNG được giống nhau):
@@ -1849,6 +1883,20 @@ def fix_title_meta_for_url(url: str, force_title: str = None, force_meta: str = 
     except Exception as e:
         return {"ok": False, "error": f"PUT Haravan lỗi: {e}", "backup": backup_file.name}
 
+    # Cập nhật lại seo_pages để bảng hiển thị title/meta MỚI ngay sau reload (best-effort).
+    # Trước đây chỉ PUT Haravan → bảng vẫn hiện bản crawl cũ → "hiển thị sai".
+    try:
+        _conn = db.get_conn()
+        _conn.execute(
+            "UPDATE seo_pages SET title = ?, title_len = ?, meta_desc = ?, meta_desc_len = ? "
+            "WHERE url = ?",
+            (new_title, len(new_title), new_meta, len(new_meta), url),
+        )
+        _conn.commit()
+        _conn.close()
+    except Exception:
+        pass  # Haravan đã update xong; cập nhật DB lỗi không nên fail cả request
+
     # Báo cáo real-time sang Google Sheet (best-effort — KHÔNG fail nếu Sheet lỗi,
     # vì Haravan đã update thành công). Ghi cột F/G + trạng thái "✅ Up Haravan ...".
     sheet_report = None
@@ -1889,9 +1937,11 @@ _title_meta_fix_state = {
     "started_at": None,
     "finished_at": None,
     "message": "",
+    "mode": None,          # "all" = Auto-fix tất cả · "queue" = gen lại từng SP
     "results": {},
 }
 _title_meta_fix_lock = threading.Lock()
+_title_meta_queue = []     # hàng chờ URL cho chế độ gen lại từng SP
 
 
 def title_meta_fix_state() -> dict:
@@ -1924,7 +1974,7 @@ def run_title_meta_fix_all(url_type: str = None, issue_filter: str = None):
 
     with _title_meta_fix_lock:
         _title_meta_fix_state.update({
-            "running": True, "stop_requested": False,
+            "running": True, "stop_requested": False, "mode": "all",
             "total": len(fixable), "checked": 0,
             "success": 0, "failed": 0, "skipped": skipped,
             "current_url": "",
@@ -1973,6 +2023,7 @@ def run_title_meta_fix_all(url_type: str = None, issue_filter: str = None):
     with _title_meta_fix_lock:
         was_stopped = _title_meta_fix_state["stop_requested"]
         _title_meta_fix_state["running"] = False
+        _title_meta_fix_state["mode"] = None
         _title_meta_fix_state["finished_at"] = datetime.now().isoformat(timespec="seconds")
         _title_meta_fix_state["current_url"] = ""
         prefix = "⏹️ Đã dừng" if was_stopped else "🏁 Hoàn tất"
@@ -1990,6 +2041,88 @@ def start_title_meta_fix_all_async(url_type: str = None, issue_filter: str = Non
                          args=(url_type, issue_filter), daemon=True)
     t.start()
     return True
+
+
+# ─── Gen lại TỪNG SP qua hàng chờ (realtime, dùng chung state với fix-all) ───
+
+def enqueue_title_meta_regen(url: str) -> dict:
+    """Đẩy 1 URL vào hàng chờ gen+sync lại. Tái dùng _title_meta_fix_state để
+    frontend poll realtime giống Auto-fix tất cả.
+    - Chưa có job → start worker hàng chờ (mode="queue").
+    - Job "queue" đang chạy → append, cộng dồn total.
+    - Đang chạy "all" (Auto-fix tất cả) → từ chối, đợi xong.
+    """
+    if not url:
+        return {"ok": False, "error": "Thiếu URL."}
+    with _title_meta_fix_lock:
+        if _title_meta_fix_state["running"] and _title_meta_fix_state.get("mode") != "queue":
+            return {"ok": False, "error": "Đang chạy job Auto-fix tất cả — đợi xong rồi gen lại."}
+        if url not in _title_meta_queue:
+            _title_meta_queue.append(url)
+        position = len(_title_meta_queue)
+        if not _title_meta_fix_state["running"]:
+            _title_meta_fix_state.update({
+                "running": True, "stop_requested": False, "mode": "queue",
+                "total": len(_title_meta_queue), "checked": 0,
+                "success": 0, "failed": 0, "skipped": 0,
+                "current_url": "",
+                "started_at": datetime.now().isoformat(timespec="seconds"),
+                "finished_at": None,
+                "message": "Đang gen lại theo hàng chờ...",
+                "results": {},
+            })
+            threading.Thread(target=run_title_meta_queue, daemon=True).start()
+        else:
+            _title_meta_fix_state["total"] = (
+                _title_meta_fix_state["checked"] + len(_title_meta_queue)
+                + (1 if _title_meta_fix_state["current_url"] else 0)
+            )
+    return {"ok": True, "position": position, "running": True}
+
+
+def run_title_meta_queue():
+    while True:
+        with _title_meta_fix_lock:
+            if _title_meta_fix_state["stop_requested"] or not _title_meta_queue:
+                break
+            url = _title_meta_queue.pop(0)
+            _title_meta_fix_state["current_url"] = url
+
+        try:
+            result = fix_title_meta_for_url(url)
+        except Exception as e:
+            result = {"ok": False, "error": f"Exception: {e}"}
+
+        with _title_meta_fix_lock:
+            _title_meta_fix_state["checked"] += 1
+            if result.get("ok"):
+                _title_meta_fix_state["success"] += 1
+                status = "success"
+            else:
+                _title_meta_fix_state["failed"] += 1
+                status = "failed"
+            _title_meta_fix_state["results"][url] = {
+                "status": status,
+                "new_title": result.get("new_title"),
+                "new_meta": result.get("new_meta"),
+                "title_len": result.get("title_len"),
+                "meta_len": result.get("meta_len"),
+                "error": result.get("error"),
+            }
+
+    with _title_meta_fix_lock:
+        was_stopped = _title_meta_fix_state["stop_requested"]
+        _title_meta_queue.clear()
+        _title_meta_fix_state["running"] = False
+        _title_meta_fix_state["mode"] = None
+        _title_meta_fix_state["stop_requested"] = False
+        _title_meta_fix_state["current_url"] = ""
+        _title_meta_fix_state["finished_at"] = datetime.now().isoformat(timespec="seconds")
+        prefix = "⏹️ Đã dừng hàng chờ" if was_stopped else "🏁 Hoàn tất hàng chờ"
+        _title_meta_fix_state["message"] = (
+            f"{prefix} {_title_meta_fix_state['checked']} bài "
+            f"(✅ {_title_meta_fix_state['success']} · ❌ {_title_meta_fix_state['failed']})."
+        )
 
 
 # ─────────────────────────── GSC INSIGHTS ───────────────────────────

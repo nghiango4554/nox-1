@@ -83,7 +83,7 @@ body_html PHẢI bắt đầu NGAY bằng <p> (intro) — KHÔNG wrap thêm <div
 ═══════════════════════════════════════════════════
 ⚠️ LIMIT KÝ TỰ — ĐẾM len() TRƯỚC KHI TRẢ
 ═══════════════════════════════════════════════════
-- TITLE: 48-58 ký tự (chặt hơn để chắc ăn). KHÔNG chứa "Sintech" (Haravan auto-suffix " - Sintech"). Format câu phân tích lợi ích, KHÔNG "Chính Hãng" / "Giá Rẻ" / capitalize từng từ.
+- TITLE: 48-58 ký tự (chặt hơn để chắc ăn). KHÔNG chứa "Sintech" (Haravan auto-suffix " - Sintech"). Format câu phân tích lợi ích, KHÔNG "Chính Hãng" / "Giá Rẻ" / capitalize từng từ. NÊN cài 1-2 tín hiệu tin cậy dạng chữ thường tự nhiên ("chính hãng", "bảo hành chính hãng") để tăng CTR; KHÔNG nhồi >2 cụm lợi ích; CẤM superlative ("rẻ nhất / giá sốc / đáng mua nhất").
 - META: NHẮM 148-158 ký tự (đếm len(); tối thiểu 140, tối đa 160 — viết DÀI TAY vì hay bị hụt dưới 140). BẮT BUỘC kết thúc bằng 1 CTA viết HOA: "XEM NGAY tại Sintech" / "THAM KHẢO NGAY tại Sintech" / "CHỌN NGAY mẫu phù hợp tại Sintech" / "KHÁM PHÁ NGAY tại Sintech".
 - BODY HTML: 2000-2500 từ. TỐI THIỂU 2000 từ — bài dưới 2000 từ bị tính FAIL, phải viết thêm phân tích cho đủ. Đủ chiều sâu, KHÔNG nhồi heading rỗng để chữa cháy số từ. KHÔNG H1.
 
@@ -610,7 +610,7 @@ _TITLE_META_SYSTEM_PROMPT = """Bạn là chuyên gia SEO copywriter cho Sintech.
 Nhiệm vụ: Gen LẠI title + meta description CHO 1 collection. KHÔNG cần body.
 
 RULES CỨNG (length riêng cho collection):
-- TITLE: 48-58 ký tự (sweet 50-56). KHÔNG capitalize từng từ ("Máy Bộ Rosa Chính Hãng" SAI). Tone phân tích lợi ích, không SEOer.
+- TITLE: 48-58 ký tự (sweet 50-56). KHÔNG capitalize từng từ ("Máy Bộ Rosa Chính Hãng" SAI). Tone phân tích lợi ích, không SEOer. NÊN cài 1-2 tín hiệu tin cậy chữ thường ("chính hãng", "bảo hành chính hãng"); KHÔNG nhồi >2 cụm; CẤM superlative ("rẻ nhất / sốc / đáng mua nhất").
 - META: 140-160 ký tự, kết thúc bằng CTA HOA (xem pool ở RULE CHUNG bên dưới).
 - Tone tư vấn, KHÔNG SEOer.
 - ĐẾM len() trước khi trả — TITLE 48-58, META 140-160 STRICT.

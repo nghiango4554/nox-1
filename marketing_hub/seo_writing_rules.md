@@ -102,6 +102,13 @@ Phải có:
 - Bổ sung lợi ích chính / ngữ cảnh dùng / spec nổi bật nếu length cho phép
 - Nếu tên SP đã chiếm ~40c, có thể thêm cụm "chính hãng / giá tốt / cho [nhu cầu]"
 
+### Riêng title LAPTOP — format cố định
+
+- **Mặc định (≤61c):** `Laptop [Hãng] [Dòng] ([chip] | [RAM] | [ROM])` — vd *"Laptop Asus Vivobook 15 (i5 | 16GB | 512GB)"*
+- **Nếu tổng >61c:** lược bỏ **chip** + bỏ ngoặc → `Laptop [Hãng] [Dòng] [RAM] | [ROM]` — vd *"Laptop Asus Vivobook 15 16GB | 512GB"*
+- **Hàng cũ** (tên SP có "cũ" / used / like new): thêm **" cũ đẹp"** ở cuối — vd *"Laptop Dell Latitude 5420 (i5 | 8GB | 256GB) cũ đẹp"*. Hàng mới KHÔNG thêm.
+- Sau khi dựng format, nếu title vẫn **<54c** và còn dư chỗ ≤61c → điền thêm tín hiệu tin cậy (giá tốt → chính hãng → giá rẻ → bảo hành chính hãng).
+
 **Lưu ý Haravan:** website auto thêm hậu tố `" - Sintech"` (10 ký tự) sau title gốc. Vậy:
 - **Title gốc ≤ 60 ký tự** → display tổng ≤ 70 ký tự, vừa đẹp Google SERP
 - KHÔNG tự thêm "Sintech" trong title gốc (sẽ bị lặp)
@@ -126,6 +133,7 @@ Phải có:
 - **140-160 ký tự** mỗi meta — **CỨNG min 140**, không được ngắn hơn 140 ký tự!
 - 1 câu hoàn chỉnh, mượt, dễ đọc — fill đủ context để tận dụng SERP space
 - Phải có: **tên SP / keyword chính** + 1-2 lợi ích + ngữ cảnh dùng + CTA
+- **Tín hiệu tin cậy:** phần lớn meta nên cài 1 cụm **"chính hãng"** (và/hoặc 1 cam kết: **"bảo hành chính hãng"** / **"hỗ trợ kỹ thuật"**) đặt tự nhiên, chữ thường — tăng CTR. KHÔNG nêu **số tháng/năm** bảo hành nếu user không cung cấp. KHÔNG nhồi cả 3 meta giống nhau (giữ M1/M2/M3 khác góc nhìn) và không dồn >2 cụm lợi ích/meta.
 - **ĐẾM TỪNG KÝ TỰ trước khi trả** — meta dưới 140c bị reject
 
 ### Pattern 3 META khác nhau (M1/M2/M3) — KHÔNG được giống nhau

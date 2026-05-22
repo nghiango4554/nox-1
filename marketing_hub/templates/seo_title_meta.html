@@ -69,6 +69,13 @@
       <option value="url"           {% if sort == 'url'           %}selected{% endif %}>🔤 URL A→Z</option>
     </select>
 
+    <label class="muted" style="font-size:13px;margin-left:8px">Sync:</label>
+    <select name="sync">
+      <option value="">Tất cả</option>
+      <option value="unsynced" {% if sync_filter == 'unsynced' %}selected{% endif %}>⬜ Chưa sync</option>
+      <option value="synced"   {% if sync_filter == 'synced'   %}selected{% endif %}>✅ Đã sync</option>
+    </select>
+
     <button type="submit" class="btn btn-primary btn-sm">Lọc</button>
     <a class="btn btn-sm btn-ghost" href="{{ url_for('seo_title_meta_page') }}">Reset</a>
 
@@ -183,6 +190,7 @@
       <col style="width:50px">
       <col style="width:96px">
       <col style="width:130px">
+      <col style="width:128px">
     </colgroup>
     <thead>
       <tr>
@@ -195,6 +203,7 @@
         <th style="text-align:center">Điểm</th>
         <th style="text-align:center">Trạng thái</th>
         <th style="text-align:center">Hành động</th>
+        <th style="text-align:center">Gen lại</th>
       </tr>
     </thead>
     <tbody>
@@ -263,7 +272,10 @@
           {% else %}<span class="muted">—</span>{% endif %}
         </td>
         <td class="status-cell" style="text-align:center">
-          <span class="tm-status" data-url="{{ it.url }}" style="font-size:11px;color:var(--text-muted)">⏳</span>
+          <span class="tm-status" data-url="{{ it.url }}" style="font-size:11px">
+            {% if it.synced %}<span style="color:#34d399;font-weight:600">✅ Đã sync</span>
+            {% else %}<span style="color:#94a3b8">⬜ Chưa sync</span>{% endif %}
+          </span>
         </td>
         <td class="action-cell" style="text-align:center">
           {% if it.url_type == 'product' %}
@@ -271,6 +283,16 @@
                     onclick="fixTitleMetaSingle(this)">🔧 Auto-fix</button>
           {% else %}
             <span class="muted" style="font-size:10.5px">Sửa tay admin</span>
+          {% endif %}
+        </td>
+        <td class="regen-cell" style="text-align:center">
+          {% if it.url_type == 'product' %}
+            <button type="button" class="btn tm-fix-btn"
+                    onclick="regenTitleMetaSingle(this)"
+                    style="background:#0ea5e9;color:#fff"
+                    title="Gen lại title+meta theo rule mới nhất rồi sync Haravan — dùng được nhiều lần">🔄 Gen+Sync</button>
+          {% else %}
+            <span class="muted" style="font-size:10.5px">—</span>
           {% endif %}
         </td>
       </tr>
@@ -341,6 +363,49 @@ function escapeHtml(s) {
   return (s || '').replace(/[&<>"']/g, c => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"
   })[c]);
+}
+
+// ─── Gen + Sync LẠI (cố định, dùng nhiều lần) — đẩy vào HÀNG CHỜ + realtime ───
+async function regenTitleMetaSingle(btn) {
+  const row = btn.closest('tr');
+  const url = row.dataset.url;
+  if (!url) return;
+  if (!confirm(`🔄 GEN LẠI title + meta theo rule mới rồi SYNC Haravan cho:\n${url}\n\nThêm vào hàng chờ, chạy ngầm + cập nhật realtime. Tiếp tục?`)) return;
+  try {
+    const resp = await fetch('{{ url_for("seo_title_meta_regen") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url}),
+    });
+    const data = await resp.json();
+    if (!data.ok) { alert('❌ ' + (data.error || 'Không thêm được vào hàng chờ')); return; }
+    // Realtime: hiện report + đánh dấu hàng đang chờ + bật polling (tái dùng infra fix-all)
+    row.style.background = 'rgba(14,165,233,0.10)';
+    markStatus(row, 'queued');
+    document.getElementById('fix-all-report').style.display = 'block';
+    startPolling();
+  } catch (err) {
+    alert('❌ Network: ' + err);
+  }
+}
+
+// Cập nhật ô title/meta/issue/status — KHÔNG xóa nút hành động
+function updateRowCells(row, data) {
+  const titleCell = row.querySelector('.title-cell');
+  const metaCell = row.querySelector('.meta-cell');
+  const issueCell = row.querySelector('.issue-cell');
+  if (titleCell && data.new_title) {
+    titleCell.innerHTML = `
+      <div class="tm-text" title="${escapeHtml(data.new_title)}">${escapeHtml(data.new_title)}</div>
+      <div class="tm-len"><strong>${data.title_len}c</strong> <span class="ok">OK · ✨ AI</span></div>`;
+  }
+  if (metaCell && data.new_meta) {
+    metaCell.innerHTML = `
+      <div class="tm-text" title="${escapeHtml(data.new_meta)}">${escapeHtml(data.new_meta)}</div>
+      <div class="tm-len"><strong>${data.meta_len}c</strong> <span class="ok">OK · ✨ AI</span></div>`;
+  }
+  if (issueCell) issueCell.innerHTML = '<span class="tm-chip" style="background:rgba(52,211,153,0.16);border-color:rgba(52,211,153,0.32);color:#86efac">✅ Đã gen lại</span>';
+  markStatus(row, 'done');
 }
 
 // ─── Background job fix-all ───
@@ -515,31 +580,14 @@ function copyTitleMetaTable() {
 function markStatus(row, kind) {
   const el = row && row.querySelector('.tm-status');
   if (!el) return;
-  if (kind === 'done')         el.innerHTML = '<span style="color:#34d399;font-weight:600">✅ Đã gen</span>';
-  else if (kind === 'skipped') el.innerHTML = '<span style="color:#94a3b8">⏭️ Đã gen (skip)</span>';
-  else                         el.innerHTML = '<span style="color:#94a3b8">⬜ Chưa gen</span>';
+  if (kind === 'done')         el.innerHTML = '<span style="color:#34d399;font-weight:600">✅ Đã sync</span>';
+  else if (kind === 'skipped') el.innerHTML = '<span style="color:#94a3b8">⏭️ Đã sync (skip)</span>';
+  else if (kind === 'queued')  el.innerHTML = '<span style="color:#38bdf8;font-weight:600">⏳ Hàng chờ</span>';
+  else                         el.innerHTML = '<span style="color:#94a3b8">⬜ Chưa sync</span>';
 }
 
-// ─── Cột Trạng thái: đánh dấu SP đã gen (có đề xuất F/G trong Sheet) ───
-(async function loadGenMap() {
-  try {
-    const r = await fetch('{{ url_for("seo_title_meta_gen_map") }}');
-    const d = await r.json();
-    const done = new Set(d.done || []);
-    document.querySelectorAll('.tm-status').forEach(el => {
-      const row = el.closest('tr');
-      if (done.has(el.dataset.url)) {
-        markStatus(row, 'done');
-        const btn = row.querySelector('.action-cell button');
-        if (btn) { btn.style.opacity = '0.55'; btn.title = 'Đã gen rồi — bấm nếu muốn gen lại'; }
-      } else {
-        markStatus(row, 'todo');
-      }
-    });
-  } catch (e) {
-    document.querySelectorAll('.tm-status').forEach(el => el.textContent = '?');
-  }
-})();
+// Cột Trạng thái giờ render server-side theo cờ `synced` (nguồn: file backup),
+// nhất quán với filter Sync — không cần fetch gen-map (Sheet) nữa.
 </script>
 
 {% endblock %}

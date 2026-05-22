@@ -106,4 +106,8 @@ def title_meta_rules_block() -> str:
         "- " + SPEC_SAFETY,
         "- " + forbidden_block(),
         "- KHÔNG bịa giá / mã giảm / % giảm nếu input không cung cấp.",
+        '- TÍN HIỆU TIN CẬY: META nên cài 1 cụm "chính hãng" (và/hoặc 1 cam kết: '
+        '"bảo hành chính hãng" / "hỗ trợ kỹ thuật") đặt TỰ NHIÊN, chữ thường — tăng CTR. '
+        "KHÔNG nêu SỐ tháng/năm bảo hành nếu input không cung cấp; "
+        "KHÔNG nhồi >2 cụm lợi ích trong 1 meta (tránh loãng/spammy).",
     ])
