@@ -7,6 +7,9 @@ import os
 import re
 import json
 import secrets
+import threading
+import queue as _queue_mod
+import uuid
 from datetime import datetime, timedelta, date
 from pathlib import Path
 
@@ -21,6 +24,8 @@ from flask import (
     flash,
     make_response,
     session,
+    Response,
+    stream_with_context,
 )
 from werkzeug.utils import secure_filename
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -2517,12 +2522,19 @@ def collection_content_sync_all():
 
 # ─────────────────────────── BLOG CONTENT (bài viết huong-dan/news) ───────────────────────────
 
+# SSE batch-gen streams: stream_id → {queue, stop_flag}
+_batch_streams: dict = {}
+
 
 def _blog_jobs_list(status: str = None, source: str = None, blog: str = None):
     conn = db.get_conn()
     sql = "SELECT * FROM blog_jobs WHERE 1=1"
     args = []
-    if status:
+    if status == "not_gen":          # chưa gen = pending + failed
+        sql += " AND status IN ('pending','failed')"
+    elif status == "generated":      # đã gen = draft + synced
+        sql += " AND status IN ('draft','synced')"
+    elif status:
         sql += " AND status = ?"
         args.append(status)
     if source:
@@ -2531,7 +2543,7 @@ def _blog_jobs_list(status: str = None, source: str = None, blog: str = None):
     if blog:
         sql += " AND target_blog = ?"
         args.append(blog)
-    sql += " ORDER BY click DESC, id ASC"
+    sql += " ORDER BY CASE WHEN pillar LIKE '%Autodesk%' THEN 0 ELSE 1 END ASC, COALESCE(pillar,'zzz') ASC, click DESC, id ASC"
     rows = conn.execute(sql, args).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -2676,6 +2688,219 @@ def blog_content_gen(job_id):
     return jsonify(res) if res.get("ok") else (jsonify(res), 500)
 
 
+def _run_blog_gen_full(job_id: int) -> dict:
+    """2-pass gen full: outline → content → auto-image. Dùng chung cho route lẻ + batch."""
+    job = _blog_jobs_get(job_id)
+    if not job:
+        return {"ok": False, "error": "Job không tồn tại"}
+    import blog_content_writer as bcw
+    _blog_jobs_update(job_id, status="drafting", error=None)
+    try:
+        outline_res = bcw.gen_outline(
+            article_title=job.get("article_title") or job.get("handle") or "",
+            keyword=job.get("keyword") or "",
+            intent=job.get("intent") or "",
+            unique_angle=job.get("unique_angle") or "",
+        )
+        if not outline_res.get("ok"):
+            _blog_jobs_update(job_id, status="failed", error=f"Outline: {outline_res.get('error')}")
+            return {"ok": False, "error": outline_res.get("error")}
+        outline_text = outline_res["outline_text"]
+        _blog_jobs_update(job_id, outline=outline_text)
+
+        gen = bcw.gen_blog_with_outline(job, outline_text)
+        if not gen.get("ok"):
+            _blog_jobs_update(job_id, status="failed", error=gen.get("error"))
+            return {"ok": False, "error": gen.get("error")}
+
+        body_html = gen["body_html"]
+        try:
+            import image_gather
+            q = gen["title"] or job.get("article_title") or ""
+            handles = [job["handle"]] if (job.get("source") != "ai_pillar" and job.get("handle")) else []
+            res_img = image_gather.gather(job_id, q, product_handles=handles, max_n=10)
+            picked = image_gather.auto_pick(res_img.get("items", []), n=3)
+            if picked:
+                body_html, used = image_gather.insert_into_body(gen["body_html"], picked)
+                image_gather.mark_selected(job_id, [u["idx"] for u in used])
+        except Exception as e:
+            print(f"[gen-full auto-image] #{job_id}: {e}")
+
+        _blog_jobs_update(
+            job_id, edited_title=gen["title"], edited_meta=gen["meta"],
+            edited_body_html=body_html, status="draft",
+            ai_generated_at=datetime.now().isoformat(timespec="seconds"), error=None)
+
+        return {"ok": True, "title": gen["title"], "meta_len": len(gen["meta"]),
+                "h2_count": len(outline_res.get("outline_json") or [])}
+    except Exception as e:
+        _blog_jobs_update(job_id, status="failed", error=str(e)[:300])
+        return {"ok": False, "error": str(e)}
+
+
+@app.route("/blog-content/<int:job_id>/gen-full", methods=["POST"])
+def blog_content_gen_full(job_id):
+    if not _blog_jobs_get(job_id):
+        return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
+    res = _run_blog_gen_full(job_id)
+    return jsonify(res) if res.get("ok") else (jsonify(res), 500)
+
+
+@app.route("/blog-content/batch-gen", methods=["POST"])
+def blog_content_batch_gen():
+    """Khởi động batch gen liên tục. Trả stream_id để client lắng nghe SSE."""
+    data = request.get_json(silent=True) or {}
+    mode = data.get("mode", "full")
+    status_filter = data.get("status", "not_gen")
+    jobs = _blog_jobs_list(status=status_filter)
+    if not jobs:
+        return jsonify({"ok": False, "error": "Không có bài nào trong filter này."})
+    job_ids = [j["id"] for j in jobs]
+    titles = {j["id"]: (j.get("article_title") or j.get("handle") or f"#{j['id']}")[:60] for j in jobs}
+
+    stream_id = uuid.uuid4().hex[:10]
+    # Dùng append-only list thay Queue → client reconnect bất kỳ lúc nào vẫn nhận đủ events
+    entry = {"events": [], "stop": {"stop": False}, "done": False}
+    _batch_streams[stream_id] = entry
+
+    def push(msg):
+        entry["events"].append(msg)
+
+    def runner():
+        import time as _t
+        total = len(job_ids)
+        done = 0
+        for idx, jid in enumerate(job_ids):
+            if entry["stop"]["stop"]:
+                push({"type": "stopped", "done": done, "total": total})
+                break
+            title = titles.get(jid, f"#{jid}")
+            push({"type": "start", "id": jid, "title": title, "idx": idx + 1, "total": total})
+            try:
+                res = _run_blog_gen_full(jid) if mode == "full" else _run_blog_gen(jid)
+                if res.get("ok"):
+                    done += 1
+                    push({"type": "done", "id": jid, "title": title, "idx": idx + 1, "total": total})
+                else:
+                    push({"type": "error", "id": jid, "title": title,
+                          "error": (res.get("error") or "?")[:120], "idx": idx + 1, "total": total})
+            except Exception as e:
+                push({"type": "error", "id": jid, "title": title,
+                      "error": str(e)[:120], "idx": idx + 1, "total": total})
+        else:
+            push({"type": "finish", "done": done, "total": total})
+        entry["done"] = True
+        # Giữ entry 30 phút để client kịp reconnect xem lại kết quả
+        _t.sleep(1800)
+        _batch_streams.pop(stream_id, None)
+
+    threading.Thread(target=runner, daemon=True).start()
+    return jsonify({"ok": True, "stream_id": stream_id, "total": len(job_ids)})
+
+
+@app.route("/blog-content/batch-gen/stop/<stream_id>", methods=["POST"])
+def blog_content_batch_gen_stop(stream_id):
+    entry = _batch_streams.get(stream_id)
+    if entry:
+        entry["stop"]["stop"] = True
+    return jsonify({"ok": True})
+
+
+@app.route("/blog-content/batch-gen/status/<stream_id>")
+def blog_content_batch_gen_status(stream_id):
+    """Client hỏi stream còn active không (dùng khi reconnect)."""
+    entry = _batch_streams.get(stream_id)
+    if not entry:
+        return jsonify({"active": False})
+    return jsonify({"active": True, "done": entry["done"], "total_events": len(entry["events"])})
+
+
+@app.route("/blog-content/batch-gen/stream/<stream_id>")
+def blog_content_batch_gen_stream(stream_id):
+    """SSE stream — client có thể reconnect bất kỳ lúc nào, nhận lại toàn bộ events từ offset."""
+    entry = _batch_streams.get(stream_id)
+    if not entry:
+        return jsonify({"error": "Stream không tồn tại hoặc đã hết."}), 404
+    # Client truyền ?from=N để nhận events từ index N (skip events đã nhận trước đó)
+    start_idx = max(0, request.args.get("from", 0, type=int))
+
+    import time as _t
+
+    @stream_with_context
+    def generate():
+        yield "retry: 3000\n\n"
+        idx = start_idx
+        while True:
+            events = entry["events"]
+            # Flush tất cả events từ idx trở đi
+            while idx < len(events):
+                yield f"data: {json.dumps(events[idx], ensure_ascii=False)}\n\n"
+                idx += 1
+            # Nếu đã xong thì kết thúc stream
+            if entry["done"]:
+                break
+            # Chưa xong → wait polling
+            _t.sleep(0.4)
+
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.route("/blog-content/<int:job_id>/gen-title", methods=["POST"])
+def blog_content_gen_title(job_id):
+    """Gen lại title 45-61c từ title/keyword hiện tại của job."""
+    job = _blog_jobs_get(job_id)
+    if not job:
+        return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
+    current_title = job.get("edited_title") or job.get("article_title") or job.get("handle") or ""
+    keyword = job.get("keyword") or ""
+    body_snippet = ""
+    if job.get("edited_body_html"):
+        import re as _re
+        body_snippet = _re.sub(r"<[^>]+>", " ", job["edited_body_html"])[:800]
+    try:
+        import ai_provider
+        sys_p = "Bạn là SEO copywriter cho Sintech.vn (shop PC/laptop/gaming gear). Viết title SEO tiếng Việt."
+        usr_p = (f"Tiêu đề hiện tại: {current_title}\nKeyword: {keyword or '(suy ra từ tiêu đề)'}\n"
+                 f"Snippet nội dung: {body_snippet or '(chưa có)'}\n\n"
+                 f"Viết lại title 45-61 ký tự, bám keyword, KHÔNG chứa 'Sintech', tự nhiên buyer-facing. "
+                 f"Chỉ trả text thuần, không dấu ngoặc kép.")
+        raw = ai_provider.call_ai(sys_p, usr_p, timeout=60).strip()
+        raw = raw.strip('"\'')
+        if not (20 <= len(raw) <= 80):
+            return jsonify({"ok": False, "error": f"AI trả title bất thường ({len(raw)}c): {raw[:80]}"})
+        return jsonify({"ok": True, "title": raw, "len": len(raw)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/blog-content/<int:job_id>/gen-meta", methods=["POST"])
+def blog_content_gen_meta(job_id):
+    """Gen lại meta description 140-160c từ title + body hiện tại."""
+    job = _blog_jobs_get(job_id)
+    if not job:
+        return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
+    title = job.get("edited_title") or job.get("article_title") or ""
+    body_snippet = ""
+    if job.get("edited_body_html"):
+        import re as _re
+        body_snippet = _re.sub(r"<[^>]+>", " ", job["edited_body_html"])[:1200]
+    try:
+        import ai_provider
+        sys_p = "Bạn là SEO copywriter cho Sintech.vn (shop PC/laptop/gaming gear). Viết meta description chuẩn SEO tiếng Việt."
+        usr_p = (f"Title bài: {title}\nNội dung (snippet): {body_snippet or '(chưa có)'}\n\n"
+                 f"Viết meta description 140-160 ký tự: tóm tắt giá trị bài, có keyword, kết thúc bằng CTA HOA "
+                 f"(XEM NGAY / KHÁM PHÁ NGAY / TÌM HIỂU NGAY / THAM KHẢO NGAY). "
+                 f"Chỉ trả text thuần, không dấu ngoặc kép.")
+        raw = ai_provider.call_ai(sys_p, usr_p, timeout=60).strip()
+        raw = raw.strip('"\'')
+        if not (100 <= len(raw) <= 200):
+            return jsonify({"ok": False, "error": f"AI trả meta bất thường ({len(raw)}c): {raw[:100]}"})
+        return jsonify({"ok": True, "meta": raw, "len": len(raw)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/blog-content/<int:job_id>/save", methods=["POST"])
 def blog_content_save(job_id):
     return _save_seo_job_edits(_blog_jobs_update, job_id)
@@ -2698,12 +2923,14 @@ def _push_blog_to_haravan(job, publish=True):
     body_html = bcw.compress_html(bcw.sanitize_pasted_html(body))
     blog_id = job.get("haravan_blog_id") or BLOG_ID_BY_TARGET.get(
         (job.get("target_blog") or "news").strip(), 1000906526)
+    meta = (job.get("edited_meta") or "").strip()
     fields = {
         "title": title,
-        "author": "Sintech",
+        "author": "Trọng Nghĩa",
         "body_html": body_html,
+        "summary_html": meta,  # trích dẫn / excerpt
         "page_title": title,
-        "meta_description": (job.get("edited_meta") or "").strip(),
+        "meta_description": meta,
     }
     if job.get("handle"):
         fields["handle"] = job["handle"]
@@ -2720,12 +2947,23 @@ def _push_blog_to_haravan(job, publish=True):
     except Exception:
         pass
     try:
+        import haravan_client as _hc
         aid = job.get("haravan_article_id")
         if aid:
             haravan_blog.update_article(int(blog_id), int(aid), fields)
+            try:
+                _hc.upsert_seo_metafields("articles", int(aid), title=title, description=meta)
+            except Exception:
+                pass
             return {"ok": True, "article_id": int(aid), "blog_id": int(blog_id), "created": False}
         art = haravan_blog.create_article(int(blog_id), fields, hidden=not publish)
-        return {"ok": True, "article_id": art.get("id"), "blog_id": int(blog_id), "created": True}
+        new_aid = art.get("id")
+        if new_aid:
+            try:
+                _hc.upsert_seo_metafields("articles", int(new_aid), title=title, description=meta)
+            except Exception:
+                pass
+        return {"ok": True, "article_id": new_aid, "blog_id": int(blog_id), "created": True}
     except Exception as e:
         return {"ok": False, "error": str(e)[:300]}
 
@@ -2907,8 +3145,6 @@ _PILLAR_BG = {
     "running": False, "stopped": False, "phase": None, "msg": "",
     "n_pillars": 0, "pillar_idx": 0, "pillar_total": 0, "pillar_title": "",
     "jobs_created": 0, "n_clusters": 0,
-    "auto_gen": False, "gen_total": 0, "gen_done": 0, "gen_ok": 0, "gen_fail": 0,
-    "gen_current": "",
     "started_at": None, "finished_at": None, "error": None, "result": None,
 }
 _PILLAR_BG_LOCK = _threading.Lock()
@@ -2919,7 +3155,9 @@ def _pillar_progress(d):
         _PILLAR_BG.update(d)
 
 
-def _pillar_bg_worker(n_pillars, clusters_per_pillar, auto_gen=True):
+def _pillar_bg_worker(n_pillars, clusters_per_pillar):
+    """Chỉ gen Pillar + Cluster (đề xuất chủ đề) → seed blog_jobs status='pending'.
+    KHÔNG gen nội dung — viết bài là bước riêng ở /blog-content."""
     import blog_pillar_writer as bpw
     try:
         res = bpw.generate_plan(n_pillars, clusters_per_pillar, progress=_pillar_progress)
@@ -2928,27 +3166,6 @@ def _pillar_bg_worker(n_pillars, clusters_per_pillar, auto_gen=True):
             _PILLAR_BG["jobs_created"] = res["jobs_created"]
             _PILLAR_BG["n_clusters"] = res["n_clusters"]
             _PILLAR_BG["n_pillars"] = res["n_pillars"]
-
-        # Tầng C: auto-gen nội dung từng bài (brief-mode) + tự gom ảnh — em chỉ vào duyệt.
-        job_ids = res.get("job_ids", []) if auto_gen else []
-        if job_ids:
-            with _PILLAR_BG_LOCK:
-                _PILLAR_BG.update({"phase": "gen_content", "gen_total": len(job_ids),
-                                   "gen_done": 0, "gen_ok": 0, "gen_fail": 0})
-            for i, jid in enumerate(job_ids, 1):
-                with _PILLAR_BG_LOCK:
-                    if _PILLAR_BG["stopped"]:
-                        break
-                job = _blog_jobs_get(jid)
-                with _PILLAR_BG_LOCK:
-                    _PILLAR_BG["gen_current"] = (job.get("article_title") if job else f"#{jid}") or f"#{jid}"
-                r = _run_blog_gen(jid)
-                with _PILLAR_BG_LOCK:
-                    _PILLAR_BG["gen_done"] = i
-                    if r.get("ok"):
-                        _PILLAR_BG["gen_ok"] += 1
-                    else:
-                        _PILLAR_BG["gen_fail"] += 1
     except Exception as e:
         with _PILLAR_BG_LOCK:
             _PILLAR_BG["error"] = str(e)[:300]
@@ -2986,19 +3203,16 @@ def blog_pillars_generate():
             cpp = max(1, min(int(data.get("clusters_per_pillar") or 10), 15))
         except (TypeError, ValueError):
             n_pillars, cpp = 12, 10
-        auto_gen = bool(data.get("auto_gen", True))
         _PILLAR_BG.update({
             "running": True, "stopped": False, "phase": "starting", "msg": "Khởi động...",
             "n_pillars": 0, "pillar_idx": 0, "pillar_total": n_pillars, "pillar_title": "",
             "jobs_created": 0, "n_clusters": 0,
-            "auto_gen": auto_gen, "gen_total": 0, "gen_done": 0, "gen_ok": 0, "gen_fail": 0, "gen_current": "",
             "started_at": datetime.now().isoformat(timespec="seconds"),
             "finished_at": None, "error": None, "result": None,
         })
-    t = _threading.Thread(target=_pillar_bg_worker, args=(n_pillars, cpp, auto_gen), daemon=True)
+    t = _threading.Thread(target=_pillar_bg_worker, args=(n_pillars, cpp), daemon=True)
     t.start()
-    suffix = " + tự gen nội dung" if auto_gen else ""
-    return jsonify({"ok": True, "msg": f"Bắt đầu gen {n_pillars} pillar × ~{cpp} cluster{suffix} (chạy nền)."})
+    return jsonify({"ok": True, "msg": f"Bắt đầu gen {n_pillars} pillar × ~{cpp} cluster (chạy nền)."})
 
 
 @app.route("/blog-pillars/stop", methods=["POST"])

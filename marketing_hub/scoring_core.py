@@ -262,36 +262,39 @@ def score_title(title: str | None, max_score: int = 10) -> dict:
     title = (title or "").strip()
     tl = len(title)
     issues = []
-    meta = {"len": tl}
 
-    # Length scoring (raw points out of 13).
+    # Strip Haravan auto-suffix " – Sintech" / " - Sintech" trước khi đánh giá độ dài.
+    # seo_pages.title lưu full <title> tag (có suffix), nhưng rule áp dụng cho phần custom.
+    stripped = re.sub(r"\s*[-–—|]\s*sintech.*$", "", title, flags=re.IGNORECASE).strip()
+    sl = len(stripped)  # effective length (custom part only)
+    meta = {"len": tl, "stripped_len": sl}
+
+    # Length scoring dùng sl (stripped). Sweet spot 45-61c cho phần custom.
     if tl == 0:
         len_raw = 0
         issues.append(_issue("error", "no_title", "Thiếu thẻ <title>", "high"))
-    elif 45 <= tl <= 61:
+    elif 45 <= sl <= 61:
         len_raw = 13
-    elif tl > 61:
+    elif sl > 61:
         thr = _thr("title_long", 61)
         len_raw = 7
         issues.append(_issue("warn", "title_long",
-                             f"Title quá dài ({tl} ký tự, max {thr}) — Google sẽ cắt", "med"))
-    elif tl < 20:
+                             f"Title quá dài ({sl}c custom, max {thr}) — Google sẽ cắt", "med"))
+    elif sl < 20:
         thr = _thr("title_short", 20)
         len_raw = 5
         issues.append(_issue("warn", "title_short",
-                             f"Title quá ngắn ({tl} ký tự, nên ≥{thr})", "med"))
+                             f"Title quá ngắn ({sl}c custom, nên ≥{thr})", "med"))
     else:
-        # 20..44 → partial (close but under sweet spot)
+        # 20..44 → partial
         len_raw = 8
         issues.append(_issue("warn", "title_short",
-                             f"Title {tl}c — chưa tận dụng SERP (sweet spot 45-61)", "med"))
+                             f"Title {sl}c custom — chưa tận dụng SERP (sweet spot 45-61)", "med"))
 
-    # Brand-suffix bonus (raw 7): "sintech" must NOT appear in raw title
-    # (Haravan auto-appends " - Sintech..." which we strip before check).
+    # Brand-suffix bonus (raw 7): "sintech" không được có trong phần custom title
     brand_raw = 0
     if title:
-        cleaned = re.sub(r"\s*[-–—|]\s*sintech.*$", "", title.lower()).strip()
-        if "sintech" in cleaned:
+        if "sintech" in stripped.lower():
             issues.append(_issue("warn", "sintech_in_title",
                                  "Title gốc chứa 'Sintech' (không tính suffix Haravan) — rule cấm",
                                  "med"))
@@ -349,7 +352,7 @@ def score_meta(meta_desc: str | None, max_score: int = 10, require_cta: bool = T
 
     cta_raw = 0.0
     if require_cta and meta_desc:
-        cta_keywords = ["XEM NGAY", "CHỌN NGAY", "THAM KHẢO NGAY", "KHÁM PHÁ NGAY", "MUA NGAY"]
+        cta_keywords = ["XEM NGAY", "CHỌN NGAY", "THAM KHẢO NGAY", "KHÁM PHÁ NGAY", "MUA NGAY", "TÌM HIỂU NGAY"]
         has_cta = any(kw in meta_desc for kw in cta_keywords)
         if has_cta:
             cta_raw = cta_raw_max

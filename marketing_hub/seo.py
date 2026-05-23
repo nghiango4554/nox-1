@@ -1682,12 +1682,38 @@ def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
             continue
         if sync_filter == "unsynced" and is_synced:
             continue
+        # Strip " – Sintech" suffix trước khi đánh giá title length
+        # seo_pages.title lưu full <title> tag; rule áp cho phần custom (không có suffix).
+        import re as _re
+        raw_title = r["title"] or ""
+        stripped_title = _re.sub(r"\s*[-–—|]\s*sintech.*$", "", raw_title, flags=_re.IGNORECASE).strip()
+        sl = len(stripped_title)
+        # Re-evaluate title_long/title_short dựa trên stripped length
+        if "title_long" in codes and sl <= 61:
+            codes.discard("title_long")
+        if "title_short" in codes and sl >= 20:
+            codes.discard("title_short")
+        if sl > 61 and "title_long" not in codes and "no_title" not in codes:
+            codes.add("title_long")
+
+        if not codes:
+            continue
+        if url_type and r["url_type"] != url_type:
+            continue
+        if issue_filter and issue_filter not in codes:
+            continue
+        is_synced = r["url"] in synced_set
+        if sync_filter == "synced" and not is_synced:
+            continue
+        if sync_filter == "unsynced" and is_synced:
+            continue
         out.append({
             "id": r["id"],
             "url": r["url"],
             "url_type": r["url_type"],
-            "title": r["title"] or "",
+            "title": raw_title,
             "title_len": r["title_len"] or 0,
+            "title_stripped_len": sl,
             "meta_desc": r["meta_desc"] or "",
             "meta_desc_len": r["meta_desc_len"] or 0,
             "score": r["score"],

@@ -14,119 +14,212 @@
 
 {% block content %}
 <style>
-  .pl-gen { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin-bottom:16px }
-  .pl-gen h3 { font-size:14px; font-weight:700; margin:0 0 4px }
-  .pl-gen .hint { font-size:12px; color:var(--text-muted); margin-bottom:10px }
-  .pl-gen input[type=number] { width:64px; padding:5px 7px; border:1px solid var(--border); border-radius:6px; background:rgba(255,255,255,.02); color:var(--text) }
-  .pl-prog { margin-top:12px; padding:10px 12px; border-radius:8px; background:rgba(96,165,250,.08); border:1px solid var(--border); font-size:13px; display:none }
-  .pl-bar { height:6px; border-radius:4px; background:rgba(255,255,255,.08); overflow:hidden; margin-top:8px }
-  .pl-bar > i { display:block; height:100%; width:0; background:linear-gradient(90deg,#60a5fa,#34d399); transition:width .4s }
+  .plg-wrap { --money:var(--success); --support:var(--info); --media:var(--warning); max-width:1080px }
 
-  .pl-stats { display:flex; gap:18px; margin-bottom:14px; font-size:13px; color:var(--text-muted) }
-  .pl-stats strong { color:#60a5fa; font-size:16px }
+  /* ---------- HERO GENERATE ---------- */
+  .plg-hero {
+    position:relative; overflow:hidden;
+    background:var(--bg-elevated); border:1px solid var(--border);
+    border-radius:var(--radius-lg); padding:22px 24px; margin-bottom:18px;
+    box-shadow:var(--shadow);
+  }
+  .plg-hero::before {
+    content:""; position:absolute; inset:0 0 auto 0; height:3px; background:var(--gradient-accent);
+  }
+  .plg-hero::after {
+    content:""; position:absolute; top:-60px; right:-60px; width:220px; height:220px; border-radius:50%;
+    background:var(--accent-glow); filter:blur(60px); opacity:.5; pointer-events:none;
+  }
+  .plg-hero h2 { margin:0 0 4px; font-size:18px; font-weight:800; letter-spacing:-.3px;
+    background:var(--gradient-text); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; width:fit-content }
+  .plg-hero .sub { font-size:12.5px; color:var(--text-secondary); line-height:1.65; max-width:680px; margin-bottom:16px }
+  .plg-hero .sub b { color:var(--text) }
+  .plg-controls { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; position:relative; z-index:1 }
+  .plg-field { display:flex; flex-direction:column; gap:5px }
+  .plg-field label { font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px }
+  .plg-field input { width:84px; padding:9px 11px; border:1px solid var(--border-strong); border-radius:var(--radius-sm);
+    background:var(--surface); color:var(--text); font-size:15px; font-weight:700; text-align:center; transition:border-color .15s, box-shadow .15s }
+  .plg-field input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft) }
+  .plg-btn-gen { padding:10px 20px; font-size:13.5px; font-weight:700; border:none; border-radius:var(--radius-sm);
+    background:var(--gradient-accent); color:#fff; cursor:pointer; box-shadow:var(--shadow-sm); transition:transform .12s, opacity .15s; }
+  .plg-btn-gen:hover { transform:translateY(-1px) }
+  .plg-btn-gen:disabled { opacity:.5; cursor:default; transform:none }
+  .plg-btn-stop { padding:10px 16px; font-size:13px; font-weight:600; border:1px solid var(--border-strong); border-radius:var(--radius-sm);
+    background:var(--surface); color:var(--danger); cursor:pointer; display:none }
 
-  .pl-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; margin-bottom:12px; overflow:hidden }
-  .pl-head { padding:12px 16px; cursor:pointer; display:flex; align-items:center; gap:10px }
-  .pl-head:hover { background:rgba(255,255,255,.02) }
-  .pl-head .pl-tt { font-weight:700; font-size:14px; flex:1 }
-  .pl-layer { font-size:10.5px; padding:2px 9px; border-radius:12px; font-weight:700; text-transform:uppercase; letter-spacing:.3px }
-  .layer-money  { background:rgba(52,211,153,.18); color:#34d399 }
-  .layer-support{ background:rgba(96,165,250,.18); color:#60a5fa }
-  .layer-media  { background:rgba(250,204,21,.18); color:#facc15 }
-  .pl-cnt { font-size:12px; color:var(--text-muted) }
-  .pl-body { display:none; padding:0 16px 14px; border-top:1px solid var(--border) }
-  .pl-meta { font-size:12px; color:var(--text-muted); margin:10px 0; line-height:1.6 }
-  .pl-meta b { color:var(--text) }
-  .cl-row { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:6px; font-size:12.5px }
-  .cl-row:hover { background:rgba(255,255,255,.03) }
-  .cl-row a { color:var(--text); text-decoration:none; flex:1 }
-  .cl-row a:hover { color:#60a5fa; text-decoration:underline }
-  .cl-tag { font-size:10px; padding:1px 7px; border-radius:10px; background:rgba(255,255,255,.07); color:var(--text-muted) }
-  .cl-ext { font-size:10px; padding:1px 7px; border-radius:10px; background:rgba(168,85,247,.18); color:#c084fc }
-  .cl-prio-Cao { color:#f87171; font-weight:700 }
+  /* ---------- PROGRESS ---------- */
+  .plg-prog { display:none; margin-top:18px; padding:14px 16px; border-radius:var(--radius); background:var(--surface); border:1px solid var(--border) }
+  .plg-prog-msg { font-size:13px; font-weight:600; color:var(--text) }
+  .plg-bar { height:7px; border-radius:99px; background:var(--border-soft); overflow:hidden; margin:9px 0 6px }
+  .plg-bar > i { display:block; height:100%; width:0; border-radius:99px; background:var(--gradient-accent); transition:width .5s ease }
+  .plg-prog-stat { font-size:11.5px; color:var(--text-muted) }
+
+  /* ---------- STAT TILES ---------- */
+  .plg-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:18px }
+  .plg-stat { background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; transition:transform .15s, border-color .15s }
+  .plg-stat:hover { transform:translateY(-2px); border-color:var(--border-strong) }
+  .plg-stat .num { font-size:26px; font-weight:800; line-height:1; letter-spacing:-1px }
+  .plg-stat .lbl { font-size:11.5px; color:var(--text-muted); margin-top:5px; font-weight:500 }
+  .plg-stat.s-pillar .num { color:var(--accent) }
+  .plg-stat.s-cluster .num { color:var(--info) }
+  .plg-stat .legend { display:flex; gap:10px; margin-top:7px; flex-wrap:wrap }
+  .plg-stat .legend span { font-size:11px; color:var(--text-secondary); display:flex; align-items:center; gap:4px }
+  .dot { width:8px; height:8px; border-radius:50% }
+  .dot.money{background:var(--money)} .dot.support{background:var(--support)} .dot.media{background:var(--media)}
+
+  /* ---------- PILLAR CARDS ---------- */
+  .plg-card { background:var(--bg-elevated); border:1px solid var(--border); border-left:3px solid var(--border-strong);
+    border-radius:var(--radius); margin-bottom:11px; overflow:hidden; transition:box-shadow .18s, transform .12s, border-color .15s }
+  .plg-card:hover { box-shadow:var(--shadow); transform:translateY(-1px) }
+  .plg-card.l-money  { border-left-color:var(--money) }
+  .plg-card.l-support{ border-left-color:var(--support) }
+  .plg-card.l-media  { border-left-color:var(--media) }
+  .plg-head { padding:13px 16px; cursor:pointer; display:flex; align-items:center; gap:11px; user-select:none }
+  .plg-head:hover { background:var(--surface) }
+  .plg-pill { font-size:10px; padding:3px 10px; border-radius:99px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap }
+  .plg-pill.l-money  { background:rgba(34,197,94,.15);  color:var(--money) }
+  .plg-pill.l-support{ background:rgba(59,130,246,.15); color:var(--support) }
+  .plg-pill.l-media  { background:rgba(234,179,8,.15);  color:var(--media) }
+  .plg-tt { font-weight:700; font-size:14.5px; flex:1; line-height:1.4 }
+  .plg-star { font-size:11px; color:var(--warning); font-weight:700; white-space:nowrap }
+  .plg-count { font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:6px; white-space:nowrap }
+  .plg-chev { transition:transform .25s; color:var(--text-muted); font-size:11px }
+  .plg-card.open .plg-chev { transform:rotate(180deg) }
+
+  .plg-body { display:none; padding:4px 16px 16px }
+  .plg-card.open .plg-body { display:block; animation:plgFade .25s ease }
+  @keyframes plgFade { from{opacity:0; transform:translateY(-4px)} to{opacity:1; transform:none} }
+  .plg-meta { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px 18px;
+    font-size:12px; color:var(--text-secondary); padding:12px 14px; background:var(--surface); border-radius:var(--radius-sm); margin-bottom:12px; line-height:1.5 }
+  .plg-meta b { color:var(--text); font-weight:600 }
+
+  .plg-cl { display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:var(--radius-sm); transition:background .12s }
+  .plg-cl:hover { background:var(--surface) }
+  .plg-cl + .plg-cl { border-top:1px solid var(--border-soft) }
+  .plg-cl .cdot { width:7px; height:7px; border-radius:50%; flex:none }
+  .plg-cl a { color:var(--text); text-decoration:none; flex:1; font-size:13px; line-height:1.4 }
+  .plg-cl a:hover { color:var(--accent) }
+  .plg-tag { font-size:10px; padding:2px 8px; border-radius:99px; background:var(--surface); border:1px solid var(--border); color:var(--text-muted); white-space:nowrap }
+  .plg-tag.ext { background:rgba(168,85,247,.14); border-color:transparent; color:#c084fc }
+  .plg-tag.hi { color:var(--danger); border-color:rgba(239,68,68,.3) }
+  .plg-tag.st { text-transform:capitalize }
+
+  /* ---------- EMPTY ---------- */
+  .plg-empty { text-align:center; padding:48px 20px; background:var(--bg-elevated); border:1px dashed var(--border-strong); border-radius:var(--radius-lg); color:var(--text-muted) }
+  .plg-empty .ico { font-size:40px; margin-bottom:10px; opacity:.7 }
+  .plg-empty b { color:var(--text) }
+
+  @media (max-width:680px){ .plg-stats{grid-template-columns:1fr} .plg-controls{gap:10px} }
 </style>
 
-<div class="pl-gen">
-  <h3>🏛️ Tạo kế hoạch nội dung Pillar–Cluster (tự động)</h3>
-  <div class="hint">
-    AI research data Sintech thật (collections + keyword GSC) → đề xuất Pillar + bài Cluster theo mô hình
-    3 lớp Money/Support/Media → tự seed thành <b>blog_jobs</b> (trạng thái <i>pending</i>, chờ gen nội dung).
-    Chạy nền ~10–30 phút tùy số lượng. <b>Không ghi đè</b> kế hoạch cũ — tạo thêm pillar mới.
-  </div>
-  <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-    <label>Số Pillar: <input type="number" id="n-pillars" value="12" min="1" max="20"></label>
-    <label>Cluster/Pillar: <input type="number" id="n-clusters" value="10" min="1" max="15"></label>
-    <label style="display:flex;align-items:center;gap:5px"><input type="checkbox" id="auto-gen" checked> Tự gen nội dung + gom ảnh luôn (em chỉ vào duyệt)</label>
-    <button class="btn btn-primary" type="button" onclick="startGen(this)">⚙️ Tạo kế hoạch (auto)</button>
-    <button class="btn" type="button" id="pl-stop-btn" onclick="stopGen(this)" style="display:none">⏹ Dừng</button>
-  </div>
-  <div class="pl-prog" id="pl-prog">
-    <div id="pl-prog-msg">Đang khởi động...</div>
-    <div class="pl-bar"><i id="pl-bar-fill"></i></div>
-    <div id="pl-prog-stat" style="font-size:11.5px;color:var(--text-muted);margin-top:6px"></div>
-  </div>
-</div>
+<div class="plg-wrap">
 
-<div class="pl-stats">
-  <span><strong>{{ pillars|length }}</strong> Pillar</span>
-  <span><strong>{{ total_jobs }}</strong> bài Cluster (AI) đã seed</span>
-</div>
-
-{% if not pillars %}
-<div class="pl-gen" style="text-align:center;color:var(--text-muted)">
-  Chưa có Pillar nào. Bấm <b>"Tạo kế hoạch (auto)"</b> ở trên để AI đề xuất.
-</div>
-{% endif %}
-
-{% for p in pillars %}
-<div class="pl-card">
-  <div class="pl-head" onclick="togglePillar({{ p.id }})">
-    <span class="pl-layer layer-{{ p.layer or 'media' }}">{{ p.layer or '—' }}</span>
-    <span class="pl-tt">{{ p.title }}</span>
-    {% if p.priority == 'Cao' %}<span class="cl-prio-Cao" style="font-size:11px">★ {{ p.priority }}</span>{% endif %}
-    <span class="pl-cnt">{{ p.clusters|length }} bài ▾</span>
-  </div>
-  <div class="pl-body" id="pl-body-{{ p.id }}">
-    <div class="pl-meta">
-      <b>Intent:</b> {{ p.intent or '—' }}<br>
-      <b>Đối tượng:</b> {{ p.audience or '—' }} · <b>Ưu tiên:</b> {{ p.priority or '—' }}<br>
-      <b>Lý do:</b> {{ p.reason or '—' }}<br>
-      <b>Kéo link về:</b> {{ p.target_category or '—' }}
+  <!-- HERO -->
+  <div class="plg-hero">
+    <h2>🏛️ Tạo kế hoạch nội dung Pillar–Cluster</h2>
+    <div class="sub">
+      AI đọc dữ liệu Sintech thật (collections + top keyword Google Search Console) → đề xuất <b>Pillar</b> (chủ đề trụ)
+      và các bài <b>Cluster</b> theo 3 lớp Money / Support / Media. Chỉ tạo <b>khung chủ đề</b> — không viết nội dung
+      (viết bài là bước riêng ở Blog Content). Không ghi đè kế hoạch cũ.
     </div>
-    {% for c in p.clusters %}
-    <div class="cl-row">
-      <span class="pl-layer layer-{{ c.content_layer or 'media' }}" style="font-size:9px">{{ c.content_layer or '?' }}</span>
-      <a href="{{ url_for('blog_content_detail_page', job_id=c.id) }}">{{ c.article_title }}</a>
-      {% if c.is_external %}<span class="cl-ext">ngoài lề</span>{% endif %}
-      {% if c.article_type %}<span class="cl-tag">{{ c.article_type }}</span>{% endif %}
-      <span class="cl-tag {% if c.priority == 'Cao' %}cl-prio-Cao{% endif %}">{{ c.priority or '—' }}</span>
-      <span class="cl-tag">{{ c.status }}</span>
+    <div class="plg-controls">
+      <div class="plg-field">
+        <label>Số Pillar</label>
+        <input type="number" id="n-pillars" value="12" min="1" max="20">
+      </div>
+      <div class="plg-field">
+        <label>Cluster / Pillar</label>
+        <input type="number" id="n-clusters" value="10" min="1" max="15">
+      </div>
+      <button class="plg-btn-gen" type="button" onclick="startGen(this)">✨ Tạo kế hoạch</button>
+      <button class="plg-btn-stop" type="button" id="pl-stop-btn" onclick="stopGen(this)">⏹ Dừng</button>
     </div>
-    {% endfor %}
+    <div class="plg-prog" id="pl-prog">
+      <div class="plg-prog-msg" id="pl-prog-msg">Đang khởi động…</div>
+      <div class="plg-bar"><i id="pl-bar-fill"></i></div>
+      <div class="plg-prog-stat" id="pl-prog-stat"></div>
+    </div>
   </div>
+
+  <!-- STATS -->
+  {% set money = pillars|selectattr('layer','equalto','money')|list|length %}
+  {% set support = pillars|selectattr('layer','equalto','support')|list|length %}
+  {% set media = pillars|selectattr('layer','equalto','media')|list|length %}
+  <div class="plg-stats">
+    <div class="plg-stat s-pillar">
+      <div class="num">{{ pillars|length }}</div>
+      <div class="lbl">Pillar (chủ đề trụ)</div>
+    </div>
+    <div class="plg-stat s-cluster">
+      <div class="num">{{ total_jobs }}</div>
+      <div class="lbl">Bài Cluster đã đề xuất</div>
+    </div>
+    <div class="plg-stat">
+      <div class="num" style="font-size:15px;font-weight:700;color:var(--text-secondary)">3 lớp</div>
+      <div class="legend">
+        <span><i class="dot money"></i>Money {{ money }}</span>
+        <span><i class="dot support"></i>Support {{ support }}</span>
+        <span><i class="dot media"></i>Media {{ media }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PILLAR LIST -->
+  {% if not pillars %}
+  <div class="plg-empty">
+    <div class="ico">🪴</div>
+    Chưa có Pillar nào.<br>Bấm <b>"✨ Tạo kế hoạch"</b> ở trên để AI đề xuất chủ đề trụ + bài cluster.
+  </div>
+  {% endif %}
+
+  {% for p in pillars %}
+  {% set lyr = p.layer or 'media' %}
+  <div class="plg-card l-{{ lyr }}" id="plg-card-{{ p.id }}">
+    <div class="plg-head" onclick="togglePillar({{ p.id }})">
+      <span class="plg-pill l-{{ lyr }}">{{ p.layer or '—' }}</span>
+      <span class="plg-tt">{{ p.title }}</span>
+      {% if p.priority == 'Cao' %}<span class="plg-star">★ Ưu tiên</span>{% endif %}
+      <span class="plg-count">{{ p.clusters|length }} bài <span class="plg-chev">▾</span></span>
+    </div>
+    <div class="plg-body">
+      <div class="plg-meta">
+        <div><b>Intent:</b> {{ p.intent or '—' }}</div>
+        <div><b>Đối tượng:</b> {{ p.audience or '—' }}</div>
+        <div><b>Ưu tiên:</b> {{ p.priority or '—' }}</div>
+        <div><b>Kéo link về:</b> {{ p.target_category or '—' }}</div>
+        {% if p.reason %}<div style="grid-column:1/-1"><b>Lý do:</b> {{ p.reason }}</div>{% endif %}
+      </div>
+      {% for c in p.clusters %}
+      <div class="plg-cl">
+        <i class="cdot dot {{ c.content_layer or 'media' }}"></i>
+        <a href="{{ url_for('blog_content_detail_page', job_id=c.id) }}">{{ c.article_title }}</a>
+        {% if c.is_external %}<span class="plg-tag ext">ngoài lề</span>{% endif %}
+        {% if c.article_type %}<span class="plg-tag">{{ c.article_type }}</span>{% endif %}
+        {% if c.priority == 'Cao' %}<span class="plg-tag hi">★ Cao</span>{% endif %}
+        <span class="plg-tag st">{{ c.status }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
 </div>
-{% endfor %}
 
 <script>
 function togglePillar(id) {
-  const b = document.getElementById('pl-body-' + id);
-  b.style.display = (b.style.display === 'block') ? 'none' : 'block';
+  document.getElementById('plg-card-' + id).classList.toggle('open');
 }
 
 let POLL = null;
 async function startGen(btn) {
   const nP = parseInt(document.getElementById('n-pillars').value) || 12;
   const nC = parseInt(document.getElementById('n-clusters').value) || 10;
-  const autoGen = document.getElementById('auto-gen').checked;
-  const note = autoGen
-    ? `Gen ${nP} pillar × ~${nC} cluster (~${nP*nC} bài) + TỰ VIẾT NỘI DUNG + gom ảnh từng bài. Chạy nền có thể vài GIỜ. Bắt đầu?`
-    : `Gen ${nP} pillar × ~${nC} cluster (~${nP*nC} bài), chỉ tạo kế hoạch (chưa viết nội dung). Bắt đầu?`;
-  if (!confirm(note)) return;
+  if (!confirm(`Tạo ${nP} pillar × ~${nC} cluster (~${nP*nC} bài đề xuất). Chỉ tạo khung chủ đề, KHÔNG viết nội dung. Bắt đầu?`)) return;
   btn.disabled = true;
   try {
     const r = await fetch('/blog-pillars/generate', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({n_pillars: nP, clusters_per_pillar: nC, auto_gen: autoGen}),
+      body: JSON.stringify({n_pillars: nP, clusters_per_pillar: nC}),
     });
     const d = await r.json();
     if (!d.ok) { alert('❌ ' + (d.error || 'lỗi')); btn.disabled = false; return; }
@@ -138,7 +231,7 @@ async function startGen(btn) {
 }
 
 async function stopGen(btn) {
-  if (!confirm('Dừng gen sau bài đang chạy?')) return;
+  if (!confirm('Dừng sau pillar đang chạy?')) return;
   btn.disabled = true;
   try { await fetch('/blog-pillars/stop', {method: 'POST'}); } catch (e) {}
 }
@@ -149,35 +242,28 @@ async function pollStatus() {
     const msg = document.getElementById('pl-prog-msg');
     const fill = document.getElementById('pl-bar-fill');
     const stat = document.getElementById('pl-prog-stat');
-    let pct = 0;
-    if (d.phase === 'gen_content') {
-      pct = d.gen_total ? Math.round((d.gen_done || 0) * 100 / d.gen_total) : 50;
-      msg.textContent = `✍️ Viết nội dung ${d.gen_done || 0}/${d.gen_total || 0}: ${(d.gen_current || '').slice(0,55)}`;
-      stat.textContent = `Pillar+cluster đã seed: ${d.jobs_created || 0} · viết OK ${d.gen_ok || 0} · lỗi ${d.gen_fail || 0}`;
-    } else if (d.phase === 'pillars' || d.phase === 'starting') {
-      pct = 4; msg.textContent = '🔎 ' + (d.msg || 'Đang gen Pillar...');
-      stat.textContent = `pha: ${d.phase || '-'}`;
+    let pct = 4;
+    if (d.phase === 'pillars' || d.phase === 'starting') {
+      pct = 5; msg.textContent = '🔎 ' + (d.msg || 'Đang đề xuất Pillar…');
     } else if (d.pillar_total) {
       pct = Math.round((d.pillar_idx || 0) * 100 / d.pillar_total);
       msg.textContent = `🏛️ Pillar ${d.pillar_idx}/${d.pillar_total}: ${d.pillar_title || ''}`;
-      stat.textContent = `Đã tạo ${d.jobs_created || 0} bài cluster · pha: ${d.phase || '-'}`;
     }
+    stat.textContent = `Đã đề xuất ${d.jobs_created || 0} bài cluster`;
     fill.style.width = Math.max(pct, 3) + '%';
     if (!d.running) {
       clearInterval(POLL);
-      fill.style.width = '100%';
       document.getElementById('pl-stop-btn').style.display = 'none';
-      if (d.error) { msg.textContent = '❌ Lỗi: ' + d.error; }
+      if (d.error) { fill.style.background = 'var(--danger)'; msg.textContent = '❌ Lỗi: ' + d.error; }
       else {
-        const g = d.gen_total ? ` · viết ${d.gen_ok}/${d.gen_total} bài (lỗi ${d.gen_fail})` : '';
-        msg.textContent = `✅ Xong! ${d.n_pillars} pillar · ${d.jobs_created} cluster${g}.`;
-        setTimeout(() => location.reload(), 2200);
+        fill.style.width = '100%';
+        msg.textContent = `✅ Xong! ${d.n_pillars} pillar · ${d.jobs_created} bài cluster.`;
+        setTimeout(() => location.reload(), 1800);
       }
     }
   } catch (e) { /* giữ poll */ }
 }
 
-// Nếu mở trang lúc đang chạy → tự bám tiến độ
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     const d = await (await fetch('/blog-pillars/status')).json();

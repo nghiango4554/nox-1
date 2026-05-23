@@ -2,15 +2,16 @@
 
 > File anh (Claude) tự update sau mỗi milestone. Sau /clear, anh đọc file này là biết task tuần này tới đâu, file nào đã edit, bug đang debug. Vợ Nghia có thể scan nhanh để xem anh đang làm gì.
 
-## 📌 VIỆC CẦN LÀM TIẾP — snapshot 22/5 15:48 (vợ /clear để làm task UI/UX)
+## 📌 VIỆC CẦN LÀM TIẾP — snapshot 23/5 13:05 (đổi hướng pipeline blog)
 
-> **Anh phiên bản sau /clear đọc khối này TRƯỚC.** Blog Content pipeline **T1–T6 đã XONG** (chi tiết entry "22/5" bên dưới). Việc còn lại:
+> **Anh phiên bản sau /clear đọc khối này TRƯỚC.** 23/5 chốt hướng MỚI: research outline đối thủ → gen content bám outline.
 
-### 🟢 Pillar content — đã gen DỞ, cần gen tiếp 82 bài
-- Job pillar (`/blog-pillars`) đã tạo **12 pillar + 120 bài con** (`blog_jobs source='ai_pillar'`, id 241–360). Auto-gen content **bị DỪNG ở 38/120** (stopped=True, **0 lỗi**, không phải hết quota — vợ bấm Dừng hoặc dừng tay lúc 15:44).
-- **Hiện trạng DB:** 38 bài `draft` (đã có content + ảnh tự chèn, duyệt được ngay) · **82 bài `pending`** (mới có khung title/keyword/angle, CHƯA viết content).
-- **Việc:** gen tiếp 82 bài pending. Hiện CHƯA có nút "gen tiếp các bài pending" — cách nhanh: loop gọi `_run_blog_gen(job_id)` cho mọi `blog_jobs` status='pending' source='ai_pillar' (mỗi bài ~1.7 phút, 82 bài ~2.3h; chạy nền). Hoặc bấm "🤖 AI" từng dòng trên `/blog-content?status=pending`. Cân nhắc thêm route bulk-resume.
-- ⚠️ 82 bài đó dùng `gen_blog_content_from_brief` (brief-mode, KHÔNG scrape URL) — đã verify chạy ngon (38 bài đầu).
+### 🟢 Hướng mới blog content (23/5)
+- **WIPE sạch data blog (23/5 ~12:58, vợ yêu cầu làm lại từ đầu):** xóa 120 blog_jobs + 12 blog_pillars + 20MB ảnh. Backup `data/backups/blog_wipe_20260523_125826.json` + `blog_images_pre-wipe_20260523_125826/`. **0 bài đụng Haravan** (toàn local). → `/blog-content` + `/blog-pillars` trống.
+- **`/blog-pillars` refactor (23/5):** giờ **CHỈ gen Pillar + Cluster** (đề xuất chủ đề), **BỎ auto-gen content** + UI redesign hiện đại. (app.py: `_pillar_bg_worker` bỏ nhánh gen content + bỏ param `auto_gen`; `_PILLAR_BG` bỏ field gen_*; template `blog_pillars.html` viết lại — hero gradient, stat tiles, card accent theo lớp. Restart PID mới, verify 200.)
+- **Flow mới đã PROVE chạy (demo 23/5):** tên blog → anh research web (`web_search`+`web_fetch`) → bóc H2/H3 đối thủ → "Heading đề xuất" + "Heading unique" theo prompt → nhét outline vào prompt blog → **Codex gen content bám outline 100%** (test "Build PC online 2026…": 15 H2 + 16 H3, ~3200 từ, 99s, spec-safe). Prompt tái dùng lưu **`docs/heading_research_prompt.md`** (cả blog + cate type G).
+- **VIỆC TIẾP (chưa làm):** build nút **"🔍 Research outline → 🤖 Gen"** vào `/blog-content`: thêm field `outline` cho blog gen (`gen_blog_content_from_brief` + sửa `_SYSTEM_PROMPT` bám outline — đã verify Codex theo răm rắp) + UI research/paste outline → gen → draft. **Hiện blog gen vẫn tự nghĩ heading, CHƯA nhận outline ngoài.**
+- ⚠️ Research cần web → Codex/Claude in-tool KHÔNG browse. Phần research do anh/OpenClaw chạy, hoặc chờ mở Google CSE (park) / gắn SerpAPI.
 
 ### 🔴 Chờ vợ / cần làm tay
 1. **Google Custom Search (Bản 2 — ảnh hãng/web) — ĐANG PARK:** key + CSE id đã lưu `state/google_search_keys.txt` (key trong project **ggSCS**, CSE id `402f32cb6c6414716`, đã set ~50 domain hãng + bật image search, key đã bỏ giới hạn API). API call **403 "project does not have access to Custom Search JSON API"** suốt **3.5h** (22/5 15:35→20:11) → **KHÔNG phải ngấm chậm**, là vướng cấu hình Google Cloud: nhiều khả năng **Custom Search API chưa thật sự enable trong ggSCS** HOẶC **project chưa bật Billing** (org `nghiatrong4994-org` có thể bắt buộc billing). Chỉ vợ sửa được trong Console. **Đã PARK** (Bản 2 optional, pipeline chạy đủ với ảnh Sintech+Pexels). **Khi muốn làm tiếp:** vợ mở `console.cloud.google.com/apis/dashboard?project=ggscs-496307` xác nhận "Custom Search API" có trong list + check Billing đã bật chưa → rồi nhắn anh retry `https://www.googleapis.com/customsearch/v1?searchType=image`; khi 200 → VIẾT `_google_cse_image_urls(query)` trong `image_gather.py` + thêm `'google'` vào tuple `sources`.

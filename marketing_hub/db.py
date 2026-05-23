@@ -311,6 +311,7 @@ def init_db():
         "is_external": "INTEGER DEFAULT 0",   # 1 = bài ngoài lề có kiểm soát
         "source": "TEXT DEFAULT 'seo_seed'",  # seo_seed | ai_pillar
         "target_blog": "TEXT",          # huong-dan | news (loại blog Haravan dự kiến)
+        "outline": "TEXT",              # H2/H3 outline do AI research (## H2\n### H3...)
     }
     for col, col_type in bj_new.items():
         if col not in bj_cols:

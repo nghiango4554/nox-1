@@ -157,9 +157,12 @@
     <span>📝 Title (45-61 ký tự)</span>
     <span class="cd-section-hint">SEO title hiển thị Google · KHÔNG chứa "Sintech"</span>
   </div>
-  <input type="text" class="cd-input" id="f-title" name="title"
-         value="{{ job.edited_title or '' }}" maxlength="80"
-         oninput="updateMeter('f-title', 'meter-title', 45, 61)">
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+    <input type="text" class="cd-input" id="f-title" name="title"
+           value="{{ job.edited_title or '' }}" maxlength="80" style="flex:1"
+           oninput="updateMeter('f-title', 'meter-title', 45, 61)">
+    <button type="button" class="btn btn-sm" onclick="genTitle(this)" title="AI gen lại title 45-61c">🔄 Gen title</button>
+  </div>
   <div class="cd-meter" id="meter-title">{{ (job.edited_title or '')|length }}c</div>
 </div>
 
@@ -168,8 +171,11 @@
     <span>📄 Meta description (140-160 ký tự)</span>
     <span class="cd-section-hint">CTA HOA cuối câu: XEM NGAY / THAM KHẢO NGAY / TÌM HIỂU NGAY / KHÁM PHÁ NGAY</span>
   </div>
-  <textarea class="cd-textarea" id="f-meta" name="meta" rows="3"
-            oninput="updateMeter('f-meta', 'meter-meta', 140, 160)">{{ job.edited_meta or '' }}</textarea>
+  <div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:6px">
+    <textarea class="cd-textarea" id="f-meta" name="meta" rows="3" style="flex:1"
+              oninput="updateMeter('f-meta', 'meter-meta', 140, 160)">{{ job.edited_meta or '' }}</textarea>
+    <button type="button" class="btn btn-sm" onclick="genMeta(this)" title="AI gen lại meta 140-160c" style="flex-shrink:0">🔄 Gen meta</button>
+  </div>
   <div class="cd-meter" id="meter-meta">{{ (job.edited_meta or '')|length }}c</div>
 </div>
 
@@ -653,13 +659,49 @@ function getBodyHTML() {
   return document.getElementById('f-body').innerHTML;
 }
 
+async function genTitle(btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳…';
+  try {
+    const r = await fetch(`/blog-content/${JOB_ID}/gen-title`, {method: 'POST'});
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('f-title').value = d.title;
+      updateMeter('f-title', 'meter-title', 45, 61);
+      btn.textContent = '✅';
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
+    } else {
+      alert('❌ ' + (d.error || 'Lỗi gen title'));
+      btn.textContent = orig; btn.disabled = false;
+    }
+  } catch (e) { alert('❌ ' + e); btn.textContent = orig; btn.disabled = false; }
+}
+
+async function genMeta(btn) {
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '⏳…';
+  try {
+    const r = await fetch(`/blog-content/${JOB_ID}/gen-meta`, {method: 'POST'});
+    const d = await r.json();
+    if (d.ok) {
+      document.getElementById('f-meta').value = d.meta;
+      updateMeter('f-meta', 'meter-meta', 140, 160);
+      btn.textContent = '✅';
+      setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2000);
+    } else {
+      alert('❌ ' + (d.error || 'Lỗi gen meta'));
+      btn.textContent = orig; btn.disabled = false;
+    }
+  } catch (e) { alert('❌ ' + e); btn.textContent = orig; btn.disabled = false; }
+}
+
 async function genAI() {
-  if (!confirm('🤖 Gen lại content (ghi đè field hiện tại). Tốn ~60-120s vì bài blog dài 1500-3000 từ.')) return;
+  if (!confirm('🤖 Gen lại bài (2 pass: outline → content). Tốn ~2-4 phút — bài hướng dẫn sẽ có các bước cụ thể.')) return;
   const btns = document.querySelectorAll('button');
   btns.forEach(b => b.disabled = true);
-  document.getElementById('f-body').innerHTML = '<p>⏳ Đang gen content qua Codex CLI... vui lòng đợi ~60-120s</p>';
+  document.getElementById('f-body').innerHTML = '<p>⏳ Pass 1: nghiên cứu outline... rồi Pass 2 viết bài đầy đủ (~2-4 phút)</p>';
   try {
-    const r = await fetch(`/blog-content/${JOB_ID}/gen`, {method: 'POST'});
+    const r = await fetch(`/blog-content/${JOB_ID}/gen-full`, {method: 'POST'});
     const d = await r.json();
     if (d.ok) {
       document.getElementById('f-title').value = d.title || '';

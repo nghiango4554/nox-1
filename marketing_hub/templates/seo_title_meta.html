@@ -232,10 +232,12 @@
             <div class="tm-text empty">(rỗng)</div>
           {% endif %}
           <div class="tm-len">
-            <strong>{{ it.title_len }}c</strong>
-            {% if it.title_len == 0 %}<span class="err">❌ thiếu</span>
-            {% elif it.title_len < 20 %}<span class="warn">⚠ ngắn</span>
-            {% elif it.title_len > 61 %}<span class="warn">⚠ dài</span>
+            {% set eff_len = it.title_stripped_len if it.title_stripped_len is defined else it.title_len %}
+            <strong>{{ eff_len }}c</strong>
+            {% if it.title_len != eff_len %}<span style="color:#94a3b8;font-size:11px">({{ it.title_len }}c full)</span>{% endif %}
+            {% if eff_len == 0 %}<span class="err">❌ thiếu</span>
+            {% elif eff_len < 20 %}<span class="warn">⚠ ngắn</span>
+            {% elif eff_len > 61 %}<span class="warn">⚠ dài</span>
             {% else %}<span class="ok">OK</span>{% endif %}
           </div>
         </td>
