@@ -30,7 +30,10 @@ def _load_token() -> str:
         try:
             with open(OPENCLAW_CONFIG, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            token = data.get("channels", {}).get("telegram", {}).get("botToken")
+            tg = data.get("channels", {}).get("telegram", {})
+            # New path: accounts.default.botToken
+            token = (tg.get("accounts", {}).get("default", {}).get("botToken")
+                     or tg.get("botToken"))
             if token:
                 _cached_token = token
                 return token
@@ -60,6 +63,25 @@ def send_telegram(text: str, chat_id: str = None, parse_mode: str = "HTML") -> b
         return False
     except requests.RequestException as e:
         logger.error(f"Telegram send fail: {e}")
+        return False
+
+
+def send_photo(photo_url: str, caption: str = "", chat_id: str = None) -> bool:
+    """Gửi ảnh qua Telegram bot bằng URL."""
+    token = _load_token()
+    if not token:
+        return False
+    cid = chat_id or DEFAULT_CHAT_ID
+    url = f"https://api.telegram.org/bot{token}/sendPhoto"
+    try:
+        r = requests.post(url, json={
+            "chat_id": cid,
+            "photo": photo_url,
+            "caption": caption[:1024],
+            "parse_mode": "HTML",
+        }, timeout=15)
+        return r.status_code == 200
+    except requests.RequestException:
         return False
 
 

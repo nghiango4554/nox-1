@@ -144,16 +144,22 @@ def _request(method: str, path: str, params: dict = None, payload: dict = None) 
 
 # ─────────────────────────── PRODUCTS ───────────────────────────
 
-def list_products(page: int = 1, limit: int = 50, fields: str = None) -> list:
+def list_products(page: int = 1, limit: int = 50, fields: str = None,
+                  updated_at_min: str = None) -> list:
     params = {"page": page, "limit": min(limit, 250)}
     if fields:
         params["fields"] = fields
+    if updated_at_min:
+        params["updated_at_min"] = updated_at_min
     data = _request("GET", "/products.json", params=params)
     return data.get("products", [])
 
 
-def count_products() -> int:
-    data = _request("GET", "/products/count.json")
+def count_products(updated_at_min: str = None) -> int:
+    params = {}
+    if updated_at_min:
+        params["updated_at_min"] = updated_at_min
+    data = _request("GET", "/products/count.json", params=params or None)
     return data.get("count", 0)
 
 
@@ -166,6 +172,16 @@ def update_product(product_id: int, fields: dict) -> dict:
     payload = {"product": fields}
     data = _request("PUT", f"/products/{product_id}.json", payload=payload)
     return data.get("product", {})
+
+
+def put_image_alt(product_id: int, image_id: int, alt: str) -> dict:
+    """PUT ALT text cho 1 image của SP. Trả {"ok": True} hoặc {"ok": False, "error": msg}."""
+    try:
+        _request("PUT", f"/products/{product_id}/images/{image_id}.json",
+                 payload={"image": {"id": image_id, "alt": alt}})
+        return {"ok": True}
+    except HaravanError as e:
+        return {"ok": False, "error": str(e)}
 
 
 def create_product(fields: dict) -> dict:
