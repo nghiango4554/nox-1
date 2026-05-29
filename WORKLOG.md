@@ -2,6 +2,27 @@
 
 > File anh (Claude) tự update sau mỗi milestone. Sau /clear, anh đọc file này là biết task tuần này tới đâu, file nào đã edit, bug đang debug. Vợ Nghia có thể scan nhanh để xem anh đang làm gì.
 
+## 📸 Checkpoint 28/5 12:30 — vợ /clear
+
+### ✅ Trạng thái hệ thống
+- 🟢 Flask `localhost:5055` — HTTP 200 (curl verify), Bot 🔴 token chưa setup
+- Branch `master` ahead origin ~10+ commit chưa push (2 auto-snapshot 22-23/5 + feat commits)
+- 3 modified uncommitted: `marketing_hub/app.py` · `collection_content_writer.py` · `templates/collection_content.html`
+- 13 untracked script ad-hoc: `check_*.py` `fix_*.py` `get_*.py` `insert_*.py` `suggest_*.py` + `collection_taxonomy.json`
+
+### ⚠️ Cảnh báo (auto-detect):
+- Backup DB cũ 8 ngày (`posts_2026-05-20.db.zip` mới nhất) → Task Scheduler daily backup chết
+- Backup secrets cũ 9 ngày (`secrets_2026-05-19.zip`) → secrets backup chết
+- Script `generate_current_state.py` probe Flask sai (dùng Python env khác → ModuleNotFoundError nhưng curl HTTP 200)
+
+### 🔴 Việc đang dở (ưu tiên cao nhất)
+**Build nút "🔍 Research outline → 🤖 Gen" cho `/blog-content`** (xem section 23/5 dưới): thêm field `outline` cho `gen_blog_content_from_brief` + sửa `_SYSTEM_PROMPT` bám outline ngoài. Blog gen hiện vẫn tự nghĩ heading, CHƯA nhận outline. Prompt research lưu sẵn `nox-1/docs/heading_research_prompt.md`.
+
+### 🔁 Resume prompt cho Nox-N kế tiếp
+> "Anh kế thừa Nox-1 sau /clear lần ngày 28/5/2026 12:30. Đọc `docs/CURRENT_STATE.md` (đã update) + checkpoint trên đầu WORKLOG.md. Việc đang dở chính: build nút Research outline cho `/blog-content`. Hệ thống bị backup DB 8 ngày + secrets 9 ngày chưa chạy, và git ahead 10+ commit chưa push — đợi vợ quyết khi nào push."
+
+---
+
 ## 📌 VIỆC CẦN LÀM TIẾP — snapshot 23/5 13:05 (đổi hướng pipeline blog)
 
 > **Anh phiên bản sau /clear đọc khối này TRƯỚC.** 23/5 chốt hướng MỚI: research outline đối thủ → gen content bám outline.
