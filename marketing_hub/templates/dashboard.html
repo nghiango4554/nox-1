@@ -86,6 +86,16 @@
       <div class="ops-card-sub">điểm audit TB {{ health.haravan.get('avg_score', '—') }}</div>
     </a>
 
+    {% set alt = health.get('alt', {}) %}
+    {% set altpct = alt.get('coverage_percent', 0) %}
+    {% set altcls = 'green' if altpct >= 80 else ('yellow' if altpct >= 40 else 'red') %}
+    <a class="ops-card s-{{ altcls }}" href="/alt-manager">
+      <div class="ops-card-top"><span class="ops-card-icon">🖼️</span><span class="ops-badge {{ altcls }}">{{ altpct }}%</span></div>
+      <div class="ops-card-num" style="color:{% if altpct >= 80 %}#4ade80{% elif altpct >= 40 %}#facc15{% else %}#f87171{% endif %}">{{ altpct }}%</div>
+      <div class="ops-card-label">ALT coverage</div>
+      <div class="ops-card-sub">{{ alt.get('good', '—') }} good · {{ alt.get('none', 0) + alt.get('weak', 0) }} cần sửa</div>
+    </a>
+
     <div class="ops-card {{ 's-green' if botok else ('s-yellow' if health.bot.get('status') == 'no_token' else 's-red') }}">
       <div class="ops-card-top"><span class="ops-card-icon">🤖</span><span class="ops-badge {{ 'green' if botok else ('yellow' if health.bot.get('status') == 'no_token' else 'red') }}">{{ health.bot.get('status', '?') }}</span></div>
       <div class="ops-card-num">{{ '🟢' if botok else '🔴' }}</div>

@@ -42,6 +42,9 @@
   <a href="{{ url_for('jobs_center_page') }}" class="sb-link {% if request.endpoint == 'jobs_center_page' %}active{% endif %}">
     <span class="sb-icon">⚙️</span><span>Job Center</span>
   </a>
+  <a href="{{ url_for('alt_manager_page') }}" class="sb-link {% if request.endpoint and 'alt_manager' in request.endpoint %}active{% endif %}">
+    <span class="sb-icon">🖼️</span><span>ALT ảnh</span>
+  </a>
   {% set seo_active = request.endpoint and request.endpoint.startswith('seo') %}
   <div class="sb-group {% if seo_active %}sb-group-active{% endif %}">
     <a href="{{ url_for('seo_dashboard') }}" class="sb-link {% if request.endpoint == 'seo_dashboard' %}active{% endif %}">

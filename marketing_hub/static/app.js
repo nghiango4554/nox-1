@@ -117,6 +117,30 @@
   }
 })();
 
+// ─── Sidebar group collapse/expand toggle ───
+(() => {
+  document.querySelectorAll('.sb-group').forEach(group => {
+    const link = group.querySelector('.sb-link');
+    const caret = group.querySelector('.sb-caret');
+    if (!link || !caret) return;
+    // Click trên caret → toggle group, không navigate
+    caret.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      group.classList.toggle('sb-group-active');
+    });
+    // Click trên link text (không phải caret) → toggle group NẾU sub-menu đang đóng, còn navigate bình thường
+    link.addEventListener('click', (e) => {
+      if (e.target === caret) return; // đã xử lý ở trên
+      const isOpen = group.classList.contains('sb-group-active');
+      if (!isOpen) {
+        e.preventDefault();
+        group.classList.add('sb-group-active');
+      }
+    });
+  });
+})();
+
 // ─── Mobile sidebar toggle ───
 (() => {
   const toggle = document.getElementById('ph-mobile-menu');

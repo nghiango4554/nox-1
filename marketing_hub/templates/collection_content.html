@@ -2,7 +2,7 @@
 {% block title %}Collection Content · Sintech Hub{% endblock %}
 
 {% block page_title %}
-<span style="font-weight:600">🗂️ Collection Content (Tạm)</span>
+<span style="font-weight:600">🗂️ Collection Content</span>
 {% endblock %}
 
 {% block page_actions %}
@@ -44,6 +44,54 @@
   .cc-len-warn { color:#facc15 }
   .cc-len-bad  { color:#f87171 }
   .cc-len-empty { color:#94a3b8 }
+
+  /* ─── VIEW TOGGLE ─── */
+  .view-toggle { display:flex; gap:6px; margin-bottom:14px; align-items:center }
+  .view-btn { font-size:12px; padding:4px 12px; border-radius:6px; border:1px solid var(--border);
+    background:transparent; color:var(--text-muted); cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:4px }
+  .view-btn.active { border-color:#7c3aed; background:rgba(124,58,237,0.12); color:#a78bfa; font-weight:600 }
+
+  /* ─── TIER TREE VIEW ─── */
+  .tier1-section { margin-bottom:20px }
+  .tier1-header {
+    display:flex; align-items:center; gap:12px;
+    padding:10px 14px; border-radius:10px 10px 0 0;
+    background:linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(96,165,250,0.08) 100%);
+    border:1px solid rgba(124,58,237,0.3); cursor:pointer; user-select:none;
+  }
+  .tier1-header:hover { background:linear-gradient(135deg,rgba(124,58,237,0.18) 0%,rgba(96,165,250,0.12) 100%) }
+  .tier1-title { font-size:15px; font-weight:700; color:#a78bfa; flex:1 }
+  .tier1-badge { font-size:11px; padding:2px 8px; border-radius:10px; font-weight:600 }
+  .tier1-badge-synced { background:rgba(96,165,250,0.18); color:#60a5fa }
+  .tier1-badge-draft  { background:rgba(52,211,153,0.18); color:#34d399 }
+  .tier1-badge-pending{ background:rgba(148,163,184,0.15); color:#94a3b8 }
+  .tier1-pct { font-size:12px; color:var(--text-muted) }
+  .tier1-toggle-icon { font-size:13px; color:var(--text-muted); transition:transform .2s }
+  .tier1-body { border:1px solid rgba(124,58,237,0.2); border-top:none; border-radius:0 0 10px 10px; overflow:hidden }
+  .tier1-body.collapsed { display:none }
+
+  .tier2-section { border-bottom:1px solid rgba(255,255,255,.06) }
+  .tier2-section:last-child { border-bottom:none }
+  .tier2-header {
+    display:flex; align-items:center; gap:10px;
+    padding:8px 14px; background:rgba(255,255,255,.02);
+    cursor:pointer; user-select:none;
+  }
+  .tier2-header:hover { background:rgba(255,255,255,.04) }
+  .tier2-title { font-size:13px; font-weight:600; color:var(--text); flex:1 }
+  .tier2-mini-stats { display:flex; gap:6px; font-size:11px; color:var(--text-muted) }
+  .tier2-mini-stats span { color:var(--text-muted) !important }
+  .tier2-toggle-icon { font-size:11px; color:var(--text-muted); transition:transform .2s }
+  .tier2-jobs { display:none }
+  .tier2-jobs.expanded { display:block }
+
+  .tier2-table { width:100%; font-size:12px; table-layout:fixed; border-collapse:collapse }
+  .tier2-table th { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px;
+    padding:6px 8px; text-align:left; border-bottom:1px solid rgba(255,255,255,.06); background:rgba(0,0,0,.10) }
+  .tier2-table td { padding:6px 8px; border-bottom:1px solid rgba(255,255,255,.03); vertical-align:middle }
+  .tier2-table tbody tr:hover { background:rgba(255,255,255,.025) }
+  .tier2-table .num { text-align:right; font-variant-numeric:tabular-nums }
+  .tier2-table .cc-cell-url { font-size:10.5px; color:var(--text-muted); word-break:break-all }
 
   /* ─── PROGRESS BAR GEN LIÊN TỤC ─── */
   .gen-progress {
@@ -143,81 +191,155 @@
   </a>
 </div>
 
+<div class="view-toggle">
+  <span style="font-size:12px;color:var(--text-muted);margin-right:4px">Xem:</span>
+  <a href="{{ url_for('collection_content_page') }}{% if active_status %}?status={{ active_status }}&view=tier{% else %}?view=tier{% endif %}"
+     class="view-btn{% if view == 'tier' %} active{% endif %}">🗂️ Phân tầng</a>
+  <a href="{{ url_for('collection_content_page') }}{% if active_status %}?status={{ active_status }}&view=flat{% else %}?view=flat{% endif %}"
+     class="view-btn{% if view == 'flat' %} active{% endif %}">☰ Danh sách</a>
+</div>
+
+{% macro render_job_row(j, index) %}
+{% set tl = (j.edited_title or '')|length %}
+{% set ml = (j.edited_meta or '')|length %}
+{% set bl = (j.edited_body_html or '')|length %}
+<tr data-job-id="{{ j.id }}" data-status="{{ j.status }}">
+  <td class="muted">{{ index }}</td>
+  <td><span class="cc-status-pill cc-status-{{ j.status }}">{{ j.status }}</span></td>
+  <td style="font-weight:500">
+    {% if j.tier3_name %}<span style="color:#64748b;font-size:10px">{{ j.tier3_name[:28] }}</span>
+    {% elif j.tier2_name %}<span style="color:#64748b;font-size:10px">{{ j.tier2_name[:28] }}</span>
+    {% else %}{{ (j.collection_title or j.handle)[:50] }}{% endif %}
+    <br><span style="font-size:11px;color:var(--text-muted)">{{ (j.collection_title or j.handle)[:50] }}</span>
+  </td>
+  <td class="num">
+    {% if tl == 0 %}<span class="cc-len-empty">—</span>
+    {% elif 45 <= tl <= 61 %}<span class="cc-len-good">{{ tl }}c</span>
+    {% elif tl > 61 %}<span class="cc-len-bad">{{ tl }}c</span>
+    {% else %}<span class="cc-len-warn">{{ tl }}c</span>{% endif %}
+  </td>
+  <td class="num">
+    {% if ml == 0 %}<span class="cc-len-empty">—</span>
+    {% elif 140 <= ml <= 160 %}<span class="cc-len-good">{{ ml }}c</span>
+    {% elif ml > 160 %}<span class="cc-len-bad">{{ ml }}c</span>
+    {% else %}<span class="cc-len-warn">{{ ml }}c</span>{% endif %}
+  </td>
+  <td class="num">
+    {% if bl == 0 %}<span class="cc-len-empty">—</span>
+    {% else %}<span class="muted">{{ bl }}b</span>{% endif %}
+  </td>
+  <td class="num">
+    {% set qs = j.quality_score %}
+    {% if not qs %}<span class="cc-len-empty">—</span>
+    {% elif qs >= 80 %}<span class="cc-len-good">{{ qs }}</span>
+    {% elif qs >= 65 %}<span style="color:#22c55e;font-weight:600">{{ qs }}</span>
+    {% elif qs >= 50 %}<span class="cc-len-warn">{{ qs }}</span>
+    {% elif qs >= 35 %}<span style="color:#f59e0b;font-weight:600">{{ qs }}</span>
+    {% else %}<span class="cc-len-bad">{{ qs }}</span>{% endif %}
+  </td>
+  <td class="num">
+    {% set rs = j.readability_score %}
+    {% if not rs %}<span class="cc-len-empty">—</span>
+    {% elif rs >= 60 %}<span class="cc-len-good">{{ rs }}</span>
+    {% elif rs >= 40 %}<span class="cc-len-warn">{{ rs }}</span>
+    {% else %}<span class="cc-len-bad">{{ rs }}</span>{% endif %}
+  </td>
+  <td class="cc-cell-url">
+    <a href="{{ j.collection_url }}" target="_blank" rel="noopener">{{ j.collection_url|replace('https://sintech.vn', '') }}</a>
+  </td>
+  <td style="text-align:center">
+    <a href="{{ url_for('collection_content_detail_page', job_id=j.id) }}" class="btn btn-sm">✏️ Sửa</a>
+    <button class="btn btn-sm btn-primary" onclick="genAIInline({{ j.id }}, this)">🤖 AI gen</button>
+  </td>
+</tr>
+{% endmacro %}
+
+{% macro render_table_head(compact=false) %}
+<colgroup>
+  <col style="width:36px"><col style="width:74px">
+  <col style="width:21%"><col style="width:58px"><col style="width:58px"><col style="width:58px">
+  <col style="width:62px"><col style="width:58px">
+  <col><col style="width:170px">
+</colgroup>
+<thead>
+  <tr>
+    <th>#</th><th>Status</th>
+    <th>Tên collection</th>
+    <th class="num">Title</th><th class="num">Meta</th><th class="num">Body</th>
+    <th class="num" title="SEO quality score 0-100">⭐ Q</th>
+    <th class="num" title="Readability score 0-100">📖 R</th>
+    <th>URL</th>
+    <th style="text-align:center">Hành động</th>
+  </tr>
+</thead>
+{% endmacro %}
+
 {% if not jobs %}
 <section class="card" style="padding:24px;text-align:center">
   <p class="muted">Không có collection nào trong filter này.</p>
 </section>
+
+{% elif view == 'tier' %}
+{# ─────────── TIER TREE VIEW ─────────── #}
+{% for t1 in tier_groups %}
+<div class="tier1-section" id="t1-{{ t1.handle }}">
+  <div class="tier1-header" onclick="toggleTier1('{{ t1.handle }}')">
+    <span class="tier1-title">{{ t1.name }}</span>
+    {% if t1.stats.synced %}
+    <span class="tier1-badge tier1-badge-synced">✅ {{ t1.stats.synced }} synced</span>
+    {% endif %}
+    {% if t1.stats.draft %}
+    <span class="tier1-badge tier1-badge-draft">📝 {{ t1.stats.draft }} draft</span>
+    {% endif %}
+    {% if t1.stats.pending %}
+    <span class="tier1-badge tier1-badge-pending">⏳ {{ t1.stats.pending }} pending</span>
+    {% endif %}
+    {% if t1.stats.failed %}
+    <span class="tier1-badge" style="background:rgba(239,68,68,0.15);color:#f87171">❌ {{ t1.stats.failed }}</span>
+    {% endif %}
+    <span class="tier1-pct">{{ t1.stats.done }}/{{ t1.stats.total }} ({{ t1.stats.pct }}%)</span>
+    <span class="tier1-toggle-icon" id="t1-icon-{{ t1.handle }}">▼</span>
+  </div>
+  <div class="tier1-body{% if t1.stats.done == t1.stats.total and t1.stats.total > 0 %} collapsed{% endif %}" id="t1-body-{{ t1.handle }}">
+    {% for t2 in t1.tier2_groups %}
+    {% set t2id = t1.handle ~ '-' ~ t2.handle %}
+    <div class="tier2-section">
+      <div class="tier2-header" onclick="toggleTier2('{{ t2id }}')">
+        <span class="tier2-title">{{ t2.name }}</span>
+        <span class="tier2-mini-stats">
+          {% if t2.stats.synced %}<span style="color:#60a5fa">✅{{ t2.stats.synced }}</span>{% endif %}
+          {% if t2.stats.existing %}<span style="color:#c084fc">🔵{{ t2.stats.existing }}</span>{% endif %}
+          {% if t2.stats.draft %}<span style="color:#34d399">📝{{ t2.stats.draft }}</span>{% endif %}
+          {% if t2.stats.pending %}<span style="color:#94a3b8">⏳{{ t2.stats.pending }}</span>{% endif %}
+          {% if t2.stats.failed %}<span style="color:#f87171">❌{{ t2.stats.failed }}</span>{% endif %}
+          <span style="color:var(--text-muted)">· {{ t2.stats.total }} bài</span>
+        </span>
+        <span class="tier2-toggle-icon" id="t2-icon-{{ t2id }}">▶</span>
+      </div>
+      <div class="tier2-jobs" id="t2-jobs-{{ t2id }}">
+        <table class="tier2-table">
+          {{ render_table_head() }}
+          <tbody>
+            {% for j in t2.jobs %}
+            {{ render_job_row(j, loop.index) }}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+
 {% else %}
+{# ─────────── FLAT TABLE VIEW ─────────── #}
 <section class="card" style="padding:0">
 <table class="cc-table">
-  <colgroup>
-    <col style="width:42px"><col style="width:78px">
-    <col style="width:22%"><col style="width:70px"><col style="width:70px"><col style="width:70px">
-    <col style="width:70px"><col style="width:70px">
-    <col><col style="width:130px"><col style="width:180px">
-  </colgroup>
-  <thead>
-    <tr>
-      <th>#</th><th>Status</th>
-      <th>Tên collection</th>
-      <th class="num">Title</th><th class="num">Meta</th><th class="num">Body</th>
-      <th class="num" title="SEO quality score 0-100">⭐ Quality</th>
-      <th class="num" title="Readability score 0-100">📖 Read</th>
-      <th>URL</th>
-      <th>Synced lúc</th>
-      <th style="text-align:center">Hành động</th>
-    </tr>
-  </thead>
+  {{ render_table_head() }}
   <tbody>
     {% for j in jobs %}
-    {% set tl = (j.edited_title or '')|length %}
-    {% set ml = (j.edited_meta or '')|length %}
-    {% set bl = (j.edited_body_html or '')|length %}
-    <tr data-job-id="{{ j.id }}" data-status="{{ j.status }}">
-      <td class="muted">{{ loop.index }}</td>
-      <td><span class="cc-status-pill cc-status-{{ j.status }}">{{ j.status }}</span></td>
-      <td style="font-weight:500">{{ (j.collection_title or j.handle)[:60] }}</td>
-      <td class="num">
-        {% if tl == 0 %}<span class="cc-len-empty">—</span>
-        {% elif 45 <= tl <= 61 %}<span class="cc-len-good">{{ tl }}c</span>
-        {% elif tl > 61 %}<span class="cc-len-bad">{{ tl }}c</span>
-        {% else %}<span class="cc-len-warn">{{ tl }}c</span>{% endif %}
-      </td>
-      <td class="num">
-        {% if ml == 0 %}<span class="cc-len-empty">—</span>
-        {% elif 140 <= ml <= 160 %}<span class="cc-len-good">{{ ml }}c</span>
-        {% elif ml > 160 %}<span class="cc-len-bad">{{ ml }}c</span>
-        {% else %}<span class="cc-len-warn">{{ ml }}c</span>{% endif %}
-      </td>
-      <td class="num">
-        {% if bl == 0 %}<span class="cc-len-empty">—</span>
-        {% else %}<span class="muted">{{ bl }}b</span>{% endif %}
-      </td>
-      <td class="num">
-        {% set qs = j.quality_score %}
-        {% if not qs %}<span class="cc-len-empty">—</span>
-        {% elif qs >= 80 %}<span class="cc-len-good">{{ qs }}</span>
-        {% elif qs >= 65 %}<span style="color:#22c55e;font-weight:600">{{ qs }}</span>
-        {% elif qs >= 50 %}<span class="cc-len-warn">{{ qs }}</span>
-        {% elif qs >= 35 %}<span style="color:#f59e0b;font-weight:600">{{ qs }}</span>
-        {% else %}<span class="cc-len-bad">{{ qs }}</span>{% endif %}
-      </td>
-      <td class="num">
-        {% set rs = j.readability_score %}
-        {% if not rs %}<span class="cc-len-empty">—</span>
-        {% elif rs >= 60 %}<span class="cc-len-good">{{ rs }}</span>
-        {% elif rs >= 40 %}<span class="cc-len-warn">{{ rs }}</span>
-        {% else %}<span class="cc-len-bad">{{ rs }}</span>{% endif %}
-      </td>
-      <td class="cc-cell-url">
-        <a href="{{ j.collection_url }}" target="_blank" rel="noopener">{{ j.collection_url|replace('https://sintech.vn', '') }}</a>
-      </td>
-      <td class="muted" style="font-size:11px">{{ j.synced_at[:16] if j.synced_at else '—' }}</td>
-      <td style="text-align:center">
-        <a href="{{ url_for('collection_content_detail_page', job_id=j.id) }}" class="btn btn-sm">✏️ Sửa</a>
-        <button class="btn btn-sm btn-primary" onclick="genAIInline({{ j.id }}, this)">🤖 AI gen</button>
-      </td>
-    </tr>
+    {{ render_job_row(j, loop.index) }}
     {% endfor %}
   </tbody>
 </table>
@@ -225,6 +347,22 @@
 {% endif %}
 
 <script>
+function toggleTier1(handle) {
+  const body = document.getElementById('t1-body-' + handle);
+  const icon = document.getElementById('t1-icon-' + handle);
+  if (!body) return;
+  const collapsed = body.classList.toggle('collapsed');
+  icon.textContent = collapsed ? '▶' : '▼';
+}
+
+function toggleTier2(t2id) {
+  const jobs = document.getElementById('t2-jobs-' + t2id);
+  const icon = document.getElementById('t2-icon-' + t2id);
+  if (!jobs) return;
+  const expanded = jobs.classList.toggle('expanded');
+  icon.textContent = expanded ? '▼' : '▶';
+}
+
 async function genAIInline(id, btn) {
   if (!confirm(`🤖 Thêm collection #${id} vào hàng đợi gen? Chạy ngầm — em có thể bấm gen thêm bài khác, chúng sẽ nối đuôi nhau.`)) return;
   const orig = btn.textContent;
@@ -235,7 +373,6 @@ async function genAIInline(id, btn) {
     if (d.ok) {
       btn.textContent = d.position > 0 ? `✅ Hàng đợi #${d.position}` : '✅ Đang gen';
       setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 2500);
-      // Bật progress bar + poll (giống bulk) — hàng đợi dùng chung 1 worker nền
       if (_pollTimer) clearTimeout(_pollTimer);
       _pollBGStatus();
     } else {
@@ -245,12 +382,8 @@ async function genAIInline(id, btn) {
   } catch (e) { btn.textContent = orig; btn.disabled = false; alert('❌ ' + e); }
 }
 
-// ─── GEN LIÊN TỤC + PROGRESS BAR (BACKGROUND server-side) ───
-// Server chạy gen thật trong thread riêng → client poll /gen-status để update UI.
-// Chuyển trang/đóng tab vẫn tiếp tục gen, mở lại trang sẽ thấy bar đang chạy.
-
+// ─── GEN LIÊN TỤC + PROGRESS BAR ───
 let _pollTimer = null;
-let _pollClientT0 = 0;  // client-side clock for elapsed display when between polls
 
 function _fmtDuration(sec) {
   sec = Math.max(0, Math.round(sec));
@@ -302,13 +435,11 @@ function _renderBGProgress(s) {
   document.getElementById('gp-fail').textContent = fail;
   document.getElementById('gp-pct').textContent = `(${pct}%)`;
 
-  // Current job + elapsed
   let curText = '—';
   if (s.current_name) {
     curText = `#${s.current_id} ${s.current_name}`;
     if (s.job_started_at) {
-      const jobT0 = new Date(s.job_started_at).getTime();
-      const jobElapsed = (Date.now() - jobT0) / 1000;
+      const jobElapsed = (Date.now() - new Date(s.job_started_at).getTime()) / 1000;
       curText += ` · ⏱ ${_fmtDuration(jobElapsed)}`;
     }
   } else if (isFinished) {
@@ -316,20 +447,17 @@ function _renderBGProgress(s) {
   }
   document.getElementById('gp-current-name').textContent = curText;
 
-  // Elapsed tổng + ETA + avg
   if (s.started_at) {
     const t0 = new Date(s.started_at).getTime();
     const endT = s.finished_at ? new Date(s.finished_at).getTime() : Date.now();
-    const elapsed = (endT - t0) / 1000;
-    document.getElementById('gp-elapsed').textContent = _fmtDuration(elapsed);
+    document.getElementById('gp-elapsed').textContent = _fmtDuration((endT - t0) / 1000);
   }
   const durs = s.completed_durations || [];
   if (durs.length > 0) {
     const avg = durs.reduce((a,b) => a+b, 0) / durs.length;
     document.getElementById('gp-avg').textContent = _fmtDuration(avg);
     if (!isFinished) {
-      const remaining = total - done;
-      document.getElementById('gp-eta-val').textContent = _fmtDuration(avg * remaining);
+      document.getElementById('gp-eta-val').textContent = _fmtDuration(avg * (total - done));
     } else {
       document.getElementById('gp-eta-val').textContent = '✓ Xong';
     }
@@ -337,7 +465,6 @@ function _renderBGProgress(s) {
     document.getElementById('gp-eta-val').textContent = '✓ Xong';
   }
 
-  // Update row pill on the page nếu có thấy
   if (s.current_id) {
     const row = document.querySelector(`tr[data-job-id="${s.current_id}"]`);
     if (row) {
@@ -350,7 +477,6 @@ function _renderBGProgress(s) {
     }
   }
 
-  // Đánh dấu các row đang CHỜ trong hàng đợi (trừ job đang gen)
   const queue = s.queue || [];
   queue.forEach((qid, i) => {
     if (qid === s.current_id) return;
@@ -367,10 +493,7 @@ function _renderBGProgress(s) {
 function dismissProgressBar() {
   const wrap = document.getElementById('gen-progress');
   const finishedAt = wrap.dataset.finishedAt;
-  if (finishedAt) {
-    // Nhớ "đã đóng" mãi (localStorage) — không hiện lại run này
-    localStorage.setItem('cc_bg_acked_' + finishedAt, '1');
-  }
+  if (finishedAt) localStorage.setItem('cc_bg_acked_' + finishedAt, '1');
   wrap.style.display = 'none';
 }
 
@@ -379,51 +502,44 @@ async function _pollBGStatus() {
     const r = await fetch('/collection-content/gen-status', {cache: 'no-store'});
     const s = await r.json();
     if (s.running) {
-      // Đang chạy → render + poll tiếp, KHÔNG show nút Đóng/Reload
       _renderBGProgress(s);
       document.getElementById('gp-dismiss').style.display = 'none';
       document.getElementById('gp-reload').style.display = 'none';
       _pollTimer = setTimeout(_pollBGStatus, 2000);
     } else if (s.finished_at) {
-      // Đã xong — kiểm tra user đã đóng bar cho run này chưa
       const ackKey = 'cc_bg_acked_' + s.finished_at;
       if (localStorage.getItem(ackKey)) {
-        // Đã đóng rồi → ẩn luôn, không hiện lại
         document.getElementById('gen-progress').style.display = 'none';
       } else {
-        // Show 1 lần, hiện nút Reload + Đóng, KHÔNG auto reload, KHÔNG poll tiếp
         _renderBGProgress(s);
         document.getElementById('gen-progress').dataset.finishedAt = s.finished_at;
         document.getElementById('gp-dismiss').style.display = '';
         document.getElementById('gp-reload').style.display = '';
       }
-      // KHÔNG poll tiếp khi đã xong
     } else {
       document.getElementById('gen-progress').style.display = 'none';
     }
   } catch(e) {
     console.error('Poll error:', e);
-    // Khi lỗi mạng → retry 5s sau, NHƯNG chỉ nếu đang running mới poll tiếp
     _pollTimer = setTimeout(_pollBGStatus, 5000);
   }
 }
 
 async function stopGenAll() {
   document.getElementById('btn-stop-gen').textContent = '⏸ Đang dừng...';
-  try {
-    await fetch('/collection-content/gen-stop', {method: 'POST'});
-  } catch(e) { alert('Lỗi gửi stop: ' + e); }
+  try { await fetch('/collection-content/gen-stop', {method: 'POST'}); }
+  catch(e) { alert('Lỗi gửi stop: ' + e); }
 }
 
 async function genAllInline(btn) {
   const allRows = Array.from(document.querySelectorAll('tr[data-job-id]'));
   const pendingRows = allRows.filter(r => ['pending','failed'].includes(r.dataset.status));
   if (pendingRows.length === 0) {
-    alert('Không có job pending/failed nào trên trang hiện tại. Filter sang tab "⏳ Pending" hoặc "❌ Failed" rồi thử lại.');
+    alert('Không có job pending/failed nào. Mở một nhóm Tầng 2 có bài pending rồi thử lại.');
     return;
   }
   const askN = prompt(
-    `Gen liên tục bao nhiêu bài? (Tối đa ${pendingRows.length} bài pending/failed trên trang)\n` +
+    `Gen liên tục bao nhiêu bài? (Tối đa ${pendingRows.length} bài pending/failed đang hiển thị)\n` +
     `Mỗi bài mất ~60-120s, ${pendingRows.length} bài ≈ ${Math.ceil(pendingRows.length * 90 / 60)} phút.\n\n` +
     `✨ Server chạy NGẦM — em có thể tự do chuyển trang, mở bài khác mà gen vẫn tiếp tục.`,
     String(Math.min(pendingRows.length, 10))
@@ -431,8 +547,7 @@ async function genAllInline(btn) {
   if (askN === null) return;
   const limit = parseInt(askN, 10);
   if (isNaN(limit) || limit < 1) { alert('Số không hợp lệ.'); return; }
-  const targets = pendingRows.slice(0, limit);
-  const ids = targets.map(r => parseInt(r.dataset.jobId));
+  const ids = pendingRows.slice(0, limit).map(r => parseInt(r.dataset.jobId));
 
   btn.disabled = true; btn.dataset.orig = btn.textContent; btn.textContent = '⏳ Đang khởi động...';
   document.getElementById('btn-stop-gen').style.display = '';
@@ -451,7 +566,6 @@ async function genAllInline(btn) {
       document.getElementById('btn-stop-gen').style.display = 'none';
       return;
     }
-    // Start polling
     if (_pollTimer) clearTimeout(_pollTimer);
     _pollBGStatus();
   } catch(e) {
@@ -461,18 +575,14 @@ async function genAllInline(btn) {
   }
 }
 
-// Auto-detect: khi load trang, check status — nếu đang chạy thì show bar + poll luôn.
 document.addEventListener('DOMContentLoaded', () => {
   _pollBGStatus();
-  // Update job-elapsed mỗi 1s cho mượt (không cần fetch server)
   setInterval(() => {
     const cur = document.getElementById('gp-current-name');
     if (!cur || cur.textContent === '—' || cur.textContent.startsWith('✓') || cur.textContent.startsWith('Đã dừng')) return;
-    // Nhặt elapsed từ last fetched job_started_at (lưu trong dataset)
     const startStr = cur.dataset.jobStart;
     if (startStr) {
-      const t0 = parseInt(startStr);
-      const elapsed = (Date.now() - t0) / 1000;
+      const elapsed = (Date.now() - parseInt(startStr)) / 1000;
       const base = cur.textContent.split(' · ⏱')[0];
       cur.textContent = `${base} · ⏱ ${_fmtDuration(elapsed)}`;
     }

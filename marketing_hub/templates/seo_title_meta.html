@@ -79,6 +79,13 @@
     <button type="submit" class="btn btn-primary btn-sm">Lọc</button>
     <a class="btn btn-sm btn-ghost" href="{{ url_for('seo_title_meta_page') }}">Reset</a>
 
+    <span style="margin-left:8px;padding:6px 12px;background:rgba(59,130,246,0.15);border-radius:8px;color:#3b82f6;font-weight:600;font-size:13px;white-space:nowrap"
+          title="Số dòng đang hiển thị sau khi lọc (limit 2000)">
+      📦 {{ items|length }} URL{% if summary.total and items|length != summary.total %}
+        <span class="muted" style="font-weight:400;font-size:12px">/ {{ summary.total }}</span>
+      {% endif %}
+    </span>
+
     <span style="flex:1"></span>
     <button type="button" class="btn btn-primary" onclick="startFixAllJob()" id="fix-all-btn">
       🚀 Auto-fix tất cả (Codex AI)
@@ -417,16 +424,19 @@ const _appliedResults = new Set();
 async function startFixAllJob() {
   const filterType = {{ (url_type or '')|tojson }};
   const filterIssue = {{ (issue_filter or '')|tojson }};
+  const filterSync = {{ (sync_filter or '')|tojson }};
+  const syncLabel = filterSync === 'unsynced' ? '⬜ Chưa sync' : (filterSync === 'synced' ? '✅ Đã sync' : '');
   const msg = `🚀 Auto-fix tất cả SP có lỗi title/meta?\n\n` +
     (filterType ? `· Loại: ${filterType}\n` : '') +
     (filterIssue ? `· Lỗi: ${filterIssue}\n` : '') +
+    (syncLabel ? `· Sync: ${syncLabel}\n` : '') +
     `\nMỗi SP tốn ~30-60s gọi Codex. Job chạy ngầm — em chuyển trang được.`;
   if (!confirm(msg)) return;
   try {
     const resp = await fetch('{{ url_for("seo_title_meta_fix_all_start") }}', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({type: filterType, issue: filterIssue}),
+      body: JSON.stringify({type: filterType, issue: filterIssue, sync: filterSync}),
     });
     const data = await resp.json();
     if (!data.ok) { alert('❌ ' + (data.error || 'Không start được')); return; }

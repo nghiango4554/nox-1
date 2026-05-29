@@ -1978,7 +1978,7 @@ html, body {
 }
 .data-table thead th, table thead th {
   background: linear-gradient(180deg, #fafaf9 0%, #f5f5f4 100%);
-  color: var(--text-secondary);
+  color: var(--text-secondary, #44403c);
   font-weight: 600;
   font-size: 11px;
   text-transform: uppercase;
@@ -2145,6 +2145,11 @@ h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
 .muted { color: var(--text-muted) !important; }
 .crumb { color: var(--text-muted) !important; }
 
+/* Page header — luôn dark bg nên force text sáng */
+.page-header { color: #e4e4e7 !important; }
+.page-header .ph-title { color: #f4f4f5 !important; }
+.page-header .muted { color: #a1a1aa !important; }
+
 /* Flash */
 .flash {
   background: var(--surface) !important;
@@ -2195,4 +2200,51 @@ h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
   font-weight: 700;
   margin-left: 4px;
 }
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   FONT SIZE UPLIFT — baseline từ 13px → 15px
+   Chỉ target content areas, KHÔNG đụng badges/chips nhỏ
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+/* Base */
+html { font-size: 16px; }
+body { font-size: 15px; }
+
+/* Main content text — tables, cards, forms */
+.content { font-size: 15px; }
+.data-table tbody td,
+table tbody td    { font-size: 14px !important; }
+.data-table thead th,
+table thead th    { font-size: 12px !important; }
+
+/* Sidebar */
+.sidebar .sb-link,
+.sidebar .sb-sublink { font-size: 13.5px !important; }
+.sidebar .sb-section  { font-size: 11px !important; }
+
+/* Buttons + inputs */
+.btn                    { font-size: 14px !important; }
+.btn.btn-sm             { font-size: 13px !important; }
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="url"],
+select, textarea        { font-size: 14px !important; }
+
+/* Muted / secondary text — bump từ 12px lên 13px */
+.muted                  { font-size: 13px !important; }
+
+/* KPI */
+.kpi-label              { font-size: 13px !important; }
+.kpi-num                { font-size: 34px !important; }
+
+/* Cards prose */
+.card p, .card li, .card label { font-size: 14px; }
+
+/* Ops cards */
+.ops-card-label { font-size: 12.5px !important; }
+.ops-card-sub   { font-size: 12.5px !important; }
+
+/* Page header title */
+.ph-title { font-size: 17px !important; }
 
