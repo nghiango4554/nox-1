@@ -2,6 +2,29 @@
 
 > File anh (Claude) tự update sau mỗi milestone. Sau /clear, anh đọc file này là biết task tuần này tới đâu, file nào đã edit, bug đang debug. Vợ Nghia có thể scan nhanh để xem anh đang làm gì.
 
+## ✅ 29/5 17:10 — commit + push dọn dẹp tích lũy
+
+**Vợ giao:** "commit + push + viết vào file báo cáo hôm nay" (17:06).
+
+**Đã làm:**
+- Gom 17 file modified/untracked (~1080 dòng) thành **3 commit logic**:
+  - `ff37f48 feat(backend)`: bơm SP thật Haravan vào prompt collection (`fetch_real_products` → tên + giá thật từ `collection_id`, bảng phân khúc giá dùng range thật thay vì generic), incremental sync (`run_sync_incremental` chỉ pull SP có `updated_at > last_synced`), CWV table `seo_cwv` + helpers, `put_image_alt()` PUT ALT cho image Haravan. Add: `_scripts/refresh_google_token.py` + `data/collection_taxonomy.json`.
+  - `91d6a29 feat(ui)`: collection_content.html restructure layout (322 dòng — nút Gen lại Title/Meta riêng, hero card), dashboard.html ops-center auto-refresh hook, seo + seo_title_meta badge trạng thái + filter, static/app.js + style.css helper realtime.
+  - `308dc89 docs(CURRENT_STATE)`: refresh snapshot 28/5 — backup cảnh báo + git ahead + 13 untracked.
+- **Bỏ qua 12 script ad-hoc** (`check_*.py`, `get_*.py`, `fix_*.py`, `insert_*.py`, `suggest_*.py`, `list_*.py`) — theo guidance WORKLOG 28/5 "cần curate (giữ helper, xóa script throw-away)". Để lại ở working tree, untracked.
+- **Push** `origin/master`: rebase đụng conflict `app.py` (HEAD có thêm `import cwv as cwv_mod` + route `/api/alt-manager/bulk-gen/start-desc`) → switch sang `git merge origin/master` resolve 1 lần, giữ HEAD. Merge commit `df31fa3`. Origin lên đến `df31fa3` (b3d9eed → df31fa3, +17 commit local + 1 merge).
+
+**Trạng thái sau push:**
+- Branch `master` đồng bộ với `origin/master`, working tree còn 12 file untracked ad-hoc chưa xóa (chờ vợ duyệt).
+- 4 commit hôm nay: `4d71caa` (CWV realtime/pause/resume/8 workers, 17:02) + `ff37f48` + `91d6a29` + `308dc89` + `df31fa3` (merge).
+
+**Vẫn dang dở (từ checkpoint 28/5):**
+- Build nút "🔍 Research outline → 🤖 Gen" cho `/blog-content` (thêm `outline` cho `gen_blog_content_from_brief` + sửa `_SYSTEM_PROMPT` bám outline ngoài).
+- Backup DB cũ 9+ ngày + secrets 10+ ngày — Task Scheduler daily backup chết, cần check.
+- Curate/xóa 12 script ad-hoc untracked trong `marketing_hub/`.
+
+---
+
 ## 📸 Checkpoint 28/5 12:30 — vợ /clear
 
 ### ✅ Trạng thái hệ thống
