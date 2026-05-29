@@ -319,3 +319,80 @@ def start_sync_async(limit_pages: int = None) -> bool:
     t = threading.Thread(target=run_sync, args=(limit_pages,), daemon=True)
     t.start()
     return True
+
+
+def run_sync_incremental():
+    """Incremental sync: chỉ pull SP có updated_at > lần sync cuối trong DB.
+
+    Nhanh hơn full sync vì bỏ qua SP không đổi.
+    SP mới thêm cũng được bắt (created_at > last_sync cũng nằm trong updated_at_min).
+    """
+    conn = db.get_conn()
+    row = conn.execute("SELECT MAX(last_synced) as last FROM haravan_products").fetchone()
+    last_synced = (row["last"] if row and row["last"] else None)
+    conn.close()
+
+    # Lấy updated_at_min: dùng last_synced - 1 phút để tránh race condition
+    if last_synced:
+        from datetime import datetime, timedelta
+        dt = datetime.fromisoformat(last_synced) - timedelta(minutes=1)
+        updated_at_min = dt.isoformat(timespec="seconds")
+    else:
+        updated_at_min = None  # fallback: sync toàn bộ
+
+    run_id = db.hv_create_sync(notes=f"incremental since {updated_at_min or 'all'}")
+    _set_state(
+        run_id=run_id, status="fetching",
+        total=0, fetched=0, failed=0,
+        started_at=datetime.now().isoformat(timespec="seconds"),
+        message=f"Incremental sync từ {updated_at_min or 'đầu'}...",
+    )
+    try:
+        total = hv.count_products(updated_at_min=updated_at_min)
+        _set_state(total=total, message=f"Có {total} SP cần cập nhật...")
+        if total == 0:
+            db.hv_finish_sync(run_id, "done", 0, 0, 0)
+            _set_state(status="done", message="✅ Không có SP nào thay đổi kể từ lần sync cuối.")
+            return
+
+        fetched = 0
+        failed = 0
+        page = 1
+        while True:
+            try:
+                items = hv.list_products(page=page, limit=PAGE_LIMIT,
+                                         updated_at_min=updated_at_min)
+            except Exception as e:
+                _set_state(message=f"Lỗi page {page}: {e.__class__.__name__}")
+                failed += 1
+                break
+            if not items:
+                break
+            for raw in items:
+                try:
+                    upsert_with_audit(raw)
+                    fetched += 1
+                except Exception:
+                    failed += 1
+            db.hv_update_sync(run_id, total, fetched, failed)
+            _set_state(fetched=fetched, failed=failed,
+                       message=f"Incremental page {page}: {fetched}/{total}")
+            page += 1
+            time.sleep(PER_PAGE_DELAY)
+
+        db.hv_finish_sync(run_id, "done", total, fetched, failed)
+        _set_state(status="done",
+                   message=f"✅ Incremental xong: {fetched} SP cập nhật ({failed} lỗi)")
+    except Exception as e:
+        db.hv_finish_sync(run_id, "failed", 0, 0, 0)
+        _set_state(status="failed", message=f"Lỗi: {e.__class__.__name__}: {str(e)[:200]}")
+
+
+def start_sync_incremental_async() -> bool:
+    """Chạy incremental sync trong background thread."""
+    snap = sync_state()
+    if snap["status"] == "fetching":
+        return False
+    t = threading.Thread(target=run_sync_incremental, daemon=True)
+    t.start()
+    return True

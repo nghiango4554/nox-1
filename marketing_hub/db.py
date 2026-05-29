@@ -226,6 +226,29 @@ CREATE TABLE IF NOT EXISTS content_jobs (
 
 CREATE INDEX IF NOT EXISTS idx_content_jobs_status ON content_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_content_jobs_url ON content_jobs(product_url);
+
+CREATE TABLE IF NOT EXISTS seo_cwv (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    url TEXT NOT NULL,
+    strategy TEXT NOT NULL DEFAULT 'mobile',
+    scanned_at TEXT,
+    performance_score INTEGER,
+    lcp_ms INTEGER,
+    cls_score REAL,
+    tbt_ms INTEGER,
+    fcp_ms INTEGER,
+    tti_ms INTEGER,
+    speed_index_ms INTEGER,
+    field_data_ok INTEGER DEFAULT 0,
+    lcp_field_ms INTEGER,
+    cls_field REAL,
+    inp_field_ms INTEGER,
+    fcp_field_ms INTEGER,
+    overall_category TEXT,
+    UNIQUE(url, strategy)
+);
+CREATE INDEX IF NOT EXISTS idx_seo_cwv_url ON seo_cwv(url);
+CREATE INDEX IF NOT EXISTS idx_seo_cwv_score ON seo_cwv(performance_score);
 """
 
 
@@ -1906,3 +1929,154 @@ def stats():
         "by_type": by_type,
         "today_count": today_count,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CWV (Core Web Vitals) — PageSpeed Insights data
+# ═══════════════════════════════════════════════════════════════════════════
+
+def cwv_upsert(data: dict):
+    """Upsert 1 kết quả PSI scan vào seo_cwv."""
+    conn = get_conn()
+    conn.execute("""
+        INSERT INTO seo_cwv
+            (url, strategy, scanned_at, performance_score, lcp_ms, cls_score,
+             tbt_ms, fcp_ms, tti_ms, speed_index_ms,
+             field_data_ok, lcp_field_ms, cls_field, inp_field_ms, fcp_field_ms, overall_category)
+        VALUES
+            (:url, :strategy, :scanned_at, :performance_score, :lcp_ms, :cls_score,
+             :tbt_ms, :fcp_ms, :tti_ms, :speed_index_ms,
+             :field_data_ok, :lcp_field_ms, :cls_field, :inp_field_ms, :fcp_field_ms, :overall_category)
+        ON CONFLICT(url, strategy) DO UPDATE SET
+            scanned_at=excluded.scanned_at,
+            performance_score=excluded.performance_score,
+            lcp_ms=excluded.lcp_ms, cls_score=excluded.cls_score,
+            tbt_ms=excluded.tbt_ms, fcp_ms=excluded.fcp_ms,
+            tti_ms=excluded.tti_ms, speed_index_ms=excluded.speed_index_ms,
+            field_data_ok=excluded.field_data_ok,
+            lcp_field_ms=excluded.lcp_field_ms, cls_field=excluded.cls_field,
+            inp_field_ms=excluded.inp_field_ms, fcp_field_ms=excluded.fcp_field_ms,
+            overall_category=excluded.overall_category
+    """, {
+        "url": data.get("url"), "strategy": data.get("strategy", "mobile"),
+        "scanned_at": data.get("scanned_at"),
+        "performance_score": data.get("performance_score"),
+        "lcp_ms": data.get("lcp_ms"), "cls_score": data.get("cls_score"),
+        "tbt_ms": data.get("tbt_ms"), "fcp_ms": data.get("fcp_ms"),
+        "tti_ms": data.get("tti_ms"), "speed_index_ms": data.get("speed_index_ms"),
+        "field_data_ok": data.get("field_data_ok", 0),
+        "lcp_field_ms": data.get("lcp_field_ms"), "cls_field": data.get("cls_field"),
+        "inp_field_ms": data.get("inp_field_ms"), "fcp_field_ms": data.get("fcp_field_ms"),
+        "overall_category": data.get("overall_category", ""),
+    })
+    conn.commit()
+    conn.close()
+
+
+def cwv_list(strategy: str = "mobile", limit: int = 100, offset: int = 0,
+             sort: str = "performance_score", order: str = "asc") -> list:
+    """Lấy danh sách CWV results, join với seo_pages để lấy url_type."""
+    safe_sort = sort if sort in (
+        "performance_score", "lcp_ms", "cls_score", "tbt_ms",
+        "lcp_field_ms", "cls_field", "inp_field_ms", "scanned_at"
+    ) else "performance_score"
+    safe_order = "DESC" if order == "desc" else "ASC"
+    conn = get_conn()
+    rows = conn.execute(f"""
+        SELECT c.*, p.url_type, p.title
+        FROM seo_cwv c
+        LEFT JOIN seo_pages p ON p.url = c.url
+        WHERE c.strategy = ?
+        ORDER BY c.{safe_sort} {safe_order} NULLS LAST
+        LIMIT ? OFFSET ?
+    """, (strategy, limit, offset)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def cwv_count(strategy: str = "mobile") -> int:
+    conn = get_conn()
+    n = conn.execute("SELECT COUNT(*) FROM seo_cwv WHERE strategy=?", (strategy,)).fetchone()[0]
+    conn.close()
+    return n
+
+
+def cwv_stats(strategy: str = "mobile") -> dict:
+    """Summary stats: avg score, LCP distribution, CLS distribution."""
+    conn = get_conn()
+    row = conn.execute("""
+        SELECT
+            COUNT(*) total,
+            ROUND(AVG(performance_score), 1) avg_perf,
+            ROUND(AVG(lcp_ms), 0) avg_lcp,
+            ROUND(AVG(cls_score), 4) avg_cls,
+            ROUND(AVG(tbt_ms), 0) avg_tbt,
+            SUM(CASE WHEN performance_score >= 90 THEN 1 ELSE 0 END) perf_good,
+            SUM(CASE WHEN performance_score >= 50 AND performance_score < 90 THEN 1 ELSE 0 END) perf_ok,
+            SUM(CASE WHEN performance_score < 50 OR performance_score IS NULL THEN 1 ELSE 0 END) perf_bad,
+            SUM(CASE WHEN lcp_ms <= 2500 THEN 1 ELSE 0 END) lcp_good,
+            SUM(CASE WHEN lcp_ms > 2500 AND lcp_ms <= 4000 THEN 1 ELSE 0 END) lcp_ok,
+            SUM(CASE WHEN lcp_ms > 4000 THEN 1 ELSE 0 END) lcp_bad,
+            SUM(CASE WHEN cls_score <= 0.1 THEN 1 ELSE 0 END) cls_good,
+            SUM(CASE WHEN cls_score > 0.1 AND cls_score <= 0.25 THEN 1 ELSE 0 END) cls_ok,
+            SUM(CASE WHEN cls_score > 0.25 THEN 1 ELSE 0 END) cls_bad
+        FROM seo_cwv WHERE strategy=?
+    """, (strategy,)).fetchone()
+    conn.close()
+    return dict(row) if row else {}
+
+
+def cwv_top_urls(limit: int = 50, url_type: str = "product", skip_scanned: bool = False, strategy: str = "mobile") -> list:
+    """Lấy top URL từ seo_pages theo internal_links (trang quan trọng nhất)."""
+    conn = get_conn()
+    if skip_scanned:
+        rows = conn.execute("""
+            SELECT p.url FROM seo_pages p
+            WHERE p.url_type=? AND p.status_code=200 AND p.indexable=1
+            AND NOT EXISTS (SELECT 1 FROM seo_cwv c WHERE c.url=p.url AND c.strategy=?)
+            ORDER BY p.internal_links DESC
+            LIMIT ?
+        """, (url_type, strategy, limit)).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT url FROM seo_pages
+            WHERE url_type=? AND status_code=200 AND indexable=1
+            ORDER BY internal_links DESC LIMIT ?
+        """, (url_type, limit)).fetchall()
+    conn.close()
+    return [r["url"] for r in rows]
+
+
+def cwv_progress(strategy: str = "mobile") -> list:
+    """Per url_type: total pages, scanned, unscanned."""
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT p.url_type,
+               COUNT(*) as total,
+               COUNT(c.url) as scanned
+        FROM seo_pages p
+        LEFT JOIN seo_cwv c ON c.url=p.url AND c.strategy=?
+        WHERE p.status_code=200 AND p.indexable=1
+        GROUP BY p.url_type
+        ORDER BY total DESC
+    """, (strategy,)).fetchall()
+    conn.close()
+    out = []
+    for r in rows:
+        out.append({
+            "url_type": r["url_type"],
+            "total": r["total"],
+            "scanned": r["scanned"],
+            "unscanned": r["total"] - r["scanned"],
+        })
+    return out
+
+
+def cwv_clear(strategy: str = None):
+    conn = get_conn()
+    if strategy:
+        conn.execute("DELETE FROM seo_cwv WHERE strategy=?", (strategy,))
+    else:
+        conn.execute("DELETE FROM seo_cwv")
+    conn.commit()
+    conn.close()

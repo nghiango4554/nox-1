@@ -62,6 +62,37 @@ def fetch_collection_context(url: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
+def fetch_real_products(haravan_collection_id: int, limit: int = 20) -> dict:
+    """Gọi Haravan API lấy SP thật + giá thật trong collection → làm giàu prompt gen content."""
+    if not haravan_collection_id:
+        return {"ok": False, "error": "Thiếu haravan_id"}
+    try:
+        data = haravan_client._request(
+            "GET", "/products.json",
+            params={"collection_id": haravan_collection_id, "limit": limit,
+                    "fields": "id,title,variants"}
+        )
+        products = data.get("products", [])
+        if not products:
+            return {"ok": False, "error": "Collection rỗng hoặc không tìm được SP"}
+        names = [p["title"] for p in products if p.get("title")]
+        prices = []
+        for p in products:
+            for v in (p.get("variants") or []):
+                try:
+                    prices.append(float(v["price"]))
+                except Exception:
+                    pass
+        price_min = round(min(prices) / 1_000_000, 1) if prices else None
+        price_max = round(max(prices) / 1_000_000, 1) if prices else None
+        return {
+            "ok": True, "names": names, "n": len(names),
+            "price_min_tr": price_min, "price_max_tr": price_max,
+        }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 _SYSTEM_PROMPT = """Bạn là chuyên gia SEO + copywriter cho Sintech.vn — shop PC, laptop, gaming gear tại 457 Trần Xuân Soạn, Q7, TP.HCM. Hotline 0911 713 000. Nền tảng Haravan.
 NHIỆM VỤ: Viết content landing page cho 1 COLLECTION (category sản phẩm), tone tư vấn mua hàng, không học thuật, không SEOer.
 
@@ -152,6 +183,7 @@ BƯỚC 1: Tự xác định loại collection từ tên/URL → chọn range gi
 | Camera / Mạng / Phụ kiện văn phòng | Tầm 300k-1tr / 1-2.5tr / 2.5-5tr / Trên 5tr |
 
 ⚠️ Nếu collection có tên chứa giá sẵn (vd "PC Gaming 10-20 Triệu", "PC Gaming 50-80 Triệu") → range trong bảng PHẢI overlap/sát khoảng đó, KHÔNG bịa range khác.
+⚠️ Nếu user input có "Giá thật từ Haravan: Xtr – Ytr" → KHÔNG dùng bảng loại collection ở trên. Dùng khoảng X–Y đó làm reference THẬT, chia 4 tầng đều phủ toàn bộ X đến Y.
 
 BƯỚC 2: Format bảng theo template (cấu hình tiêu biểu phải có MODEL/SPEC CỤ THỂ — không chung chung):
 | Phân khúc giá | Cấu hình tiêu biểu (CPU · RAM · SSD · VGA) | Phù hợp với ai |
@@ -527,12 +559,40 @@ def _expand_body_to_floor(body_html: str, collection_name: str, max_retries: int
 
 def gen_collection_content(collection_url: str, collection_name: str,
                            page_title: str = "", admin_desc: str = "",
-                           sp_names: list = None) -> dict:
+                           sp_names: list = None, haravan_id: int = None) -> dict:
     """Gọi Codex CLI sinh title + meta + body HTML cho 1 collection."""
     if not codex_provider.is_codex_available():
         return {"ok": False, "error": "Codex CLI chưa cài."}
 
     sp_names = sp_names or []
+
+    # Bơm dữ liệu thật từ Haravan — SP thật + giá thật → hết "commodity"
+    real_data_block = ""
+    if haravan_id:
+        hv = fetch_real_products(haravan_id)
+        if hv.get("ok") and hv.get("names"):
+            sp_names = hv["names"]  # Haravan names > web scrape
+            parts = [f"- SP thật ({hv['n']} mẫu, từ Haravan): {', '.join(hv['names'][:10])}"]
+            pmin, pmax = hv.get("price_min_tr"), hv.get("price_max_tr")
+            if pmin and pmax:
+                spread = (pmax - pmin) / pmin if pmin > 0 else 0
+                if spread >= 0.3:
+                    # Range đủ rộng → chia 4 tầng có ý nghĩa
+                    parts.append(
+                        f"- Giá thật từ Haravan: {pmin}tr – {pmax}tr\n"
+                        f"→ BẢNG PHÂN KHÚC GIÁ (Pattern 5) PHẢI cover từ {pmin}tr đến {pmax}tr, "
+                        f"chia 4 tầng đều. KHÔNG dùng range generic."
+                    )
+                else:
+                    # Range quá hẹp (đồng giá / 1 SP) → bảng phân khúc 4 tầng vô nghĩa
+                    parts.append(
+                        f"- Giá thật từ Haravan: ~{pmin}tr (collection đồng giá hoặc ít mẫu)\n"
+                        f"→ KHÔNG làm bảng phân khúc giá 4 tầng (sẽ bịa, vô nghĩa). "
+                        f"Thay bằng bảng SO SÁNH TÍNH NĂNG (3 cột: Tiêu chí / Mức cơ bản / Mức nâng cấp) "
+                        f"hoặc bảng CHỌn THEO NHU CẦU (nhu cầu / gợi ý chọn / lý do)."
+                    )
+            real_data_block = "\n\nDỮ LIỆU THẬT TỪ HARAVAN:\n" + "\n".join(parts)
+
     used_h2 = _get_used_h2_pool()
     used_h2_block = ""
     if used_h2:
@@ -548,7 +608,7 @@ def gen_collection_content(collection_url: str, collection_name: str,
 - URL: {collection_url}
 - Page title hiện tại (Haravan): {page_title or '(rỗng)'}
 - Description admin hiện tại: {admin_desc[:500] if admin_desc else '(rỗng)'}
-- Top SP trong collection ({len(sp_names)} mẫu): {', '.join(sp_names[:8])}{used_h2_block}
+- Top SP trong collection ({len(sp_names)} mẫu): {', '.join(sp_names[:8])}{used_h2_block}{real_data_block}
 
 YÊU CẦU CỨNG:
 1. 2 H2 ĐẦU = TAXONOMY có H3: "Các dòng/loại [SP ngắn]" (4-6 H3 dòng/model CÓ THẬT) + "Phân loại [SP] theo [tiêu chí]" (3-5 H3). CẤM bịa dòng/model không tồn tại.

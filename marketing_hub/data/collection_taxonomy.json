@@ -1,0 +1,2286 @@
+{
+  "taxonomy": {
+    "phan-mem-ban-quyen": {
+      "name": "Phần Mềm Bản Quyền",
+      "handle": "phan-mem-ban-quyen",
+      "children": {}
+    },
+    "pc-gaming": {
+      "name": "PC Gaming – Đồ Họa – AI",
+      "handle": "pc-gaming",
+      "children": {
+        "pc-gaming": {
+          "name": "PC Gaming",
+          "handle": "pc-gaming",
+          "children": [
+            {
+              "name": "PC Gaming Cao Cấp",
+              "handle": "pc-gaming-cao-cap"
+            },
+            {
+              "name": "PC Streaming / Livestream",
+              "handle": "pc-streaming-livestream"
+            },
+            {
+              "name": "PC Esport",
+              "handle": "pc-esport"
+            }
+          ]
+        },
+        "pc-gaming-theo-gia": {
+          "name": "PC Gaming Theo Giá",
+          "handle": "pc-gaming-theo-gia",
+          "children": [
+            {
+              "name": "10 - 20 Triệu",
+              "handle": "pc-gaming-10-20-trieu"
+            },
+            {
+              "name": "20 - 30 Triệu",
+              "handle": "pc-gaming-20-30-trieu"
+            },
+            {
+              "name": "30 - 50 Triệu",
+              "handle": "pc-gaming-30-50-trieu"
+            },
+            {
+              "name": "50 - 80 Triệu",
+              "handle": "pc-gaming-50-80-trieu"
+            },
+            {
+              "name": "80 - 100 Triệu",
+              "handle": "pc-gaming-80-100-trieu"
+            },
+            {
+              "name": "Trên 100 Triệu",
+              "handle": "pc-gaming-tren-100-trieu"
+            }
+          ]
+        },
+        "pc-gaming-theo-vga": {
+          "name": "PC Gaming Theo VGA",
+          "handle": "pc-gaming-theo-vga",
+          "children": [
+            {
+              "name": "PC RTX 3050 / 4050",
+              "handle": "pc-rtx-3050-4050"
+            },
+            {
+              "name": "PC RTX 4060 / 5060",
+              "handle": "pc-rtx-4060-5060"
+            },
+            {
+              "name": "PC RTX 4070 / 5070",
+              "handle": "pc-rtx-4070-5070"
+            },
+            {
+              "name": "PC RTX 4080 / 5080",
+              "handle": "pc-rtx-4080-5080"
+            },
+            {
+              "name": "PC RTX 4090 / 5090",
+              "handle": "pc-rtx-4090-5090"
+            }
+          ]
+        },
+        "pc-do-hoa": {
+          "name": "PC Đồ Họa",
+          "handle": "pc-do-hoa",
+          "children": [
+            {
+              "name": "PC Photoshop",
+              "handle": "pc-photoshop"
+            },
+            {
+              "name": "PC Video Editing",
+              "handle": "pc-video-editing"
+            },
+            {
+              "name": "PC 3D Rendering",
+              "handle": "pc-3d-rendering"
+            },
+            {
+              "name": "PC AutoCAD",
+              "handle": "pc-autocad"
+            }
+          ]
+        },
+        "pc-ai-workstation": {
+          "name": "PC AI – Workstation",
+          "handle": "pc-ai-workstation",
+          "children": []
+        }
+      }
+    },
+    "pc-van-phong-may-bo": {
+      "name": "PC Văn Phòng – Máy Bộ",
+      "handle": "pc-van-phong-may-bo",
+      "children": {
+        "pc-van-phong": {
+          "name": "PC Văn Phòng",
+          "handle": "pc-van-phong",
+          "children": [
+            {
+              "name": "PC Văn Phòng Giá Rẻ",
+              "handle": "pc-van-phong-gia-re"
+            },
+            {
+              "name": "PC Văn Phòng Doanh Nghiệp",
+              "handle": "pc-van-phong-doanh-nghiep"
+            },
+            {
+              "name": "PC Kế Toán",
+              "handle": "pc-ke-toan"
+            },
+            {
+              "name": "PC Học Tập Online",
+              "handle": "pc-hoc-tap-online"
+            },
+            {
+              "name": "PC Mini PC",
+              "handle": "pc-mini-pc"
+            },
+            {
+              "name": "All In One",
+              "handle": "all-in-one"
+            }
+          ]
+        },
+        "pc-van-phong-theo-gia": {
+          "name": "PC Văn Phòng Theo Giá",
+          "handle": "pc-van-phong-theo-gia",
+          "children": [
+            {
+              "name": "PC Dưới 7 Triệu",
+              "handle": "pc-duoi-7-trieu"
+            },
+            {
+              "name": "PC 7 - 10 Triệu",
+              "handle": "pc-7-10-trieu"
+            },
+            {
+              "name": "PC 10 - 15 Triệu",
+              "handle": "pc-10-15-trieu"
+            },
+            {
+              "name": "PC 15 - 20 Triệu",
+              "handle": "pc-15-20-trieu"
+            },
+            {
+              "name": "PC Trên 20 Triệu",
+              "handle": "pc-tren-20-trieu"
+            }
+          ]
+        },
+        "may-tinh-bo": {
+          "name": "Máy Bộ",
+          "handle": "may-tinh-bo",
+          "children": [
+            {
+              "name": "Máy Bộ Dell",
+              "handle": "may-bo-dell"
+            },
+            {
+              "name": "Máy Bộ HP",
+              "handle": "may-bo-hp"
+            },
+            {
+              "name": "Máy Bộ Lenovo",
+              "handle": "may-bo-lenovo"
+            },
+            {
+              "name": "Máy Bộ Rosa",
+              "handle": "may-bo-rosa"
+            }
+          ]
+        },
+        "may-in": {
+          "name": "Máy In",
+          "handle": "may-in",
+          "children": [
+            {
+              "name": "Máy In Cắm Dây",
+              "handle": "may-in-cam-day"
+            },
+            {
+              "name": "Máy In Wifi",
+              "handle": "may-in-wifi"
+            }
+          ]
+        }
+      }
+    },
+    "laptop-macbook": {
+      "name": "Laptop – Macbook",
+      "handle": "laptop-macbook",
+      "children": {
+        "laptop": {
+          "name": "Laptop",
+          "handle": "laptop",
+          "children": [
+            {
+              "name": "Laptop Gaming",
+              "handle": "laptop-gaming"
+            },
+            {
+              "name": "Laptop Văn Phòng",
+              "handle": "laptop-van-phong"
+            },
+            {
+              "name": "Laptop Đồ Họa",
+              "handle": "laptop-do-hoa"
+            },
+            {
+              "name": "Laptop Học Tập – Sinh Viên",
+              "handle": "laptop-hoc-tap-sinh-vien"
+            }
+          ]
+        },
+        "laptop-theo-gia": {
+          "name": "Laptop Theo Giá",
+          "handle": "laptop-theo-gia",
+          "children": [
+            {
+              "name": "Laptop Dưới 15 Triệu",
+              "handle": "laptop-duoi-15-trieu"
+            },
+            {
+              "name": "Laptop 15 - 20 Triệu",
+              "handle": "laptop-15-20-trieu"
+            },
+            {
+              "name": "Laptop 20 - 25 Triệu",
+              "handle": "laptop-20-25-trieu"
+            },
+            {
+              "name": "Laptop 25 - 30 Triệu",
+              "handle": "laptop-25-30-trieu"
+            },
+            {
+              "name": "Laptop 30 - 40 Triệu",
+              "handle": "laptop-30-40-trieu"
+            }
+          ]
+        },
+        "laptop-theo-hang": {
+          "name": "Laptop Theo Hãng",
+          "handle": "laptop-theo-hang",
+          "children": [
+            {
+              "name": "Laptop Asus",
+              "handle": "laptop-asus"
+            },
+            {
+              "name": "Laptop Acer",
+              "handle": "laptop-acer"
+            },
+            {
+              "name": "Laptop MSI",
+              "handle": "laptop-msi"
+            },
+            {
+              "name": "Laptop Lenovo",
+              "handle": "laptop-lenovo"
+            },
+            {
+              "name": "Laptop Dell",
+              "handle": "laptop-dell"
+            },
+            {
+              "name": "Laptop HP",
+              "handle": "laptop-hp"
+            }
+          ]
+        },
+        "macbook": {
+          "name": "MacBook",
+          "handle": "macbook",
+          "children": [
+            {
+              "name": "MacBook Air",
+              "handle": "macbook-air"
+            },
+            {
+              "name": "MacBook Pro",
+              "handle": "macbook-pro"
+            },
+            {
+              "name": "Sạc MacBook",
+              "handle": "sac-macbook"
+            }
+          ]
+        },
+        "phu-kien-linh-kien-laptop": {
+          "name": "Phụ Kiện & Linh Kiện Laptop",
+          "handle": "phu-kien-linh-kien-laptop",
+          "children": [
+            {
+              "name": "Sạc Laptop",
+              "handle": "sac-laptop"
+            },
+            {
+              "name": "Pin Laptop",
+              "handle": "pin-laptop"
+            },
+            {
+              "name": "RAM Laptop",
+              "handle": "ram-laptop"
+            },
+            {
+              "name": "SSD Laptop",
+              "handle": "ssd-laptop"
+            },
+            {
+              "name": "Bàn Phím Laptop",
+              "handle": "ban-phim-laptop"
+            },
+            {
+              "name": "Màn Hình Laptop",
+              "handle": "man-hinh-laptop"
+            },
+            {
+              "name": "Đế Tản Nhiệt",
+              "handle": "de-tan-nhiet"
+            },
+            {
+              "name": "Balo / Túi Laptop",
+              "handle": "balo-tui-laptop"
+            }
+          ]
+        },
+        "keo-thom-laptop": {
+          "name": "Kèo Thơm Laptop",
+          "handle": "keo-thom-laptop",
+          "children": []
+        }
+      }
+    },
+    "man-hinh-may-tinh": {
+      "name": "Màn Hình Máy Tính",
+      "handle": "man-hinh-may-tinh",
+      "children": {
+        "man-hinh-may-tinh": {
+          "name": "Tần số quét màn hình",
+          "handle": "man-hinh-may-tinh",
+          "children": [
+            {
+              "name": "Màn Hình 75Hz Trở Xuống",
+              "handle": "man-hinh-75hz-tro-xuong"
+            },
+            {
+              "name": "Màn Hình 100Hz - 144Hz",
+              "handle": "man-hinh-100hz-144hz"
+            },
+            {
+              "name": "Màn Hình 165Hz - 180Hz",
+              "handle": "man-hinh-165hz-180hz"
+            },
+            {
+              "name": "Màn Hình 240Hz Trở Lên",
+              "handle": "man-hinh-240hz-tro-len"
+            }
+          ]
+        },
+        "gia-treo-man-hinh": {
+          "name": "Phụ Kiện Màn Hình",
+          "handle": "gia-treo-man-hinh",
+          "children": [
+            {
+              "name": "Giá Treo Màn Hình",
+              "handle": "gia-treo-man-hinh"
+            },
+            {
+              "name": "Giá Treo Đơn",
+              "handle": "gia-treo-don"
+            },
+            {
+              "name": "Giá Treo Đôi",
+              "handle": "gia-treo-doi"
+            }
+          ]
+        }
+      }
+    },
+    "linh-kien-may-tinh-1": {
+      "name": "Linh Kiện Máy Tính",
+      "handle": "linh-kien-may-tinh-1",
+      "children": {
+        "cpu": {
+          "name": "CPU",
+          "handle": "cpu",
+          "children": [
+            {
+              "name": "CPU Intel",
+              "handle": "cpu-intel"
+            },
+            {
+              "name": "CPU AMD",
+              "handle": "cpu-amd"
+            }
+          ]
+        },
+        "vga": {
+          "name": "VGA",
+          "handle": "vga",
+          "children": [
+            {
+              "name": "NVIDIA",
+              "handle": "vga-nvidia"
+            },
+            {
+              "name": "AMD",
+              "handle": "vga-amd"
+            }
+          ]
+        },
+        "mainboard": {
+          "name": "Mainboard",
+          "handle": "mainboard",
+          "children": [
+            {
+              "name": "Mainboard Intel",
+              "handle": "mainboard-intel-1"
+            },
+            {
+              "name": "Mainboard AMD",
+              "handle": "mainboard-amd"
+            }
+          ]
+        },
+        "ram": {
+          "name": "Ram",
+          "handle": "ram",
+          "children": [
+            {
+              "name": "RAM DDR4",
+              "handle": "ram-ddr4"
+            },
+            {
+              "name": "RAM DDR5",
+              "handle": "ram-ddr5"
+            }
+          ]
+        },
+        "ssd-hdd-1": {
+          "name": "SSD / HDD",
+          "handle": "ssd-hdd-1",
+          "children": [
+            {
+              "name": "SSD M.2",
+              "handle": "ssd-m-2"
+            },
+            {
+              "name": "SSD SATA",
+              "handle": "ssd-sata"
+            },
+            {
+              "name": "HDD",
+              "handle": "hdd"
+            }
+          ]
+        },
+        "psu-nguon": {
+          "name": "PSU – Nguồn",
+          "handle": "psu-nguon",
+          "children": [
+            {
+              "name": "Nguồn Dưới 550W",
+              "handle": "nguon-duoi-550w"
+            },
+            {
+              "name": "Nguồn 600W - 750W",
+              "handle": "nguon-600w-750w"
+            },
+            {
+              "name": "Nguồn 850W Trở Lên",
+              "handle": "nguon-850w-tro-len"
+            }
+          ]
+        },
+        "case": {
+          "name": "Case",
+          "handle": "case",
+          "children": [
+            {
+              "name": "Case Gaming",
+              "handle": "case-gaming-1"
+            },
+            {
+              "name": "Case Văn Phòng",
+              "handle": "case-van-phong-1"
+            }
+          ]
+        },
+        "tan-nhiet": {
+          "name": "Tản Nhiệt",
+          "handle": "tan-nhiet",
+          "children": [
+            {
+              "name": "Tản Khí",
+              "handle": "tan-khi"
+            },
+            {
+              "name": "Tản AIO",
+              "handle": "tan-aio"
+            },
+            {
+              "name": "Fan Case",
+              "handle": "fan-case"
+            }
+          ]
+        }
+      }
+    },
+    "gaming-gear": {
+      "name": "Gaming Gear",
+      "handle": "gaming-gear",
+      "children": {
+        "ban-phim": {
+          "name": "Bàn Phím",
+          "handle": "ban-phim",
+          "children": [
+            {
+              "name": "Bàn Phím Gaming",
+              "handle": "ban-phim-gaming"
+            },
+            {
+              "name": "Bàn Phím Cơ",
+              "handle": "ban-phim-co"
+            },
+            {
+              "name": "Bàn Phím Không Dây",
+              "handle": "ban-phim-khong-day-1"
+            },
+            {
+              "name": "Bàn Phím Có Dây",
+              "handle": "ban-phim-co-day"
+            }
+          ]
+        },
+        "chuot-may-tinh": {
+          "name": "Chuột",
+          "handle": "chuot-may-tinh",
+          "children": [
+            {
+              "name": "Chuột Gaming",
+              "handle": "chuot-gaming"
+            },
+            {
+              "name": "Chuột Văn Phòng",
+              "handle": "chuot-van-phong"
+            },
+            {
+              "name": "Chuột Không Dây",
+              "handle": "chuot-khong-day"
+            },
+            {
+              "name": "Chuột Có Dây",
+              "handle": "chuot-co-day"
+            }
+          ]
+        },
+        "ban-di-chuot": {
+          "name": "Bàn Di Chuột",
+          "handle": "ban-di-chuot",
+          "children": [
+            {
+              "name": "Bàn Di Chuột Nhỏ",
+              "handle": "ban-di-chuot-nho"
+            },
+            {
+              "name": "Bàn Di Chuột Lớn",
+              "handle": "ban-di-chuot-lon"
+            }
+          ]
+        },
+        "tai-nghe": {
+          "name": "Tai Nghe",
+          "handle": "tai-nghe",
+          "children": [
+            {
+              "name": "Tai Nghe Gaming",
+              "handle": "tai-nghe-gaming"
+            },
+            {
+              "name": "Tai Nghe Không Dây",
+              "handle": "tai-nghe-khong-day"
+            },
+            {
+              "name": "Tai Nghe Có Dây",
+              "handle": "tai-nghe-co-day-1"
+            }
+          ]
+        },
+        "loa-1": {
+          "name": "Loa",
+          "handle": "loa-1",
+          "children": [
+            {
+              "name": "Loa Có Dây",
+              "handle": "loa-1"
+            }
+          ]
+        },
+        "ban-2": {
+          "name": "Bàn",
+          "handle": "ban-2",
+          "children": [
+            {
+              "name": "Bàn Gaming Chữ Z",
+              "handle": "ban-gaming-chu-z"
+            },
+            {
+              "name": "Bàn Gaming Chữ K",
+              "handle": "ban-gaming-chu-k"
+            },
+            {
+              "name": "Bàn Gaming Chữ Y",
+              "handle": "ban-gaming-chu-yn"
+            }
+          ]
+        },
+        "ghe": {
+          "name": "Ghế",
+          "handle": "ghe",
+          "children": [
+            {
+              "name": "Ghế Gaming",
+              "handle": "ghe"
+            },
+            {
+              "name": "Ghế Văn Phòng",
+              "handle": "ghe-van-phong-2"
+            }
+          ]
+        }
+      }
+    },
+    "phu-kien-thiet-bi-mang-1": {
+      "name": "Phụ Kiện & Thiết Bị Mạng",
+      "handle": "phu-kien-thiet-bi-mang-1",
+      "children": {
+        "cap-chuyen-doi": {
+          "name": "Cáp & Chuyển Đổi",
+          "handle": "cap-chuyen-doi",
+          "children": [
+            {
+              "name": "Cáp HDMI",
+              "handle": "cap-hdmi"
+            },
+            {
+              "name": "Cáp DisplayPort",
+              "handle": "cap-displayport"
+            },
+            {
+              "name": "Cáp Type C",
+              "handle": "cap-type-c"
+            }
+          ]
+        },
+        "luu-tru-va-box": {
+          "name": "Lưu Trữ & Box Đọc",
+          "handle": "luu-tru-va-box",
+          "children": [
+            {
+              "name": "Thẻ Nhớ",
+              "handle": "the-nho"
+            },
+            {
+              "name": "USB Flash",
+              "handle": "usb-flash"
+            },
+            {
+              "name": "Box SSD M.2",
+              "handle": "box-ssd-m-2"
+            },
+            {
+              "name": "Box SSD",
+              "handle": "box-ssd-sata"
+            },
+            {
+              "name": "Box HDD",
+              "handle": "box-hdd"
+            }
+          ]
+        },
+        "day-nguon": {
+          "name": "Cáp Nguồn",
+          "handle": "day-nguon",
+          "children": [
+            {
+              "name": "Cáp Nguồn PC",
+              "handle": "cap-nguon-pc"
+            },
+            {
+              "name": "Cáp Nguồn Sạc Laptop",
+              "handle": "cap-nguon-laptop"
+            }
+          ]
+        },
+        "hub": {
+          "name": "Hub",
+          "handle": "hub",
+          "children": [
+            {
+              "name": "Hub USB",
+              "handle": "hub-usb"
+            },
+            {
+              "name": "Hub Type C",
+              "handle": "hub-type-c"
+            }
+          ]
+        },
+        "thiet-bi-wifi": {
+          "name": "Thiết Bị WiFi",
+          "handle": "thiet-bi-wifi",
+          "children": [
+            {
+              "name": "WiFi Mesh",
+              "handle": "wifi-mesh"
+            },
+            {
+              "name": "Router Wifi",
+              "handle": "router-wifi-1"
+            },
+            {
+              "name": "Bộ Phát WiFi 4G/LTE",
+              "handle": "bo-phat-wifi-4g-lte"
+            }
+          ]
+        },
+        "thiet-bi-thu-wifi-bluetooth": {
+          "name": "Thiết Bị Thu WiFi & Bluetooth",
+          "handle": "thiet-bi-thu-wifi-bluetooth",
+          "children": [
+            {
+              "name": "USB WiFi",
+              "handle": "usb-wifi-1"
+            },
+            {
+              "name": "USB Bluetooth",
+              "handle": "usb-bluetooth"
+            }
+          ]
+        },
+        "bo-chia-mang-day-mang": {
+          "name": "Bộ Chia Mạng & Dây Mạng",
+          "handle": "bo-chia-mang-day-mang",
+          "children": [
+            {
+              "name": "Bộ chia mạng",
+              "handle": "bo-chia-mang"
+            },
+            {
+              "name": "Dây mạng",
+              "handle": "day-mang"
+            }
+          ]
+        },
+        "camera": {
+          "name": "Camera",
+          "handle": "camera",
+          "children": [
+            {
+              "name": "Camera Trong Nhà",
+              "handle": "camera-trong-nha"
+            },
+            {
+              "name": "Camera Ngoài Trời",
+              "handle": "camera-ngoai-troi"
+            }
+          ]
+        }
+      }
+    },
+    "dich-vu-sua-chua": {
+      "name": "Dịch Vụ & Sửa Chữa",
+      "handle": "dich-vu-sua-chua",
+      "children": {
+        "dich-vu-ve-sinh-pc": {
+          "name": "Dịch Vụ Vệ Sinh PC",
+          "handle": "dich-vu-ve-sinh-pc",
+          "children": [
+            {
+              "name": "Vệ Sinh PC Tại Cửa Hàng",
+              "handle": "ve-sinh-pc-tai-cua-hang"
+            },
+            {
+              "name": "Vệ Sinh PC Tận Nhà",
+              "handle": "ve-sinh-pc-tan-nha"
+            },
+            {
+              "name": "Vệ Sinh Laptop",
+              "handle": "ve-sinh-laptop"
+            }
+          ]
+        },
+        "sua-chua-may-tinh": {
+          "name": "Sửa Chữa Máy Tính",
+          "handle": "sua-chua-may-tinh",
+          "children": [
+            {
+              "name": "Nâng Cấp PC",
+              "handle": "nang-cap-pc"
+            },
+            {
+              "name": "Cài Đặt Windows – Phần Mềm",
+              "handle": "cai-dat-windows-phan-mem"
+            },
+            {
+              "name": "Sửa Chữa PC/Laptop",
+              "handle": "sua-chua-pc-laptop"
+            }
+          ]
+        }
+      }
+    },
+    "hang-cu": {
+      "name": "Hàng Cũ",
+      "handle": "hang-cu",
+      "children": {}
+    }
+  },
+  "flat": {
+    "phan-mem-ban-quyen": [
+      1,
+      "phan-mem-ban-quyen",
+      null,
+      "Phần Mềm Bản Quyền",
+      null,
+      null
+    ],
+    "pc-gaming": [
+      2,
+      "pc-gaming",
+      "pc-gaming",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming",
+      null
+    ],
+    "pc-gaming-cao-cap": [
+      3,
+      "pc-gaming",
+      "pc-gaming",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming",
+      "PC Gaming Cao Cấp"
+    ],
+    "pc-streaming-livestream": [
+      3,
+      "pc-gaming",
+      "pc-gaming",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming",
+      "PC Streaming / Livestream"
+    ],
+    "pc-esport": [
+      3,
+      "pc-gaming",
+      "pc-gaming",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming",
+      "PC Esport"
+    ],
+    "pc-gaming-theo-gia": [
+      2,
+      "pc-gaming",
+      "pc-gaming-theo-gia",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming Theo Giá",
+      null
+    ],
+    "pc-gaming-10-20-trieu": [
+      3,
+      "pc-gaming",
+      "pc-gaming-theo-gia",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming Theo Giá",
+      "10 - 20 Triệu"
+    ],
+    "pc-gaming-20-30-trieu": [
+      3,
+      "pc-gaming",
+      "pc-gaming-theo-gia",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming Theo Giá",
+      "20 - 30 Triệu"
+    ],
+    "pc-gaming-30-50-trieu": [
+      3,
+      "pc-gaming",
+      "pc-gaming-theo-gia",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming Theo Giá",
+      "30 - 50 Triệu"
+    ],
+    "pc-gaming-50-80-trieu": [
+      3,
+      "pc-gaming",
+      "pc-gaming-theo-gia",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming Theo Giá",
+      "50 - 80 Triệu"
+    ],
+    "pc-gaming-80-100-trieu": [
+      3,
+      "pc-gaming",
+      "pc-gaming-theo-gia",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming Theo Giá",
+      "80 - 100 Triệu"
+    ],
+    "pc-gaming-tren-100-trieu": [
+      3,
+      "pc-gaming",
+      "pc-gaming-theo-gia",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming Theo Giá",
+      "Trên 100 Triệu"
+    ],
+    "pc-gaming-theo-vga": [
+      2,
+      "pc-gaming",
+      "pc-gaming-theo-vga",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming Theo VGA",
+      null
+    ],
+    "pc-rtx-3050-4050": [
+      3,
+      "pc-gaming",
+      "pc-gaming-theo-vga",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming Theo VGA",
+      "PC RTX 3050 / 4050"
+    ],
+    "pc-rtx-4060-5060": [
+      3,
+      "pc-gaming",
+      "pc-gaming-theo-vga",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming Theo VGA",
+      "PC RTX 4060 / 5060"
+    ],
+    "pc-rtx-4070-5070": [
+      3,
+      "pc-gaming",
+      "pc-gaming-theo-vga",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming Theo VGA",
+      "PC RTX 4070 / 5070"
+    ],
+    "pc-rtx-4080-5080": [
+      3,
+      "pc-gaming",
+      "pc-gaming-theo-vga",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming Theo VGA",
+      "PC RTX 4080 / 5080"
+    ],
+    "pc-rtx-4090-5090": [
+      3,
+      "pc-gaming",
+      "pc-gaming-theo-vga",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Gaming Theo VGA",
+      "PC RTX 4090 / 5090"
+    ],
+    "pc-do-hoa": [
+      2,
+      "pc-gaming",
+      "pc-do-hoa",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Đồ Họa",
+      null
+    ],
+    "pc-photoshop": [
+      3,
+      "pc-gaming",
+      "pc-do-hoa",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Đồ Họa",
+      "PC Photoshop"
+    ],
+    "pc-video-editing": [
+      3,
+      "pc-gaming",
+      "pc-do-hoa",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Đồ Họa",
+      "PC Video Editing"
+    ],
+    "pc-3d-rendering": [
+      3,
+      "pc-gaming",
+      "pc-do-hoa",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Đồ Họa",
+      "PC 3D Rendering"
+    ],
+    "pc-autocad": [
+      3,
+      "pc-gaming",
+      "pc-do-hoa",
+      "PC Gaming – Đồ Họa – AI",
+      "PC Đồ Họa",
+      "PC AutoCAD"
+    ],
+    "pc-ai-workstation": [
+      2,
+      "pc-gaming",
+      "pc-ai-workstation",
+      "PC Gaming – Đồ Họa – AI",
+      "PC AI – Workstation",
+      null
+    ],
+    "pc-van-phong-may-bo": [
+      1,
+      "pc-van-phong-may-bo",
+      null,
+      "PC Văn Phòng – Máy Bộ",
+      null,
+      null
+    ],
+    "pc-van-phong": [
+      2,
+      "pc-van-phong-may-bo",
+      "pc-van-phong",
+      "PC Văn Phòng – Máy Bộ",
+      "PC Văn Phòng",
+      null
+    ],
+    "pc-van-phong-gia-re": [
+      3,
+      "pc-van-phong-may-bo",
+      "pc-van-phong",
+      "PC Văn Phòng – Máy Bộ",
+      "PC Văn Phòng",
+      "PC Văn Phòng Giá Rẻ"
+    ],
+    "pc-van-phong-doanh-nghiep": [
+      3,
+      "pc-van-phong-may-bo",
+      "pc-van-phong",
+      "PC Văn Phòng – Máy Bộ",
+      "PC Văn Phòng",
+      "PC Văn Phòng Doanh Nghiệp"
+    ],
+    "pc-ke-toan": [
+      3,
+      "pc-van-phong-may-bo",
+      "pc-van-phong",
+      "PC Văn Phòng – Máy Bộ",
+      "PC Văn Phòng",
+      "PC Kế Toán"
+    ],
+    "pc-hoc-tap-online": [
+      3,
+      "pc-van-phong-may-bo",
+      "pc-van-phong",
+      "PC Văn Phòng – Máy Bộ",
+      "PC Văn Phòng",
+      "PC Học Tập Online"
+    ],
+    "pc-mini-pc": [
+      3,
+      "pc-van-phong-may-bo",
+      "pc-van-phong",
+      "PC Văn Phòng – Máy Bộ",
+      "PC Văn Phòng",
+      "PC Mini PC"
+    ],
+    "all-in-one": [
+      3,
+      "pc-van-phong-may-bo",
+      "pc-van-phong",
+      "PC Văn Phòng – Máy Bộ",
+      "PC Văn Phòng",
+      "All In One"
+    ],
+    "pc-van-phong-theo-gia": [
+      2,
+      "pc-van-phong-may-bo",
+      "pc-van-phong-theo-gia",
+      "PC Văn Phòng – Máy Bộ",
+      "PC Văn Phòng Theo Giá",
+      null
+    ],
+    "pc-duoi-7-trieu": [
+      3,
+      "pc-van-phong-may-bo",
+      "pc-van-phong-theo-gia",
+      "PC Văn Phòng – Máy Bộ",
+      "PC Văn Phòng Theo Giá",
+      "PC Dưới 7 Triệu"
+    ],
+    "pc-7-10-trieu": [
+      3,
+      "pc-van-phong-may-bo",
+      "pc-van-phong-theo-gia",
+      "PC Văn Phòng – Máy Bộ",
+      "PC Văn Phòng Theo Giá",
+      "PC 7 - 10 Triệu"
+    ],
+    "pc-10-15-trieu": [
+      3,
+      "pc-van-phong-may-bo",
+      "pc-van-phong-theo-gia",
+      "PC Văn Phòng – Máy Bộ",
+      "PC Văn Phòng Theo Giá",
+      "PC 10 - 15 Triệu"
+    ],
+    "pc-15-20-trieu": [
+      3,
+      "pc-van-phong-may-bo",
+      "pc-van-phong-theo-gia",
+      "PC Văn Phòng – Máy Bộ",
+      "PC Văn Phòng Theo Giá",
+      "PC 15 - 20 Triệu"
+    ],
+    "pc-tren-20-trieu": [
+      3,
+      "pc-van-phong-may-bo",
+      "pc-van-phong-theo-gia",
+      "PC Văn Phòng – Máy Bộ",
+      "PC Văn Phòng Theo Giá",
+      "PC Trên 20 Triệu"
+    ],
+    "may-tinh-bo": [
+      2,
+      "pc-van-phong-may-bo",
+      "may-tinh-bo",
+      "PC Văn Phòng – Máy Bộ",
+      "Máy Bộ",
+      null
+    ],
+    "may-bo-dell": [
+      3,
+      "pc-van-phong-may-bo",
+      "may-tinh-bo",
+      "PC Văn Phòng – Máy Bộ",
+      "Máy Bộ",
+      "Máy Bộ Dell"
+    ],
+    "may-bo-hp": [
+      3,
+      "pc-van-phong-may-bo",
+      "may-tinh-bo",
+      "PC Văn Phòng – Máy Bộ",
+      "Máy Bộ",
+      "Máy Bộ HP"
+    ],
+    "may-bo-lenovo": [
+      3,
+      "pc-van-phong-may-bo",
+      "may-tinh-bo",
+      "PC Văn Phòng – Máy Bộ",
+      "Máy Bộ",
+      "Máy Bộ Lenovo"
+    ],
+    "may-bo-rosa": [
+      3,
+      "pc-van-phong-may-bo",
+      "may-tinh-bo",
+      "PC Văn Phòng – Máy Bộ",
+      "Máy Bộ",
+      "Máy Bộ Rosa"
+    ],
+    "may-in": [
+      2,
+      "pc-van-phong-may-bo",
+      "may-in",
+      "PC Văn Phòng – Máy Bộ",
+      "Máy In",
+      null
+    ],
+    "may-in-cam-day": [
+      3,
+      "pc-van-phong-may-bo",
+      "may-in",
+      "PC Văn Phòng – Máy Bộ",
+      "Máy In",
+      "Máy In Cắm Dây"
+    ],
+    "may-in-wifi": [
+      3,
+      "pc-van-phong-may-bo",
+      "may-in",
+      "PC Văn Phòng – Máy Bộ",
+      "Máy In",
+      "Máy In Wifi"
+    ],
+    "laptop-macbook": [
+      1,
+      "laptop-macbook",
+      null,
+      "Laptop – Macbook",
+      null,
+      null
+    ],
+    "laptop": [
+      2,
+      "laptop-macbook",
+      "laptop",
+      "Laptop – Macbook",
+      "Laptop",
+      null
+    ],
+    "laptop-gaming": [
+      3,
+      "laptop-macbook",
+      "laptop",
+      "Laptop – Macbook",
+      "Laptop",
+      "Laptop Gaming"
+    ],
+    "laptop-van-phong": [
+      3,
+      "laptop-macbook",
+      "laptop",
+      "Laptop – Macbook",
+      "Laptop",
+      "Laptop Văn Phòng"
+    ],
+    "laptop-do-hoa": [
+      3,
+      "laptop-macbook",
+      "laptop",
+      "Laptop – Macbook",
+      "Laptop",
+      "Laptop Đồ Họa"
+    ],
+    "laptop-hoc-tap-sinh-vien": [
+      3,
+      "laptop-macbook",
+      "laptop",
+      "Laptop – Macbook",
+      "Laptop",
+      "Laptop Học Tập – Sinh Viên"
+    ],
+    "laptop-theo-gia": [
+      2,
+      "laptop-macbook",
+      "laptop-theo-gia",
+      "Laptop – Macbook",
+      "Laptop Theo Giá",
+      null
+    ],
+    "laptop-duoi-15-trieu": [
+      3,
+      "laptop-macbook",
+      "laptop-theo-gia",
+      "Laptop – Macbook",
+      "Laptop Theo Giá",
+      "Laptop Dưới 15 Triệu"
+    ],
+    "laptop-15-20-trieu": [
+      3,
+      "laptop-macbook",
+      "laptop-theo-gia",
+      "Laptop – Macbook",
+      "Laptop Theo Giá",
+      "Laptop 15 - 20 Triệu"
+    ],
+    "laptop-20-25-trieu": [
+      3,
+      "laptop-macbook",
+      "laptop-theo-gia",
+      "Laptop – Macbook",
+      "Laptop Theo Giá",
+      "Laptop 20 - 25 Triệu"
+    ],
+    "laptop-25-30-trieu": [
+      3,
+      "laptop-macbook",
+      "laptop-theo-gia",
+      "Laptop – Macbook",
+      "Laptop Theo Giá",
+      "Laptop 25 - 30 Triệu"
+    ],
+    "laptop-30-40-trieu": [
+      3,
+      "laptop-macbook",
+      "laptop-theo-gia",
+      "Laptop – Macbook",
+      "Laptop Theo Giá",
+      "Laptop 30 - 40 Triệu"
+    ],
+    "laptop-theo-hang": [
+      2,
+      "laptop-macbook",
+      "laptop-theo-hang",
+      "Laptop – Macbook",
+      "Laptop Theo Hãng",
+      null
+    ],
+    "laptop-asus": [
+      3,
+      "laptop-macbook",
+      "laptop-theo-hang",
+      "Laptop – Macbook",
+      "Laptop Theo Hãng",
+      "Laptop Asus"
+    ],
+    "laptop-acer": [
+      3,
+      "laptop-macbook",
+      "laptop-theo-hang",
+      "Laptop – Macbook",
+      "Laptop Theo Hãng",
+      "Laptop Acer"
+    ],
+    "laptop-msi": [
+      3,
+      "laptop-macbook",
+      "laptop-theo-hang",
+      "Laptop – Macbook",
+      "Laptop Theo Hãng",
+      "Laptop MSI"
+    ],
+    "laptop-lenovo": [
+      3,
+      "laptop-macbook",
+      "laptop-theo-hang",
+      "Laptop – Macbook",
+      "Laptop Theo Hãng",
+      "Laptop Lenovo"
+    ],
+    "laptop-dell": [
+      3,
+      "laptop-macbook",
+      "laptop-theo-hang",
+      "Laptop – Macbook",
+      "Laptop Theo Hãng",
+      "Laptop Dell"
+    ],
+    "laptop-hp": [
+      3,
+      "laptop-macbook",
+      "laptop-theo-hang",
+      "Laptop – Macbook",
+      "Laptop Theo Hãng",
+      "Laptop HP"
+    ],
+    "macbook": [
+      2,
+      "laptop-macbook",
+      "macbook",
+      "Laptop – Macbook",
+      "MacBook",
+      null
+    ],
+    "macbook-air": [
+      3,
+      "laptop-macbook",
+      "macbook",
+      "Laptop – Macbook",
+      "MacBook",
+      "MacBook Air"
+    ],
+    "macbook-pro": [
+      3,
+      "laptop-macbook",
+      "macbook",
+      "Laptop – Macbook",
+      "MacBook",
+      "MacBook Pro"
+    ],
+    "sac-macbook": [
+      3,
+      "laptop-macbook",
+      "macbook",
+      "Laptop – Macbook",
+      "MacBook",
+      "Sạc MacBook"
+    ],
+    "phu-kien-linh-kien-laptop": [
+      2,
+      "laptop-macbook",
+      "phu-kien-linh-kien-laptop",
+      "Laptop – Macbook",
+      "Phụ Kiện & Linh Kiện Laptop",
+      null
+    ],
+    "sac-laptop": [
+      3,
+      "laptop-macbook",
+      "phu-kien-linh-kien-laptop",
+      "Laptop – Macbook",
+      "Phụ Kiện & Linh Kiện Laptop",
+      "Sạc Laptop"
+    ],
+    "pin-laptop": [
+      3,
+      "laptop-macbook",
+      "phu-kien-linh-kien-laptop",
+      "Laptop – Macbook",
+      "Phụ Kiện & Linh Kiện Laptop",
+      "Pin Laptop"
+    ],
+    "ram-laptop": [
+      3,
+      "laptop-macbook",
+      "phu-kien-linh-kien-laptop",
+      "Laptop – Macbook",
+      "Phụ Kiện & Linh Kiện Laptop",
+      "RAM Laptop"
+    ],
+    "ssd-laptop": [
+      3,
+      "laptop-macbook",
+      "phu-kien-linh-kien-laptop",
+      "Laptop – Macbook",
+      "Phụ Kiện & Linh Kiện Laptop",
+      "SSD Laptop"
+    ],
+    "ban-phim-laptop": [
+      3,
+      "laptop-macbook",
+      "phu-kien-linh-kien-laptop",
+      "Laptop – Macbook",
+      "Phụ Kiện & Linh Kiện Laptop",
+      "Bàn Phím Laptop"
+    ],
+    "man-hinh-laptop": [
+      3,
+      "laptop-macbook",
+      "phu-kien-linh-kien-laptop",
+      "Laptop – Macbook",
+      "Phụ Kiện & Linh Kiện Laptop",
+      "Màn Hình Laptop"
+    ],
+    "de-tan-nhiet": [
+      3,
+      "laptop-macbook",
+      "phu-kien-linh-kien-laptop",
+      "Laptop – Macbook",
+      "Phụ Kiện & Linh Kiện Laptop",
+      "Đế Tản Nhiệt"
+    ],
+    "balo-tui-laptop": [
+      3,
+      "laptop-macbook",
+      "phu-kien-linh-kien-laptop",
+      "Laptop – Macbook",
+      "Phụ Kiện & Linh Kiện Laptop",
+      "Balo / Túi Laptop"
+    ],
+    "keo-thom-laptop": [
+      2,
+      "laptop-macbook",
+      "keo-thom-laptop",
+      "Laptop – Macbook",
+      "Kèo Thơm Laptop",
+      null
+    ],
+    "man-hinh-may-tinh": [
+      2,
+      "man-hinh-may-tinh",
+      "man-hinh-may-tinh",
+      "Màn Hình Máy Tính",
+      "Tần số quét màn hình",
+      null
+    ],
+    "man-hinh-75hz-tro-xuong": [
+      3,
+      "man-hinh-may-tinh",
+      "man-hinh-may-tinh",
+      "Màn Hình Máy Tính",
+      "Tần số quét màn hình",
+      "Màn Hình 75Hz Trở Xuống"
+    ],
+    "man-hinh-100hz-144hz": [
+      3,
+      "man-hinh-may-tinh",
+      "man-hinh-may-tinh",
+      "Màn Hình Máy Tính",
+      "Tần số quét màn hình",
+      "Màn Hình 100Hz - 144Hz"
+    ],
+    "man-hinh-165hz-180hz": [
+      3,
+      "man-hinh-may-tinh",
+      "man-hinh-may-tinh",
+      "Màn Hình Máy Tính",
+      "Tần số quét màn hình",
+      "Màn Hình 165Hz - 180Hz"
+    ],
+    "man-hinh-240hz-tro-len": [
+      3,
+      "man-hinh-may-tinh",
+      "man-hinh-may-tinh",
+      "Màn Hình Máy Tính",
+      "Tần số quét màn hình",
+      "Màn Hình 240Hz Trở Lên"
+    ],
+    "gia-treo-man-hinh": [
+      3,
+      "man-hinh-may-tinh",
+      "gia-treo-man-hinh",
+      "Màn Hình Máy Tính",
+      "Phụ Kiện Màn Hình",
+      "Giá Treo Màn Hình"
+    ],
+    "gia-treo-don": [
+      3,
+      "man-hinh-may-tinh",
+      "gia-treo-man-hinh",
+      "Màn Hình Máy Tính",
+      "Phụ Kiện Màn Hình",
+      "Giá Treo Đơn"
+    ],
+    "gia-treo-doi": [
+      3,
+      "man-hinh-may-tinh",
+      "gia-treo-man-hinh",
+      "Màn Hình Máy Tính",
+      "Phụ Kiện Màn Hình",
+      "Giá Treo Đôi"
+    ],
+    "linh-kien-may-tinh-1": [
+      1,
+      "linh-kien-may-tinh-1",
+      null,
+      "Linh Kiện Máy Tính",
+      null,
+      null
+    ],
+    "cpu": [
+      2,
+      "linh-kien-may-tinh-1",
+      "cpu",
+      "Linh Kiện Máy Tính",
+      "CPU",
+      null
+    ],
+    "cpu-intel": [
+      3,
+      "linh-kien-may-tinh-1",
+      "cpu",
+      "Linh Kiện Máy Tính",
+      "CPU",
+      "CPU Intel"
+    ],
+    "cpu-amd": [
+      3,
+      "linh-kien-may-tinh-1",
+      "cpu",
+      "Linh Kiện Máy Tính",
+      "CPU",
+      "CPU AMD"
+    ],
+    "vga": [
+      2,
+      "linh-kien-may-tinh-1",
+      "vga",
+      "Linh Kiện Máy Tính",
+      "VGA",
+      null
+    ],
+    "vga-nvidia": [
+      3,
+      "linh-kien-may-tinh-1",
+      "vga",
+      "Linh Kiện Máy Tính",
+      "VGA",
+      "NVIDIA"
+    ],
+    "vga-amd": [
+      3,
+      "linh-kien-may-tinh-1",
+      "vga",
+      "Linh Kiện Máy Tính",
+      "VGA",
+      "AMD"
+    ],
+    "mainboard": [
+      2,
+      "linh-kien-may-tinh-1",
+      "mainboard",
+      "Linh Kiện Máy Tính",
+      "Mainboard",
+      null
+    ],
+    "mainboard-intel-1": [
+      3,
+      "linh-kien-may-tinh-1",
+      "mainboard",
+      "Linh Kiện Máy Tính",
+      "Mainboard",
+      "Mainboard Intel"
+    ],
+    "mainboard-amd": [
+      3,
+      "linh-kien-may-tinh-1",
+      "mainboard",
+      "Linh Kiện Máy Tính",
+      "Mainboard",
+      "Mainboard AMD"
+    ],
+    "ram": [
+      2,
+      "linh-kien-may-tinh-1",
+      "ram",
+      "Linh Kiện Máy Tính",
+      "Ram",
+      null
+    ],
+    "ram-ddr4": [
+      3,
+      "linh-kien-may-tinh-1",
+      "ram",
+      "Linh Kiện Máy Tính",
+      "Ram",
+      "RAM DDR4"
+    ],
+    "ram-ddr5": [
+      3,
+      "linh-kien-may-tinh-1",
+      "ram",
+      "Linh Kiện Máy Tính",
+      "Ram",
+      "RAM DDR5"
+    ],
+    "ssd-hdd-1": [
+      2,
+      "linh-kien-may-tinh-1",
+      "ssd-hdd-1",
+      "Linh Kiện Máy Tính",
+      "SSD / HDD",
+      null
+    ],
+    "ssd-m-2": [
+      3,
+      "linh-kien-may-tinh-1",
+      "ssd-hdd-1",
+      "Linh Kiện Máy Tính",
+      "SSD / HDD",
+      "SSD M.2"
+    ],
+    "ssd-sata": [
+      3,
+      "linh-kien-may-tinh-1",
+      "ssd-hdd-1",
+      "Linh Kiện Máy Tính",
+      "SSD / HDD",
+      "SSD SATA"
+    ],
+    "hdd": [
+      3,
+      "linh-kien-may-tinh-1",
+      "ssd-hdd-1",
+      "Linh Kiện Máy Tính",
+      "SSD / HDD",
+      "HDD"
+    ],
+    "psu-nguon": [
+      2,
+      "linh-kien-may-tinh-1",
+      "psu-nguon",
+      "Linh Kiện Máy Tính",
+      "PSU – Nguồn",
+      null
+    ],
+    "nguon-duoi-550w": [
+      3,
+      "linh-kien-may-tinh-1",
+      "psu-nguon",
+      "Linh Kiện Máy Tính",
+      "PSU – Nguồn",
+      "Nguồn Dưới 550W"
+    ],
+    "nguon-600w-750w": [
+      3,
+      "linh-kien-may-tinh-1",
+      "psu-nguon",
+      "Linh Kiện Máy Tính",
+      "PSU – Nguồn",
+      "Nguồn 600W - 750W"
+    ],
+    "nguon-850w-tro-len": [
+      3,
+      "linh-kien-may-tinh-1",
+      "psu-nguon",
+      "Linh Kiện Máy Tính",
+      "PSU – Nguồn",
+      "Nguồn 850W Trở Lên"
+    ],
+    "case": [
+      2,
+      "linh-kien-may-tinh-1",
+      "case",
+      "Linh Kiện Máy Tính",
+      "Case",
+      null
+    ],
+    "case-gaming-1": [
+      3,
+      "linh-kien-may-tinh-1",
+      "case",
+      "Linh Kiện Máy Tính",
+      "Case",
+      "Case Gaming"
+    ],
+    "case-van-phong-1": [
+      3,
+      "linh-kien-may-tinh-1",
+      "case",
+      "Linh Kiện Máy Tính",
+      "Case",
+      "Case Văn Phòng"
+    ],
+    "tan-nhiet": [
+      2,
+      "linh-kien-may-tinh-1",
+      "tan-nhiet",
+      "Linh Kiện Máy Tính",
+      "Tản Nhiệt",
+      null
+    ],
+    "tan-khi": [
+      3,
+      "linh-kien-may-tinh-1",
+      "tan-nhiet",
+      "Linh Kiện Máy Tính",
+      "Tản Nhiệt",
+      "Tản Khí"
+    ],
+    "tan-aio": [
+      3,
+      "linh-kien-may-tinh-1",
+      "tan-nhiet",
+      "Linh Kiện Máy Tính",
+      "Tản Nhiệt",
+      "Tản AIO"
+    ],
+    "fan-case": [
+      3,
+      "linh-kien-may-tinh-1",
+      "tan-nhiet",
+      "Linh Kiện Máy Tính",
+      "Tản Nhiệt",
+      "Fan Case"
+    ],
+    "gaming-gear": [
+      1,
+      "gaming-gear",
+      null,
+      "Gaming Gear",
+      null,
+      null
+    ],
+    "ban-phim": [
+      2,
+      "gaming-gear",
+      "ban-phim",
+      "Gaming Gear",
+      "Bàn Phím",
+      null
+    ],
+    "ban-phim-gaming": [
+      3,
+      "gaming-gear",
+      "ban-phim",
+      "Gaming Gear",
+      "Bàn Phím",
+      "Bàn Phím Gaming"
+    ],
+    "ban-phim-co": [
+      3,
+      "gaming-gear",
+      "ban-phim",
+      "Gaming Gear",
+      "Bàn Phím",
+      "Bàn Phím Cơ"
+    ],
+    "ban-phim-khong-day-1": [
+      3,
+      "gaming-gear",
+      "ban-phim",
+      "Gaming Gear",
+      "Bàn Phím",
+      "Bàn Phím Không Dây"
+    ],
+    "ban-phim-co-day": [
+      3,
+      "gaming-gear",
+      "ban-phim",
+      "Gaming Gear",
+      "Bàn Phím",
+      "Bàn Phím Có Dây"
+    ],
+    "chuot-may-tinh": [
+      2,
+      "gaming-gear",
+      "chuot-may-tinh",
+      "Gaming Gear",
+      "Chuột",
+      null
+    ],
+    "chuot-gaming": [
+      3,
+      "gaming-gear",
+      "chuot-may-tinh",
+      "Gaming Gear",
+      "Chuột",
+      "Chuột Gaming"
+    ],
+    "chuot-van-phong": [
+      3,
+      "gaming-gear",
+      "chuot-may-tinh",
+      "Gaming Gear",
+      "Chuột",
+      "Chuột Văn Phòng"
+    ],
+    "chuot-khong-day": [
+      3,
+      "gaming-gear",
+      "chuot-may-tinh",
+      "Gaming Gear",
+      "Chuột",
+      "Chuột Không Dây"
+    ],
+    "chuot-co-day": [
+      3,
+      "gaming-gear",
+      "chuot-may-tinh",
+      "Gaming Gear",
+      "Chuột",
+      "Chuột Có Dây"
+    ],
+    "ban-di-chuot": [
+      2,
+      "gaming-gear",
+      "ban-di-chuot",
+      "Gaming Gear",
+      "Bàn Di Chuột",
+      null
+    ],
+    "ban-di-chuot-nho": [
+      3,
+      "gaming-gear",
+      "ban-di-chuot",
+      "Gaming Gear",
+      "Bàn Di Chuột",
+      "Bàn Di Chuột Nhỏ"
+    ],
+    "ban-di-chuot-lon": [
+      3,
+      "gaming-gear",
+      "ban-di-chuot",
+      "Gaming Gear",
+      "Bàn Di Chuột",
+      "Bàn Di Chuột Lớn"
+    ],
+    "tai-nghe": [
+      2,
+      "gaming-gear",
+      "tai-nghe",
+      "Gaming Gear",
+      "Tai Nghe",
+      null
+    ],
+    "tai-nghe-gaming": [
+      3,
+      "gaming-gear",
+      "tai-nghe",
+      "Gaming Gear",
+      "Tai Nghe",
+      "Tai Nghe Gaming"
+    ],
+    "tai-nghe-khong-day": [
+      3,
+      "gaming-gear",
+      "tai-nghe",
+      "Gaming Gear",
+      "Tai Nghe",
+      "Tai Nghe Không Dây"
+    ],
+    "tai-nghe-co-day-1": [
+      3,
+      "gaming-gear",
+      "tai-nghe",
+      "Gaming Gear",
+      "Tai Nghe",
+      "Tai Nghe Có Dây"
+    ],
+    "loa-1": [
+      3,
+      "gaming-gear",
+      "loa-1",
+      "Gaming Gear",
+      "Loa",
+      "Loa Có Dây"
+    ],
+    "ban-2": [
+      2,
+      "gaming-gear",
+      "ban-2",
+      "Gaming Gear",
+      "Bàn",
+      null
+    ],
+    "ban-gaming-chu-z": [
+      3,
+      "gaming-gear",
+      "ban-2",
+      "Gaming Gear",
+      "Bàn",
+      "Bàn Gaming Chữ Z"
+    ],
+    "ban-gaming-chu-k": [
+      3,
+      "gaming-gear",
+      "ban-2",
+      "Gaming Gear",
+      "Bàn",
+      "Bàn Gaming Chữ K"
+    ],
+    "ban-gaming-chu-yn": [
+      3,
+      "gaming-gear",
+      "ban-2",
+      "Gaming Gear",
+      "Bàn",
+      "Bàn Gaming Chữ Y"
+    ],
+    "ghe": [
+      3,
+      "gaming-gear",
+      "ghe",
+      "Gaming Gear",
+      "Ghế",
+      "Ghế Gaming"
+    ],
+    "ghe-van-phong-2": [
+      3,
+      "gaming-gear",
+      "ghe",
+      "Gaming Gear",
+      "Ghế",
+      "Ghế Văn Phòng"
+    ],
+    "phu-kien-thiet-bi-mang-1": [
+      1,
+      "phu-kien-thiet-bi-mang-1",
+      null,
+      "Phụ Kiện & Thiết Bị Mạng",
+      null,
+      null
+    ],
+    "cap-chuyen-doi": [
+      2,
+      "phu-kien-thiet-bi-mang-1",
+      "cap-chuyen-doi",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Cáp & Chuyển Đổi",
+      null
+    ],
+    "cap-hdmi": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "cap-chuyen-doi",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Cáp & Chuyển Đổi",
+      "Cáp HDMI"
+    ],
+    "cap-displayport": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "cap-chuyen-doi",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Cáp & Chuyển Đổi",
+      "Cáp DisplayPort"
+    ],
+    "cap-type-c": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "cap-chuyen-doi",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Cáp & Chuyển Đổi",
+      "Cáp Type C"
+    ],
+    "luu-tru-va-box": [
+      2,
+      "phu-kien-thiet-bi-mang-1",
+      "luu-tru-va-box",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Lưu Trữ & Box Đọc",
+      null
+    ],
+    "the-nho": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "luu-tru-va-box",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Lưu Trữ & Box Đọc",
+      "Thẻ Nhớ"
+    ],
+    "usb-flash": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "luu-tru-va-box",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Lưu Trữ & Box Đọc",
+      "USB Flash"
+    ],
+    "box-ssd-m-2": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "luu-tru-va-box",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Lưu Trữ & Box Đọc",
+      "Box SSD M.2"
+    ],
+    "box-ssd-sata": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "luu-tru-va-box",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Lưu Trữ & Box Đọc",
+      "Box SSD"
+    ],
+    "box-hdd": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "luu-tru-va-box",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Lưu Trữ & Box Đọc",
+      "Box HDD"
+    ],
+    "day-nguon": [
+      2,
+      "phu-kien-thiet-bi-mang-1",
+      "day-nguon",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Cáp Nguồn",
+      null
+    ],
+    "cap-nguon-pc": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "day-nguon",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Cáp Nguồn",
+      "Cáp Nguồn PC"
+    ],
+    "cap-nguon-laptop": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "day-nguon",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Cáp Nguồn",
+      "Cáp Nguồn Sạc Laptop"
+    ],
+    "hub": [
+      2,
+      "phu-kien-thiet-bi-mang-1",
+      "hub",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Hub",
+      null
+    ],
+    "hub-usb": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "hub",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Hub",
+      "Hub USB"
+    ],
+    "hub-type-c": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "hub",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Hub",
+      "Hub Type C"
+    ],
+    "thiet-bi-wifi": [
+      2,
+      "phu-kien-thiet-bi-mang-1",
+      "thiet-bi-wifi",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Thiết Bị WiFi",
+      null
+    ],
+    "wifi-mesh": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "thiet-bi-wifi",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Thiết Bị WiFi",
+      "WiFi Mesh"
+    ],
+    "router-wifi-1": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "thiet-bi-wifi",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Thiết Bị WiFi",
+      "Router Wifi"
+    ],
+    "bo-phat-wifi-4g-lte": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "thiet-bi-wifi",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Thiết Bị WiFi",
+      "Bộ Phát WiFi 4G/LTE"
+    ],
+    "thiet-bi-thu-wifi-bluetooth": [
+      2,
+      "phu-kien-thiet-bi-mang-1",
+      "thiet-bi-thu-wifi-bluetooth",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Thiết Bị Thu WiFi & Bluetooth",
+      null
+    ],
+    "usb-wifi-1": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "thiet-bi-thu-wifi-bluetooth",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Thiết Bị Thu WiFi & Bluetooth",
+      "USB WiFi"
+    ],
+    "usb-bluetooth": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "thiet-bi-thu-wifi-bluetooth",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Thiết Bị Thu WiFi & Bluetooth",
+      "USB Bluetooth"
+    ],
+    "bo-chia-mang-day-mang": [
+      2,
+      "phu-kien-thiet-bi-mang-1",
+      "bo-chia-mang-day-mang",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Bộ Chia Mạng & Dây Mạng",
+      null
+    ],
+    "bo-chia-mang": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "bo-chia-mang-day-mang",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Bộ Chia Mạng & Dây Mạng",
+      "Bộ chia mạng"
+    ],
+    "day-mang": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "bo-chia-mang-day-mang",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Bộ Chia Mạng & Dây Mạng",
+      "Dây mạng"
+    ],
+    "camera": [
+      2,
+      "phu-kien-thiet-bi-mang-1",
+      "camera",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Camera",
+      null
+    ],
+    "camera-trong-nha": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "camera",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Camera",
+      "Camera Trong Nhà"
+    ],
+    "camera-ngoai-troi": [
+      3,
+      "phu-kien-thiet-bi-mang-1",
+      "camera",
+      "Phụ Kiện & Thiết Bị Mạng",
+      "Camera",
+      "Camera Ngoài Trời"
+    ],
+    "dich-vu-sua-chua": [
+      1,
+      "dich-vu-sua-chua",
+      null,
+      "Dịch Vụ & Sửa Chữa",
+      null,
+      null
+    ],
+    "dich-vu-ve-sinh-pc": [
+      2,
+      "dich-vu-sua-chua",
+      "dich-vu-ve-sinh-pc",
+      "Dịch Vụ & Sửa Chữa",
+      "Dịch Vụ Vệ Sinh PC",
+      null
+    ],
+    "ve-sinh-pc-tai-cua-hang": [
+      3,
+      "dich-vu-sua-chua",
+      "dich-vu-ve-sinh-pc",
+      "Dịch Vụ & Sửa Chữa",
+      "Dịch Vụ Vệ Sinh PC",
+      "Vệ Sinh PC Tại Cửa Hàng"
+    ],
+    "ve-sinh-pc-tan-nha": [
+      3,
+      "dich-vu-sua-chua",
+      "dich-vu-ve-sinh-pc",
+      "Dịch Vụ & Sửa Chữa",
+      "Dịch Vụ Vệ Sinh PC",
+      "Vệ Sinh PC Tận Nhà"
+    ],
+    "ve-sinh-laptop": [
+      3,
+      "dich-vu-sua-chua",
+      "dich-vu-ve-sinh-pc",
+      "Dịch Vụ & Sửa Chữa",
+      "Dịch Vụ Vệ Sinh PC",
+      "Vệ Sinh Laptop"
+    ],
+    "sua-chua-may-tinh": [
+      2,
+      "dich-vu-sua-chua",
+      "sua-chua-may-tinh",
+      "Dịch Vụ & Sửa Chữa",
+      "Sửa Chữa Máy Tính",
+      null
+    ],
+    "nang-cap-pc": [
+      3,
+      "dich-vu-sua-chua",
+      "sua-chua-may-tinh",
+      "Dịch Vụ & Sửa Chữa",
+      "Sửa Chữa Máy Tính",
+      "Nâng Cấp PC"
+    ],
+    "cai-dat-windows-phan-mem": [
+      3,
+      "dich-vu-sua-chua",
+      "sua-chua-may-tinh",
+      "Dịch Vụ & Sửa Chữa",
+      "Sửa Chữa Máy Tính",
+      "Cài Đặt Windows – Phần Mềm"
+    ],
+    "sua-chua-pc-laptop": [
+      3,
+      "dich-vu-sua-chua",
+      "sua-chua-may-tinh",
+      "Dịch Vụ & Sửa Chữa",
+      "Sửa Chữa Máy Tính",
+      "Sửa Chữa PC/Laptop"
+    ],
+    "hang-cu": [
+      1,
+      "hang-cu",
+      null,
+      "Hàng Cũ",
+      null,
+      null
+    ]
+  }
+}

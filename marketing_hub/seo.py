@@ -1987,8 +1987,10 @@ def stop_title_meta_fix() -> bool:
     return False
 
 
-def run_title_meta_fix_all(url_type: str = None, issue_filter: str = None):
-    pages = list_title_meta_pages(url_type=url_type, issue_filter=issue_filter, limit=10000)
+def run_title_meta_fix_all(url_type: str = None, issue_filter: str = None,
+                            sync_filter: str = None):
+    pages = list_title_meta_pages(url_type=url_type, issue_filter=issue_filter,
+                                   sync_filter=sync_filter, limit=10000)
     fixable = [p for p in pages if p["url_type"] == "product"]
     skipped = len(pages) - len(fixable)
     # Skip SP đã gen trước đó (đã có đề xuất F/G trong Sheet) → tránh gen lại bài cũ
@@ -2059,12 +2061,13 @@ def run_title_meta_fix_all(url_type: str = None, issue_filter: str = None):
         )
 
 
-def start_title_meta_fix_all_async(url_type: str = None, issue_filter: str = None) -> bool:
+def start_title_meta_fix_all_async(url_type: str = None, issue_filter: str = None,
+                                    sync_filter: str = None) -> bool:
     with _title_meta_fix_lock:
         if _title_meta_fix_state["running"]:
             return False
     t = threading.Thread(target=run_title_meta_fix_all,
-                         args=(url_type, issue_filter), daemon=True)
+                         args=(url_type, issue_filter, sync_filter), daemon=True)
     t.start()
     return True
 

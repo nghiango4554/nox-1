@@ -41,6 +41,8 @@ import product_writer as pw
 import codex_provider as cp
 import haravan_client as hv_client
 import job_sync
+import alt_manager
+import cwv as cwv_mod
 
 ROOT = Path(__file__).parent
 ALLOWED_EXT = {"jpg", "jpeg", "png", "gif", "webp", "mp4"}
@@ -1811,15 +1813,201 @@ def seo_title_meta_fix_all_start():
     payload = request.get_json(silent=True) or request.form
     url_type = (payload.get("type") or "").strip() or None
     issue_filter = (payload.get("issue") or "").strip() or None
+    sync_filter = (payload.get("sync") or "").strip() or None
     if url_type and url_type not in ("product", "collection", "blog", "page"):
         url_type = None
     if issue_filter and issue_filter not in seo_mod.ALL_TITLE_META_CODES:
         issue_filter = None
+    if sync_filter not in ("synced", "unsynced"):
+        sync_filter = None
     started = seo_mod.start_title_meta_fix_all_async(
-        url_type=url_type, issue_filter=issue_filter)
+        url_type=url_type, issue_filter=issue_filter, sync_filter=sync_filter)
     if started:
         return jsonify({"ok": True, "message": "Đã start job."})
     return jsonify({"ok": False, "error": "Job đang chạy rồi."}), 409
+
+
+# ─────────────────────────── ALT MANAGER (P1: audit only) ───────────────────────────
+
+
+@app.route("/alt-manager")
+def alt_manager_page():
+    """P2 — trang list SP với ALT coverage badge, KPI + filter + paginate."""
+    page = max(1, int(request.args.get("page", 1) or 1))
+    only_missing = request.args.get("missing", "1") != "0"
+    filter_type = (request.args.get("type") or "").strip() or None
+    filter_vendor = (request.args.get("vendor") or "").strip() or None
+    search = (request.args.get("q") or "").strip() or None
+    sort = request.args.get("sort", "missing_desc")
+    if sort not in ("missing_desc", "total_desc", "handle_asc"):
+        sort = "missing_desc"
+
+    summary = alt_manager.summarize_alt_coverage()
+    page_data = alt_manager.list_products_paginated(
+        page=page, page_size=100,
+        only_missing=only_missing,
+        filter_type=filter_type, filter_vendor=filter_vendor,
+        search=search, sort=sort,
+    )
+    options = alt_manager.list_filter_options()
+    return render_template(
+        "alt_manager.html",
+        summary=summary, page_data=page_data, options=options,
+        only_missing=only_missing,
+        filter_type=filter_type, filter_vendor=filter_vendor,
+        search=search, sort=sort,
+    )
+
+
+@app.route("/alt-manager/<int:product_id>")
+def alt_manager_product_page(product_id):
+    """P3 — editor inline ALT text cho 1 SP."""
+    from content_writer import _gen_alt_for_position  # noqa: F401 — confirm importable
+    product = alt_manager.get_product_for_editor(product_id)
+    if not product:
+        return "Không tìm thấy SP", 404
+    return render_template("alt_manager_product.html", product=product)
+
+
+@app.route("/api/alt-manager/<int:product_id>/gen-alt", methods=["POST"])
+def alt_manager_gen_alt(product_id):
+    """P3 — AI gen ALT text cho 1 image."""
+    from content_writer import _gen_alt_for_position
+    data = request.get_json(force=True) or {}
+    position = int(data.get("position", 1))
+    total = int(data.get("total", 1))
+    product = alt_manager.get_product_for_editor(product_id)
+    if not product:
+        return jsonify({"error": "SP not found"}), 404
+    name_clean = (product.get("title") or product.get("handle") or "").strip()
+    alt = _gen_alt_for_position(name_clean, position, total)
+    return jsonify({"alt": alt})
+
+
+@app.route("/api/alt-manager/<int:product_id>/save", methods=["POST"])
+def alt_manager_save_alts(product_id):
+    """P3 — bulk save ALT: PUT Haravan API + update local DB."""
+    data = request.get_json(force=True) or {}
+    updates = data.get("updates", [])  # [{image_id, alt}, ...]
+    if not updates:
+        return jsonify({"ok": True, "saved": 0, "errors": []})
+    errors = []
+    saved = 0
+    for item in updates:
+        image_id = item.get("image_id")
+        new_alt = (item.get("alt") or "").strip()
+        if not image_id:
+            continue
+        result = hv_client.put_image_alt(product_id, image_id, new_alt)
+        if result.get("ok"):
+            alt_manager.update_image_alt_local(product_id, image_id, new_alt)
+            saved += 1
+        else:
+            errors.append({"image_id": image_id, "error": result.get("error", "unknown")})
+    return jsonify({"ok": len(errors) == 0, "saved": saved, "errors": errors})
+
+
+@app.route("/api/alt-manager/summary")
+def alt_manager_summary():
+    """P1 — coverage stats toàn shop, parse JSON images đã có trong DB."""
+    return jsonify(alt_manager.summarize_alt_coverage())
+
+
+@app.route("/api/alt-manager/worst")
+def alt_manager_worst():
+    """P1 — top SP có nhiều ảnh thiếu/yếu ALT nhất."""
+    limit = max(1, min(int(request.args.get("limit", 50)), 500))
+    only_missing = request.args.get("all", "").lower() not in ("1", "true", "yes")
+    return jsonify({
+        "items": alt_manager.worst_products(limit=limit, only_with_missing=only_missing),
+        "limit": limit,
+    })
+
+
+@app.route("/api/alt-manager/<int:product_id>/desc-images")
+def alt_manager_desc_images(product_id):
+    """P5 — fetch body_html LIVE từ Haravan, parse img tags."""
+    try:
+        imgs, _ = alt_manager.get_product_desc_images(product_id)
+    except Exception as e:
+        return jsonify({"error": str(e)[:200]}), 500
+    product = alt_manager.get_product_for_editor(product_id)
+    return jsonify({"images": imgs, "title": (product or {}).get("title", "")})
+
+
+@app.route("/api/alt-manager/<int:product_id>/gen-alt-desc", methods=["POST"])
+def alt_manager_gen_alt_desc(product_id):
+    """P5 — gen ALT cho 1 ảnh mô tả."""
+    data = request.get_json(force=True) or {}
+    idx = int(data.get("index", 0))
+    product = alt_manager.get_product_for_editor(product_id)
+    if not product:
+        return jsonify({"error": "SP not found"}), 404
+    name = (product.get("title") or product.get("handle") or "").strip()
+    alt = alt_manager.gen_alt_for_desc_image(name, idx)
+    return jsonify({"alt": alt})
+
+
+@app.route("/api/alt-manager/<int:product_id>/save-desc", methods=["POST"])
+def alt_manager_save_desc(product_id):
+    """P5 — fetch live body_html → inject ALT → PUT lên Haravan."""
+    data = request.get_json(force=True) or {}
+    updates = data.get("updates", [])
+    if not updates:
+        return jsonify({"ok": True, "saved": 0})
+    try:
+        _, live_html = alt_manager.get_product_desc_images(product_id)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Fetch Haravan thất bại: {e}"}), 500
+    if not live_html:
+        return jsonify({"ok": False, "error": "body_html trống"}), 400
+    new_html = alt_manager.save_desc_image_alts(product_id, updates, live_html)
+    try:
+        hv_client.update_product(product_id, {"body_html": new_html})
+        return jsonify({"ok": True, "saved": len(updates)})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)[:300]}), 500
+
+
+@app.route("/api/alt-manager/bulk-gen/start", methods=["POST"])
+def alt_manager_bulk_gen_start():
+    """P4 — khởi chạy bulk gen ALT background job."""
+    ok = alt_manager.start_bulk_gen_async()
+    if not ok:
+        return jsonify({"ok": False, "error": "Job đang chạy rồi"}), 409
+    return jsonify({"ok": True, "message": "Đã bắt đầu bulk gen"})
+
+
+@app.route("/api/alt-manager/bulk-gen/start-desc", methods=["POST"])
+def alt_manager_bulk_gen_start_desc():
+    """Bulk gen chỉ ảnh mô tả (body_html) — API image ALT không hỗ trợ."""
+    ok = alt_manager.start_bulk_gen_async(desc_only=True)
+    if not ok:
+        return jsonify({"ok": False, "error": "Job đang chạy rồi"}), 409
+    return jsonify({"ok": True})
+
+
+@app.route("/api/alt-manager/bulk-gen/stop", methods=["POST"])
+def alt_manager_bulk_gen_stop():
+    """P4 — gửi tín hiệu dừng bulk gen job."""
+    stopped = alt_manager.stop_bulk_gen()
+    return jsonify({"ok": stopped, "message": "Đang dừng..." if stopped else "Job không chạy"})
+
+
+@app.route("/api/alt-manager/bulk-gen/status")
+def alt_manager_bulk_gen_status():
+    """P4 — polling endpoint trả trạng thái bulk gen job."""
+    return jsonify(alt_manager.bulk_gen_job_state())
+
+
+@app.route("/api/alt-manager/<int:product_id>/gen-save-all", methods=["POST"])
+def alt_manager_gen_save_all(product_id):
+    """Gen + save ALT cho tất cả ảnh (product + desc) của 1 SP."""
+    try:
+        result = alt_manager.gen_and_save_all_alts(product_id)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)[:200]}), 500
+    return jsonify(result)
 
 
 @app.route("/seo/title-meta/fix-all/stop", methods=["POST"])
@@ -1891,6 +2079,90 @@ def seo_gsc_refresh():
     except Exception as e:
         flash(f"❌ Refresh error: {e}", "error")
     return redirect(url_for("seo_gsc_page"))
+
+
+# ─────────────────────── CORE WEB VITALS (PSI) ────────────────────────
+
+
+@app.route("/seo/cwv")
+def seo_cwv_page():
+    strategy = request.args.get("strategy", "mobile")
+    sort = request.args.get("sort", "performance_score")
+    order = request.args.get("order", "asc")
+    page_num = max(1, int(request.args.get("page", 1)))
+    per_page = 50
+    offset = (page_num - 1) * per_page
+
+    total = db.cwv_count(strategy)
+    rows = db.cwv_list(strategy=strategy, limit=per_page, offset=offset, sort=sort, order=order)
+    stats = db.cwv_stats(strategy)
+    state = cwv_mod.state_snapshot()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    progress = db.cwv_progress(strategy)
+
+    return render_template(
+        "seo_cwv.html",
+        rows=rows, stats=stats, state=state,
+        strategy=strategy, sort=sort, order=order,
+        page_num=page_num, total_pages=total_pages, total=total,
+        psi_key=_load_psi_key(),
+        progress=progress,
+    )
+
+
+@app.route("/api/seo/cwv/status")
+def api_cwv_status():
+    return jsonify(cwv_mod.state_snapshot())
+
+
+@app.route("/api/seo/cwv/progress")
+def api_cwv_progress():
+    strategy = request.args.get("strategy", "mobile")
+    return jsonify({"progress": db.cwv_progress(strategy)})
+
+
+def _load_psi_key() -> str:
+    try:
+        cfg = json.loads((ROOT.parent / "state" / "psi_config.json").read_text())
+        return cfg.get("psi_api_key", "")
+    except Exception:
+        return ""
+
+
+@app.route("/api/seo/cwv/scan/start", methods=["POST"])
+def api_cwv_scan_start():
+    body = request.get_json(silent=True) or {}
+    strategy = body.get("strategy", "mobile")
+    api_key = body.get("api_key", "").strip() or _load_psi_key()
+    mode = body.get("mode", "top")       # "top" | "custom"
+    url_type = body.get("url_type", "product")
+    limit = min(int(body.get("limit", 30)), 200)
+
+    skip_scanned = bool(body.get("skip_scanned", False))
+    if mode == "custom":
+        urls = [u.strip() for u in body.get("urls", []) if u.strip()]
+    else:
+        urls = cwv_mod.get_top_urls(limit=limit, url_type=url_type, skip_scanned=skip_scanned, strategy=strategy)
+
+    if not urls:
+        return jsonify({"ok": False, "error": "Không có URL nào để scan"})
+
+    ok = cwv_mod.start_scan_async(urls, api_key=api_key, strategy=strategy)
+    return jsonify({"ok": ok, "total": len(urls),
+                    "message": "Đã bắt đầu scan" if ok else "Đang có scan chạy rồi"})
+
+
+@app.route("/api/seo/cwv/scan/stop", methods=["POST"])
+def api_cwv_scan_stop():
+    cwv_mod.stop_scan()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/seo/cwv/clear", methods=["POST"])
+def api_cwv_clear():
+    strategy = (request.get_json(silent=True) or {}).get("strategy")
+    db.cwv_clear(strategy)
+    return jsonify({"ok": True})
 
 
 # ─────────────────────────── SP THIẾU MÔ TẢ ───────────────────────────
@@ -2141,9 +2413,70 @@ def _collection_jobs_update(job_id: int, **fields):
     conn.close()
 
 
+def _build_tier_groups(all_jobs):
+    """Group jobs by tier1 → tier2, maintaining nav order from taxonomy JSON."""
+    import json as _json
+    tax_path = os.path.join(os.path.dirname(__file__), "data", "collection_taxonomy.json")
+    try:
+        with open(tax_path, encoding="utf-8") as f:
+            tax_data = _json.load(f)
+        t1_order = list(tax_data["taxonomy"].keys())
+    except Exception:
+        t1_order = []
+
+    # Build tier1 → tier2 → jobs mapping
+    t1_map = {}  # t1_handle → {name, t2_map}
+    for j in all_jobs:
+        t1h = j.get("tier1_handle") or "uncategorized"
+        t1n = j.get("tier1_name") or "Chưa phân loại"
+        t2h = j.get("tier2_handle") or t1h
+        t2n = j.get("tier2_name") or t1n
+        if t1h not in t1_map:
+            t1_map[t1h] = {"name": t1n, "handle": t1h, "t2_map": {}}
+        t2_map = t1_map[t1h]["t2_map"]
+        if t2h not in t2_map:
+            t2_map[t2h] = {"name": t2n, "handle": t2h, "jobs": []}
+        t2_map[t2h]["jobs"].append(j)
+
+    # Sort tier1 by nav order, then alphabetical for unknowns
+    def t1_sort_key(h):
+        try: return t1_order.index(h)
+        except ValueError: return 9999
+
+    # Build final list with stats
+    tier_groups = []
+    for t1h in sorted(t1_map.keys(), key=t1_sort_key):
+        t1v = t1_map[t1h]
+        t2_groups = []
+        for t2h, t2v in t1v["t2_map"].items():
+            t2_stats = {}
+            for s in ("pending", "draft", "synced", "failed", "existing", "drafting"):
+                t2_stats[s] = sum(1 for j in t2v["jobs"] if j["status"] == s)
+            t2_stats["total"] = len(t2v["jobs"])
+            t2_stats["done"] = t2_stats["synced"] + t2_stats["existing"]
+            t2_stats["active"] = t2_stats["draft"] + t2_stats["pending"] + t2_stats["failed"]
+            t2_groups.append({**t2v, "stats": t2_stats})
+
+        t1_stats = {}
+        all_t1_jobs = [j for g in t2_groups for j in g["jobs"]]
+        for s in ("pending", "draft", "synced", "failed", "existing", "drafting"):
+            t1_stats[s] = sum(1 for j in all_t1_jobs if j["status"] == s)
+        t1_stats["total"] = len(all_t1_jobs)
+        t1_stats["done"] = t1_stats["synced"] + t1_stats["existing"]
+        t1_stats["pct"] = round(t1_stats["done"] / t1_stats["total"] * 100) if t1_stats["total"] else 0
+
+        tier_groups.append({
+            "name": t1v["name"], "handle": t1h,
+            "tier2_groups": t2_groups,
+            "stats": t1_stats,
+        })
+    return tier_groups
+
+
 @app.route("/collection-content")
 def collection_content_page():
     status_filter = request.args.get("status") or None
+    view = request.args.get("view") or ("tier" if not status_filter else "flat")
     jobs = _collection_jobs_list(status=status_filter)
     conn = db.get_conn()
     stats = {}
@@ -2151,7 +2484,9 @@ def collection_content_page():
         stats[s] = conn.execute("SELECT COUNT(*) FROM collection_jobs WHERE status=?", (s,)).fetchone()[0]
     stats["total"] = conn.execute("SELECT COUNT(*) FROM collection_jobs").fetchone()[0]
     conn.close()
-    return render_template("collection_content.html", jobs=jobs, stats=stats, active_status=status_filter)
+    tier_groups = _build_tier_groups(jobs) if view == "tier" else []
+    return render_template("collection_content.html", jobs=jobs, stats=stats,
+                           active_status=status_filter, view=view, tier_groups=tier_groups)
 
 
 @app.route("/collection-content/<int:job_id>")
@@ -2294,6 +2629,7 @@ def _gen_bg_worker_collection_loop():
                     page_title=ctx.get("page_title", ""),
                     admin_desc=ctx.get("admin_desc", ""),
                     sp_names=ctx.get("sp_names", []),
+                    haravan_id=job.get("haravan_id"),
                 )
                 if not gen.get("ok"):
                     _collection_jobs_update(jid, status="failed", error=gen.get("error"))
@@ -3736,6 +4072,20 @@ def haravan_sync_start():
     return redirect(url_for("haravan_dashboard"))
 
 
+@app.route("/api/haravan/sync-incremental/start", methods=["POST"])
+def haravan_sync_incremental_start():
+    """Incremental sync — chỉ pull SP thay đổi/mới kể từ last_synced."""
+    ok = hv_sync.start_sync_incremental_async()
+    if ok:
+        return jsonify({"ok": True, "message": "Incremental sync đã bắt đầu"})
+    return jsonify({"ok": False, "message": "Đang sync — chờ xong"}), 409
+
+
+@app.route("/api/haravan/sync/status")
+def haravan_sync_status_api():
+    return jsonify(hv_sync.sync_state())
+
+
 @app.route("/api/haravan/status")
 def haravan_status_api():
     return jsonify({
@@ -4272,6 +4622,18 @@ def _dashboard_health():
     except Exception as e:
         out["review_queue"] = {"error": str(e)[:100]}
         out["pillar"] = {"error": str(e)[:100]}
+
+    try:
+        s = alt_manager.summarize_alt_coverage()
+        out["alt"] = {
+            "total_images": s.get("total_images", 0),
+            "good": s.get("good", 0),
+            "none": s.get("none", 0),
+            "weak": s.get("weak", 0),
+            "coverage_percent": s.get("coverage_percent", 0.0),
+        }
+    except Exception as e:
+        out["alt"] = {"error": str(e)[:100]}
 
     out["backups"] = {"db": _backup_info("posts_*.db.zip"), "secrets": _backup_info("secrets_*.zip")}
     out["git"] = _health_cached("git", 30, _git_health)
