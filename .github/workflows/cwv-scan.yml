@@ -1,0 +1,140 @@
+name: CWV Scan (PageSpeed Insights)
+
+on:
+  schedule:
+    # 18:00 UTC = 01:00 GMT+7 (Vietnam) — quét đêm tránh giờ cao điểm
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+    inputs:
+      url_type:
+        description: "URL type (product/collection/blog/page/all)"
+        required: false
+        default: "all"
+      strategy:
+        description: "mobile/desktop/both"
+        required: false
+        default: "both"
+      limit:
+        description: "Max URL per job"
+        required: false
+        default: "300"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cwv-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330  # 5.5h — dưới limit 6h
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        strategy: [mobile, desktop]
+        url_type: [product, collection, blog, page]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install requests
+
+      - name: Filter by dispatch inputs
+        id: filter
+        run: |
+          want_type="${{ github.event.inputs.url_type }}"
+          want_strat="${{ github.event.inputs.strategy }}"
+          # Trigger from cron → inputs trống → chạy hết
+          if [ -z "$want_type" ] || [ "$want_type" = "all" ]; then want_type="${{ matrix.url_type }}"; fi
+          if [ -z "$want_strat" ] || [ "$want_strat" = "both" ]; then want_strat="${{ matrix.strategy }}"; fi
+          if [ "$want_type" != "${{ matrix.url_type }}" ] || [ "$want_strat" != "${{ matrix.strategy }}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "→ skip job (filtered by dispatch input)"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run CWV scan
+        if: steps.filter.outputs.skip != 'true'
+        env:
+          PSI_API_KEY: ${{ secrets.PSI_API_KEY }}
+        run: |
+          DATE_DIR=$(date -u +"%Y-%m-%d")
+          OUT="data/cwv_results/${DATE_DIR}/${{ matrix.strategy }}_${{ matrix.url_type }}.json"
+          LIMIT="${{ github.event.inputs.limit }}"
+          if [ -z "$LIMIT" ]; then LIMIT=300; fi
+          python .github/scripts/cwv_scan.py \
+            --strategy "${{ matrix.strategy }}" \
+            --url-type "${{ matrix.url_type }}" \
+            --limit "$LIMIT" \
+            --output "$OUT"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        if: steps.filter.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cwv-${{ matrix.strategy }}-${{ matrix.url_type }}
+          path: ${{ env.OUT }}
+          retention-days: 30
+
+  commit:
+    needs: scan
+    runs-on: ubuntu-latest
+    if: always() && needs.scan.result != 'cancelled'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: cwv-*
+          merge-multiple: false
+
+      - name: Move artifacts → data/cwv_results/<date>/
+        run: |
+          set -e
+          DATE_DIR=$(date -u +"%Y-%m-%d")
+          mkdir -p "data/cwv_results/${DATE_DIR}"
+          if [ -d artifacts ]; then
+            find artifacts -name "*.json" -exec cp -v {} "data/cwv_results/${DATE_DIR}/" \;
+          fi
+          ls -la "data/cwv_results/${DATE_DIR}" || true
+
+      - name: Update latest pointer
+        run: |
+          DATE_DIR=$(date -u +"%Y-%m-%d")
+          cat > data/cwv_results/_latest.json <<EOF
+          {
+            "latest_date": "${DATE_DIR}",
+            "updated_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "files": $(ls data/cwv_results/${DATE_DIR}/ 2>/dev/null | grep '.json$' | jq -R . | jq -sc . || echo '[]')
+          }
+          EOF
+          cat data/cwv_results/_latest.json
+
+      - name: Commit & push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/cwv_results/
+          if git diff --staged --quiet; then
+            echo "→ No changes to commit"
+          else
+            DATE_DIR=$(date -u +"%Y-%m-%d")
+            git commit -m "chore(cwv): auto scan ${DATE_DIR} [skip ci]"
+            git push
+          fi

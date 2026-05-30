@@ -27,6 +27,10 @@ from pathlib import Path
 
 import requests
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 PSI_API_URL = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 SITEMAP_URL = "https://sintech.vn/sitemap.xml"
 PSI_API_KEY = os.getenv("PSI_API_KEY", "").strip()
