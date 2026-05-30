@@ -2152,6 +2152,15 @@ def api_cwv_scan_start():
                     "message": "Đã bắt đầu scan" if ok else "Đang có scan chạy rồi"})
 
 
+@app.route("/api/seo/cwv/scan/start-all", methods=["POST"])
+def api_cwv_scan_start_all():
+    """Quét All Batch — chain 8 phase: mobile×(product→collection→blog→page) → desktop×(...)."""
+    body = request.get_json(silent=True) or {}
+    api_key = body.get("api_key", "").strip() or _load_psi_key()
+    ok = cwv_mod.start_chain_async(api_key=api_key)
+    return jsonify({"ok": ok, "message": "Đã bắt đầu Quét All Batch" if ok else "Đang có scan chạy rồi"})
+
+
 @app.route("/api/seo/cwv/scan/stop", methods=["POST"])
 def api_cwv_scan_stop():
     cwv_mod.stop_scan()

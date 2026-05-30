@@ -1,0 +1,54 @@
+name: CWV Weekly Scan
+
+on:
+  schedule:
+    # Saturday 19:00 UTC = Sunday 02:00 GMT+7
+    - cron: '0 19 * * 6'
+  workflow_dispatch:
+    inputs:
+      max_urls:
+        description: 'Giới hạn URL để smoke test (mặc định 0 = scan hết)'
+        required: false
+        default: '0'
+      send_telegram:
+        description: 'Gửi report Telegram (true/false)'
+        required: false
+        default: 'true'
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deps
+        run: pip install requests
+
+      - name: Run weekly CWV scan
+        env:
+          PSI_API_KEY: ${{ secrets.PSI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MAX_URLS: ${{ inputs.max_urls || '0' }}
+          SEND_TELEGRAM: ${{ inputs.send_telegram || 'true' }}
+        run: python scripts/cwv_weekly.py
+
+      - name: Commit snapshot
+        if: always()
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add data/cwv_history/ || true
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(cwv): weekly snapshot $(date -u +%Y-W%V)"
+            git push
+          else
+            echo "No snapshot changes to commit"
+          fi

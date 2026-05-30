@@ -88,7 +88,8 @@ marketing_hub/test_processed.jpg
 # ─── Workspace artifact / personal drafts ───
 /blog_drafts/
 /portraits/
-/data/
+/data/*
+!/data/cwv_history/
 UsersNghia
 /seo_duplicates.tsv
 

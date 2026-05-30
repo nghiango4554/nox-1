@@ -432,10 +432,10 @@ details:not([open]) summary::before { content:'▸ ' }
   </div>
   {% endif %}
 
-  <!-- Auto-scan banner (hiển thị khi đang chạy auto) -->
+  <!-- Auto-scan banner (hiển thị khi đang chạy chain All Batch) -->
   <div id="autoScanBanner" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:12.5px; color:#1e40af">
-    🤖 <b>Đang tự động quét All Batch</b> — <span id="autoScanPhaseLabel"></span>
-    &nbsp;·&nbsp; Sẽ tự chuyển tiếp sau khi xong
+    🤖 <b>Đang Quét All Batch (8 phase)</b> — <span id="autoScanPhaseLabel"></span>
+    &nbsp;·&nbsp; Server tự chuyển phase, refresh trang vẫn tiếp tục
   </div>
 
   <!-- Resume banner (hiện khi có scan bị dừng giữa chừng) -->
@@ -771,88 +771,69 @@ async function startBatch(skipScanned) {
 }
 
 /* ════════════════════════════════════════
-   AUTO ALL BATCH (Quét All Batch)
-   Phases: mobile → desktop, tất cả URL còn lại
-   Mỗi lần hết scan → reload → tiếp tục tự động
+   QUÉT ALL BATCH (server-side chain)
+   8 phase: mobile/product → mobile/collection → mobile/blog → mobile/page
+            → desktop/product → desktop/collection → desktop/blog → desktop/page
+   Server tự chuyển phase, browser chỉ poll.
    ════════════════════════════════════════ */
 async function startAllBatchAuto() {
-  const urlType = document.getElementById('urlTypeSelect').value;
-  setAuto({ active: true, urlType, phases: ['mobile','desktop'], phaseIdx: 0 });
-  // Luôn bắt đầu từ mobile
-  if (_currentStrategy !== 'mobile') {
-    window.location.href = `/seo/cwv?strategy=mobile`;
+  clearPauseState();
+  setAuto(null); // bỏ legacy client-side chain
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const r = await fetch('/api/seo/cwv/scan/start-all', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ api_key: apiKey })
+  });
+  const d = await r.json();
+  if (!d.ok) {
+    alert(d.error || d.message || 'Lỗi khởi động chain');
     return;
   }
-  await _runAutoPhase();
+  setBtnState(true); showRunning(true);
+  showAutoBanner('Đang khởi động phase 1/8...');
+  _pollChain();
 }
 
-async function _runAutoPhase() {
-  const state = getAuto();
-  if (!state || !state.active) return;
+let _chainPollTimer = null;
+function _stopChainPoll() { clearInterval(_chainPollTimer); _chainPollTimer = null; }
 
-  const phases  = state.phases || ['mobile','desktop'];
-  const phaseIdx = state.phaseIdx || 0;
+function _pollChain() {
+  _stopChainPoll();
+  _startLiveStats();
+  _chainPollTimer = setInterval(async () => {
+    const d = await fetch('/api/seo/cwv/status').then(r => r.json());
+    const pbar = document.getElementById('scanPbar');
+    const msg  = document.getElementById('scanMsg');
+    const ctr  = document.getElementById('scanCounter');
+    const pct  = d.total > 0 ? Math.round(d.done / d.total * 100) : 0;
+    if (pbar) pbar.style.width = pct + '%';
+    if (msg)  msg.textContent = d.message || '';
+    if (ctr)  ctr.textContent = `${d.done}/${d.total} URL · phase ${d.phase_idx || 0}/${d.phase_total || 8}`;
 
-  if (phaseIdx >= phases.length) {
-    // Hoàn tất cả phases
-    setAuto(null);
-    showAutoBanner(null);
-    setBtnState(false); showRunning(false);
-    // Show done toast
-    const b = document.getElementById('autoScanBanner');
-    if (b) {
-      b.style.display = 'block';
-      b.style.background = '#f0fdf4';
-      b.style.borderColor = '#86efac';
-      b.style.color = '#15803d';
-      b.innerHTML = '✅ <b>Hoàn tất Quét All Batch!</b> Đã quét cả Mobile & Desktop.';
+    if (d.chain_active && d.phase_label) {
+      showAutoBanner(`Phase ${d.phase_idx}/${d.phase_total} · ${d.phase_label}`);
     }
-    return;
-  }
 
-  const strategy = phases[phaseIdx];
-
-  // Nếu trang hiện tại khác strategy → navigate
-  if (_currentStrategy !== strategy) {
-    window.location.href = `/seo/cwv?strategy=${strategy}`;
-    return;
-  }
-
-  // Kiểm tra còn URL chưa quét không
-  const progData = await fetch(`/api/seo/cwv/progress?strategy=${strategy}`).then(r => r.json());
-  const typeRow = (progData.progress || []).find(p => p.url_type === state.urlType);
-  const unscanned = typeRow ? typeRow.unscanned : 0;
-
-  if (unscanned === 0) {
-    // Phase này xong, chuyển sang phase tiếp
-    state.phaseIdx = phaseIdx + 1;
-    setAuto(state);
-    const nextStrategy = phases[phaseIdx + 1];
-    if (nextStrategy) {
-      window.location.href = `/seo/cwv?strategy=${nextStrategy}`;
-    } else {
-      await _runAutoPhase(); // gọi lại để show done
+    if (!d.running) {
+      _stopChainPoll(); _stopLiveStats();
+      const b = document.getElementById('autoScanBanner');
+      if (b) {
+        b.style.display = 'block';
+        b.style.background = '#f0fdf4';
+        b.style.borderColor = '#86efac';
+        b.style.color = '#15803d';
+        const ok = d.chain_total_ok || 0;
+        const fail = d.chain_total_failed || 0;
+        b.innerHTML = `✅ <b>Hoàn tất Quét All Batch!</b> Tổng ${ok} OK · ${fail} lỗi qua ${d.phase_total || 8} phase.`;
+      }
+      setBtnState(false); showRunning(false);
+      // Reload sau 2s để hiển thị data mới
+      setTimeout(() => {
+        window.location.href = `/seo/cwv?strategy=${_currentStrategy}&sort=performance_score&order=asc`;
+      }, 2000);
     }
-    return;
-  }
-
-  // Bắt đầu quét tất cả còn lại
-  const phaseLabel = `${strategy.charAt(0).toUpperCase() + strategy.slice(1)} (${phaseIdx+1}/${phases.length}) · ${state.urlType} · ${unscanned} URL còn lại`;
-  showAutoBanner(phaseLabel);
-  setBtnState(true); showRunning(true);
-
-  const d = await _fireScan(strategy, state.urlType, 99999, true);
-  if (d.ok) {
-    _poll((result) => {
-      // Sau khi scan xong → reload để hiển thị data mới, auto tiếp tục
-      window.location.href = `/seo/cwv?strategy=${strategy}&sort=performance_score&order=asc`;
-    });
-  } else {
-    setAuto(null);
-    showAutoBanner(null);
-    setBtnState(false); showRunning(false);
-    alert(d.error || d.message || 'Lỗi khởi động auto scan');
-  }
+  }, 2500);
 }
 
 /* ── Pause / Resume state ── */
@@ -929,28 +910,22 @@ async function clearData() {
    PAGE INIT
    ════════════════ */
 (async () => {
-  // 1. Check if auto-scan is active (resumed after reload)
-  const autoState = getAuto();
-  if (autoState && autoState.active) {
-    // Check không có scan đang chạy trước
-    const status = await fetch('/api/seo/cwv/status').then(r => r.json());
-    if (status.running) {
-      // Scan đang chạy tiếp (resumed từ reload trước)
-      const phaseLabel = `${_currentStrategy} đang chạy...`;
-      showAutoBanner(phaseLabel);
-      setBtnState(true); showRunning(true);
-      _poll(() => {
-        window.location.href = `/seo/cwv?strategy=${_currentStrategy}&sort=performance_score&order=asc`;
-      });
-    } else {
-      // Scan vừa xong → tiếp tục phase tiếp
-      await _runAutoPhase();
-    }
+  // 1. Check server-side chain đang chạy → resume poll
+  const status = await fetch('/api/seo/cwv/status').then(r => r.json());
+  if (status.running && status.chain_active) {
+    setBtnState(true); showRunning(true);
+    showAutoBanner(`Phase ${status.phase_idx}/${status.phase_total} · ${status.phase_label || ''}`);
+    _pollChain();
     return;
   }
 
-  // 2. Nếu có scan đang chạy (manual resume)
-  const status = await fetch('/api/seo/cwv/status').then(r => r.json());
+  // 2. Legacy client-side auto chain (deprecated, vẫn xử nếu có)
+  const autoState = getAuto();
+  if (autoState && autoState.active) {
+    setAuto(null); // clear legacy state
+  }
+
+  // 3. Nếu có scan đang chạy (manual resume)
   if (status.running) {
     setBtnState(true); showRunning(true);
     _poll(() => {

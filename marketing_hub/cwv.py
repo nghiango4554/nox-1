@@ -34,6 +34,13 @@ _state = {
     "started_at": None,
     "finished_at": None,
     "message": "",
+    # All Batch chain fields
+    "chain_active": False,
+    "phase_idx": 0,
+    "phase_total": 0,
+    "phase_label": "",
+    "chain_total_ok": 0,
+    "chain_total_failed": 0,
 }
 
 
@@ -157,12 +164,13 @@ def scan_url_psi(url: str, api_key: str = "", strategy: str = "mobile") -> dict:
 WORKERS_WITH_KEY = 8   # 8 luồng song song khi có API key
 WORKERS_NO_KEY   = 1   # tuần tự khi không có key (tránh 429)
 
-def _run_scan(urls: list, api_key: str, strategy: str):
+def _run_scan_core(urls: list, api_key: str, strategy: str, prefix: str = ""):
+    """Core batch scan — không touch running/started_at/finished_at/chain_active.
+    Dùng được cho cả single-batch lẫn từng phase của chain."""
     workers = WORKERS_WITH_KEY if api_key else WORKERS_NO_KEY
     total = len(urls)
-    _set(running=True, stop_requested=False, total=total, done=0, ok=0, failed=0,
-         strategy=strategy, started_at=datetime.now().isoformat(timespec="seconds"),
-         finished_at=None, message=f"Đang scan {total} URL ({strategy}) — {workers} luồng song song...")
+    _set(total=total, done=0, ok=0, failed=0, strategy=strategy,
+         message=f"{prefix}Đang scan {total} URL ({strategy}) — {workers} luồng song song...")
 
     ok_count = failed_count = done_count = 0
     _counter_lock = threading.Lock()
@@ -177,7 +185,6 @@ def _run_scan(urls: list, api_key: str, strategy: str):
         futures = {pool.submit(_scan_one, url): url for url in urls}
         for future in as_completed(futures):
             if _state["stop_requested"]:
-                # Cancel pending futures
                 for f in futures:
                     f.cancel()
                 break
@@ -191,22 +198,102 @@ def _run_scan(urls: list, api_key: str, strategy: str):
                 else:
                     failed_count += 1
                 _set(done=done_count, ok=ok_count, failed=failed_count,
-                     message=f"[{done_count}/{total}] {url}")
+                     message=f"{prefix}[{done_count}/{total}] {url}")
 
+    return ok_count, failed_count
+
+
+def _run_scan(urls: list, api_key: str, strategy: str):
+    """Single batch — set running on/off."""
+    _set(running=True, stop_requested=False, chain_active=False,
+         started_at=datetime.now().isoformat(timespec="seconds"),
+         finished_at=None)
+    ok_count, failed_count = _run_scan_core(urls, api_key, strategy)
+
+    tail = f"{ok_count} OK · {failed_count} lỗi"
     if _state["stop_requested"]:
         _set(running=False, current_url="",
              finished_at=datetime.now().isoformat(timespec="seconds"),
-             message=f"⏹ Đã dừng — {ok_count} OK · {failed_count} lỗi")
+             message=f"⏹ Đã dừng — {tail}")
     else:
         _set(running=False, current_url="",
              finished_at=datetime.now().isoformat(timespec="seconds"),
-             message=f"✅ Xong! {ok_count} OK · {failed_count} lỗi")
+             message=f"✅ Xong! {tail}")
+
+
+# ─── ALL BATCH chain ────────────────────────────────────────────────────────
+
+ALL_PHASES = [
+    ("mobile",  "product"),
+    ("mobile",  "collection"),
+    ("mobile",  "blog"),
+    ("mobile",  "page"),
+    ("desktop", "product"),
+    ("desktop", "collection"),
+    ("desktop", "blog"),
+    ("desktop", "page"),
+]
+
+
+def _run_chain(api_key: str):
+    """Quét tuần tự 8 phase: mobile→(product→collection→blog→page) rồi desktop→(...).
+    Mỗi phase skip_scanned=True. Nếu phase rỗng (đã quét hết) → next."""
+    n_phases = len(ALL_PHASES)
+    _set(running=True, stop_requested=False, chain_active=True,
+         phase_idx=0, phase_total=n_phases, phase_label="",
+         chain_total_ok=0, chain_total_failed=0,
+         total=0, done=0, ok=0, failed=0,
+         started_at=datetime.now().isoformat(timespec="seconds"),
+         finished_at=None,
+         message=f"🚀 Bắt đầu Quét All Batch — {n_phases} phase (mobile × 4 + desktop × 4)")
+
+    chain_ok = chain_failed = 0
+
+    for idx, (strat, utype) in enumerate(ALL_PHASES):
+        if _state["stop_requested"]:
+            break
+
+        label = f"{strat}/{utype}"
+        urls = db.cwv_top_urls(limit=99999, url_type=utype, skip_scanned=True, strategy=strat)
+
+        if not urls:
+            _set(phase_idx=idx + 1, phase_label=label, strategy=strat,
+                 message=f"[Phase {idx + 1}/{n_phases}] {label} — đã đủ, bỏ qua")
+            continue
+
+        _set(phase_idx=idx + 1, phase_label=label, strategy=strat,
+             message=f"[Phase {idx + 1}/{n_phases}] {label} — {len(urls)} URL")
+
+        prefix = f"[Phase {idx + 1}/{n_phases}] {label} · "
+        ok_n, failed_n = _run_scan_core(urls, api_key, strat, prefix=prefix)
+        chain_ok += ok_n
+        chain_failed += failed_n
+        _set(chain_total_ok=chain_ok, chain_total_failed=chain_failed)
+
+    tail = f"{chain_ok} OK · {chain_failed} lỗi (tổng chain)"
+    if _state["stop_requested"]:
+        _set(running=False, chain_active=False, current_url="",
+             finished_at=datetime.now().isoformat(timespec="seconds"),
+             message=f"⏹ Đã dừng Quét All Batch — {tail}")
+    else:
+        _set(running=False, chain_active=False, current_url="",
+             finished_at=datetime.now().isoformat(timespec="seconds"),
+             message=f"✅ Hoàn tất Quét All Batch! {tail}")
 
 
 def start_scan_async(urls: list, api_key: str = "", strategy: str = "mobile") -> bool:
     if _state["running"]:
         return False
     t = threading.Thread(target=_run_scan, args=(urls, api_key, strategy), daemon=True)
+    t.start()
+    return True
+
+
+def start_chain_async(api_key: str = "") -> bool:
+    """Kick chain Quét All Batch (8 phase)."""
+    if _state["running"]:
+        return False
+    t = threading.Thread(target=_run_chain, args=(api_key,), daemon=True)
     t.start()
     return True
 
