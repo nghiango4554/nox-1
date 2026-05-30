@@ -128,6 +128,32 @@ py -3.12 "C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\_scripts\wee
 
 ---
 
+## ✅ Layer 6 — Weekly Schema Audit (JSON-LD, Chủ nhật 03:00)
+
+Audit `<script type="application/ld+json">` của toàn bộ URL Sintech mỗi tuần → biết URL nào có / thiếu schema (Product / Article / FAQPage / ItemList / BreadcrumbList) → ưu tiên fix gap rich snippet.
+
+**Bước 1:** Test chạy tay được (50 URL nhanh ~15s):
+```
+py -3.12 "C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\_scripts\audit_schema_all.py" --limit 50
+```
+→ Log per 50 URL: `ok=N fail=M | X req/s | ETA Ys`. Cuối log: aggregate @type counts + flag breakdown.
+
+**Bước 2:** Task Scheduler → Create Basic Task...
+- Name: `Marketing Hub Weekly Schema Audit`
+- Trigger: **Weekly** at **3:00 AM** mỗi **Sunday** (lệch giờ với CWV diff 02:00)
+- Action: **Start a program**
+- Program: `wscript.exe`
+- Arguments: `"C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\_scripts\start_audit_schema_hidden.vbs"`
+- Tick **"Run whether user is logged on or not"** (chọn "Do not store password" nếu account không có pass) + **"Run with highest privileges"** (optional, script không cần admin)
+
+→ Log ghi vào `data/backups/audit_schema.log`.
+→ Script tự skip URL đã audit trong 7 ngày qua (idempotent).
+→ Toàn site ~2486 URL × 0.3s/URL ≈ 12-15 phút mỗi lần chạy.
+
+⚠️ **CPU + bandwidth note:** Script fetch HTML mỗi URL → ~12 phút tải data từ Sintech.vn. Nếu vợ thấy site lag lúc 3h sáng → giảm `WORKERS = 5` xuống 3 trong `audit_schema_all.py`.
+
+---
+
 ## 🔧 Troubleshooting
 
 | Vấn đề | Cách xử |

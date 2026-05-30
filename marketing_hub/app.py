@@ -2131,6 +2131,91 @@ def seo_cwv_diff_page():
     return render_template("seo_cwv_diff.html", diff=diff, error=error)
 
 
+@app.route("/seo/schema")
+def seo_schema_page():
+    url_type = request.args.get("url_type") or None
+    missing = request.args.get("missing") or None
+    page_num = max(1, int(request.args.get("page", 1)))
+    per_page = 50
+    offset = (page_num - 1) * per_page
+
+    stats_all = db.seo_schema_stats()
+    stats_by_type = {
+        ut: db.seo_schema_stats(url_type=ut)
+        for ut in ("product", "blog", "collection", "page")
+    }
+    total = db.seo_schema_count(url_type=url_type, missing=missing)
+    rows = db.seo_schema_list(url_type=url_type, missing=missing,
+                              limit=per_page, offset=offset)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return render_template(
+        "seo_schema.html",
+        stats_all=stats_all, stats_by_type=stats_by_type,
+        rows=rows, total=total, total_pages=total_pages,
+        page_num=page_num, url_type=url_type, missing=missing,
+    )
+
+
+@app.route("/seo/schema/rescan/<int:page_id>", methods=["POST"])
+def seo_schema_rescan(page_id):
+    conn = db.get_conn()
+    row = conn.execute("SELECT url FROM seo_pages WHERE id=?", (page_id,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"ok": False, "error": "Page not found"}), 404
+    import schema_scanner
+    try:
+        data = schema_scanner.update_page_schema(row["url"])
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)[:200]}), 500
+    import json as _json
+    types = []
+    if data.get("schema_types"):
+        try:
+            types = _json.loads(data["schema_types"])
+        except Exception:
+            types = []
+    return jsonify({
+        "ok": True,
+        "url": row["url"],
+        "types": types,
+        "schema_count": data.get("schema_count", 0),
+        "has_product": bool(data.get("has_product")),
+        "has_faq": bool(data.get("has_faq")),
+        "has_article": bool(data.get("has_article")),
+        "fetch_error": data.get("fetch_error"),
+        "scanned_at": data.get("scanned_at"),
+    })
+
+
+@app.route("/seo/schema/detail/<int:page_id>")
+def seo_schema_detail(page_id):
+    conn = db.get_conn()
+    row = conn.execute("SELECT url, url_type, title FROM seo_pages WHERE id=?", (page_id,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"ok": False, "error": "Page not found"}), 404
+    import schema_scanner
+    import requests
+    headers = {"User-Agent": schema_scanner.USER_AGENT, "Accept-Encoding": "gzip, deflate"}
+    try:
+        r = requests.get(row["url"], headers=headers, timeout=12, allow_redirects=True)
+        if r.status_code != 200:
+            return jsonify({"ok": False, "error": f"HTTP {r.status_code}", "url": row["url"]}), 200
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{type(e).__name__}: {str(e)[:120]}", "url": row["url"]}), 200
+    parsed = schema_scanner.extract_jsonld_from_html(r.text)
+    return jsonify({
+        "ok": True,
+        "url": row["url"],
+        "url_type": row["url_type"],
+        "title": row["title"],
+        "blocks": parsed["blocks"],
+        "all_types": parsed["all_types"],
+        "errors": parsed["errors"],
+    })
+
+
 @app.route("/api/seo/cwv/status")
 def api_cwv_status():
     return jsonify(cwv_mod.state_snapshot())
@@ -4804,6 +4889,34 @@ def _dashboard_health():
             out["cwv_diff"] = None
     except Exception as e:
         out["cwv_diff"] = {"error": str(e)[:100]}
+
+    try:
+        sp_stats = db.seo_schema_stats(url_type="product")
+        bl_stats = db.seo_schema_stats(url_type="blog")
+        col_stats = db.seo_schema_stats(url_type="collection")
+        conn_s = db.get_conn()
+        col_missing_itemlist = conn_s.execute("""
+            SELECT COUNT(*) FROM seo_pages
+            WHERE url_type='collection' AND status_code=200 AND indexable=1
+            AND schema_scanned_at IS NOT NULL
+            AND (schema_types IS NULL OR schema_types NOT LIKE '%ItemList%')
+        """).fetchone()[0]
+        conn_s.close()
+        total_audited_all = (sp_stats.get("total_audited") or 0) + \
+                            (bl_stats.get("total_audited") or 0) + \
+                            (col_stats.get("total_audited") or 0)
+        out["schema"] = {
+            "total_audited": total_audited_all,
+            "sp_pct_product": sp_stats.get("pct_has_product") or 0,
+            "sp_missing_product": (sp_stats.get("total_audited") or 0) - (sp_stats.get("has_product") or 0),
+            "blog_pct_article": bl_stats.get("pct_has_article") or 0,
+            "blog_pct_faq": bl_stats.get("pct_has_faq") or 0,
+            "blog_missing_faq": (bl_stats.get("total_audited") or 0) - (bl_stats.get("has_faq") or 0),
+            "col_total": col_stats.get("total_audited") or 0,
+            "col_missing_itemlist": col_missing_itemlist,
+        }
+    except Exception as e:
+        out["schema"] = {"error": str(e)[:100]}
 
     out["backups"] = {"db": _backup_info("posts_*.db.zip"), "secrets": _backup_info("secrets_*.zip")}
     out["git"] = _health_cached("git", 30, _git_health)

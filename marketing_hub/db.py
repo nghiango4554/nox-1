@@ -309,11 +309,20 @@ def init_db():
         "desc_h1_scanned_at": "TEXT",
         "desc_word_count": "INTEGER",
         "desc_empty_scanned_at": "TEXT",
+        # Schema validator (Task 4 SEO Crawl Optimization, 30/5/2026)
+        "schema_types": "TEXT",                   # JSON array: ["Product", "BreadcrumbList"]
+        "schema_count": "INTEGER DEFAULT 0",      # số <script type="application/ld+json"> block
+        "schema_has_product": "INTEGER DEFAULT 0",
+        "schema_has_faq": "INTEGER DEFAULT 0",
+        "schema_has_article": "INTEGER DEFAULT 0",
+        "schema_errors": "TEXT",                  # JSON array các parse error
+        "schema_scanned_at": "TEXT",
     }
     for col, col_type in new_seo_cols.items():
         if col not in seo_cols:
             conn.execute(f"ALTER TABLE seo_pages ADD COLUMN {col} {col_type}")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seo_pages_indexable ON seo_pages(indexable)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_seo_pages_schema_scanned ON seo_pages(schema_scanned_at)")
 
     # seo_links: thêm error_kind để phân loại lỗi timeout (dns_fail, ssl_error,...)
     link_cols = {r["name"] for r in conn.execute("PRAGMA table_info(seo_links)").fetchall()}
@@ -2163,5 +2172,159 @@ def cwv_history_get_week(week_no: int, year: int, strategy: str = "mobile") -> l
         FROM seo_cwv_history
         WHERE week_no=? AND year=? AND strategy=?
     """, (week_no, year, strategy)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Schema validator (Task 4 SEO Crawl Optimization) — JSON-LD audit
+# ═══════════════════════════════════════════════════════════════════════════
+
+def seo_schema_upsert(url: str, data: dict):
+    """Update kết quả scan schema cho 1 URL vào seo_pages."""
+    conn = get_conn()
+    conn.execute("""
+        UPDATE seo_pages
+        SET schema_types=?, schema_count=?,
+            schema_has_product=?, schema_has_faq=?, schema_has_article=?,
+            schema_errors=?, schema_scanned_at=?
+        WHERE url=?
+    """, (
+        data.get("schema_types"),
+        data.get("schema_count", 0),
+        1 if data.get("has_product") else 0,
+        1 if data.get("has_faq") else 0,
+        1 if data.get("has_article") else 0,
+        data.get("schema_errors"),
+        data.get("scanned_at"),
+        url,
+    ))
+    conn.commit()
+    conn.close()
+
+
+def seo_schema_stats(url_type: str = None) -> dict:
+    """Breakdown count + percent per schema type (Product/FAQ/Article)."""
+    conn = get_conn()
+    where = "WHERE status_code=200 AND indexable=1 AND schema_scanned_at IS NOT NULL"
+    args = []
+    if url_type:
+        where += " AND url_type=?"
+        args.append(url_type)
+    row = conn.execute(f"""
+        SELECT
+            COUNT(*) total_audited,
+            SUM(schema_has_product) has_product,
+            SUM(schema_has_faq) has_faq,
+            SUM(schema_has_article) has_article,
+            SUM(CASE WHEN schema_count=0 THEN 1 ELSE 0 END) no_schema,
+            SUM(CASE WHEN schema_errors IS NOT NULL AND schema_errors != '' AND schema_errors != '[]'
+                THEN 1 ELSE 0 END) has_errors
+        FROM seo_pages
+        {where}
+    """, args).fetchone()
+    n_total = conn.execute(f"""
+        SELECT COUNT(*) FROM seo_pages
+        WHERE status_code=200 AND indexable=1
+        {'AND url_type=?' if url_type else ''}
+    """, args).fetchone()[0]
+    conn.close()
+    out = dict(row) if row else {}
+    out["total_indexable"] = n_total
+    out["audited_pct"] = round(100.0 * (out.get("total_audited", 0) or 0) / n_total, 1) if n_total else 0.0
+    if out.get("total_audited"):
+        t = out["total_audited"]
+        out["pct_has_product"] = round(100.0 * (out.get("has_product") or 0) / t, 1)
+        out["pct_has_faq"] = round(100.0 * (out.get("has_faq") or 0) / t, 1)
+        out["pct_has_article"] = round(100.0 * (out.get("has_article") or 0) / t, 1)
+        out["pct_no_schema"] = round(100.0 * (out.get("no_schema") or 0) / t, 1)
+    return out
+
+
+def seo_schema_list(url_type: str = None, missing: str = None, limit: int = 100,
+                    offset: int = 0, only_audited: bool = True) -> list:
+    """List URL với cột schema cho UI page /seo/schema, có filter + pagination."""
+    conn = get_conn()
+    sql = """SELECT id, url, url_type, title, status_code,
+                    schema_types, schema_count, schema_has_product,
+                    schema_has_faq, schema_has_article, schema_errors, schema_scanned_at
+             FROM seo_pages
+             WHERE status_code=200 AND indexable=1"""
+    args = []
+    if only_audited:
+        sql += " AND schema_scanned_at IS NOT NULL"
+    if url_type:
+        sql += " AND url_type=?"
+        args.append(url_type)
+    if missing == "product":
+        sql += " AND schema_has_product=0"
+    elif missing == "faq":
+        sql += " AND schema_has_faq=0"
+    elif missing == "article":
+        sql += " AND schema_has_article=0"
+    elif missing == "itemlist":
+        sql += " AND (schema_types IS NULL OR schema_types NOT LIKE '%ItemList%')"
+    elif missing == "any":
+        sql += " AND schema_count=0"
+    elif missing == "errors":
+        sql += " AND schema_errors IS NOT NULL AND schema_errors != '' AND schema_errors != '[]'"
+    sql += " ORDER BY url_type, url LIMIT ? OFFSET ?"
+    args.extend([limit, offset])
+    rows = conn.execute(sql, args).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def seo_schema_count(url_type: str = None, missing: str = None,
+                     only_audited: bool = True) -> int:
+    """Đếm tổng URL match filter (cho pagination)."""
+    conn = get_conn()
+    sql = "SELECT COUNT(*) FROM seo_pages WHERE status_code=200 AND indexable=1"
+    args = []
+    if only_audited:
+        sql += " AND schema_scanned_at IS NOT NULL"
+    if url_type:
+        sql += " AND url_type=?"
+        args.append(url_type)
+    if missing == "product":
+        sql += " AND schema_has_product=0"
+    elif missing == "faq":
+        sql += " AND schema_has_faq=0"
+    elif missing == "article":
+        sql += " AND schema_has_article=0"
+    elif missing == "itemlist":
+        sql += " AND (schema_types IS NULL OR schema_types NOT LIKE '%ItemList%')"
+    elif missing == "any":
+        sql += " AND schema_count=0"
+    elif missing == "errors":
+        sql += " AND schema_errors IS NOT NULL AND schema_errors != '' AND schema_errors != '[]'"
+    n = conn.execute(sql, args).fetchone()[0]
+    conn.close()
+    return n
+
+
+def seo_schema_missing(missing: str = "product", url_type: str = None, limit: int = 500) -> list:
+    """List URL thiếu schema priority (Product cho SP, Article cho blog, FAQ cho cả 2).
+    `missing` = 'product' | 'faq' | 'article' | 'any' (any = schema_count=0).
+    """
+    conn = get_conn()
+    sql = """SELECT url, url_type, title, schema_types, schema_count, schema_scanned_at
+             FROM seo_pages
+             WHERE status_code=200 AND indexable=1 AND schema_scanned_at IS NOT NULL"""
+    args = []
+    if missing == "product":
+        sql += " AND schema_has_product=0"
+    elif missing == "faq":
+        sql += " AND schema_has_faq=0"
+    elif missing == "article":
+        sql += " AND schema_has_article=0"
+    elif missing == "any":
+        sql += " AND schema_count=0"
+    if url_type:
+        sql += " AND url_type=?"
+        args.append(url_type)
+    sql += " ORDER BY url_type, url LIMIT ?"
+    args.append(limit)
+    rows = conn.execute(sql, args).fetchall()
     conn.close()
     return [dict(r) for r in rows]

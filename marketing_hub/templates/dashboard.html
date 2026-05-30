@@ -151,6 +151,36 @@
       </a>
     {% endif %}
 
+    {% set sch = health.get('schema') %}
+    {% if sch and not sch.get('error') and sch.get('total_audited', 0) > 0 %}
+      {% set faq_gap = sch.get('blog_missing_faq', 0) %}
+      {% set il_gap = sch.get('col_missing_itemlist', 0) %}
+      {% set total_gap = faq_gap + il_gap %}
+      {% set schcls = 'red' if total_gap > 100 else ('yellow' if total_gap > 0 else 'green') %}
+      <a class="ops-card s-{{ schcls }}" href="/seo/schema">
+        <div class="ops-card-top">
+          <span class="ops-card-icon">🔖</span>
+          <span class="ops-badge {{ schcls }}">{{ 'cần fix' if total_gap > 0 else 'ok' }}</span>
+        </div>
+        <div class="ops-card-num">{{ total_gap }}</div>
+        <div class="ops-card-label">Schema gap (FAQ + ItemList)</div>
+        <div class="ops-card-sub">
+          🔴 {{ faq_gap }} blog thiếu FAQ · {{ il_gap }} collection thiếu ItemList
+          <br><small style="opacity:.7">SP Product {{ sch.get('sp_pct_product', 0) }}% · blog Article {{ sch.get('blog_pct_article', 0) }}%</small>
+        </div>
+      </a>
+    {% else %}
+      <a class="ops-card s-gray" href="/seo/schema" style="opacity:.7">
+        <div class="ops-card-top">
+          <span class="ops-card-icon">🔖</span>
+          <span class="ops-badge gray">chờ audit</span>
+        </div>
+        <div class="ops-card-num">—</div>
+        <div class="ops-card-label">Schema gap (FAQ + ItemList)</div>
+        <div class="ops-card-sub"><small style="opacity:.7">chạy `_scripts/audit_schema_all.py` trước</small></div>
+      </a>
+    {% endif %}
+
     <div class="ops-card {{ 's-green' if botok else ('s-yellow' if health.bot.get('status') == 'no_token' else 's-red') }}">
       <div class="ops-card-top"><span class="ops-card-icon">🤖</span><span class="ops-badge {{ 'green' if botok else ('yellow' if health.bot.get('status') == 'no_token' else 'red') }}">{{ health.bot.get('status', '?') }}</span></div>
       <div class="ops-card-num">{{ '🟢' if botok else '🔴' }}</div>

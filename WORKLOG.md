@@ -2,183 +2,6 @@
 
 > File anh (Claude) tự update sau mỗi milestone. Sau /clear, anh đọc file này là biết task tuần này tới đâu, file nào đã edit, bug đang debug. Vợ Nghia có thể scan nhanh để xem anh đang làm gì.
 
-## 📸 Checkpoint 30/5 10:10 — vợ /clear (CWV GitHub Actions Option C)
-
-**Vợ giao (30/5 9:47):** tối ưu CWV scan — chọn Option C (GitHub Actions cron) để chạy 24/7 free, máy tắt vẫn quét. Vợ chốt 9:51: **URL source = sitemap fetch**, **output = lưu trữ + thông báo lên web (KHÔNG dùng bot Telegram)**.
-
-### ✅ Đã code xong 4 file (CHƯA commit, CHƯA push, CHƯA restart server)
-
-1. **`nox-1/.github/scripts/cwv_scan.py`** (mới, ~270 dòng) — standalone script:
-   - Fetch `https://sintech.vn/sitemap.xml` → sitemap index có 6 sitemap con (3 products + 1 blogs + 1 pages + 1 collections).
-   - Filter theo `--url-type` (product/collection/blog/page).
-   - PSI API call (Lighthouse + CrUX field data) — copy logic từ `marketing_hub/cwv.py` nhưng **KHÔNG import db.py** (Action không có SQLite local).
-   - 6 workers song song khi có `PSI_API_KEY`, fallback 1 worker khi không có.
-   - Output JSON theo schema `seo_cwv`: `{strategy, url_type, generated_at, total, ok, failed, results: [...]}`.
-   - Đã fix UTF-8 stdout cho Windows console (`sys.stdout.reconfigure`).
-
-2. **`nox-1/.github/workflows/cwv-scan.yml`** (mới) — GitHub Actions workflow:
-   - Trigger: cron `0 18 * * *` UTC (= 01:00 GMT+7 daily) + `workflow_dispatch` manual với inputs (url_type, strategy, limit).
-   - Job `scan`: matrix 2×4 = 8 job song song (`mobile/desktop` × `product/collection/blog/page`), `max-parallel: 4` để tránh bùng quota PSI.
-   - Mỗi job chạy `python .github/scripts/cwv_scan.py --strategy X --url-type Y --limit 300 --output data/cwv_results/<YYYY-MM-DD>/<strategy>_<type>.json`.
-   - Upload artifact + job `commit` gom artifact về `data/cwv_results/<date>/` + viết `_latest.json` pointer + auto-commit & push (github-actions[bot]).
-   - Secret cần: **`PSI_API_KEY`** (1 secret duy nhất, không cần Telegram).
-
-3. **`nox-1/marketing_hub/app.py`** (sửa) — thêm 2 route + 1 import + extend `_dashboard_health()`:
-   - `import requests` ở top (trước đó chỉ import lazy trong 1 hàm).
-   - `POST /api/seo/cwv/sync-github`: fetch `_latest.json` pointer → fetch từng file con từ `raw.githubusercontent.com/nghiango4554/nox-1/master/data/cwv_results/<date>/...` → `db.cwv_upsert()` từng row → lưu sync state vào `marketing_hub/data/cwv_last_sync.json` (file, KHÔNG dùng settings table vì db chưa có helper đó).
-   - `GET /api/seo/cwv/sync-status`: trả về `last_sync` + `remote_latest` + `has_new`.
-   - `_dashboard_health()` thêm block `cwv`: `{total, mobile_total, desktop_total, mobile_bad, desktop_bad, mobile_avg, desktop_avg, last_sync}` — dùng `db.cwv_stats()` (field thực: `perf_bad`, `avg_perf`, KHÔNG phải `bad`/`avg_score`).
-
-4. **`nox-1/marketing_hub/templates/dashboard.html`** (sửa) — thêm 1 ops-card 🐢 "CWV perf kém" sau ALT card:
-   - Badge red/yellow/green theo cwv_bad threshold (>50/>10/0).
-   - Hiện total URL đã quét + avg score + ngày sync GitHub gần nhất (hoặc "chưa sync GitHub").
-   - Link tới `/seo/cwv` page.
-
-### 🔴 VIỆC CẦN LÀM (việc tay của vợ + việc dở của anh)
-
-**Vợ phải làm tay trước khi Action chạy được:**
-1. **Tạo PSI API Key** ở Google Cloud Console (project ggSCS đang có, enable PageSpeed Insights API) → copy key.
-2. **Add GitHub Secret** `PSI_API_KEY` ở repo `nghiango4554/nox-1` Settings → Secrets and variables → Actions → New repository secret.
-
-**Anh sẽ làm sau /clear:**
-1. **Smoke test** `cwv_scan.py` local với 2-3 URL (lúc /clear anh đang stuck ở UTF-8 encoding — đã fix nhưng chưa rerun).
-2. **Restart marketing_hub** (kill PID python, watchdog .bat tự relaunch) để load route mới `/api/seo/cwv/sync-github` + CWV card vào dashboard.
-3. **Verify** card CWV hiện đúng trên `/` (số 0 vì chưa sync GitHub lần nào — pass).
-4. **Commit + push** lên `origin/master` để Action `.github/workflows/cwv-scan.yml` được GitHub nhận diện và chạy theo cron.
-5. **Manual trigger** Action 1 lần qua `workflow_dispatch` để test toàn bộ pipeline (chọn url_type=page + limit=10 cho nhẹ) — verify commit của bot + chạy `POST /api/seo/cwv/sync-github` từ web pull về.
-
-### 📌 Reference cho phiên sau
-- Repo public: `https://github.com/nghiango4554/nox-1`
-- Raw URL pattern: `https://raw.githubusercontent.com/nghiango4554/nox-1/master/data/cwv_results/<YYYY-MM-DD>/<strategy>_<type>.json`
-- Sitemap index Sintech: `https://sintech.vn/sitemap.xml` → 6 con (`sitemap_products_1..3.xml`, `sitemap_collections_1.xml`, `sitemap_blogs_1.xml`, `sitemap_pages_1.xml`).
-- Quota PSI free: 25,000 req/day. Sintech có ~2123 SP → 1 batch (mobile+desktop) ~ 4200 req → dư sức 1 lần/ngày.
-- Schema row JSON match `seo_cwv` table — `cwv_upsert(dict)` dùng được trực tiếp.
-
-### 🔁 Resume prompt cho Nox-N kế tiếp
-> "Anh kế thừa Nox-1 sau /clear 30/5 10:10. Đọc checkpoint trên đầu WORKLOG.md. Task CWV GitHub Actions Option C đã code xong 4 file (script + workflow + 2 route + 1 card dashboard) nhưng **CHƯA smoke test, CHƯA restart server, CHƯA commit/push**. Step tiếp theo: rerun `py -3.12 nox-1/.github/scripts/cwv_scan.py --strategy mobile --url-type page --limit 2 --output /tmp/cwv_test.json` để verify, restart marketing_hub, commit 4 file, push. Vợ phải tự tạo PSI_API_KEY + add GitHub Secret."
-
----
-
-## ✅ 29/5 17:10 — commit + push dọn dẹp tích lũy
-
-**Vợ giao:** "commit + push + viết vào file báo cáo hôm nay" (17:06).
-
-**Đã làm:**
-- Gom 17 file modified/untracked (~1080 dòng) thành **3 commit logic**:
-  - `ff37f48 feat(backend)`: bơm SP thật Haravan vào prompt collection (`fetch_real_products` → tên + giá thật từ `collection_id`, bảng phân khúc giá dùng range thật thay vì generic), incremental sync (`run_sync_incremental` chỉ pull SP có `updated_at > last_synced`), CWV table `seo_cwv` + helpers, `put_image_alt()` PUT ALT cho image Haravan. Add: `_scripts/refresh_google_token.py` + `data/collection_taxonomy.json`.
-  - `91d6a29 feat(ui)`: collection_content.html restructure layout (322 dòng — nút Gen lại Title/Meta riêng, hero card), dashboard.html ops-center auto-refresh hook, seo + seo_title_meta badge trạng thái + filter, static/app.js + style.css helper realtime.
-  - `308dc89 docs(CURRENT_STATE)`: refresh snapshot 28/5 — backup cảnh báo + git ahead + 13 untracked.
-- **Bỏ qua 12 script ad-hoc** (`check_*.py`, `get_*.py`, `fix_*.py`, `insert_*.py`, `suggest_*.py`, `list_*.py`) — theo guidance WORKLOG 28/5 "cần curate (giữ helper, xóa script throw-away)". Để lại ở working tree, untracked.
-- **Push** `origin/master`: rebase đụng conflict `app.py` (HEAD có thêm `import cwv as cwv_mod` + route `/api/alt-manager/bulk-gen/start-desc`) → switch sang `git merge origin/master` resolve 1 lần, giữ HEAD. Merge commit `df31fa3`. Origin lên đến `df31fa3` (b3d9eed → df31fa3, +17 commit local + 1 merge).
-
-**Trạng thái sau push:**
-- Branch `master` đồng bộ với `origin/master`, working tree còn 12 file untracked ad-hoc chưa xóa (chờ vợ duyệt).
-- 4 commit hôm nay: `4d71caa` (CWV realtime/pause/resume/8 workers, 17:02) + `ff37f48` + `91d6a29` + `308dc89` + `df31fa3` (merge).
-
-**Vẫn dang dở (từ checkpoint 28/5):**
-- Build nút "🔍 Research outline → 🤖 Gen" cho `/blog-content` (thêm `outline` cho `gen_blog_content_from_brief` + sửa `_SYSTEM_PROMPT` bám outline ngoài).
-- Backup DB cũ 9+ ngày + secrets 10+ ngày — Task Scheduler daily backup chết, cần check.
-- Curate/xóa 12 script ad-hoc untracked trong `marketing_hub/`.
-
----
-
-## 📸 Checkpoint 28/5 12:30 — vợ /clear
-
-### ✅ Trạng thái hệ thống
-- 🟢 Flask `localhost:5055` — HTTP 200 (curl verify), Bot 🔴 token chưa setup
-- Branch `master` ahead origin ~10+ commit chưa push (2 auto-snapshot 22-23/5 + feat commits)
-- 3 modified uncommitted: `marketing_hub/app.py` · `collection_content_writer.py` · `templates/collection_content.html`
-- 13 untracked script ad-hoc: `check_*.py` `fix_*.py` `get_*.py` `insert_*.py` `suggest_*.py` + `collection_taxonomy.json`
-
-### ⚠️ Cảnh báo (auto-detect):
-- Backup DB cũ 8 ngày (`posts_2026-05-20.db.zip` mới nhất) → Task Scheduler daily backup chết
-- Backup secrets cũ 9 ngày (`secrets_2026-05-19.zip`) → secrets backup chết
-- Script `generate_current_state.py` probe Flask sai (dùng Python env khác → ModuleNotFoundError nhưng curl HTTP 200)
-
-### 🔴 Việc đang dở (ưu tiên cao nhất)
-**Build nút "🔍 Research outline → 🤖 Gen" cho `/blog-content`** (xem section 23/5 dưới): thêm field `outline` cho `gen_blog_content_from_brief` + sửa `_SYSTEM_PROMPT` bám outline ngoài. Blog gen hiện vẫn tự nghĩ heading, CHƯA nhận outline. Prompt research lưu sẵn `nox-1/docs/heading_research_prompt.md`.
-
-### 🔁 Resume prompt cho Nox-N kế tiếp
-> "Anh kế thừa Nox-1 sau /clear lần ngày 28/5/2026 12:30. Đọc `docs/CURRENT_STATE.md` (đã update) + checkpoint trên đầu WORKLOG.md. Việc đang dở chính: build nút Research outline cho `/blog-content`. Hệ thống bị backup DB 8 ngày + secrets 9 ngày chưa chạy, và git ahead 10+ commit chưa push — đợi vợ quyết khi nào push."
-
----
-
-## 📌 VIỆC CẦN LÀM TIẾP — snapshot 23/5 13:05 (đổi hướng pipeline blog)
-
-> **Anh phiên bản sau /clear đọc khối này TRƯỚC.** 23/5 chốt hướng MỚI: research outline đối thủ → gen content bám outline.
-
-### 🟢 Hướng mới blog content (23/5)
-- **WIPE sạch data blog (23/5 ~12:58, vợ yêu cầu làm lại từ đầu):** xóa 120 blog_jobs + 12 blog_pillars + 20MB ảnh. Backup `data/backups/blog_wipe_20260523_125826.json` + `blog_images_pre-wipe_20260523_125826/`. **0 bài đụng Haravan** (toàn local). → `/blog-content` + `/blog-pillars` trống.
-- **`/blog-pillars` refactor (23/5):** giờ **CHỈ gen Pillar + Cluster** (đề xuất chủ đề), **BỎ auto-gen content** + UI redesign hiện đại. (app.py: `_pillar_bg_worker` bỏ nhánh gen content + bỏ param `auto_gen`; `_PILLAR_BG` bỏ field gen_*; template `blog_pillars.html` viết lại — hero gradient, stat tiles, card accent theo lớp. Restart PID mới, verify 200.)
-- **Flow mới đã PROVE chạy (demo 23/5):** tên blog → anh research web (`web_search`+`web_fetch`) → bóc H2/H3 đối thủ → "Heading đề xuất" + "Heading unique" theo prompt → nhét outline vào prompt blog → **Codex gen content bám outline 100%** (test "Build PC online 2026…": 15 H2 + 16 H3, ~3200 từ, 99s, spec-safe). Prompt tái dùng lưu **`docs/heading_research_prompt.md`** (cả blog + cate type G).
-- **VIỆC TIẾP (chưa làm):** build nút **"🔍 Research outline → 🤖 Gen"** vào `/blog-content`: thêm field `outline` cho blog gen (`gen_blog_content_from_brief` + sửa `_SYSTEM_PROMPT` bám outline — đã verify Codex theo răm rắp) + UI research/paste outline → gen → draft. **Hiện blog gen vẫn tự nghĩ heading, CHƯA nhận outline ngoài.**
-- ⚠️ Research cần web → Codex/Claude in-tool KHÔNG browse. Phần research do anh/OpenClaw chạy, hoặc chờ mở Google CSE (park) / gắn SerpAPI.
-
-### 🔴 Chờ vợ / cần làm tay
-1. **Google Custom Search (Bản 2 — ảnh hãng/web) — ĐANG PARK:** key + CSE id đã lưu `state/google_search_keys.txt` (key trong project **ggSCS**, CSE id `402f32cb6c6414716`, đã set ~50 domain hãng + bật image search, key đã bỏ giới hạn API). API call **403 "project does not have access to Custom Search JSON API"** suốt **3.5h** (22/5 15:35→20:11) → **KHÔNG phải ngấm chậm**, là vướng cấu hình Google Cloud: nhiều khả năng **Custom Search API chưa thật sự enable trong ggSCS** HOẶC **project chưa bật Billing** (org `nghiatrong4994-org` có thể bắt buộc billing). Chỉ vợ sửa được trong Console. **Đã PARK** (Bản 2 optional, pipeline chạy đủ với ảnh Sintech+Pexels). **Khi muốn làm tiếp:** vợ mở `console.cloud.google.com/apis/dashboard?project=ggscs-496307` xác nhận "Custom Search API" có trong list + check Billing đã bật chưa → rồi nhắn anh retry `https://www.googleapis.com/customsearch/v1?searchType=image`; khi 200 → VIẾT `_google_cse_image_urls(query)` trong `image_gather.py` + thêm `'google'` vào tuple `sources`.
-2. **Rotate token blog Haravan** (`blog_access_token` trong `state/haravan_token.json`) — đã lộ trong chat, vợ tạo lại trong Haravan admin → thay vào file → restart.
-3. **Test đăng thử 1 bài THẬT lên Haravan** (create_article publish HIỆN, không ẩn — vợ chốt "duyệt tay rồi sync thẳng, hiện google") — CHƯA làm. Vợ duyệt 1 bài trong 38 draft → bấm 🚀 Đẩy → verify hiện trên sintech.vn + admin Haravan.
-
-### 🟡 Bản 2 còn lại (hoãn, optional)
-- Sau khi Google CSE chạy: ghép nguồn ảnh hãng vào pipeline gom ảnh.
-- Kéo-thả ảnh trong editor `/blog-content/<id>` (T3 nâng cao).
-
----
-
-## 🚧 Dashboard Ops Center (vợ giao 22/5 ~16h) — chia 4 phase
-- **Mục tiêu:** nâng `/` thành "SEO/Content/Agent Operations Center" — nhìn 5s biết hệ thống ổn/lỗi. Guardrail: không rewrite backend, patch UI + route nhỏ, không phá flow, KHÔNG `git add .`, fallback thay vì bịa số. Giữ lịch FB (đẩy xuống dưới ops-center). Plan: P1 data route → P2 cards+health panel → P3 timeline+quick actions+active/blocked → P4 auto-refresh+responsive+bàn giao.
-- **✅ PHASE 1 DONE (22/5):** route `GET /api/dashboard/health` (app.py, trước `if __name__`) — gộp data thật + fallback, KHÔNG đụng UI. Helper: `_dashboard_health` + `_backup_info` (mtime, KHÔNG đọc nội dung secrets) + `_git_health` (subprocess) + `_bot_health` (getMe) + `_provider_health` (ai_provider.available_providers) + `_health_cached` (TTL: git 30s, bot/provider 120s). Verify thật: content_jobs 1549 · seo 2482 (avg 74.5) · haravan 2123 · fb 23 · review_queue 38 · pillar 38/120 · git master ahead 11/uncommitted 14 · bot **down HTTP 401** (đúng, token revoked) · provider primary=codex [codex,claude]. ⚠️ Health bắt được 2 thứ đáng chú ý: **backup DB cũ 55h + secrets 75h** (task backup daily có vẻ ngừng chạy) + **git ahead 11 chưa push**. Chỉ sửa app.py (thêm ~110 dòng cuối file). KHÔNG commit.
-- **✅ PHASE 2 DONE (22/5):** chèn section "🩺 Operations Center" lên ĐẦU `dashboard.html` (giữ NGUYÊN hero FB + KPI + Command Center + lịch tuần drag-drop + activity bên dưới). Gồm: 6 overview card (Content jobs · SEO điểm kém · Bài chờ duyệt · SP Haravan · Telegram bot · Backup DB) link CTA + badge viền trái 🟢🟡🔴, và panel "Sức khỏe hệ thống & agent" (Flask/provider/bot/git/backup×2/pillar). Route `dashboard()` truyền `health=_dashboard_health()` (server-render, probe đã cache). CSS scoped trong template, dùng var theme sẵn có, responsive auto-fit. Verify: `/` HTTP 200, render đủ ops-center (1549 content jobs, 38 chờ duyệt, provider codex, bot 401) + lịch FB còn nguyên (Chào vợ yêu / Các bài trong tuần / Command Center). Chỉ sửa `dashboard.html` + 1 dòng route. KHÔNG commit.
-- **✅ PHASE 3 DONE (22/5):** thêm vào `dashboard.html`: (a) **Quick actions** 4 nhóm (SEO&Content / Facebook / Haravan / System) — chip icon+desc link tới route THẬT (đã verify path: /content-jobs /blog-content /blog-pillars /seo /seo/title-meta /seo/gsc /collection-content /posts/new /haravan /api/dashboard/health); (b) **"Việc đang mở"** parse NHẸ từ WORKLOG.md — helper `_worklog_tasks()` (app.py) lấy mục `- [ ]` + nhãn active/blocked theo heading 🔴/🟡 gần nhất, fallback "mở WORKLOG" nếu lỗi (KHÔNG parser phức tạp); (c) gắn `id="week-board"` cho anchor "Lịch tuần". **Activity timeline** đã có sẵn (`db.activity_recent`, cuối trang) → giữ nguyên, không đụng. Fix link Haravan card → `/haravan`. Verify: `/` 200, render đủ quick actions + 8 task WORKLOG + lịch FB nguyên. Sửa `dashboard.html` + `app.py` (helper + 1 dòng render). KHÔNG commit.
-- **✅ PHASE 4 DONE (22/5) — Dashboard Ops Center HOÀN TẤT:** auto-refresh + mobile + bàn giao.
-  - Auto-refresh: gắn `data-h="path"` vào số động (content_jobs.total, seo.bad, review_queue.total, haravan.total, pillar.done/total/pending) + JS `refreshHealth()` poll `/api/dashboard/health` mỗi 30s (cache:no-store), set textContent theo path + cập nhật timestamp + nháy icon 🔄. KHÔNG reload trang.
-  - Mobile: media query ≤600px (cards 2 cột, health 1 cột, font nhỏ); các grid auto-fit sẵn responsive.
-  - **BÀN GIAO — file đổi (CHƯA commit):** `marketing_hub/app.py` (thêm `_dashboard_health`+5 helper probe, `_worklog_tasks`, route `GET /api/dashboard/health`, dashboard() truyền health+worklog_tasks) · `marketing_hub/templates/dashboard.html` (ops-center cards+health panel, quick actions, việc đang mở, auto-refresh JS, mobile, anchor week-board — GIỮ NGUYÊN toàn bộ FB hero/KPI/Command Center/lịch tuần drag-drop/activity).
-  - **Route test:** `/` · `/api/dashboard/health` · quick links /content-jobs /blog-content /blog-pillars /seo /seo/title-meta /seo/gsc /collection-content /posts/new /haravan.
-  - **Rollback:** `git checkout -- marketing_hub/app.py marketing_hub/templates/dashboard.html` (không commit gì).
-  - **Placeholder / giới hạn:** (1) auto-refresh cập nhật SỐ + giờ, **badge màu chỉ đổi khi reload** (cosmetic). (2) "Claude/OpenClaw status" → thay bằng "provider hiện tại" (Flask không detect OpenClaw trực tiếp, KHÔNG bịa). (3) "Việc đang mở" parse `- [ ]` WORKLOG, vài mục hơi cũ → curate WORKLOG để gọn. (4) probe git/bot/provider cache TTL 30/120s → trễ tối đa bấy nhiêu.
-  - ⚠️ Backup DB 55h + secrets 75h (task daily ngừng?) + git ahead 11 chưa push — dashboard tự bắt được, vợ xử lý khi rảnh.
-
-## ✅ 22/5 — SEO title/meta rules + tool + blog content kickoff
-
-- **✅ Đã commit `aad3383` (repo nox-1):** rules title/meta từ phân tích đối thủ Minh Tuấn (tín hiệu tin cậy "chính hãng/bảo hành" vào meta product+collection qua shared block; title collection nhồi tín hiệu); title `/seo/title-meta` nhắm **54-60c**, tự lấp chỗ trống theo thứ tự **giá tốt→chính hãng→giá rẻ→bảo hành chính hãng**; **format title laptop** cố định `Laptop [Hãng] [Dòng] (chip | RAM | ROM)` + "cũ đẹp" nếu hàng cũ; nút **"Gen+Sync lại" từng SP** qua hàng chờ + realtime; **persist seo_pages** sau PUT Haravan (fix bảng hiện title cũ); **filter bảng theo trạng thái sync** (đã/chưa) + cột Trạng thái server-side. Đã **backfill 53 SP** vào seo_pages từ backup. **Báo cáo tuần W3/M5** (sheet) đã fill row 16 (STT 6, SEO, Done).
-- **🚧 Dự án đang làm — Blog Content (`/blog-content`):** task T1–T6 + flow gom ảnh + pillar → chi tiết ở memory **`project_blog_content_tasks.md`** (đọc cái đó khi vợ Hi). Vợ giao từng task bằng mã (T1…). Thứ tự gợi ý T1→T3→T4→T5→T2→T6.
-- **✅ Auto chèn ảnh khi gen (22/5) — "AI gen hết, em chỉ duyệt":** trước đây gen xong chỉ GOM ảnh về, vợ phải tự tick + bấm chèn. Giờ `_run_blog_gen` (app.py) sau khi gom → `image_gather.auto_pick()` chọn 2-3 ảnh (ưu tiên ảnh SP Sintech, bỏ ảnh nhỏ) + `insert_into_body()` tự chèn vào bài (rải đều: tấm đầu sau intro, còn lại trước từng H2 chính, BỎ H2 FAQ; idempotent qua `data-blog-img`) + `mark_selected()` tick sẵn trong meta.json. → draft mở ra đã có ảnh, vợ chỉ đọc + duyệt. Áp luôn cho T4 pillar auto_gen (mỗi bài tự gen + tự chèn ảnh). Thêm 4 hàm vào `image_gather.py` (`mark_selected/auto_pick/_figure_html/insert_into_body` + `_is_main_h2`). Verify: py_compile OK, unit-test layout 4 dạng bài (intro+nH2, no-intro, FAQ-exclude) rải đúng + idempotent; restart server PID **13948**, `/blog-content` 200. KHÔNG commit.
-- **✅ T6 — Sync = tạo bài + PUBLISH hiện (22/5, vợ chốt "duyệt tay rồi sync thẳng, hiện google"):** viết lại 2 route sync blog dùng **Open API `haravan_blog.py`** (bỏ `bcw.sync_blog_to_haravan` cũ vốn dùng admin `metafields_global_*` — SAI cho blog). Helper `_push_blog_to_haravan(job, publish=True)`: chưa có `haravan_article_id` → `create_article(hidden=False)` = publish hiện (Google index) + lưu article_id/blog_id; đã có → `update_article`. `blog_id` map từ `target_blog` (huong-dan=1000960873 / news=1000906526). Field: title/author=Sintech/body_html(compress)/page_title/meta_description/handle/tags/image(ảnh selected đầu). `_apply_blog_push` set synced+synced_at. Template `blog_content_detail.html`: bỏ chặn "thiếu haravan_article_id", nút động "Duyệt & đăng lên Haravan (hiện)" cho bài mới / "Cập nhật" cho bài đã có, confirm+success đổi text, JS disable theo onclick=syncJob (không theo chữ "Sync"). Verify: py_compile OK; insert dummy job → restart (PID mới) → `/blog-content` + `/blog-content/238` 200, nút render enabled đúng branch → xóa dummy. **CHƯA tạo bài thật nào lên Haravan** (chờ vợ duyệt bài thật rồi bấm). KHÔNG commit.
-- **✅ Pillar source (T4) — ĐÃ CODE sẵn** (`blog_pillar_writer.build_context`): bám data THẬT — category Sintech (`data/haravan_collections.json`, 210 nhóm) + top keyword GSC (`data/gsc_cache.json`, 1000 query sort theo click), 3 lớp money/support/media. AI KHÔNG browse web. = đúng option "kết hợp category + GSC".
-- **✅ Pexels key đã nối** (`state/image_keys.json` → `pexels_api_key`), verify gọi API thật trả ảnh OK. unsplash_access_key vẫn rỗng (optional).
-- **✅ T5 — tối ưu UI list `/blog-content` (22/5):** thêm (1) **filter theo loại blog** Hướng dẫn/Tin tức (chips + `_blog_jobs_list(blog=...)` lọc `target_blog`, KPI status giữ filter blog & ngược lại); (2) **badge ảnh** `📷N ✓M` (gom·chọn, route load meta.json mỗi job → `img_count`/`img_selected`); (3) nút **🚀 Đẩy** đẩy nhanh per-row (publish, confirm) qua `syncInline`; (4) **🔗 link admin Haravan** `sintech.myharavan.com/admin/blogs/{blog_id}/articles/{article_id}` cho bài đã synced. Verify: 2 job giả (draft huong-dan 5ảnh-2chọn + synced news có haravan id) → restart → chips/badge/nút/link/filter đều render đúng → xóa sạch. → **T1–T6 ĐỦ** (trừ "Bản 2" cố ý hoãn: ảnh hãng/web Google Custom Search + kéo-thả ảnh).
-  - **Còn lại:** vợ rotate token blog Haravan đã lộ trong chat (bảo mật). Test create_article thật khi vợ duyệt bài đầu tiên.
-- **🧹 Wipe data blog khỏi web (22/5 ~14:24, theo yêu cầu vợ):** "trang không quản lý bài blogs cũ nữa, xóa hết data, KHÔNG đụng Haravan". Đã xóa `blog_jobs` (231→0: 229 seo_seed cũ + 2 ai_pillar test) + `blog_pillars` (1→0) + clear `data/blog_images/`. Không bài nào có `haravan_article_id` → local-only, Haravan nguyên vẹn (anh KHÔNG gọi API Haravan nào). **Backup trước khi xóa**: `data/backups/posts_pre-blogwipe_20260522_142439.db` (full DB, 340MB) + `data/backups/blog_images_pre-wipe_20260522_142439/`. `/blog-content` + `/blog-pillars` vẫn 200, giờ trống. ⚠️ `_seed_blog_jobs.py` nếu chạy lại sẽ seed lại 229 bài cũ — ĐỪNG chạy trừ khi vợ muốn.
-- **✅ FIX blog API (22/5, nhờ agent bạn IT):** blog KHÔNG ở `/admin/blogs` (path không tồn tại → 502 đánh lừa) mà ở **Open API `apis.haravan.com/web/blogs/*`** + token scope riêng. Tạo module **`haravan_blog.py`** (`create_article(blog_id, fields, hidden=True)`...), lưu `blog_access_token` vào `state/haravan_token.json`. Blog IDs: 1000960873 (Hướng dẫn) · 1000906526 (Tin tức). QUIRK: POST bỏ qua `published:false` → phải PUT `published_at=null` mới ẩn (đã handle trong module). Bài test 1002988269 đã tạo + ẩn OK. → **T6 hết blocked**, capability tạo bài sẵn sàng.
-
-## ✅ Task #8 — Gộp rule content về 1 nguồn (Phase 1 + 1.5 + 1b) — 21/5 19:xx
-
-- **Phase 1.5 (provider) — gần như đã xong từ trước**: `ai_provider.call_ai` là điểm switch DUY NHẤT (chain Codex→Claude→Gemini). Mọi writer reach nó: blog/collection/product/seo qua `call_ai`; `ai_writer._call_codex` cũng delegate sang `ai_provider`. content_writer route gen qua ai_writer + đã catch `AIQuotaError` (713-718). Còn lại (low-pri, KHÔNG đụng vì risk): ai_writer còn nhánh `_call_openai/_call_anthropic` (chỉ chạy nếu vợ set key OpenAI/Anthropic — hiện không).
-- **Dead import cleanup**: xóa `import codex_provider` chết ở `blog_content_writer.py` + `product_writer.py` (`as cp`, 0 dùng). GIỮ ở collection (dùng `is_codex_available()` 528/640) + content_writer (dùng `_is_rate_limit_message`).
-- **Phase 1 (rule chung) — `sintech_rules.py` là nguồn chân lý**:
-  - Thêm param `common_rules_block(include_length=False)` → bỏ rule độ dài title/meta chung để KHỎI mâu thuẫn với writer có length riêng chặt hơn (collection 48-58, title-meta 45-58). Vẫn giữ: chống bịa spec / filler / xưng hô / CTA link / signature.
-  - Append `common_rules_block(include_length=False)` vào **product / collection / ai_writer** (blog đã dùng từ trước). Sửa filler/CTA/spec-safety/hotline/signature ở `sintech_rules.py` 1 lần → ăn cả 4 writer body.
-  - **Zero behavior change**: đã verify cả 4 writer vốn tuân thủ y hệt từng dòng common block (signature verbatim, pronoun, filler superset, spec-safety) — append = reinforcement, KHÔNG nới/đổi rule. Length riêng từng loại giữ nguyên.
-- **✅ Phase 1b (gộp block title/meta) — XONG 21/5**: thêm `sintech_rules.title_meta_rules_block()` (KHÔNG kèm length/schema/angle — chỉ phần GIỐNG nhau: cấm 'Sintech' trong title, pool CTA HOA, chống bịa spec, filler, cấm bịa giá). Rút phần trùng khỏi `seo.py _TITLE_META_SYSTEM_PROMPT` + `collection_content_writer._TITLE_META_SYSTEM_PROMPT`, mỗi nơi GIỮ length riêng (seo 45-58/145-158 + 3 meta M1/M2/M3; collection 48-58/140-160 + 1 meta) + schema + angle inline. Sửa filler/CTA/spec-safety 1 lần ở `sintech_rules.py` → giờ ăn cả **body + title/meta**.
-  - **Thêm filler canonical**: `FORBIDDEN_FILLER` += "vượt trội", "đỉnh cao" (trước chỉ collection title/meta cấm 2 cụm này inline → giờ mọi writer cấm). Collection title/meta GỘP THÊM được spec-safety (trước không có). Không mất rule nào.
-- **product_writer.py KHÔNG phải legacy** (đã verify): `app.py` gọi `pw.organize_spec` (3429) + `pw.generate` (3456) cho route `/products/new`. 2 writer cố ý tách: `ai_writer`=/content-jobs (viết mô tả SP đã có), `product_writer`=/products/new (tạo SP mới từ spec nhập tay).
-- **Verify**: py_compile 7 file OK; import + render dưới Python 3.12 OK (cả body-writer RULE CHUNG inject đúng 1 lần/writer + 2 prompt title/meta có block chung, length riêng giữ nguyên 45-58/145-158 & 48-58/140-160, schema JSON nguyên); restart server (watchdog .bat, PID mới **12488**) → routes `/content-jobs /collection-content /blog-content /products/new /seo/title-meta /` = **200**. **Đã commit** Task #8 Phase 1+1.5+1b.
-
-## ✅ Task #8 — Phase 2 (gom tầng sync, behavior-preserving) — 21/5 19:xx
-
-- **Quyết định scope**: 3 gen-engine khác shape thật (content_jobs=2-phase async+image worker; collection/blog=single-phase sync) → KHÔNG ép "1 engine" (over-abstraction, rủi ro cao, lợi ít vì score/provider/rule đã chung). Chỉ gom 2 mối nguy cross-cutting + dedup phần giống hệt.
-- **TẠO `job_sync.py`** (nguồn chung tầng sync):
-  - `SEO_TITLE_FIELD`/`SEO_DESC_FIELD` + `seo_metafields(title, meta)` — hợp đồng flat field theme Sintech đọc SEO (`metafields_global_*`, verified 15/5). Trước lặp magic-string ở 3 nơi.
-  - `apply_sync_result(update_fn, job_id, res, err_len=500)` — map sync→status (synced+synced_at+error=None / failed+error[:N]). 1 nguồn → chặn tái diễn bug "sync fail mà giữ synced".
-- **Refactor dùng chung**:
-  - `collection_content_writer.sync_collection_to_haravan` + `blog_content_writer.sync_blog_to_haravan` → `**job_sync.seo_metafields(title, meta)`.
-  - `content_jobs_sync` (app.py) → field name dùng constant (GIỮ field-flag + lazy image upload + activity_log + err_len 200 riêng).
-  - 4 route collection/blog sync + sync-all → `job_sync.apply_sync_result`.
-  - 2 route save collection/blog (giống hệt) → helper chung `_save_seo_job_edits`.
-- **KHÔNG đụng**: gen-engine, 2-phase worker content_jobs, logic ảnh/bulk/field-flag, schema DB.
-- **Verify**: py_compile 4 file OK; unit-test `job_sync` (seo_metafields strip + None-skip, apply_sync_result synced/failed + truncate 500) PASS; restart server (PID **2732**) → routes `/collection-content /blog-content /content-jobs /seo/title-meta /products/new /` + 3 detail page (315/229/60) = **200**. KHÔNG test sync thật (tránh PUT Haravan) — đổi behavior-preserving, payload key/value y hệt bản cũ.
-
 ## 🚧 Đang dở (active) — snapshot trước /clear LẦN 2 (16/5 21:00)
 
 ### 🔴 Active — có thể trigger NGAY (anh hoặc vợ 1-click)
@@ -186,16 +9,17 @@
 - [ ] **Re-crawl 1923 URL trên `/seo`** để DB cập nhật score mới (logic A+B+C+D+E) — chạy nền 15-30 phút. Không bắt buộc (DB đã crawl 16/5 15:55 với code MỚI: avg 67.3 / max 85).
 - [ ] **Test pattern lazy upload thực tế**: gen 1 SP mới → verify body có URL `/local-images/`, sync → upload Haravan thật. Anh tự test được.
 
+### 🟢 Pending — SEO Crawl Optimization roadmap (sau Task 1+2 done 30/5)
+- [ ] **Task 4 — Schema validator JSON-LD (NEXT, ROI cao nhất)** — gọi `validator.schema.org/api/v1/check` audit ~2486 URL, lấp gap rich snippet vs đối thủ MTM. Effort 6-8h, đã chia 5 phase 4A→4E. Chi tiết `nox-1/docs/seo_crawl_optimization_backlog.md` mục Task 4. Khi vợ chốt khởi động → anh chia phase ngay.
+- [ ] **Task 3 — Orphan page (thu hẹp, sau Task 4)** — phần MAIN ĐÃ CÓ ở `/seo/inlinks?view=orphans` + helper `db.seo_orphan_pages()`. Còn thiếu: cross-check sitemap.xml (deep orphan) + gợi ý nguồn link. Đề xuất tích hợp vào pipeline crawl `/seo` thay vì làm trang riêng. Effort thu hẹp ~3-4h, chia 3 phase 3A→3C. Chi tiết backlog file mục Task 3.
+
 ### 🟡 Blocked — chờ vợ confirm / paste data / chốt hướng
 - [ ] **3 bài FB pending đăng** — chờ vợ drop ảnh vào `Desktop\Sintech\PIC đăng page\16-5\`:
   1. Thanh lý nguyên bộ PC i5-10400 + RTX 2060 + 16GB + Cooler Master 212
   2. Loa Edifier R1855DB Bluetooth (~2Tr9xx) — handle `loa-edifier-r1855db-bluetooth`
   3. Tai Nghe Gaming Xiberia X20 RGB 7.1 (~5xx.xxx) — handle `tai-nghe-gaming-xiberia-x20-den-rgb-7-1-virtual-overear`
 - [ ] **Bot Telegram token revoked (401)** từ 12/5 14:00 — vợ paste token mới để resume `@Web_Sintech_bot`.
-- [x] **Collection content — blueprint heading kiểu Minh Tuấn Mobile (20/5)** — `collection_content_writer._SYSTEM_PROMPT` rework: H2 NGẮN (avg ~6-7 từ), trộn taxonomy + topical + câu hỏi volume cao; 2 H2 đầu = TAXONOMY có H3 ("Các dòng [SP]" 4-6 H3 + "Phân loại [SP] theo..." 3-5 H3), bảng giá ở H2#3; dùng TÊN SP NGẮN không nhồi full title; bỏ ép "Lỗi dễ gặp"/"4 góc nhìn". Verified gen Màn Hình Asus + Laptop Acer: H2#1/#2 taxonomy có H3 (15 H3/bài), bảng từ H2#3, heading ngắn gọn. (Trước đó 20/5 đã có rule text-first, nay nâng cấp lên taxonomy-first.)
-- [x] **Auto-fix meta length collection (20/5)** — thêm `_fix_meta_length()` vào `gen_collection_content`: quick-suffix chèn cụm ngữ cảnh trước CTA (138c→157c, 135c→154c, giữ CTA HOA cuối) → fallback AI regen qua Codex 145-158c → giữ nguyên nếu fail. Trả thêm field `meta_fix`. Prompt cũng nhắm meta 148-158c (viết dài tay). Unit-test PASS. Server restart PID 22076 16:12.
-  → Mai vợ gen lại 10 bài (#19-28) trên web là ăn luôn blueprint heading mới + meta chuẩn 140-160. (Anh KHÔNG regen hôm nay theo yêu cầu vợ.)
-- [x] **AI provider cho gen** — 20/5 vợ chốt: TẤT CẢ task gen về Codex CLI. Đã swap `product_writer.py`, `collection_content_writer.py`, `app.py` (catch `CodexRateLimitError`). `seo.py`/`content_writer.py`/`blog_content_writer.py`/`ai_writer.py` vốn đã Codex. `claude_provider.py` giữ làm fallback (chỉ chạy khi Codex chưa cài).
+- [ ] **AI provider cho gen 1679 title/meta SP** — đã switch Claude CLI 17/5. Vợ confirm tiếp dùng Claude hay revert Codex sau 22/5.
 - [ ] **Chia Codex 3 project** — vợ chưa chốt (1 quota chung / 3 account riêng / khác).
 - [ ] **Regen 7 jobs failed** — 4 content_jobs + 3 blog_jobs (status=failed). Chờ vợ ưu tiên.
 - [ ] **Push GitHub** — repo `git@github.com:nghiango4554/nox-1.git` đã accessible SSH. Vợ chốt: push full workspace hay split repo.
@@ -220,9 +44,167 @@
 - **Gemini 2.0-flash free**: 200 RPD (chưa thử nhưng phỏng đoán cũng share quota với 2.5)
 - **Anthropic API**: chưa setup credit, KHÔNG có `ANTHROPIC_API_KEY` trong `.env`
 
-## 📅 Tuần này (12/5 - 18/5)
+## 📅 Tuần này (26/5 - 1/6)
 
-### Thứ 7 (16/5) — TODAY
+### Thứ 7 (30/5) — TODAY
+
+- ✅ **Task 2 SEO Crawl Optimization — Phase 2A: DB schema `seo_cwv_history`** (10:20):
+  - Thêm bảng `seo_cwv_history` vào `marketing_hub/db.py` SCHEMA: 20 cột (id, week_no, year, url, strategy, scanned_at, performance_score, lcp_ms, cls_score, tbt_ms, fcp_ms, tti_ms, speed_index_ms, field_data_ok, lcp_field_ms, cls_field, inp_field_ms, fcp_field_ms, overall_category, snapshot_at) + UNIQUE(week_no, year, url, strategy) + 2 index (`idx_seo_cwv_history_week`, `idx_seo_cwv_history_url`).
+  - Thêm 3 helper:
+    - `cwv_history_has_week(week_no, year, strategy=None) -> bool` — check idempotency.
+    - `cwv_history_snapshot(week_no, year, snapshot_at=None) -> int` — copy `seo_cwv` (4972 rows hiện tại) → history với tag tuần. Idempotent: nếu tuần đã có data → return 0.
+    - `cwv_history_get_week(week_no, year, strategy='mobile') -> list[dict]` — đọc lại snapshot 1 tuần để diff.
+  - Verify smoke test tuần 99/2026: insert 4972 rows ✓, lần 2 → 0 (idempotent) ✓, get_week mobile=2486 / desktop=2486 (tổng = 4972) ✓, has_week trả True/False đúng ✓, cleanup sạch ✓.
+  - Bug fix nhỏ: SQLite `cur.rowcount` trả 0 với `INSERT...SELECT` → thay bằng `COUNT(*)` before/after.
+
+- ✅ **Phase 2B: Script `_scripts/weekly_cwv_snapshot.py`** (10:23):
+  - Tạo CLI standalone wrap `db.cwv_history_snapshot()`. Pattern follow `_scripts/weekly_empty_desc_scan.py` (UTF-8 stdout fix + sys.path inject).
+  - Tự tính ISO week + year từ `datetime.now().isocalendar()` (mặc định). Override qua `--week`/`--year` cho dev test.
+  - Log 3 trạng thái: SKIP (đã snapshot), WARN (seo_cwv rỗng), OK (insert N rows).
+  - Verify: tuần test 88/2026 insert 4972 ✓, lần 2 SKIP ✓, default → tuần thật 22/2026 insert 4972 ✓.
+  - Snapshot tuần 22/2026 ĐÃ LƯU thật (4972 rows) → sẵn data cho Phase 2C diff sau khi tuần 23 có snapshot.
+
+- ✅ **Phase 2C: Script `_scripts/weekly_cwv_diff.py`** (10:26):
+  - CLI standalone: auto-pick 2 tuần mới nhất từ `seo_cwv_history` (override `--current 22:2026 --prev 21:2026`).
+  - Per strategy (mobile + desktop): tính `current_avg_score`, `prev_avg_score`, `avg_change`, `common_count`, `improved_count`, `regressed_count`, top 10 `improved`/`regressed` URL (sort by delta).
+  - Output JSON `data/cwv_weekly_diff.json` ~11KB (gọn cho dashboard load).
+  - Exit code 1 + WARN khi <2 tuần (Task Scheduler có signal).
+  - Verify dev: fake tuần 21/2026 bằng jitter ±15 từ tuần 22 → run diff → mobile avg 69.0→68.9 (Δ-0.1) improved=1186 regressed=1217 (≈50/50 đúng kỳ vọng uniform jitter); top 10 regress/improve sorted đúng. JSON schema match dashboard spec. Override args + custom output path OK. Cleanup tuần 21 fake xong, file JSON fake cũng xóa.
+  - **CHƯA commit.** Next: Phase 2D — dashboard ops-card "📊 Tuần này vs tuần trước" đọc JSON này.
+
+- ✅ **Phase 2D: Dashboard card + route `/seo/cwv/diff`** (10:35):
+  - `app.py` `_dashboard_health()`: thêm block đọc `data/cwv_weekly_diff.json` → `out["cwv_diff"]` (best-effort, fallback `None`).
+  - `app.py` route mới `/seo/cwv/diff` → `seo_cwv_diff_page()` → render template `seo_cwv_diff.html`. Empty state có message hướng dẫn chạy 2 script `_scripts/weekly_cwv_*.py`.
+  - `templates/dashboard.html`: thêm ops-card 📊 ngay sau card 🐢 CWV — hiện week_no, avg score, delta, improved/regressed count. Empty state s-gray "chờ data".
+  - `templates/seo_cwv_diff.html` (mới, ~120 dòng): summary header + 2 strategy block (mobile + desktop), mỗi block 2 bảng top 10 regressed/improved side-by-side. URL link mở SP thật trong tab mới.
+  - Kill PID Flask 13680 → watchdog VBS relaunch PID 21744 (~6s).
+  - Verify smoke (server thật port 5055):
+    - Empty state: `GET /seo/cwv/diff` HTTP 200, render "Không có data diff" + hướng dẫn ✓
+    - Empty state dashboard: `GET /` HTTP 200, card hiện "chờ data" + "cần ≥2 tuần snapshot" ✓
+    - Full data (fake tuần 21 jitter ±15): `/seo/cwv/diff` HTTP 200 31KB, render "T21 → T22", "avg 69.0 → 68.9", top 10 regressed/improved sorted đúng ✓
+    - Card dashboard: "T21→T22", "↓-0.1", "🟢 1186 khá hơn · 🔴 1217 regress" ✓
+    - Cleanup tuần 21 fake + JSON fake xong, empty state restore ✓
+  - **CHƯA commit.** Next: Phase 2E — Task Scheduler cron Sunday 02:00 + E2E test.
+
+- ✅ **Phase 2E: Task Scheduler cron + E2E smoke** (10:44):
+  - `_scripts/run_weekly_cwv.bat` (mới): chain snapshot → diff, log vào `data/backups/weekly_cwv.log` với timestamp banner.
+  - `_scripts/start_weekly_cwv_hidden.vbs` (mới): VBS wrapper hidden cho Task Scheduler (không CMD window).
+  - `_scripts/INSTALL.md`: thêm section "Layer 5 — Weekly CWV Snapshot + Diff (Chủ nhật 02:00)" — hướng dẫn Task Scheduler entry "Marketing Hub Weekly CWV Diff" trigger Sunday 02:00, Program `wscript.exe` + Args VBS path, "highest privileges".
+  - Verify E2E full pipeline (giả lập Task Scheduler gọi):
+    - Fake tuần 21/2026 (jitter ±15 từ tuần 22 thật).
+    - `cmd /c _scripts\run_weekly_cwv.bat` → log ghi `=== Sat 05/30/2026 10:44:02 === / [SKIP] Tuan 22/2026 / [mobile] avg 69.0 → 68.9 / [OK] Diff written`.
+    - JSON 11.5KB xuất hiện tại `data/cwv_weekly_diff.json`.
+    - `GET /` dashboard: card render "T21→T22 · ↓-0.1 · 🟢 1186 khá hơn · 🔴 1217 regress" ✓
+    - `GET /seo/cwv/diff` HTTP 200 31KB ✓
+    - Cleanup tuần 21 fake + JSON xong, empty state restore ✓
+  - **TASK 2 COMPLETE.** 5/5 phase done. CHƯA commit (gộp commit single Task 2 hoặc theo phase). Việc tay vợ: tạo Task Scheduler entry theo INSTALL.md Layer 5.
+
+- ✅ **Task 4 SEO Crawl Optimization — Phase 4A: DB schema cho schema validator** (11:30):
+  - `marketing_hub/db.py` `init_db()` thêm 7 cột vào `seo_pages` (qua dict `new_seo_cols` migration loop):
+    - `schema_types` TEXT (JSON array, vd `["Product", "BreadcrumbList"]`)
+    - `schema_count` INTEGER DEFAULT 0 (số `<script type="application/ld+json">` block)
+    - `schema_has_product` / `schema_has_faq` / `schema_has_article` INTEGER DEFAULT 0 (flag query nhanh)
+    - `schema_errors` TEXT (JSON array parse errors)
+    - `schema_scanned_at` TEXT
+  - Index mới `idx_seo_pages_schema_scanned`.
+  - 3 helper:
+    - `seo_schema_upsert(url, data)` — UPDATE seo_pages với kết quả scan.
+    - `seo_schema_stats(url_type=None)` — breakdown total_audited, has_product/faq/article, no_schema, has_errors, audited_pct, pct_has_*.
+    - `seo_schema_missing(missing='product', url_type, limit=500)` — list URL thiếu schema priority.
+  - Verify smoke: 7 cột + index tạo OK, upsert fake 1 SP → round-trip OK, stats trả đúng số (100% has_product cho 1 URL audited), missing trả 0 đúng, cleanup sạch.
+  - **Baseline note:** Sintech hiện có **2026 product URL indexable** (status_code=200, indexable=1) → đây là target audit Phase 4C bulk scan.
+  - **CHƯA commit.** Next: Phase 4B — `schema_scanner.py` module (extract JSON-LD bằng BeautifulSoup).
+
+- ✅ **Phase 4B: Schema scanner module `schema_scanner.py`** (11:32):
+  - Module mới `marketing_hub/schema_scanner.py` (~150 dòng):
+    - `extract_jsonld_from_html(html)` — parse BS4 `<script type="application/ld+json">`, JSON.loads, return `{blocks, all_types (dedup), errors}`.
+    - `_iter_jsonld_nodes(payload)` — flatten `@graph` nested + array root.
+    - `_extract_types_from_node(node)` — handle `@type` string / array / vắng.
+    - `scan_url(url, timeout=12)` — fetch + extract, robust error (RequestException → fetch_error JSON; HTTP non-200 → record).
+    - `update_page_schema(url)` — wrapper gọi scan + `db.seo_schema_upsert()`.
+    - CLI runnable: `py -3.12 schema_scanner.py <url> [<url> ...]`.
+    - USER_AGENT consistent với `seo.py`.
+  - **Khám phá lớn (verified 5 URL thật):** Sintech ĐÃ CÓ `Product` schema cho SP + `Article` schema cho blog + `Organization` + `Store` + `BreadcrumbList` mọi trang (chắc Haravan theme inject). Gap thực tế chỉ là **FAQPage** (blog chưa có) + **ItemList** (collection chưa có) + một số page 404 trong DB cũ. **Đảo ngược assumption backlog cũ.** Đã update memory `reference_competitor_seo_mtm.md` strikethrough 2 claim sai + thêm gap thực tế.
+  - Test 5 URL pass đẹp:
+    - SP: 3 blocks, types `["Organization", "Store", "BreadcrumbList", "Product"]`, has_product=True ✓
+    - Collection: 2 blocks, types `["Organization", "Store", "BreadcrumbList"]` (thiếu ItemList) ✓
+    - Blog: 3 blocks, types `["Organization", "Store", "BreadcrumbList", "Article"]`, has_article=True ✓
+    - Homepage: 1 block, types `["Organization", "Store"]` ✓ (đúng vì root không có Breadcrumb)
+    - Page 404: fetch_error "HTTP 404", schema_errors lưu JSON ✓
+  - Edge case handled: malformed JSON (try/except), `@graph` flatten, `@type` array/string, empty block, fetch timeout/connection error.
+  - **CHƯA commit.** Next: Phase 4C — bulk audit script `audit_schema_all.py` quét 2026 product + 229 blog + 209 collection (~4-7 phút với 5 worker).
+
+- ✅ **Phase 4C: Bulk audit script + Task Scheduler + audit data thật toàn site** (11:55):
+  - `_scripts/audit_schema_all.py` (~120 dòng): ThreadPoolExecutor 5 worker × 0.5s delay, skip URL `schema_scanned_at < 7 ngày` (idempotent re-audit), args `--limit N` `--url-type X` `--force` `--workers N`, progress log mỗi 50 URL + ETA + aggregate top 10 @type + flag breakdown cuối log.
+  - `_scripts/run_audit_schema.bat` + `_scripts/start_audit_schema_hidden.vbs` — wrapper Task Scheduler hidden.
+  - `_scripts/INSTALL.md` Layer 6 — Task Scheduler weekly Sunday 03:00 (lệch giờ với CWV diff 02:00).
+  - **Audit FULL toàn site (background, 13.5 phút):** 2436 target → 2428 success, 8 fail (tất cả 404 SP đã xóa, DB cần cleanup), 3.0 req/s.
+  - **Kết quả gap thật toàn site (data 30/5/2026):**
+
+| url_type | total | audited | Product | FAQ | Article | no_schema |
+|----------|-------|---------|---------|-----|---------|-----------|
+| product | 2026 | 2026 | **2018 (99.6%)** ✅ | 0 | 0 | 8 (404) |
+| blog | 231 | 231 | 0 | **0 (0%)** ❌ | 231 (100%) ✅ | 0 |
+| collection | 210 | 210 | 0 | 0 | 0 | 0 — **0 ItemList** ❌ |
+| page | 19 | 19 | 0 | 0 | 0 | 0 |
+
+  - **Insight quan trọng cho Phase 5+:**
+    - SP Product schema: 99.6% coverage (chỉ thiếu 8 SP 404) → KHÔNG cần fix Product, chỉ cleanup DB.
+    - Blog Article schema: 100% coverage → KHÔNG cần fix Article.
+    - **Gap CHÍNH: FAQPage trên 231 blog (100% blog thiếu)** ← inject FAQPage cho top blog traffic = ROI cao nhất.
+    - **Gap CHÍNH thứ 2: ItemList trên 210 collection (100% thiếu)** ← inject ItemList cho top collection sales.
+    - Page chỉ 19 URL, ít quan trọng.
+  - **CHƯA commit.** Next: Phase 4D — UI page `/seo/schema` để vợ filter + xem chi tiết gap, nút Re-scan + Detail popup JSON-LD raw.
+
+- ✅ **Phase 4D: UI page `/seo/schema` + 2 API endpoint** (11:57):
+  - `db.py` thêm 2 helper pagination: `seo_schema_list(url_type, missing, limit, offset, only_audited)` + `seo_schema_count()`.
+    - Filter `missing` ∈ {product, faq, article, itemlist, any, errors}.
+    - Sắp xếp theo url_type + url.
+  - `app.py` 3 route mới:
+    - `GET /seo/schema` → render `seo_schema.html` với 4 summary card (Product %, Article %, FAQ %, ItemList %) + filter bar (url_type + missing) + bảng paginated 50 rows + pagination.
+    - `POST /seo/schema/rescan/<page_id>` → gọi `schema_scanner.update_page_schema()` real-time, trả JSON kết quả.
+    - `GET /seo/schema/detail/<page_id>` → re-fetch URL + `extract_jsonld_from_html()`, trả JSON `{blocks, all_types, errors}` cho popup detail.
+  - `templates/seo_schema.html` (~230 dòng):
+    - 4 summary card với màu sắc (green=ổn, red=gap)
+    - Filter form auto-submit on change + chip "X URL match" + nút Reset
+    - Bảng với badge có/thiếu schema (Product/Article/FAQPage/ItemList/Breadcrumb/Org)
+    - Per row: 🔄 Re-scan (POST + auto reload) + 👁 Detail (modal popup hiện full JSON-LD blocks)
+    - Modal detail dark theme pre/json, collapsible per block, hiện parse errors
+    - Pagination nút Prev/Next + trang current
+  - Kill PID 21744 → watchdog VBS relaunch PID 13784.
+  - Verify smoke (server thật):
+    - `GET /seo/schema` HTTP 200 73KB, summary đúng (2018/2026 Product, 231/231 Article, 🔴 231 FAQ, 🔴 210 ItemList) ✓
+    - `GET /seo/schema?missing=faq` → "2486 URL match" (đúng vì 2486 URL ko có FAQ, ko filter url_type)
+    - `GET /seo/schema?url_type=collection&missing=itemlist` → "210 URL match" ✓
+    - `POST /seo/schema/rescan/<id>` blog test → JSON `{ok:true, types:[Org,Store,Breadcrumb,Article], has_article:true, schema_count:3}` ✓
+    - `GET /seo/schema/detail/<id>` blog test → 3 blocks với types per block + errors=[] ✓
+  - **CHƯA commit.** Next: Phase 4E — dashboard ops-card 🔖 + (optional) scoring rule thiếu FAQ/ItemList.
+
+- ✅ **Phase 4E: Dashboard card 🔖 + integrate health endpoint** (11:58):
+  - `app.py` `_dashboard_health()` thêm block `out["schema"]`: tổng audited, SP Product %, blog Article %, blog FAQ %, missing_product/faq/itemlist counts (query `seo_schema_stats(url_type=...)` × 3 type + count ItemList raw query).
+  - `templates/dashboard.html` ops-card 🔖 "Schema gap (FAQ + ItemList)" ngay sau card 📊 CWV diff:
+    - Big num: tổng gap (FAQ + ItemList missing).
+    - Sub: "🔴 X blog thiếu FAQ · Y collection thiếu ItemList".
+    - Sub 2: "SP Product Z% · blog Article W%".
+    - Color: green (gap=0) / yellow (gap≤100) / red (gap>100) / gray (chưa audit).
+    - Link → `/seo/schema`.
+  - Verify smoke (server thật, kill PID 13784 → relaunch 7084):
+    - Dashboard card render: "Schema gap (FAQ + ItemList)", "231 blog thiếu FAQ · 210 collection thiếu ItemList", "SP Product 99.6% · blog Article 100.0%" ✓
+  - (Scoring rule integration scope ngoài 4E — backlog Phase 4F nếu vợ muốn ép URL thiếu schema có score thấp hơn.)
+  - **TASK 4 COMPLETE.** 5/5 phase done.
+
+### Thứ 6 (29/5)
+
+- ✅ **CWV Scanner — fix real-time progress + pause/resume**:
+  - **Fix bug progress bar không hiện**: `showRunning(v)` dùng `display:''` bị CSS `display:none` override → sửa thành `'block'`. Tương tự `setBtnState` (btnStop) → `'inline-block'`, `showAutoBanner` → `'block'`. Giờ progress bar hiện ngay khi scan bắt đầu, không cần F5.
+  - **Live stats cập nhật 5s**: thêm `_startLiveStats()` polling `/api/seo/cwv/progress` mỗi 5s trong lúc scan đang chạy → coverage bars (scanned/total per url_type) tự cập nhật.
+  - **Tăng workers 5 → 8**: `WORKERS_WITH_KEY = 8` trong `cwv.py` → nhanh hơn ~60% với PSI API key.
+  - **Pause/Resume state**: bấm ⏹ Dừng → lưu `{strategy, urlType}` vào `localStorage['cwv_paused_v1']` → đóng web vào lại thấy banner vàng "⏸️ Có lần quét bị dừng" → bấm ▶ Tiếp tục → scan tiếp với `skip_scanned=true` (bỏ qua URL đã có data).
+  - Files: `marketing_hub/cwv.py` (workers 5→8), `marketing_hub/templates/seo_cwv.html` (display fix + live stats + resume banner + JS savePauseState/resumeScan/clearPauseState).
+
+## 📅 Tuần trước (12/5 - 18/5)
+
+### Thứ 7 (16/5)
 
 - ✅ **Sheet ops + reports + Haravan ops** (session sau /clear lần 1, 16/5 16:30-21:00):
   - **Chèn 6 ảnh CDN `_grande` 600x388 vào mô tả SP Card Zotac RTX 4070 Super Twin Edge** (haravan_id 1056283679)
