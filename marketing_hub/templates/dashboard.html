@@ -96,6 +96,61 @@
       <div class="ops-card-sub">{{ alt.get('good', '—') }} good · {{ alt.get('none', 0) + alt.get('weak', 0) }} cần sửa</div>
     </a>
 
+    {% set cwv = health.get('cwv', {}) %}
+    {% set cwv_bad = (cwv.get('mobile_bad', 0) or 0) + (cwv.get('desktop_bad', 0) or 0) %}
+    {% set cwv_total = cwv.get('total', 0) or 0 %}
+    {% set cwv_avg = cwv.get('mobile_avg') %}
+    {% set cwvcls = 'red' if cwv_bad > 50 else ('yellow' if cwv_bad > 10 else 'green') %}
+    {% set cwv_sync = cwv.get('last_sync') %}
+    <a class="ops-card s-{{ cwvcls }}" href="/seo/cwv">
+      <div class="ops-card-top">
+        <span class="ops-card-icon">🐢</span>
+        <span class="ops-badge {{ cwvcls }}">{{ 'cần fix' if cwv_bad > 0 else 'tốt' }}</span>
+      </div>
+      <div class="ops-card-num" data-h="cwv.mobile_bad">{{ cwv_bad }}</div>
+      <div class="ops-card-label">CWV perf kém</div>
+      <div class="ops-card-sub">
+        {{ cwv_total }} URL đã quét{% if cwv_avg %} · TB {{ cwv_avg }}{% endif %}
+        {% if cwv_sync and cwv_sync.from_date %}
+          <br><small style="opacity:.7">↻ GitHub {{ cwv_sync.from_date }}</small>
+        {% else %}
+          <br><small style="opacity:.7">chưa sync GitHub</small>
+        {% endif %}
+      </div>
+    </a>
+
+    {% set cdiff = health.get('cwv_diff') %}
+    {% if cdiff and not cdiff.get('error') %}
+      {% set ach = cdiff.get('mobile_avg_change') %}
+      {% set diffcls = 'green' if (ach is not none and ach >= 0) else 'red' %}
+      {% set arrow = '↑' if (ach is not none and ach >= 0) else '↓' %}
+      <a class="ops-card s-{{ diffcls }}" href="/seo/cwv/diff">
+        <div class="ops-card-top">
+          <span class="ops-card-icon">📊</span>
+          <span class="ops-badge {{ diffcls }}">{{ arrow }}{% if ach is not none %}{{ '%+.1f'|format(ach) }}{% else %}—{% endif %}</span>
+        </div>
+        <div class="ops-card-num">{{ cdiff.get('mobile_current_avg') or '—' }}</div>
+        <div class="ops-card-label">CWV tuần này vs tuần trước</div>
+        <div class="ops-card-sub">
+          {% if cdiff.get('prev_week') and cdiff.get('current_week') %}
+            T{{ cdiff.prev_week.week_no }}→T{{ cdiff.current_week.week_no }}/{{ cdiff.current_week.year }}
+            ({{ cdiff.get('mobile_prev_avg') or '—' }}→{{ cdiff.get('mobile_current_avg') or '—' }})
+          {% endif %}
+          <br><small style="opacity:.7">🟢 {{ cdiff.get('improved_count', 0) }} khá hơn · 🔴 {{ cdiff.get('regressed_count', 0) }} regress</small>
+        </div>
+      </a>
+    {% else %}
+      <a class="ops-card s-gray" href="/seo/cwv/diff" style="opacity:.7">
+        <div class="ops-card-top">
+          <span class="ops-card-icon">📊</span>
+          <span class="ops-badge gray">chờ data</span>
+        </div>
+        <div class="ops-card-num">—</div>
+        <div class="ops-card-label">CWV tuần này vs tuần trước</div>
+        <div class="ops-card-sub"><small style="opacity:.7">cần ≥2 tuần snapshot</small></div>
+      </a>
+    {% endif %}
+
     <div class="ops-card {{ 's-green' if botok else ('s-yellow' if health.bot.get('status') == 'no_token' else 's-red') }}">
       <div class="ops-card-top"><span class="ops-card-icon">🤖</span><span class="ops-badge {{ 'green' if botok else ('yellow' if health.bot.get('status') == 'no_token' else 'red') }}">{{ health.bot.get('status', '?') }}</span></div>
       <div class="ops-card-num">{{ '🟢' if botok else '🔴' }}</div>

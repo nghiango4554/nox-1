@@ -13,6 +13,8 @@ import uuid
 from datetime import datetime, timedelta, date
 from pathlib import Path
 
+import requests
+
 from flask import (
     Flask,
     render_template,
@@ -2110,6 +2112,25 @@ def seo_cwv_page():
     )
 
 
+@app.route("/seo/cwv/diff")
+def seo_cwv_diff_page():
+    diff_path = Path(__file__).parent / "data" / "cwv_weekly_diff.json"
+    diff = None
+    error = None
+    if diff_path.exists():
+        try:
+            diff = json.loads(diff_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            error = f"Không đọc được {diff_path.name}: {e}"
+    else:
+        error = (
+            "Chưa có file `data/cwv_weekly_diff.json`. "
+            "Cần snapshot ≥2 tuần (`_scripts/weekly_cwv_snapshot.py`) rồi chạy "
+            "`_scripts/weekly_cwv_diff.py` để generate."
+        )
+    return render_template("seo_cwv_diff.html", diff=diff, error=error)
+
+
 @app.route("/api/seo/cwv/status")
 def api_cwv_status():
     return jsonify(cwv_mod.state_snapshot())
@@ -2172,6 +2193,101 @@ def api_cwv_clear():
     strategy = (request.get_json(silent=True) or {}).get("strategy")
     db.cwv_clear(strategy)
     return jsonify({"ok": True})
+
+
+# ─── CWV Sync từ GitHub Actions ─────────────────────────────────────────
+GITHUB_RAW_BASE = "https://raw.githubusercontent.com/nghiango4554/nox-1/master"
+GITHUB_API_BASE = "https://api.github.com/repos/nghiango4554/nox-1"
+
+
+@app.route("/api/seo/cwv/sync-github", methods=["POST"])
+def api_cwv_sync_github():
+    """Pull JSON kết quả CWV scan mới nhất từ GitHub Actions → upsert vào seo_cwv local.
+
+    Đọc data/cwv_results/_latest.json → fetch từng file con → upsert.
+    """
+    try:
+        # 1. Lấy pointer latest
+        r = requests.get(f"{GITHUB_RAW_BASE}/data/cwv_results/_latest.json", timeout=15)
+        if r.status_code != 200:
+            return jsonify({"ok": False, "error": f"_latest.json HTTP {r.status_code}"}), 502
+        latest = r.json()
+        latest_date = latest.get("latest_date")
+        files = latest.get("files") or []
+        if not latest_date or not files:
+            return jsonify({"ok": False, "error": "latest pointer thiếu date/files"}), 502
+
+        # 2. Fetch + upsert
+        total_upserted = 0
+        total_failed = 0
+        per_file = []
+        for fname in files:
+            url = f"{GITHUB_RAW_BASE}/data/cwv_results/{latest_date}/{fname}"
+            try:
+                fr = requests.get(url, timeout=30)
+                if fr.status_code != 200:
+                    per_file.append({"file": fname, "ok": False, "error": f"HTTP {fr.status_code}"})
+                    total_failed += 1
+                    continue
+                payload = fr.json()
+                results = payload.get("results") or []
+                upserted = 0
+                for res in results:
+                    if res.get("ok"):
+                        db.cwv_upsert(res)
+                        upserted += 1
+                per_file.append({"file": fname, "ok": True, "upserted": upserted, "total": len(results)})
+                total_upserted += upserted
+            except Exception as e:
+                per_file.append({"file": fname, "ok": False, "error": str(e)[:200]})
+                total_failed += 1
+
+        # 3. Lưu state sync gần nhất (file)
+        try:
+            sync_state_path = Path(__file__).parent / "data" / "cwv_last_sync.json"
+            sync_state_path.parent.mkdir(parents=True, exist_ok=True)
+            sync_state_path.write_text(json.dumps({
+                "synced_at": datetime.now().isoformat(timespec="seconds"),
+                "from_date": latest_date,
+                "upserted": total_upserted,
+                "failed_files": total_failed,
+            }, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+
+        return jsonify({
+            "ok": True,
+            "latest_date": latest_date,
+            "files_processed": len(files),
+            "upserted": total_upserted,
+            "failed_files": total_failed,
+            "detail": per_file,
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)[:300]}), 500
+
+
+@app.route("/api/seo/cwv/sync-status")
+def api_cwv_sync_status():
+    """Trạng thái sync GitHub gần nhất + có scan mới hơn local không."""
+    info = {"last_sync": None, "remote_latest": None, "has_new": False}
+    try:
+        sync_state_path = Path(__file__).parent / "data" / "cwv_last_sync.json"
+        if sync_state_path.exists():
+            info["last_sync"] = json.loads(sync_state_path.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    try:
+        r = requests.get(f"{GITHUB_RAW_BASE}/data/cwv_results/_latest.json", timeout=10)
+        if r.status_code == 200:
+            remote = r.json()
+            info["remote_latest"] = remote
+            local_date = (info["last_sync"] or {}).get("from_date") if info["last_sync"] else None
+            if remote.get("latest_date") and remote["latest_date"] != local_date:
+                info["has_new"] = True
+    except Exception as e:
+        info["remote_error"] = str(e)[:200]
+    return jsonify(info)
 
 
 # ─────────────────────────── SP THIẾU MÔ TẢ ───────────────────────────
@@ -4643,6 +4759,51 @@ def _dashboard_health():
         }
     except Exception as e:
         out["alt"] = {"error": str(e)[:100]}
+
+    try:
+        m = db.cwv_stats("mobile")
+        d = db.cwv_stats("desktop")
+        m_total = db.cwv_count("mobile")
+        d_total = db.cwv_count("desktop")
+        sync_state = None
+        sync_path = Path(__file__).parent / "data" / "cwv_last_sync.json"
+        if sync_path.exists():
+            try:
+                sync_state = json.loads(sync_path.read_text(encoding="utf-8"))
+            except Exception:
+                sync_state = None
+        out["cwv"] = {
+            "total": (m_total or 0) + (d_total or 0),
+            "mobile_total": m_total or 0,
+            "desktop_total": d_total or 0,
+            "mobile_bad": (m.get("perf_bad") or 0) if isinstance(m, dict) else 0,
+            "desktop_bad": (d.get("perf_bad") or 0) if isinstance(d, dict) else 0,
+            "mobile_avg": m.get("avg_perf") if isinstance(m, dict) else None,
+            "desktop_avg": d.get("avg_perf") if isinstance(d, dict) else None,
+            "last_sync": sync_state,
+        }
+    except Exception as e:
+        out["cwv"] = {"error": str(e)[:100]}
+
+    try:
+        diff_path = Path(__file__).parent / "data" / "cwv_weekly_diff.json"
+        if diff_path.exists():
+            diff_data = json.loads(diff_path.read_text(encoding="utf-8"))
+            mob = diff_data.get("strategies", {}).get("mobile", {}) or {}
+            out["cwv_diff"] = {
+                "generated_at": diff_data.get("generated_at"),
+                "current_week": diff_data.get("current_week"),
+                "prev_week": diff_data.get("prev_week"),
+                "mobile_avg_change": mob.get("avg_change"),
+                "mobile_current_avg": mob.get("current_avg_score"),
+                "mobile_prev_avg": mob.get("prev_avg_score"),
+                "improved_count": mob.get("improved_count"),
+                "regressed_count": mob.get("regressed_count"),
+            }
+        else:
+            out["cwv_diff"] = None
+    except Exception as e:
+        out["cwv_diff"] = {"error": str(e)[:100]}
 
     out["backups"] = {"db": _backup_info("posts_*.db.zip"), "secrets": _backup_info("secrets_*.zip")}
     out["git"] = _health_cached("git", 30, _git_health)

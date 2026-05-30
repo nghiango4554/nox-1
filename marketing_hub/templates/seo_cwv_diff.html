@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}CWV Tuần này vs Tuần trước · SEO · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
+<span class="crumb"></span>
+<a href="{{ url_for('seo_cwv_page') }}" class="muted" style="font-weight:500">⚡ Core Web Vitals</a>
+<span class="crumb"></span>
+<span style="font-weight:600">📊 Diff tuần này vs tuần trước</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('seo_cwv_page') }}">← CWV scanner</a>
+{% endblock %}
+
+{% block content %}
+<style>
+.diff-wrap { max-width: 1100px; margin: 0 auto; }
+.diff-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.diff-card { background: var(--surface, #fff); border: 1px solid var(--border, #e2e8f0); border-radius: 12px; padding: 20px; }
+.diff-card h3 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+.diff-card .big-num { font-size: 36px; font-weight: 700; line-height: 1; }
+.diff-card .sub { color: #64748b; font-size: 14px; margin-top: 8px; }
+.diff-card.positive { border-left: 4px solid #22c55e; }
+.diff-card.negative { border-left: 4px solid #ef4444; }
+.diff-card.neutral { border-left: 4px solid #94a3b8; }
+.diff-delta { font-weight: 600; padding: 2px 8px; border-radius: 4px; font-size: 14px; }
+.diff-delta.up { background: #dcfce7; color: #166534; }
+.diff-delta.down { background: #fee2e2; color: #991b1b; }
+.diff-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.diff-table th, .diff-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border, #e2e8f0); font-size: 13px; }
+.diff-table th { background: #f1f5f9; font-weight: 600; }
+.diff-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.diff-table td.delta-pos { color: #166534; font-weight: 600; }
+.diff-table td.delta-neg { color: #991b1b; font-weight: 600; }
+.diff-table .url-cell { max-width: 480px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.strategy-block { margin-bottom: 32px; }
+.strategy-block h2 { font-size: 18px; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 2px solid var(--border, #e2e8f0); }
+.empty-state { background: #fef3c7; border: 1px solid #fcd34d; padding: 20px; border-radius: 8px; color: #78350f; }
+</style>
+
+<div class="diff-wrap">
+
+{% if error %}
+  <div class="empty-state">
+    <strong>⚠️ Không có data diff</strong><br>
+    {{ error }}
+  </div>
+{% elif diff %}
+  {# Header info #}
+  <div class="diff-summary">
+    <div class="diff-card neutral">
+      <h3>📅 Tuần so sánh</h3>
+      <div class="big-num">
+        T{{ diff.prev_week.week_no }} → T{{ diff.current_week.week_no }}
+      </div>
+      <div class="sub">
+        Năm {{ diff.current_week.year }} ·
+        Generated {{ diff.generated_at }}
+      </div>
+    </div>
+    {% set mob = diff.strategies.mobile %}
+    {% set mobac = mob.avg_change %}
+    {% set mobcls = 'positive' if (mobac is not none and mobac >= 0) else 'negative' %}
+    <div class="diff-card {{ mobcls }}">
+      <h3>📱 Mobile avg score</h3>
+      <div class="big-num">
+        {{ mob.prev_avg_score or '—' }} →
+        <span>{{ mob.current_avg_score or '—' }}</span>
+        <span class="diff-delta {{ 'up' if mobac is not none and mobac >= 0 else 'down' }}">
+          {% if mobac is not none %}{{ '%+.1f'|format(mobac) }}{% else %}—{% endif %}
+        </span>
+      </div>
+      <div class="sub">
+        🟢 {{ mob.improved_count }} URL khá hơn ·
+        🔴 {{ mob.regressed_count }} URL regress ·
+        common {{ mob.common_count }}
+      </div>
+    </div>
+  </div>
+
+  {% for strategy_key in ['mobile', 'desktop'] %}
+    {% set s = diff.strategies.get(strategy_key, {}) %}
+    {% if s %}
+      <div class="strategy-block">
+        <h2>{{ '📱 Mobile' if strategy_key == 'mobile' else '🖥️ Desktop' }} ·
+          avg {{ s.prev_avg_score or '—' }} → {{ s.current_avg_score or '—' }}
+          ({% if s.avg_change is not none %}{{ '%+.1f'|format(s.avg_change) }}{% else %}—{% endif %})
+        </h2>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div>
+            <h3 style="font-size:14px;color:#991b1b;margin:0 0 6px">🔴 Top {{ s.regressed_top|length }} regress</h3>
+            <table class="diff-table">
+              <thead><tr><th>URL</th><th>Trước</th><th>Sau</th><th>Δ</th></tr></thead>
+              <tbody>
+                {% for r in s.regressed_top %}
+                  <tr>
+                    <td class="url-cell" title="{{ r.url }}">
+                      <a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.url|replace('https://sintech.vn', '') }}</a>
+                    </td>
+                    <td class="num">{{ r.prev_score }}</td>
+                    <td class="num">{{ r.current_score }}</td>
+                    <td class="num delta-neg">{{ r.delta }}</td>
+                  </tr>
+                {% else %}
+                  <tr><td colspan="4" style="text-align:center;color:#94a3b8">— không có URL regress —</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h3 style="font-size:14px;color:#166534;margin:0 0 6px">🟢 Top {{ s.improved_top|length }} cải thiện</h3>
+            <table class="diff-table">
+              <thead><tr><th>URL</th><th>Trước</th><th>Sau</th><th>Δ</th></tr></thead>
+              <tbody>
+                {% for r in s.improved_top %}
+                  <tr>
+                    <td class="url-cell" title="{{ r.url }}">
+                      <a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.url|replace('https://sintech.vn', '') }}</a>
+                    </td>
+                    <td class="num">{{ r.prev_score }}</td>
+                    <td class="num">{{ r.current_score }}</td>
+                    <td class="num delta-pos">+{{ r.delta }}</td>
+                  </tr>
+                {% else %}
+                  <tr><td colspan="4" style="text-align:center;color:#94a3b8">— không có URL cải thiện —</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
+</div>
+{% endblock %}

@@ -249,6 +249,32 @@ CREATE TABLE IF NOT EXISTS seo_cwv (
 );
 CREATE INDEX IF NOT EXISTS idx_seo_cwv_url ON seo_cwv(url);
 CREATE INDEX IF NOT EXISTS idx_seo_cwv_score ON seo_cwv(performance_score);
+
+CREATE TABLE IF NOT EXISTS seo_cwv_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    week_no INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    url TEXT NOT NULL,
+    strategy TEXT NOT NULL DEFAULT 'mobile',
+    scanned_at TEXT,
+    performance_score INTEGER,
+    lcp_ms INTEGER,
+    cls_score REAL,
+    tbt_ms INTEGER,
+    fcp_ms INTEGER,
+    tti_ms INTEGER,
+    speed_index_ms INTEGER,
+    field_data_ok INTEGER DEFAULT 0,
+    lcp_field_ms INTEGER,
+    cls_field REAL,
+    inp_field_ms INTEGER,
+    fcp_field_ms INTEGER,
+    overall_category TEXT,
+    snapshot_at TEXT NOT NULL,
+    UNIQUE(week_no, year, url, strategy)
+);
+CREATE INDEX IF NOT EXISTS idx_seo_cwv_history_week ON seo_cwv_history(year, week_no, strategy);
+CREATE INDEX IF NOT EXISTS idx_seo_cwv_history_url ON seo_cwv_history(url, strategy);
 """
 
 
@@ -2080,3 +2106,62 @@ def cwv_clear(strategy: str = None):
         conn.execute("DELETE FROM seo_cwv")
     conn.commit()
     conn.close()
+
+
+def cwv_history_has_week(week_no: int, year: int, strategy: str = None) -> bool:
+    """Check tuần (week_no, year) đã snapshot chưa — dùng cho idempotency."""
+    conn = get_conn()
+    if strategy:
+        row = conn.execute(
+            "SELECT 1 FROM seo_cwv_history WHERE week_no=? AND year=? AND strategy=? LIMIT 1",
+            (week_no, year, strategy),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT 1 FROM seo_cwv_history WHERE week_no=? AND year=? LIMIT 1",
+            (week_no, year),
+        ).fetchone()
+    conn.close()
+    return row is not None
+
+
+def cwv_history_snapshot(week_no: int, year: int, snapshot_at: str = None) -> int:
+    """Copy toàn bộ seo_cwv hiện tại vào seo_cwv_history với tag (week_no, year).
+    Return số row đã insert. Idempotent: nếu tuần đó đã có data → return 0 (không insert).
+    """
+    if cwv_history_has_week(week_no, year):
+        return 0
+    if not snapshot_at:
+        snapshot_at = datetime.now().isoformat(timespec="seconds")
+    conn = get_conn()
+    before = conn.execute("SELECT COUNT(*) FROM seo_cwv_history").fetchone()[0]
+    conn.execute("""
+        INSERT INTO seo_cwv_history
+            (week_no, year, url, strategy, scanned_at, performance_score,
+             lcp_ms, cls_score, tbt_ms, fcp_ms, tti_ms, speed_index_ms,
+             field_data_ok, lcp_field_ms, cls_field, inp_field_ms, fcp_field_ms,
+             overall_category, snapshot_at)
+        SELECT
+            ?, ?, url, strategy, scanned_at, performance_score,
+            lcp_ms, cls_score, tbt_ms, fcp_ms, tti_ms, speed_index_ms,
+            field_data_ok, lcp_field_ms, cls_field, inp_field_ms, fcp_field_ms,
+            overall_category, ?
+        FROM seo_cwv
+    """, (week_no, year, snapshot_at))
+    conn.commit()
+    after = conn.execute("SELECT COUNT(*) FROM seo_cwv_history").fetchone()[0]
+    conn.close()
+    return after - before
+
+
+def cwv_history_get_week(week_no: int, year: int, strategy: str = "mobile") -> list:
+    """Lấy lại snapshot 1 tuần để diff."""
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT url, performance_score, lcp_ms, cls_score, tbt_ms,
+               fcp_ms, lcp_field_ms, cls_field, inp_field_ms, scanned_at, snapshot_at
+        FROM seo_cwv_history
+        WHERE week_no=? AND year=? AND strategy=?
+    """, (week_no, year, strategy)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]

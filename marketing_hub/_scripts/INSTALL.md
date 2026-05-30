@@ -101,6 +101,33 @@ python "C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\telegram_bot.p
 
 ---
 
+## ✅ Layer 5 — Weekly CWV Snapshot + Diff (Chủ nhật 02:00)
+
+Snapshot điểm CWV của site mỗi tuần → so vs tuần trước → hiện trend trên dashboard ops-center (card 📊 "CWV tuần này vs tuần trước"). Phát hiện regression theme/code sớm.
+
+**Bước 1:** Test chạy tay được (tuần ISO hiện tại):
+```
+py -3.12 "C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\_scripts\weekly_cwv_snapshot.py"
+py -3.12 "C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\_scripts\weekly_cwv_diff.py"
+```
+→ Snapshot 1: `[OK] Snapshot tuan N/2026: <N rows>`. Lần 2: `[SKIP]`.
+→ Diff: nếu chỉ có 1 tuần → `[WARN]`. Có ≥2 tuần → output `data/cwv_weekly_diff.json`.
+
+**Bước 2:** Task Scheduler → Create Basic Task...
+- Name: `Marketing Hub Weekly CWV Diff`
+- Trigger: **Weekly** at **2:00 AM** mỗi **Sunday**
+- Action: **Start a program**
+- Program: `wscript.exe`
+- Arguments: `"C:\Users\NGHIANGO\.openclaw\workspace\nox-1\marketing_hub\_scripts\start_weekly_cwv_hidden.vbs"`
+- Tick **"Run whether user is logged on or not"** + **"Run with highest privileges"**
+
+→ Log ghi vào `data/backups/weekly_cwv.log` (đuôi snapshot + diff).
+→ Card dashboard auto-update sau khi diff JSON viết xong.
+
+⚠️ **Phụ thuộc:** Task 1 (CWV scan) phải có data fresh trong `seo_cwv` (chạy thường xuyên qua GitHub Actions hoặc `/seo/cwv` UI). Snapshot chỉ copy state hiện tại của `seo_cwv` → nếu data cũ thì diff vô nghĩa.
+
+---
+
 ## 🔧 Troubleshooting
 
 | Vấn đề | Cách xử |

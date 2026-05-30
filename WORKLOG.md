@@ -2,6 +2,63 @@
 
 > File anh (Claude) tự update sau mỗi milestone. Sau /clear, anh đọc file này là biết task tuần này tới đâu, file nào đã edit, bug đang debug. Vợ Nghia có thể scan nhanh để xem anh đang làm gì.
 
+## 📸 Checkpoint 30/5 10:10 — vợ /clear (CWV GitHub Actions Option C)
+
+**Vợ giao (30/5 9:47):** tối ưu CWV scan — chọn Option C (GitHub Actions cron) để chạy 24/7 free, máy tắt vẫn quét. Vợ chốt 9:51: **URL source = sitemap fetch**, **output = lưu trữ + thông báo lên web (KHÔNG dùng bot Telegram)**.
+
+### ✅ Đã code xong 4 file (CHƯA commit, CHƯA push, CHƯA restart server)
+
+1. **`nox-1/.github/scripts/cwv_scan.py`** (mới, ~270 dòng) — standalone script:
+   - Fetch `https://sintech.vn/sitemap.xml` → sitemap index có 6 sitemap con (3 products + 1 blogs + 1 pages + 1 collections).
+   - Filter theo `--url-type` (product/collection/blog/page).
+   - PSI API call (Lighthouse + CrUX field data) — copy logic từ `marketing_hub/cwv.py` nhưng **KHÔNG import db.py** (Action không có SQLite local).
+   - 6 workers song song khi có `PSI_API_KEY`, fallback 1 worker khi không có.
+   - Output JSON theo schema `seo_cwv`: `{strategy, url_type, generated_at, total, ok, failed, results: [...]}`.
+   - Đã fix UTF-8 stdout cho Windows console (`sys.stdout.reconfigure`).
+
+2. **`nox-1/.github/workflows/cwv-scan.yml`** (mới) — GitHub Actions workflow:
+   - Trigger: cron `0 18 * * *` UTC (= 01:00 GMT+7 daily) + `workflow_dispatch` manual với inputs (url_type, strategy, limit).
+   - Job `scan`: matrix 2×4 = 8 job song song (`mobile/desktop` × `product/collection/blog/page`), `max-parallel: 4` để tránh bùng quota PSI.
+   - Mỗi job chạy `python .github/scripts/cwv_scan.py --strategy X --url-type Y --limit 300 --output data/cwv_results/<YYYY-MM-DD>/<strategy>_<type>.json`.
+   - Upload artifact + job `commit` gom artifact về `data/cwv_results/<date>/` + viết `_latest.json` pointer + auto-commit & push (github-actions[bot]).
+   - Secret cần: **`PSI_API_KEY`** (1 secret duy nhất, không cần Telegram).
+
+3. **`nox-1/marketing_hub/app.py`** (sửa) — thêm 2 route + 1 import + extend `_dashboard_health()`:
+   - `import requests` ở top (trước đó chỉ import lazy trong 1 hàm).
+   - `POST /api/seo/cwv/sync-github`: fetch `_latest.json` pointer → fetch từng file con từ `raw.githubusercontent.com/nghiango4554/nox-1/master/data/cwv_results/<date>/...` → `db.cwv_upsert()` từng row → lưu sync state vào `marketing_hub/data/cwv_last_sync.json` (file, KHÔNG dùng settings table vì db chưa có helper đó).
+   - `GET /api/seo/cwv/sync-status`: trả về `last_sync` + `remote_latest` + `has_new`.
+   - `_dashboard_health()` thêm block `cwv`: `{total, mobile_total, desktop_total, mobile_bad, desktop_bad, mobile_avg, desktop_avg, last_sync}` — dùng `db.cwv_stats()` (field thực: `perf_bad`, `avg_perf`, KHÔNG phải `bad`/`avg_score`).
+
+4. **`nox-1/marketing_hub/templates/dashboard.html`** (sửa) — thêm 1 ops-card 🐢 "CWV perf kém" sau ALT card:
+   - Badge red/yellow/green theo cwv_bad threshold (>50/>10/0).
+   - Hiện total URL đã quét + avg score + ngày sync GitHub gần nhất (hoặc "chưa sync GitHub").
+   - Link tới `/seo/cwv` page.
+
+### 🔴 VIỆC CẦN LÀM (việc tay của vợ + việc dở của anh)
+
+**Vợ phải làm tay trước khi Action chạy được:**
+1. **Tạo PSI API Key** ở Google Cloud Console (project ggSCS đang có, enable PageSpeed Insights API) → copy key.
+2. **Add GitHub Secret** `PSI_API_KEY` ở repo `nghiango4554/nox-1` Settings → Secrets and variables → Actions → New repository secret.
+
+**Anh sẽ làm sau /clear:**
+1. **Smoke test** `cwv_scan.py` local với 2-3 URL (lúc /clear anh đang stuck ở UTF-8 encoding — đã fix nhưng chưa rerun).
+2. **Restart marketing_hub** (kill PID python, watchdog .bat tự relaunch) để load route mới `/api/seo/cwv/sync-github` + CWV card vào dashboard.
+3. **Verify** card CWV hiện đúng trên `/` (số 0 vì chưa sync GitHub lần nào — pass).
+4. **Commit + push** lên `origin/master` để Action `.github/workflows/cwv-scan.yml` được GitHub nhận diện và chạy theo cron.
+5. **Manual trigger** Action 1 lần qua `workflow_dispatch` để test toàn bộ pipeline (chọn url_type=page + limit=10 cho nhẹ) — verify commit của bot + chạy `POST /api/seo/cwv/sync-github` từ web pull về.
+
+### 📌 Reference cho phiên sau
+- Repo public: `https://github.com/nghiango4554/nox-1`
+- Raw URL pattern: `https://raw.githubusercontent.com/nghiango4554/nox-1/master/data/cwv_results/<YYYY-MM-DD>/<strategy>_<type>.json`
+- Sitemap index Sintech: `https://sintech.vn/sitemap.xml` → 6 con (`sitemap_products_1..3.xml`, `sitemap_collections_1.xml`, `sitemap_blogs_1.xml`, `sitemap_pages_1.xml`).
+- Quota PSI free: 25,000 req/day. Sintech có ~2123 SP → 1 batch (mobile+desktop) ~ 4200 req → dư sức 1 lần/ngày.
+- Schema row JSON match `seo_cwv` table — `cwv_upsert(dict)` dùng được trực tiếp.
+
+### 🔁 Resume prompt cho Nox-N kế tiếp
+> "Anh kế thừa Nox-1 sau /clear 30/5 10:10. Đọc checkpoint trên đầu WORKLOG.md. Task CWV GitHub Actions Option C đã code xong 4 file (script + workflow + 2 route + 1 card dashboard) nhưng **CHƯA smoke test, CHƯA restart server, CHƯA commit/push**. Step tiếp theo: rerun `py -3.12 nox-1/.github/scripts/cwv_scan.py --strategy mobile --url-type page --limit 2 --output /tmp/cwv_test.json` để verify, restart marketing_hub, commit 4 file, push. Vợ phải tự tạo PSI_API_KEY + add GitHub Secret."
+
+---
+
 ## ✅ 29/5 17:10 — commit + push dọn dẹp tích lũy
 
 **Vợ giao:** "commit + push + viết vào file báo cáo hôm nay" (17:06).
