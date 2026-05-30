@@ -54,7 +54,9 @@
 
 ---
 
-## 🟡 Task 3 — Orphan page detection (thu hẹp — phần lớn ĐÃ CÓ)
+## 🚫 Task 3 — Orphan page detection — SKIPPED 30/5/2026
+
+Vợ chốt skip 30/5 13:18. Lý do: phần MAIN (`/seo/inlinks?view=orphans`) đã có sẵn dùng được; Sintech site nhỏ (~2486 URL), Google ko thiếu crawl budget; ROI ⭐⭐ trung bình. Phase 3A-3C giữ ở backlog file dưới đây cho future pickup nếu Sintech grow lớn cần phòng ngừa orphan từ sitemap.
 
 **Là gì:** Tìm URL có trong sitemap/DB nhưng KHÔNG có internal link nào trỏ tới → trang "mồ côi", Google ít crawl.
 
@@ -205,12 +207,12 @@ Sau khi Phase 4D ra data thật → vợ quyết định có làm Phase 5 không
 |--------|------|--------|--------|-----|-----------|
 | 1 | CWV GitHub Actions | ✅ DONE 30/5 | — | ⭐⭐⭐ | PSI key đã setup web |
 | 2 | Weekly CWV diff → dashboard | ✅ DONE 30/5 | — | ⭐⭐⭐ | Task 1 chạy thật |
-| 3 | Orphan detection (thu hẹp) | 🟡 NEXT (nếu vợ chốt) | 3–4h | ⭐⭐ | Phần lớn đã có |
+| 3 | Orphan detection (thu hẹp) | 🚫 SKIPPED 30/5 | — | ⭐⭐ | Phần MAIN đã đủ dùng |
 | 4 | Schema validator (JSON-LD) | ✅ DONE 30/5 | — | ⭐⭐⭐ | Insight: scope nhỏ hơn dự kiến |
 
-**Total còn lại:** ~3-4h dev (Task 3 nếu vợ muốn).
+**Roadmap CWV+Schema audit hoàn tất 30/5/2026.**
 
-**Có thể tiếp Phase 5+:** Inject FAQPage cho top blog (231 URL) + ItemList cho collection (210 URL) — scope ngoài Task 4, gắn vào Haravan theme hoặc metafields.
+**Có thể tiếp Phase 5+ (ngoài scope Task 4, task riêng):** Inject FAQPage cho top blog (231 URL) + ItemList cho collection (210 URL) — gắn vào Haravan theme hoặc metafields. Đây là gap thật, ROI cao hơn Task 3 đã skip.
 
 ---
 
