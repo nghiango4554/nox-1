@@ -1,7 +1,8 @@
 @echo off
 REM Auto-commit local snapshot (no push) - prevents losing work from forgotten commits.
 REM Registered as Task Scheduler "Marketing Hub Auto Commit" (daily).
-cd /d "C:\Users\NGHIANGO\.openclaw\workspace\nox-1"
+call "%~dp0env.bat"
+cd /d "%WORKSPACE_ROOT%"
 git add -A
 git diff --cached --quiet
 if errorlevel 1 (

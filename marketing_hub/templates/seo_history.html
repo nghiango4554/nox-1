@@ -9,6 +9,7 @@
 
 {% block page_actions %}
 <a class="btn" href="{{ url_for('seo_dashboard') }}">← SEO</a>
+<a class="btn" href="{{ url_for('seo_history_export_csv') }}" title="Tải toàn bộ snapshot dạng CSV">📥 Export CSV</a>
 <form action="{{ url_for('seo_history_capture') }}" method="post" style="display:inline">
   <input type="hidden" name="note" value="manual">
   <button class="btn btn-primary" type="submit">📸 Chụp snapshot ngay</button>
@@ -17,8 +18,18 @@
 
 {% block content %}
 
+{% if regression and regression.has_regression %}
+<div style="padding:14px 18px;background:rgba(239,68,68,0.08);border-left:4px solid #ef4444;border-radius:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+  <div style="font-size:14px;color:#fca5a5">
+    ⚠️ <strong>Regression alert:</strong> Avg SEO giảm <strong>{{ regression.delta }}đ</strong> vs snapshot trước
+    ({{ regression.prev_avg }} → {{ regression.latest_avg }}) — cần kiểm tra nguyên nhân
+  </div>
+  <a href="{{ url_for('seo_history_compare_page', a=regression.prev_id, b=regression.latest_id) }}" class="btn">📊 Xem diff chi tiết</a>
+</div>
+{% endif %}
+
 <div class="muted" style="font-size:12px;padding:8px 12px;background:rgba(59,130,246,0.05);border-left:3px solid #93c5fd;border-radius:4px;margin-bottom:14px">
-  💡 <strong>Auto-capture:</strong> Mỗi Chủ Nhật 04:00 (sau crawl auto 03:00). Cũng tự capture sau mỗi lần em chạy crawl thủ công.
+  💡 <strong>Auto-capture:</strong> Mỗi Chủ Nhật 04:00 (sau crawl auto 03:00). Cũng tự capture sau mỗi lần em chạy crawl thủ công. Auto-cleanup giữ 52 snapshot mới nhất.
 </div>
 
 {% if not history %}
@@ -48,19 +59,72 @@
   </section>
 
   <section class="card" style="margin-top:14px">
+    <h3 style="margin:0 0 12px 0;font-size:15px">🎯 Điểm SEO trung bình theo loại URL</h3>
+    <div style="position:relative;height:280px">
+      <canvas id="chart-by-type"></canvas>
+    </div>
+  </section>
+
+  {% if cwv_timeline and cwv_timeline.labels %}
+  <section class="card" style="margin-top:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0;font-size:15px">🐢 CWV Health Timeline (PageSpeed Insights)</h3>
+      <a href="/seo/cwv/diff" class="muted" style="font-size:12px">📊 Xem diff tuần →</a>
+    </div>
+    <div class="muted" style="font-size:12px;margin-bottom:8px">
+      Data từ {{ cwv_timeline.labels|length }} tuần đã snapshot ·
+      latest: {{ cwv_timeline.url_count[-1] if cwv_timeline.url_count else 0 }} URL ·
+      mobile {{ cwv_timeline.mobile_avg[-1] if cwv_timeline.mobile_avg else '—' }} · desktop {{ cwv_timeline.desktop_avg[-1] if cwv_timeline.desktop_avg else '—' }}
+    </div>
+    <div style="position:relative;height:260px;margin-bottom:14px">
+      <canvas id="chart-cwv-score"></canvas>
+    </div>
+    <div style="position:relative;height:240px">
+      <canvas id="chart-cwv-lcp"></canvas>
+    </div>
+  </section>
+  {% endif %}
+
+  {% if schema_timeline and schema_timeline.labels %}
+  <section class="card" style="margin-top:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="margin:0;font-size:15px">🔖 Schema Gap Timeline (JSON-LD coverage)</h3>
+      <a href="/seo/schema" class="muted" style="font-size:12px">🔍 Xem detail →</a>
+    </div>
+    <div class="muted" style="font-size:12px;margin-bottom:8px">
+      {{ schema_timeline.labels|length }} tuần snapshot ·
+      latest: SP Product {{ schema_timeline.sp_pct_product[-1] if schema_timeline.sp_pct_product else '—' }}% ·
+      Blog FAQ {{ schema_timeline.blog_pct_faq[-1] if schema_timeline.blog_pct_faq else '—' }}% ·
+      Collection ItemList {{ schema_timeline.col_pct_itemlist[-1] if schema_timeline.col_pct_itemlist else '—' }}%
+    </div>
+    <div style="position:relative;height:280px">
+      <canvas id="chart-schema-gap"></canvas>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="card" style="margin-top:14px">
     <h3 style="margin:0 0 12px 0;font-size:15px">🔗 Số link gãy theo thời gian</h3>
     <div style="position:relative;height:240px">
       <canvas id="chart-broken"></canvas>
     </div>
   </section>
 
-  {# ─── 2. TABLE ─── #}
+  {# ─── 2. TABLE + COMPARE ─── #}
   <section class="card" style="margin-top:14px">
-    <h3 style="margin:0 0 10px 0;font-size:15px">📋 Lịch sử {{ history|length }} snapshot</h3>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:12px;flex-wrap:wrap">
+      <h3 style="margin:0;font-size:15px">📋 Lịch sử {{ history|length }} snapshot</h3>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="muted" style="font-size:12px">Chọn 2 snapshot để so sánh →</span>
+        <button id="btn-compare" class="btn btn-primary" disabled onclick="goCompare()">📊 So sánh A vs B</button>
+      </div>
+    </div>
     <div class="table-wrap">
     <table class="table">
       <thead>
         <tr>
+          <th class="col-stt">A</th>
+          <th class="col-stt">B</th>
           <th class="col-stt">STT</th>
           <th>Thời điểm</th>
           <th>Tổng URL</th>
@@ -75,6 +139,8 @@
       <tbody>
         {% for h in history %}
         <tr>
+          <td class="col-stt"><input type="radio" name="cmp-a" value="{{ h.id }}" onchange="updateCompare()"></td>
+          <td class="col-stt"><input type="radio" name="cmp-b" value="{{ h.id }}" onchange="updateCompare()"></td>
           <td class="col-stt">{{ loop.index }}</td>
           <td><small>{{ h.captured_at }}</small></td>
           <td>{{ h.total }}</td>
@@ -94,6 +160,20 @@
     </table>
     </div>
   </section>
+  <script>
+    function updateCompare() {
+      const a = document.querySelector('input[name="cmp-a"]:checked');
+      const b = document.querySelector('input[name="cmp-b"]:checked');
+      document.getElementById('btn-compare').disabled = !(a && b && a.value !== b.value);
+    }
+    function goCompare() {
+      const a = document.querySelector('input[name="cmp-a"]:checked');
+      const b = document.querySelector('input[name="cmp-b"]:checked');
+      if (a && b && a.value !== b.value) {
+        window.location.href = '/seo/history/compare?a=' + a.value + '&b=' + b.value;
+      }
+    }
+  </script>
 {% endif %}
 
 {% endblock %}
@@ -147,7 +227,150 @@
     options: { ...baseOpts, scales: { x: { ...baseOpts.scales.x, stacked: true }, y: { ...baseOpts.scales.y, stacked: true } } },
   });
 
-  // Chart 3: Broken links
+  // Chart 3: Avg score per url_type
+  new Chart(document.getElementById('chart-by-type'), {
+    type: 'line',
+    data: {
+      labels: data.labels,
+      datasets: [
+        {
+          label: '📦 Product (SP)',
+          data: data.avg_score_product,
+          borderColor: '#60a5fa',
+          backgroundColor: 'rgba(96,165,250,0.12)',
+          tension: 0.3,
+          borderWidth: 2,
+          fill: false,
+        },
+        {
+          label: '📰 Blog',
+          data: data.avg_score_blog,
+          borderColor: '#a78bfa',
+          backgroundColor: 'rgba(167,139,250,0.12)',
+          tension: 0.3,
+          borderWidth: 2,
+          fill: false,
+        },
+        {
+          label: '📋 Collection',
+          data: data.avg_score_collection,
+          borderColor: '#34d399',
+          backgroundColor: 'rgba(52,211,153,0.12)',
+          tension: 0.3,
+          borderWidth: 2,
+          fill: false,
+        },
+      ],
+    },
+    options: { ...baseOpts, scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, max: 100 } } },
+  });
+
+  // ─── CWV Timeline (Phase H2) ───
+  const cwv = {{ cwv_timeline|tojson }};
+  if (cwv && cwv.labels && cwv.labels.length) {
+    new Chart(document.getElementById('chart-cwv-score'), {
+      type: 'line',
+      data: {
+        labels: cwv.labels,
+        datasets: [
+          {
+            label: '📱 Mobile avg',
+            data: cwv.mobile_avg,
+            borderColor: '#f87171',
+            backgroundColor: 'rgba(248,113,113,0.12)',
+            tension: 0.3, borderWidth: 2, fill: false, spanGaps: true,
+          },
+          {
+            label: '🖥️ Desktop avg',
+            data: cwv.desktop_avg,
+            borderColor: '#34d399',
+            backgroundColor: 'rgba(52,211,153,0.12)',
+            tension: 0.3, borderWidth: 2, fill: false, spanGaps: true,
+          },
+        ],
+      },
+      options: {
+        ...baseOpts,
+        scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, max: 100, title: { display: true, text: 'PageSpeed score (0-100)', color: '#a0a0a8' } } },
+        plugins: { ...baseOpts.plugins, title: { display: true, text: 'Avg PageSpeed score / tuần', color: '#a0a0a8' } },
+      },
+    });
+
+    new Chart(document.getElementById('chart-cwv-lcp'), {
+      type: 'line',
+      data: {
+        labels: cwv.labels,
+        datasets: [
+          {
+            label: '📱 Mobile LCP (ms)',
+            data: cwv.mobile_lcp_ms,
+            borderColor: '#fb923c',
+            backgroundColor: 'rgba(251,146,60,0.12)',
+            tension: 0.3, borderWidth: 2, fill: false, spanGaps: true,
+          },
+          {
+            label: '🖥️ Desktop LCP (ms)',
+            data: cwv.desktop_lcp_ms,
+            borderColor: '#60a5fa',
+            backgroundColor: 'rgba(96,165,250,0.12)',
+            tension: 0.3, borderWidth: 2, fill: false, spanGaps: true,
+          },
+        ],
+      },
+      options: {
+        ...baseOpts,
+        scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, title: { display: true, text: 'LCP ms (thấp hơn = tốt)', color: '#a0a0a8' } } },
+        plugins: { ...baseOpts.plugins, title: { display: true, text: 'Avg LCP (Largest Contentful Paint) / tuần', color: '#a0a0a8' } },
+      },
+    });
+  }
+
+  // ─── Schema Gap Timeline (Phase H3) ───
+  const sch = {{ schema_timeline|tojson }};
+  if (sch && sch.labels && sch.labels.length) {
+    new Chart(document.getElementById('chart-schema-gap'), {
+      type: 'line',
+      data: {
+        labels: sch.labels,
+        datasets: [
+          {
+            label: '📦 SP có Product %',
+            data: sch.sp_pct_product,
+            borderColor: '#22c55e',
+            backgroundColor: 'rgba(34,197,94,0.12)',
+            tension: 0.3, borderWidth: 2, fill: false, spanGaps: true,
+          },
+          {
+            label: '📰 Blog có Article %',
+            data: sch.blog_pct_article,
+            borderColor: '#60a5fa',
+            backgroundColor: 'rgba(96,165,250,0.12)',
+            tension: 0.3, borderWidth: 2, fill: false, spanGaps: true,
+          },
+          {
+            label: '❓ Blog có FAQPage %',
+            data: sch.blog_pct_faq,
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245,158,11,0.12)',
+            tension: 0.3, borderWidth: 2, fill: false, spanGaps: true,
+          },
+          {
+            label: '📋 Collection có ItemList %',
+            data: sch.col_pct_itemlist,
+            borderColor: '#a78bfa',
+            backgroundColor: 'rgba(167,139,250,0.12)',
+            tension: 0.3, borderWidth: 2, fill: false, spanGaps: true,
+          },
+        ],
+      },
+      options: {
+        ...baseOpts,
+        scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, max: 100, title: { display: true, text: 'Coverage %', color: '#a0a0a8' } } },
+      },
+    });
+  }
+
+  // Chart 4: Broken links
   new Chart(document.getElementById('chart-broken'), {
     type: 'line',
     data: {

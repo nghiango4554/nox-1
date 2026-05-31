@@ -1,17 +1,14 @@
 """Routes: Haravan — 10 endpoint (dashboard + sync + products + blogs + inline edit + AI rewrite).
 
-Tách từ app.py (Batch 3 refactor — Med-High risk vì có inline-edit + AI rewrite).
-Đăng ký vào app qua `register(app)` (manual add_url_rule, giữ nguyên endpoint name).
-
 ⚠️ Permission gate: `api_haravan_product_edit` gọi `hv_client.update_product` KHÔNG dùng
 `allow_blocked_operations` — cố ý dùng default gate trong haravan_client (PUT SEO meta cho phép,
-POST/DELETE SP chặn — xem [[feedback_haravan_permission]]).
+POST/DELETE SP chặn).
 
 Dep:
 - haravan_client (PUT product field + update_product)
 - haravan_sync (start_sync_async / start_sync_incremental_async / sync_state / HV_ISSUE_LABELS / hv_enrich_issue)
 - db (hv_* + seo_get_page + activity_log)
-- routes/blog_topics (classify_blog_topic + BLOG_TOPICS + BLOG_TOPIC_LABELS)
+- routes.blog_topics (classify_blog_topic + BLOG_TOPICS + BLOG_TOPIC_LABELS)
 """
 
 import json

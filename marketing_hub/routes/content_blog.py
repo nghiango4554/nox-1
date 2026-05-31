@@ -1,20 +1,19 @@
-"""Routes: Content Blog — 19 endpoint (page + detail + gen×2 + batch-gen SSE×4 +
+"""Routes: Content Blog — 18 endpoint (page + detail + gen×2 + batch-gen SSE×4 +
 gen-title/meta + save + sync×2 + gather-images + image serve + select + upload + url).
 
-Tách từ app.py (Batch 6C). Med risk.
-
-Move kèm:
-- _blog_jobs_list/get/update (helpers)
+Helpers nội bộ:
+- _blog_jobs_list/get/update (CRUD)
 - _run_blog_gen, _run_blog_gen_full (1-pass + 2-pass gen)
 - _push_blog_to_haravan, _apply_blog_push (sync)
-- _blog_image_dir (path helper)
-- _save_seo_job_edits (duplicate — sau B6C app.py có thể xóa)
-- BLOG_ID_BY_TARGET constant
-- _batch_streams (module-level state cho SSE)
+
+State:
+- _batch_streams (SSE stream registry, module-level)
+- BLOG_ID_BY_TARGET (huong-dan + news blog_id Sintech)
 
 Dep:
-- db, json_sync, image_gather, blog_content_writer, haravan_blog,
+- db, job_sync, image_gather, blog_content_writer, haravan_blog,
   haravan_client, image_processor, cloudinary_upload, ai_provider (lazy)
+- routes._shared.save_seo_job_edits
 """
 
 import json
@@ -31,6 +30,7 @@ from flask import (
 from werkzeug.utils import secure_filename
 
 import db
+from routes._shared import save_seo_job_edits
 
 
 # ─────────────────────── MODULE STATE ────────────────────────────
@@ -110,16 +110,6 @@ def _blog_jobs_update(job_id: int, **fields):
                  [*[fields[k] for k in keys], job_id])
     conn.commit()
     conn.close()
-
-
-def _save_seo_job_edits(update_fn, job_id):
-    """Lưu edit title/meta/body từ form detail."""
-    payload = request.get_json(silent=True) or request.form
-    update_fn(job_id,
-              edited_title=(payload.get("title") or "").strip(),
-              edited_meta=(payload.get("meta") or "").strip(),
-              edited_body_html=(payload.get("body") or "").strip())
-    return jsonify({"ok": True})
 
 
 def _blog_image_dir(job_id):
@@ -491,7 +481,7 @@ def blog_content_gen_meta(job_id):
 
 
 def blog_content_save(job_id):
-    return _save_seo_job_edits(_blog_jobs_update, job_id)
+    return save_seo_job_edits(_blog_jobs_update, job_id)
 
 
 def blog_content_sync(job_id):

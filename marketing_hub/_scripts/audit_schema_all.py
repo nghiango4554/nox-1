@@ -145,6 +145,14 @@ def main():
     print(f"  has_product: {has_product} ({100.0*has_product/success:.1f}%)" if success else "  has_product: 0", flush=True)
     print(f"  has_faq:     {has_faq} ({100.0*has_faq/success:.1f}%)" if success else "  has_faq: 0", flush=True)
     print(f"  has_article: {has_article} ({100.0*has_article/success:.1f}%)" if success else "  has_article: 0", flush=True)
+
+    # Auto-snapshot schema gap timeline (Phase H3 SEO History Hub)
+    try:
+        rid = db.seo_schema_history_capture()
+        print(f"[OK] seo_schema_history snapshot id={rid} (auto-capture sau bulk audit)", flush=True)
+    except Exception as e:
+        print(f"[WARN] seo_schema_history_capture fail: {e}", flush=True)
+
     return 0
 
 

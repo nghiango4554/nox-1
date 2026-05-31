@@ -1,9 +1,6 @@
 """Routes: Content Jobs SP — 15 endpoint (list + push + detail + generate
 + queue worker + save + toggle-money + approve/unapprove + delete + sync + stats).
 
-Tách từ app.py (Batch 6A refactor). Med risk — bg worker `content_writer.start_worker_async()`
-phải giữ state qua re-import.
-
 Dep:
 - db.content_job(s)_* (CRUD jobs)
 - content_writer (start_worker_async, stop_worker, queue_state, upload_local_images_in_body_to_haravan)

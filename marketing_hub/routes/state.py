@@ -1,10 +1,8 @@
 """Shared mutable state cho marketing_hub.
 
-Tách ra để các module routes/* (sẽ tạo dần ở Batch 1+) cùng dùng chung
-1 ref tới các dict/lock background, conflict matrix, cache health, v.v.
-
-Constants thuần (POST_TYPES, HV_FIELD_API_MAP, BLOG_TOPICS...) vẫn để
-trong app.py hoặc chuyển sang module route tương ứng khi tách.
+Các route module dùng chung 1 ref tới các dict/lock background worker,
+conflict matrix, cache health, snapshot dir. Constants thuần để ở
+module route tương ứng (POST_TYPES → posts, BLOG_TOPICS → blog_topics, ...).
 """
 
 import threading

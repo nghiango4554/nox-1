@@ -1,11 +1,11 @@
 """Routes: SEO Tools — 33 endpoint (h1-in-desc + title-meta + GSC + CWV + schema + empty-desc).
 
-Tách từ app.py (Batch 5C refactor). Med-High risk — nhiều background worker
-(_GEN_BG/_PILLAR_BG ở routes.state đã được verify giữ state qua re-import).
+Background worker (_GEN_BG/_PILLAR_BG) ở routes.state dùng chung 1 ref —
+state KHÔNG reset khi module re-import.
 
-Move kèm:
-- `_load_psi_key()` helper (chỉ dùng nội bộ CWV)
-- `GITHUB_RAW_BASE` constant (sync-github)
+Helper nội bộ:
+- `_load_psi_key()` (CWV)
+- `GITHUB_RAW_BASE` const (sync-github)
 
 Dep:
 - seo as seo_mod

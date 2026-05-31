@@ -1,8 +1,8 @@
 """Blog topic taxonomy — constants + pure classifier.
 
 Dùng chung bởi routes/system.py (Competitors page) và routes/haravan.py
-(Haravan blogs page — sẽ tách ở Batch 3). Tách riêng để tránh circular
-import giữa các module routes/* khi cần cùng 1 taxonomy.
+(Haravan blogs page). Tách riêng để tránh circular import giữa các
+module routes/* khi cần cùng 1 taxonomy.
 
 Order matters: rule cụ thể trước, generic sau (vd "pirate" check trước "tutorial").
 """

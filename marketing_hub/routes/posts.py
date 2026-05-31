@@ -1,10 +1,10 @@
 """Routes: Posts + Calendar + Library + Media — 22 endpoint.
 
-Tách từ app.py (Batch 4 refactor). Pattern: helpers + constants gắn liền posts UI/file
-move chung sang đây (Batch 0 pattern). app.py import lại 4 symbol cho dashboard + bg job.
-
-⚠️ Smoke test KHÔNG được gọi /posts/<id>/publish hay /posts/<id>/schedule —
+⚠️ Test KHÔNG được gọi /posts/<id>/publish hay /posts/<id>/schedule —
 sẽ POST FB thật. Chỉ test draft + upload + calendar load.
+
+`register_runtime(app, sched)` đăng kèm template context (POST_TYPES/STATUSES)
++ scheduler job auto_post_due — gọi từ app.py __main__.
 
 Dep:
 - db (list_posts/get_post/create_post/update_post/delete_post/stats/activity_log/activity_recent)
@@ -762,3 +762,50 @@ def register(app):
     app.add_url_rule("/library/file/<category>/<path:filename>",
                      "library_file", library_file)
     app.add_url_rule("/api/library/use", "api_library_use", api_library_use, methods=["POST"])
+
+
+# ─────────────────────── RUNTIME (scheduler + template context) ──
+
+def auto_post_due():
+    """Worker chạy mỗi phút — đăng các bài 'approved' tới giờ.
+
+    Backup local trong trường hợp em muốn quản hoàn toàn từ Hub
+    (đã có endpoint /schedule dùng FB native scheduling)."""
+    now = datetime.now()
+    today = now.date().isoformat()
+    posts = db.list_posts(date=today, status="approved")
+    for p in posts:
+        if not p.get("scheduled_time"):
+            continue
+        try:
+            tgt = datetime.strptime(
+                f"{p['scheduled_date']} {p['scheduled_time']}", "%Y-%m-%d %H:%M"
+            )
+        except ValueError:
+            continue
+        if tgt > now:
+            continue
+        if tgt < now - timedelta(hours=2):
+            continue  # quá hạn, skip
+        try:
+            paths = post_image_paths(p)
+            if len(paths) >= 2:
+                r = fb_client.post_multi_to_page(p["caption"], paths, published=True)
+            else:
+                r = fb_client.post_to_page(
+                    p["caption"], image_path=(paths[0] if paths else None), published=True
+                )
+            fb_id = r.get("post_id") or r.get("id")
+            db.update_post(p["id"], {"status": "posted", "fb_post_id": fb_id})
+            print(f"[auto] Đã đăng bài {p['code']} → {fb_id}")
+        except Exception as e:
+            print(f"[auto] Lỗi đăng bài {p['code']}: {e}")
+
+
+def register_runtime(app, sched):
+    """Đăng ký template context (POST_TYPES/STATUSES) + scheduler job auto_post_due."""
+    @app.context_processor
+    def _inject_post_constants():
+        return {"POST_TYPES": POST_TYPES, "POST_STATUSES": POST_STATUSES}
+
+    sched.add_job(auto_post_due, "interval", minutes=1, id="auto_post_due")

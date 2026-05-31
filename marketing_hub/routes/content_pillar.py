@@ -1,10 +1,7 @@
 """Routes: Content Pillar (T4) — 4 endpoint (list + generate + stop + status).
 
-Tách từ app.py (Batch 6D). Low risk — chỉ gen Pillar+Cluster (seed blog_jobs),
-KHÔNG gen nội dung (việc viết bài ở routes/content_blog.py).
-
-Move kèm:
-- _pillar_progress, _pillar_bg_worker (BG worker callable)
+Chỉ gen Pillar+Cluster (seed blog_jobs), KHÔNG gen nội dung
+(việc viết bài ở routes/content_blog.py).
 
 Dep:
 - db

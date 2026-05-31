@@ -1,18 +1,18 @@
 """Routes: Content Collection — 10 endpoint (list + detail + gen×3 (bg/status/stop) +
 gen-job + gen-title-meta + save + sync + sync-all).
 
-Tách từ app.py (Batch 6B). Med risk — bg worker `_gen_bg_worker_collection_loop`
-dùng `_GEN_BG` ở routes/state (đã verify shared state qua re-import).
+Bg worker `_gen_bg_worker_collection_loop` dùng `_GEN_BG` ở routes.state
+(shared instance qua import).
 
-Move kèm helpers:
+Helpers nội bộ:
 - _collection_jobs_list/get/update
 - _build_tier_groups
 - _gen_bg_worker_collection_loop, _enqueue_collection_gen
-- _save_seo_job_edits (duplicate sang content_blog Batch 6C để tránh phụ thuộc chéo)
 
 Dep:
 - db
 - routes.state (_GEN_BG, _GEN_BG_LOCK)
+- routes._shared (save_seo_job_edits)
 - collection_content_writer (lazy import)
 - job_sync (apply_sync_result)
 - seo_quality (auto compute quality score)
@@ -32,6 +32,7 @@ from flask import (
 import db
 import job_sync
 from routes.state import _GEN_BG, _GEN_BG_LOCK
+from routes._shared import save_seo_job_edits
 
 
 # ─────────────────────── DB HELPERS ──────────────────────────────
@@ -264,19 +265,6 @@ def _enqueue_collection_gen(ids):
     return snapshot
 
 
-def _save_seo_job_edits(update_fn, job_id):
-    """Lưu edit title/meta/body từ form detail (CHUNG cho collection + blog).
-
-    update_fn tự lo recompute quality/readability khi có edited_*.
-    """
-    payload = request.get_json(silent=True) or request.form
-    update_fn(job_id,
-              edited_title=(payload.get("title") or "").strip(),
-              edited_meta=(payload.get("meta") or "").strip(),
-              edited_body_html=(payload.get("body") or "").strip())
-    return jsonify({"ok": True})
-
-
 # ─────────────────────── ROUTES ──────────────────────────────────
 
 def collection_content_page():
@@ -383,7 +371,7 @@ def collection_content_gen_title_meta(job_id):
 
 
 def collection_content_save(job_id):
-    return _save_seo_job_edits(_collection_jobs_update, job_id)
+    return save_seo_job_edits(_collection_jobs_update, job_id)
 
 
 def collection_content_sync(job_id):

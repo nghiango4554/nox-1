@@ -275,6 +275,23 @@ CREATE TABLE IF NOT EXISTS seo_cwv_history (
 );
 CREATE INDEX IF NOT EXISTS idx_seo_cwv_history_week ON seo_cwv_history(year, week_no, strategy);
 CREATE INDEX IF NOT EXISTS idx_seo_cwv_history_url ON seo_cwv_history(url, strategy);
+
+CREATE TABLE IF NOT EXISTS seo_schema_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    week_no INTEGER NOT NULL,
+    year INTEGER NOT NULL,
+    captured_at TEXT NOT NULL,
+    total_audited INTEGER DEFAULT 0,
+    sp_total INTEGER DEFAULT 0,
+    sp_has_product INTEGER DEFAULT 0,
+    blog_total INTEGER DEFAULT 0,
+    blog_has_article INTEGER DEFAULT 0,
+    blog_has_faq INTEGER DEFAULT 0,
+    col_total INTEGER DEFAULT 0,
+    col_has_itemlist INTEGER DEFAULT 0,
+    UNIQUE(week_no, year)
+);
+CREATE INDEX IF NOT EXISTS idx_seo_schema_history_week ON seo_schema_history(year, week_no);
 """
 
 
@@ -323,6 +340,17 @@ def init_db():
             conn.execute(f"ALTER TABLE seo_pages ADD COLUMN {col} {col_type}")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seo_pages_indexable ON seo_pages(indexable)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_seo_pages_schema_scanned ON seo_pages(schema_scanned_at)")
+
+    # seo_history: per url_type breakdown (Phase H1 SEO History Hub, 30/5/2026)
+    sh_cols = {r["name"] for r in conn.execute("PRAGMA table_info(seo_history)").fetchall()}
+    sh_new = {
+        "avg_score_product": "REAL DEFAULT 0",
+        "avg_score_blog": "REAL DEFAULT 0",
+        "avg_score_collection": "REAL DEFAULT 0",
+    }
+    for col, col_type in sh_new.items():
+        if col not in sh_cols:
+            conn.execute(f"ALTER TABLE seo_history ADD COLUMN {col} {col_type}")
 
     # seo_links: thêm error_kind để phân loại lỗi timeout (dns_fail, ssl_error,...)
     link_cols = {r["name"] for r in conn.execute("PRAGMA table_info(seo_links)").fetchall()}
@@ -597,6 +625,46 @@ def seo_upsert_page(data: dict):
     )
     conn.commit()
     conn.close()
+
+
+def seo_upsert_pages_batch(pairs: list):
+    """Batch write crawl results. pairs = [(data_dict, links_list), ...].
+    One connection, one commit — ~50x ít commit hơn so với gọi từng URL.
+    """
+    fields = [
+        "url", "url_type", "last_run_id", "status_code", "final_url",
+        "title", "title_len", "meta_desc", "meta_desc_len",
+        "h1", "h1_count", "word_count",
+        "images_total", "images_no_alt",
+        "internal_links", "external_links",
+        "has_canonical", "canonical_url", "has_og", "has_schema",
+        "indexable", "indexability_reason", "page_size_bytes",
+        "h2_list", "redirect_chain",
+        "desc_h1_count", "desc_h1_text", "desc_h1_scanned_at",
+        "load_ms", "score", "issues", "last_crawled",
+    ]
+    cols = ", ".join(fields)
+    placeholders = ", ".join("?" * len(fields))
+    updates = ", ".join(f"{f}=excluded.{f}" for f in fields if f != "url")
+    conn = get_conn()
+    try:
+        for data, links in pairs:
+            conn.execute(
+                f"INSERT INTO seo_pages ({cols}) VALUES ({placeholders}) "
+                f"ON CONFLICT(url) DO UPDATE SET {updates}",
+                [data.get(f) for f in fields],
+            )
+            url = data.get("url")
+            if url:
+                conn.execute("DELETE FROM seo_links WHERE source_url = ?", (url,))
+                if links:
+                    conn.executemany(
+                        "INSERT OR IGNORE INTO seo_links (source_url, target_url, is_internal) VALUES (?, ?, ?)",
+                        [(url, t, int(bool(i))) for t, i in links],
+                    )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def seo_list_pages(
@@ -1086,6 +1154,11 @@ def _broken_where_clause(filters: dict) -> tuple:
     filters keys: kind (4xx|5xx|timeout), status_code, error_kind, is_internal, search
     """
     sql = " WHERE status_code IS NOT NULL AND (status_code >= 400 OR status_code = 0) "
+    # Mặc định loại social share button (Pinterest/FB/Twitter share) ra khỏi
+    # broken — bọn này luôn trả 429/403 cho bot, không phải link gãy thật.
+    # Nếu caller filter explicit error_kind thì cho qua để xem chi tiết.
+    if not filters.get("error_kind"):
+        sql += " AND (error_kind IS NULL OR error_kind != 'social_share_skip') "
     args = []
     kind = filters.get("kind")
     if kind == "4xx":
@@ -1242,13 +1315,14 @@ def seo_broken_link_summary() -> dict:
     conn = get_conn()
     ext = conn.execute(
         """SELECT
-            COUNT(DISTINCT CASE WHEN status_code >= 400 OR status_code = 0
+            COUNT(DISTINCT CASE WHEN (status_code >= 400 OR status_code = 0)
+                                 AND (error_kind IS NULL OR error_kind != 'social_share_skip')
                                 THEN target_url END) broken,
             COUNT(DISTINCT CASE WHEN status_code IS NULL
                                 THEN target_url END) unchecked,
             COUNT(DISTINCT CASE WHEN status_code IS NOT NULL
-                                 AND status_code > 0
-                                 AND status_code < 400
+                                 AND ((status_code > 0 AND status_code < 400)
+                                      OR error_kind = 'social_share_skip')
                                 THEN target_url END) ok,
             COUNT(DISTINCT target_url) total
            FROM seo_links
@@ -1537,26 +1611,93 @@ def competitor_count(**filters) -> int:
 
 
 def seo_capture_history(note: str = "") -> int:
-    """Snapshot điểm SEO hiện tại vào bảng seo_history. Trả id row vừa tạo."""
+    """Snapshot điểm SEO hiện tại vào bảng seo_history. Trả id row vừa tạo.
+    Lưu cả per url_type avg score (product/blog/collection) cho timeline chart.
+    """
     stats = seo_stats()
     bsum = seo_broken_link_summary()
     conn = get_conn()
+    per_type_rows = conn.execute(
+        """SELECT url_type, ROUND(AVG(score), 1) avg_s
+           FROM seo_pages
+           WHERE score IS NOT NULL AND url_type IN ('product', 'blog', 'collection')
+           GROUP BY url_type"""
+    ).fetchall()
+    per_type = {r["url_type"]: r["avg_s"] for r in per_type_rows}
     cur = conn.execute(
         """INSERT INTO seo_history
-           (captured_at, total, avg_score, good, ok_count, bad, broken_links, note)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+           (captured_at, total, avg_score, good, ok_count, bad, broken_links, note,
+            avg_score_product, avg_score_blog, avg_score_collection)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             datetime.now().isoformat(timespec="seconds"),
             stats["total"], stats["avg_score"],
             stats["good"], stats["ok"], stats["bad"],
             bsum.get("broken", 0),
             note,
+            per_type.get("product") or 0,
+            per_type.get("blog") or 0,
+            per_type.get("collection") or 0,
         ),
     )
     rid = cur.lastrowid
     conn.commit()
     conn.close()
+    # Auto-cleanup giữ 52 snapshot mới nhất (1 năm nếu weekly)
+    try:
+        seo_history_cleanup(keep=52)
+    except Exception:
+        pass
     return rid
+
+
+def seo_history_cleanup(keep: int = 52) -> int:
+    """Giữ `keep` snapshot mới nhất, xóa cũ hơn. Return số row đã xóa."""
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT id FROM seo_history ORDER BY id DESC LIMIT 1 OFFSET ?", (keep,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return 0
+    cutoff = row["id"]
+    cur = conn.execute("DELETE FROM seo_history WHERE id <= ?", (cutoff,))
+    n = cur.rowcount
+    conn.commit()
+    conn.close()
+    return n
+
+
+def seo_history_regression_check() -> dict:
+    """So sánh snapshot mới nhất vs snapshot trước nó. Return:
+        {has_regression: bool, delta: float, prev_id, latest_id, prev_avg, latest_avg}
+    """
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT id, avg_score FROM seo_history ORDER BY id DESC LIMIT 2"
+    ).fetchall()
+    conn.close()
+    if len(rows) < 2:
+        return {"has_regression": False}
+    latest = rows[0]
+    prev = rows[1]
+    delta = round((latest["avg_score"] or 0) - (prev["avg_score"] or 0), 1)
+    return {
+        "has_regression": delta <= -5,
+        "delta": delta,
+        "prev_id": prev["id"],
+        "latest_id": latest["id"],
+        "prev_avg": prev["avg_score"],
+        "latest_avg": latest["avg_score"],
+    }
+
+
+def seo_history_get(snapshot_id: int) -> dict:
+    """Lấy 1 snapshot theo id (cho trang compare). Return None nếu ko có."""
+    conn = get_conn()
+    r = conn.execute("SELECT * FROM seo_history WHERE id=?", (snapshot_id,)).fetchone()
+    conn.close()
+    return dict(r) if r else None
 
 
 def seo_history_list(limit: int = 200) -> list:
@@ -1587,6 +1728,9 @@ def seo_history_chart_data(limit: int = 52) -> dict:
         "bad": [r["bad"] for r in items],
         "total": [r["total"] for r in items],
         "broken_links": [r["broken_links"] for r in items],
+        "avg_score_product": [r.get("avg_score_product") or 0 for r in items],
+        "avg_score_blog": [r.get("avg_score_blog") or 0 for r in items],
+        "avg_score_collection": [r.get("avg_score_collection") or 0 for r in items],
     }
 
 
@@ -2163,6 +2307,58 @@ def cwv_history_snapshot(week_no: int, year: int, snapshot_at: str = None) -> in
     return after - before
 
 
+def cwv_history_timeline(limit: int = 52) -> dict:
+    """Aggregate CWV history per (week_no, year, strategy) cho timeline chart.
+
+    Return:
+        {
+          "labels": ["W21/2026", "W22/2026", ...],
+          "mobile_avg": [71.8, 73.5, ...],
+          "desktop_avg": [88.6, 89.7, ...],
+          "mobile_lcp_ms": [3200, 3100, ...],
+          "desktop_lcp_ms": [1800, 1750, ...],
+          "url_count": [2486, 2486, ...],
+        }
+    """
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT week_no, year, strategy,
+               ROUND(AVG(performance_score), 1) avg_score,
+               ROUND(AVG(lcp_ms), 0) avg_lcp,
+               COUNT(*) n_urls
+        FROM seo_cwv_history
+        GROUP BY week_no, year, strategy
+        ORDER BY year ASC, week_no ASC
+    """).fetchall()
+    conn.close()
+
+    weeks = {}
+    for r in rows:
+        key = (r["year"], r["week_no"])
+        if key not in weeks:
+            weeks[key] = {"mobile_avg": None, "desktop_avg": None,
+                          "mobile_lcp_ms": None, "desktop_lcp_ms": None,
+                          "url_count": 0}
+        s = r["strategy"]
+        if s == "mobile":
+            weeks[key]["mobile_avg"] = r["avg_score"]
+            weeks[key]["mobile_lcp_ms"] = r["avg_lcp"]
+        elif s == "desktop":
+            weeks[key]["desktop_avg"] = r["avg_score"]
+            weeks[key]["desktop_lcp_ms"] = r["avg_lcp"]
+        weeks[key]["url_count"] = max(weeks[key]["url_count"], r["n_urls"])
+
+    sorted_keys = sorted(weeks.keys())[-limit:]
+    return {
+        "labels": [f"W{w}/{y}" for (y, w) in sorted_keys],
+        "mobile_avg": [weeks[k]["mobile_avg"] for k in sorted_keys],
+        "desktop_avg": [weeks[k]["desktop_avg"] for k in sorted_keys],
+        "mobile_lcp_ms": [weeks[k]["mobile_lcp_ms"] for k in sorted_keys],
+        "desktop_lcp_ms": [weeks[k]["desktop_lcp_ms"] for k in sorted_keys],
+        "url_count": [weeks[k]["url_count"] for k in sorted_keys],
+    }
+
+
 def cwv_history_get_week(week_no: int, year: int, strategy: str = "mobile") -> list:
     """Lấy lại snapshot 1 tuần để diff."""
     conn = get_conn()
@@ -2301,6 +2497,106 @@ def seo_schema_count(url_type: str = None, missing: str = None,
     n = conn.execute(sql, args).fetchone()[0]
     conn.close()
     return n
+
+
+def seo_schema_history_capture(week_no: int = None, year: int = None,
+                               captured_at: str = None) -> int:
+    """Snapshot trạng thái schema audit hiện tại vào seo_schema_history.
+    Idempotent: nếu (week_no, year) đã có row → UPDATE thay vì INSERT.
+    Default week_no/year = ISO tuần hiện tại.
+    Return id row (insert hoặc update).
+    """
+    if week_no is None or year is None:
+        iso = datetime.now().isocalendar()
+        week_no = week_no if week_no is not None else iso.week
+        year = year if year is not None else iso.year
+    if not captured_at:
+        captured_at = datetime.now().isoformat(timespec="seconds")
+
+    sp = seo_schema_stats(url_type="product")
+    bl = seo_schema_stats(url_type="blog")
+    col = seo_schema_stats(url_type="collection")
+
+    conn = get_conn()
+    col_missing_itemlist = conn.execute("""
+        SELECT COUNT(*) FROM seo_pages
+        WHERE url_type='collection' AND status_code=200 AND indexable=1
+        AND schema_scanned_at IS NOT NULL
+        AND schema_types IS NOT NULL AND schema_types LIKE '%ItemList%'
+    """).fetchone()[0]
+
+    total_audited = (sp.get("total_audited") or 0) + (bl.get("total_audited") or 0) + (col.get("total_audited") or 0)
+    payload = {
+        "week_no": week_no, "year": year, "captured_at": captured_at,
+        "total_audited": total_audited,
+        "sp_total": sp.get("total_audited") or 0,
+        "sp_has_product": sp.get("has_product") or 0,
+        "blog_total": bl.get("total_audited") or 0,
+        "blog_has_article": bl.get("has_article") or 0,
+        "blog_has_faq": bl.get("has_faq") or 0,
+        "col_total": col.get("total_audited") or 0,
+        "col_has_itemlist": col_missing_itemlist,
+    }
+
+    existing = conn.execute(
+        "SELECT id FROM seo_schema_history WHERE week_no=? AND year=?",
+        (week_no, year),
+    ).fetchone()
+    if existing:
+        conn.execute("""
+            UPDATE seo_schema_history SET
+                captured_at=:captured_at, total_audited=:total_audited,
+                sp_total=:sp_total, sp_has_product=:sp_has_product,
+                blog_total=:blog_total, blog_has_article=:blog_has_article,
+                blog_has_faq=:blog_has_faq,
+                col_total=:col_total, col_has_itemlist=:col_has_itemlist
+            WHERE week_no=:week_no AND year=:year
+        """, payload)
+        rid = existing["id"]
+    else:
+        cur = conn.execute("""
+            INSERT INTO seo_schema_history
+                (week_no, year, captured_at, total_audited,
+                 sp_total, sp_has_product,
+                 blog_total, blog_has_article, blog_has_faq,
+                 col_total, col_has_itemlist)
+            VALUES
+                (:week_no, :year, :captured_at, :total_audited,
+                 :sp_total, :sp_has_product,
+                 :blog_total, :blog_has_article, :blog_has_faq,
+                 :col_total, :col_has_itemlist)
+        """, payload)
+        rid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return rid
+
+
+def seo_schema_history_timeline(limit: int = 52) -> dict:
+    """Output dict chuẩn Chart.js cho timeline schema coverage per tuần."""
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT week_no, year, total_audited,
+               sp_total, sp_has_product,
+               blog_total, blog_has_article, blog_has_faq,
+               col_total, col_has_itemlist
+        FROM seo_schema_history
+        ORDER BY year ASC, week_no ASC
+    """).fetchall()
+    conn.close()
+    items = [dict(r) for r in rows][-limit:]
+
+    def pct(n, d):
+        return round(100.0 * (n or 0) / d, 1) if d else 0.0
+
+    return {
+        "labels": [f"W{r['week_no']}/{r['year']}" for r in items],
+        "sp_pct_product": [pct(r["sp_has_product"], r["sp_total"]) for r in items],
+        "blog_pct_faq": [pct(r["blog_has_faq"], r["blog_total"]) for r in items],
+        "blog_pct_article": [pct(r["blog_has_article"], r["blog_total"]) for r in items],
+        "col_pct_itemlist": [pct(r["col_has_itemlist"], r["col_total"]) for r in items],
+        "total_audited": [r["total_audited"] for r in items],
+    }
 
 
 def seo_schema_missing(missing: str = "product", url_type: str = None, limit: int = 500) -> list:

@@ -1,16 +1,11 @@
-"""Routes: Dashboard + Jobs Center — 4 endpoint (CUỐI CÙNG, Batch 7).
+"""Routes: Dashboard + Jobs Center — 4 endpoint.
 
 `/`         — homepage dashboard với week view + health probe + worklog
 `/jobs`     — Jobs Center page
 `/api/jobs` — bg jobs status JSON (merged with monitor snapshot)
 `/api/dashboard/health` — gộp toàn bộ health probe
 
-Move kèm 8 helpers:
-- _dashboard_health, _worklog_tasks, _collect_jobs
-- _health_cached, _backup_info
-- _git_health, _bot_health, _provider_health
-
-⚠️ High risk vì gọi mọi module. Test sau khi tách.
+Health probes (8 helper) gọi mọi module → đặt module này CUỐI register chain.
 
 Dep:
 - db, seo as seo_mod, competitors as competitors_mod, cwv as cwv_mod,
@@ -526,8 +521,14 @@ def api_dashboard_health():
 # ─────────────────────── REGISTRATION ────────────────────────────
 
 def register(app):
-    """Đăng ký 4 route Dashboard (Batch 7 CUỐI CÙNG)."""
+    """Đăng ký 4 route Dashboard."""
     app.add_url_rule("/", "dashboard", dashboard)
     app.add_url_rule("/jobs", "jobs_center_page", jobs_center_page)
     app.add_url_rule("/api/jobs", "api_jobs", api_jobs)
     app.add_url_rule("/api/dashboard/health", "api_dashboard_health", api_dashboard_health)
+
+
+def start_job_monitor():
+    """Khởi động job_monitor với _collect_jobs callback (gọi từ app.py __main__)."""
+    import job_monitor
+    job_monitor.start_monitor(_collect_jobs)

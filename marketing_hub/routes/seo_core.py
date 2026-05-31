@@ -2,10 +2,7 @@
 snapshot save/load/delete + clear + recrawl + seed + status + history×4 +
 crawl × 3 + recompute-dup).
 
-Tách từ app.py (Batch 5A refactor). Helpers `_open_snapshot` + `_list_seo_snapshots`
-move chung (chỉ dùng nội bộ SEO).
-
-⚠️ Smoke test: KHÔNG bấm /seo/clear hoặc /seo/crawl-fresh — sẽ xoá toàn bộ data.
+⚠️ Test: KHÔNG bấm /seo/clear hoặc /seo/crawl-fresh — sẽ xoá toàn bộ data.
 KHÔNG crawl toàn site (chỉ /seo/crawl với limit nhỏ nếu cần test).
 
 Dep:

@@ -1,6 +1,7 @@
 # ─── Secrets / tokens / env ───
 .secrets/
 state/
+marketing_hub/config.local.json
 .env
 .env/
 *.env
@@ -101,3 +102,6 @@ UsersNghia
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Refactor verification artifacts — generated per batch, không cần track
+marketing_hub/route_map_after_*.txt

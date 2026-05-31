@@ -6,108 +6,891 @@
 {% endblock %}
 
 {% block page_actions %}
-<button class="btn btn-sm" onclick="loadJobs()">🔄 Làm mới</button>
+<button class="btn btn-sm" onclick="loadJobs()" title="Làm mới ngay">🔄</button>
+<button class="btn btn-sm" onclick="toggleView()" id="jc-view-toggle" title="Đổi view grid/list">📋</button>
 {% endblock %}
 
 {% block content %}
 
-<section class="card" style="margin-top:0">
-  <p class="muted" style="margin:0">
-    Tổng hợp <strong>mọi job nền</strong> ở 1 chỗ — đang chạy, tiến độ, báo cáo, nút dừng.
-    Tự cập nhật mỗi 3 giây.
-    <span id="jc-summary" style="font-weight:600;margin-left:8px"></span>
-  </p>
+<style>
+/* ═══ Color palette — pastel sections (light theme friendly) ═══ */
+:root {
+  --jc-green: #10b981; --jc-green-bg: #ecfdf5; --jc-green-border: #6ee7b7;
+  --jc-blue: #2563eb;  --jc-blue-bg: #eff6ff;  --jc-blue-border: #93c5fd;
+  --jc-red: #dc2626;   --jc-red-bg: #fef2f2;   --jc-red-border: #fca5a5;
+  --jc-amber: #d97706; --jc-amber-bg: #fffbeb; --jc-amber-border: #fcd34d;
+  --jc-violet: #7c3aed;--jc-violet-bg: #f5f3ff;--jc-violet-border: #c4b5fd;
+  --jc-slate: #475569; --jc-slate-bg: #f8fafc; --jc-slate-border: #cbd5e1;
+  --jc-indigo: #4f46e5;--jc-indigo-bg: #eef2ff;--jc-indigo-border: #a5b4fc;
+}
+
+/* ─── Section base (every block kẹp trong frame riêng) ─── */
+.jc-section {
+  margin-bottom: 18px;
+  border-radius: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--frame-border, #e2e8f0);
+  background: var(--frame-bg, #ffffff);
+  box-shadow: 0 1px 3px rgba(15,23,42,.04);
+  position: relative;
+}
+.jc-section-title {
+  font-size: 11.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .8px;
+  color: var(--jc-slate); margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.jc-section-title::before {
+  content: ''; width: 4px; height: 14px; border-radius: 2px;
+  background: var(--frame-accent, var(--jc-indigo));
+}
+
+/* ─── Section 1: Hero stats — gradient indigo→violet ─── */
+.jc-hero {
+  --frame-bg: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
+  --frame-border: #c7d2fe;
+  --frame-accent: var(--jc-indigo);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.jc-stat {
+  border-radius: 12px;
+  padding: 16px 18px;
+  position: relative; overflow: hidden;
+  background: rgba(255,255,255,.85);
+  border: 1px solid rgba(255,255,255,.6);
+  box-shadow: 0 2px 8px rgba(79,70,229,.08);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.jc-stat:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(79,70,229,.18); }
+.jc-stat::after {
+  content: ''; position: absolute; right: -30px; top: -30px;
+  width: 90px; height: 90px; border-radius: 50%;
+  background: var(--accent, var(--jc-indigo)); opacity: .1;
+}
+.jc-stat .lbl {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .8px;
+  color: var(--jc-slate); font-weight: 600;
+}
+.jc-stat .num {
+  font-size: 34px; font-weight: 800; line-height: 1.1; margin-top: 4px;
+  font-variant-numeric: tabular-nums; transition: color .3s;
+  color: var(--accent, var(--jc-indigo));
+}
+.jc-stat .sub { font-size: 10.5px; color: var(--jc-slate); margin-top: 2px; opacity: .85; }
+.jc-stat.running { --accent: var(--jc-green); }
+.jc-stat.blocked { --accent: var(--jc-amber); }
+.jc-stat.done    { --accent: var(--jc-blue); }
+.jc-stat.total   { --accent: var(--jc-violet); }
+
+/* ─── Section 2: Filter + search toolbar — neutral slate ─── */
+.jc-toolbar-frame {
+  --frame-bg: #f8fafc;
+  --frame-border: #e2e8f0;
+  --frame-accent: var(--jc-slate);
+}
+.jc-toolbar {
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+.jc-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.jc-chip {
+  padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  cursor: pointer; border: 1px solid #cbd5e1;
+  background: #ffffff; color: #475569;
+  transition: all .2s ease; user-select: none;
+}
+.jc-chip:hover { background: #eef2ff; border-color: #a5b4fc; color: var(--jc-indigo); }
+.jc-chip.active {
+  background: var(--jc-indigo); color: white; border-color: var(--jc-indigo);
+  box-shadow: 0 2px 6px rgba(79,70,229,.3);
+}
+.jc-chip .count {
+  opacity: .8; margin-left: 6px; font-weight: 500;
+  background: rgba(0,0,0,.06); padding: 1px 7px; border-radius: 10px;
+}
+.jc-chip.active .count { background: rgba(255,255,255,.25); opacity: 1; }
+.jc-search {
+  flex: 1; min-width: 200px;
+  padding: 8px 14px; border-radius: 20px; font-size: 13px;
+  border: 1px solid #cbd5e1; background: #ffffff;
+  color: #0f172a; outline: none; transition: border .2s, box-shadow .2s;
+}
+.jc-search:focus {
+  border-color: var(--jc-indigo);
+  box-shadow: 0 0 0 3px rgba(79,70,229,.15);
+}
+
+/* ─── Section 3: Jobs container — white card ─── */
+.jc-jobs-frame {
+  --frame-bg: #ffffff;
+  --frame-border: #e2e8f0;
+  --frame-accent: var(--jc-blue);
+  padding: 16px 18px;
+}
+
+/* Group sections inner (mỗi group có bg distinct) */
+.jc-group {
+  margin-bottom: 18px; animation: jcSlideIn .35s ease both;
+  border-radius: 12px; padding: 14px 16px;
+  border: 1px solid var(--g-border, #e2e8f0);
+  background: var(--g-bg, #f8fafc);
+}
+.jc-group:last-child { margin-bottom: 0; }
+.jc-group-running { --g-bg: #ecfdf5; --g-border: #6ee7b7; }
+.jc-group-blocked { --g-bg: #fffbeb; --g-border: #fcd34d; }
+.jc-group-intr    { --g-bg: #fff7ed; --g-border: #fdba74; }
+.jc-group-idle    { --g-bg: #f8fafc; --g-border: #cbd5e1; }
+.jc-group-done    { --g-bg: #eff6ff; --g-border: #93c5fd; }
+
+.jc-group-head {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px;
+}
+.jc-group-head h3 {
+  margin: 0; font-size: 12.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .5px;
+  color: #1e293b;
+}
+.jc-group-count {
+  font-size: 11px; padding: 2px 10px; border-radius: 10px;
+  background: rgba(255,255,255,.7); color: #475569;
+  border: 1px solid rgba(0,0,0,.06); font-weight: 600;
+}
+
+/* ─── Grid + List view ─── */
+.jc-grid {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+.jc-grid.list { grid-template-columns: 1fr; }
+.jc-grid.list .jc-card { padding: 12px 14px; }
+.jc-grid.list .jc-cur { display: none; }
+
+/* ─── Job cards — pure white with colored accent ─── */
+.jc-card {
+  position: relative;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #ffffff;
+  display: flex; flex-direction: column; gap: 10px;
+  box-shadow: 0 1px 2px rgba(15,23,42,.04);
+  transition: transform .25s cubic-bezier(.2,.8,.2,1),
+              box-shadow .25s ease, border-color .25s, opacity .3s;
+  animation: jcSlideIn .3s ease both;
+}
+.jc-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px rgba(15,23,42,.12);
+  border-color: #c7d2fe;
+}
+
+@keyframes jcSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* State variants — left accent border */
+.jc-card.run {
+  border-left: 4px solid var(--jc-green);
+  background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 35%);
+  box-shadow: 0 2px 8px rgba(16,185,129,.12);
+}
+.jc-card.done {
+  border-left: 4px solid var(--jc-blue);
+  background: linear-gradient(135deg, #eff6ff 0%, #ffffff 35%);
+}
+.jc-card.stuck {
+  border-left: 4px solid var(--jc-red);
+  background: linear-gradient(135deg, #fef2f2 0%, #ffffff 35%);
+  box-shadow: 0 2px 8px rgba(220,38,38,.15);
+}
+.jc-card.intr {
+  border-left: 4px solid var(--jc-amber);
+  background: linear-gradient(135deg, #fffbeb 0%, #ffffff 35%);
+}
+.jc-card.idle {
+  border-left: 4px solid #cbd5e1;
+}
+.jc-card.blocked {
+  opacity: .55; filter: saturate(.5);
+  pointer-events: none;
+}
+.jc-card.blocked .jc-actions { pointer-events: auto; opacity: 1; filter: saturate(1); }
+.jc-card.blocked::before {
+  content: attr(data-blocked-reason);
+  position: absolute; top: 8px; right: 10px; z-index: 1;
+  font-size: 10px; background: var(--jc-amber-bg); color: var(--jc-amber);
+  padding: 3px 10px; border-radius: 10px; font-weight: 700;
+  border: 1px solid var(--jc-amber-border);
+}
+
+/* Header row */
+.jc-head { display: flex; align-items: center; gap: 12px; }
+.jc-icon-wrap {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+  background: #f1f5f9; border: 1px solid #e2e8f0;
+  transition: transform .25s, background .25s;
+}
+.jc-card.run .jc-icon-wrap {
+  background: var(--jc-green-bg); border-color: var(--jc-green-border);
+  animation: jcIconPulse 1.8s ease infinite;
+}
+.jc-card.stuck .jc-icon-wrap {
+  background: var(--jc-red-bg); border-color: var(--jc-red-border);
+  animation: jcIconPulse 1.2s ease infinite;
+}
+.jc-card.done .jc-icon-wrap {
+  background: var(--jc-blue-bg); border-color: var(--jc-blue-border);
+}
+.jc-card.intr .jc-icon-wrap {
+  background: var(--jc-amber-bg); border-color: var(--jc-amber-border);
+}
+@keyframes jcIconPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+.jc-name-stack { flex: 1; min-width: 0; }
+.jc-name {
+  font-weight: 700; font-size: 14px; color: #0f172a;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.jc-name-stack > div:last-child {
+  font-size: 10.5px; color: #94a3b8; margin-top: 2px;
+}
+.jc-badge {
+  font-size: 10.5px; padding: 4px 10px; border-radius: 10px;
+  font-weight: 700; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 1px solid transparent;
+}
+.jc-badge.run { background: var(--jc-green-bg); color: var(--jc-green); border-color: var(--jc-green-border); }
+.jc-badge.done { background: var(--jc-blue-bg); color: var(--jc-blue); border-color: var(--jc-blue-border); }
+.jc-badge.idle { background: #f1f5f9; color: var(--jc-slate); border-color: #cbd5e1; }
+.jc-badge.stuck { background: var(--jc-red-bg); color: var(--jc-red); border-color: var(--jc-red-border); }
+.jc-badge.intr { background: var(--jc-amber-bg); color: var(--jc-amber); border-color: var(--jc-amber-border); }
+.jc-badge.blocked { background: var(--jc-amber-bg); color: var(--jc-amber); border-color: var(--jc-amber-border); }
+.jc-badge.run::before { content: '●'; animation: jcpulse 1.2s infinite; color: var(--jc-green); }
+@keyframes jcpulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* Progress bar */
+.jc-progress-wrap {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 11.5px; color: #475569;
+  font-variant-numeric: tabular-nums;
+}
+.jc-progress-wrap .pct {
+  font-weight: 700; min-width: 38px; text-align: right; color: #0f172a;
+}
+.jc-bar {
+  flex: 1; height: 8px; border-radius: 4px;
+  background: #e2e8f0; overflow: hidden;
+  position: relative;
+}
+.jc-bar > div {
+  height: 100%; transition: width .5s cubic-bezier(.2,.8,.2,1);
+  background: linear-gradient(90deg, var(--jc-green), var(--jc-blue), var(--jc-violet));
+  background-size: 200% 100%; animation: jcGradMove 3s ease infinite;
+}
+.jc-card:not(.run) .jc-bar > div {
+  animation: none;
+  background: linear-gradient(90deg, var(--jc-blue) 0%, var(--jc-indigo) 100%);
+}
+.jc-card.run .jc-bar { box-shadow: 0 0 10px rgba(16,185,129,.25); }
+.jc-card.run .jc-bar::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg,
+    transparent 0%, rgba(255,255,255,.4) 50%, transparent 100%);
+  animation: jcShimmer 2s linear infinite;
+}
+@keyframes jcGradMove {
+  0% { background-position: 0% 0; } 100% { background-position: 200% 0; }
+}
+@keyframes jcShimmer {
+  from { transform: translateX(-100%); } to { transform: translateX(100%); }
+}
+
+/* Meta info */
+.jc-meta {
+  display: flex; gap: 12px; flex-wrap: wrap;
+  font-size: 11.5px; color: #64748b;
+}
+.jc-meta strong { color: #0f172a; font-weight: 700; }
+.jc-extra { font-size: 11.5px; font-weight: 500; color: #475569; }
+.jc-msg {
+  font-size: 11px; color: #94a3b8; font-style: italic;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  min-height: 1em;
+}
+.jc-cur {
+  font-size: 10.5px; color: var(--jc-violet);
+  background: var(--jc-violet-bg); padding: 5px 9px; border-radius: 6px;
+  border: 1px solid var(--jc-violet-border);
+  word-break: break-all; line-height: 1.35;
+}
+.jc-times { font-size: 10.5px; color: #94a3b8; }
+
+/* Actions */
+.jc-actions {
+  display: flex; gap: 8px; align-items: center;
+  margin-top: 2px; padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+.jc-actions .btn { font-size: 11.5px; padding: 6px 12px; }
+.jc-actions .btn.stop {
+  background: var(--jc-red-bg); color: var(--jc-red);
+  border: 1px solid var(--jc-red-border);
+}
+.jc-actions .btn.stop:hover { background: var(--jc-red); color: white; }
+
+/* Empty state */
+.jc-empty {
+  padding: 40px 20px; text-align: center;
+  color: #94a3b8; font-size: 13px;
+}
+.jc-empty .icon { font-size: 36px; opacity: .4; margin-bottom: 8px; }
+
+/* ─── Section 4: Conflict info — violet/slate ─── */
+.jc-conflict-info {
+  --frame-bg: linear-gradient(135deg, #f5f3ff 0%, #f8fafc 100%);
+  --frame-border: #c4b5fd;
+  --frame-accent: var(--jc-violet);
+  padding: 0;
+  overflow: hidden;
+  transition: border-color .25s;
+}
+.jc-conflict-info summary {
+  list-style: none; cursor: pointer; padding: 14px 20px;
+  font-size: 13px; font-weight: 700; color: #1e293b;
+  display: flex; justify-content: space-between; align-items: center;
+  transition: background .2s;
+}
+.jc-conflict-info summary:hover { background: rgba(124,58,237,.05); }
+.jc-conflict-info summary::-webkit-details-marker { display: none; }
+.jc-conflict-info summary::after {
+  content: '⌄'; font-size: 16px; transition: transform .25s; opacity: .6;
+}
+.jc-conflict-info[open] summary::after { transform: rotate(180deg); }
+.jc-conflict-info .jc-hint { font-size: 11px; font-weight: 400; color: #94a3b8; margin-right: 8px; }
+.jc-conflict-body { padding: 4px 20px 18px; }
+.jc-cgroup {
+  margin-bottom: 12px; padding: 12px 14px;
+  border-radius: 10px; background: #ffffff;
+  border-left: 4px solid var(--accent, #94a3b8);
+  border-top: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15,23,42,.04);
+}
+.jc-cgroup:last-child { margin-bottom: 0; }
+.jc-cgroup.idx-0 { --accent: var(--jc-blue); background: linear-gradient(135deg, var(--jc-blue-bg) 0%, #ffffff 60%); }
+.jc-cgroup.idx-1 { --accent: var(--jc-amber); background: linear-gradient(135deg, var(--jc-amber-bg) 0%, #ffffff 60%); }
+.jc-cgroup.indep { --accent: var(--jc-green); background: linear-gradient(135deg, var(--jc-green-bg) 0%, #ffffff 60%); }
+.jc-cgroup-head { font-size: 13px; font-weight: 700; color: #0f172a; }
+.jc-cgroup-reason {
+  font-size: 11px; color: #64748b; margin: 4px 0 10px;
+  font-style: italic;
+}
+.jc-cgroup-members { display: flex; flex-wrap: wrap; gap: 6px; }
+.jc-cmember {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 8px;
+  background: #ffffff; border: 1px solid #e2e8f0;
+  font-size: 11.5px; font-weight: 600;
+  color: #1e293b;
+}
+.jc-cmember .ico { font-size: 14px; }
+
+/* ─── Section 5: Shortcuts footer — gradient violet→green ─── */
+.jc-shortcuts {
+  --frame-bg: linear-gradient(135deg, #f5f3ff 0%, #ecfdf5 100%);
+  --frame-border: #c4b5fd;
+  --frame-accent: var(--jc-violet);
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 12px;
+}
+.jc-shortcuts strong { font-size: 12.5px; color: #1e293b; }
+.jc-shortcuts .links { display: flex; gap: 8px; flex-wrap: wrap; }
+.jc-shortcuts .links a {
+  padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 700;
+  background: #ffffff; color: #1e293b;
+  text-decoration: none; border: 1px solid #e2e8f0;
+  transition: all .2s ease;
+  box-shadow: 0 1px 2px rgba(15,23,42,.04);
+}
+.jc-shortcuts .links a:hover {
+  background: var(--jc-indigo); color: #ffffff;
+  border-color: var(--jc-indigo); transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(79,70,229,.25);
+}
+
+@media (max-width: 720px) {
+  .jc-hero { grid-template-columns: repeat(2, 1fr); }
+  .jc-stat .num { font-size: 28px; }
+  .jc-toolbar { flex-direction: column; align-items: stretch; }
+  .jc-search { width: 100%; }
+}
+</style>
+
+<!-- ── Section 1: Hero stats bar ── -->
+<section class="jc-section jc-hero">
+  <div class="jc-stat running">
+    <div class="lbl">▶ Đang chạy</div>
+    <div class="num" id="stat-running">—</div>
+    <div class="sub" id="stat-running-sub">đang xử lý nền</div>
+  </div>
+  <div class="jc-stat blocked">
+    <div class="lbl">🔒 Đang đợi</div>
+    <div class="num" id="stat-blocked">—</div>
+    <div class="sub" id="stat-blocked-sub">đợi quota / tài nguyên</div>
+  </div>
+  <div class="jc-stat done">
+    <div class="lbl">🏁 Đã hoàn thành</div>
+    <div class="num" id="stat-done">—</div>
+    <div class="sub" id="stat-done-sub">session này</div>
+  </div>
+  <div class="jc-stat total">
+    <div class="lbl">⚙️ Tổng job nền</div>
+    <div class="num" id="stat-total">—</div>
+    <div class="sub" id="stat-total-sub">auto-refresh · <span id="stat-saved">—</span></div>
+  </div>
 </section>
 
-<div id="jc-grid" class="kpi-grid" style="margin-top:14px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))">
-  <p class="muted" style="padding:20px">Đang tải...</p>
-</div>
+<!-- ── Section 2: Filter + Search toolbar ── -->
+<section class="jc-section jc-toolbar-frame">
+  <div class="jc-section-title">🎛️ Bộ lọc · Tìm kiếm</div>
+  <div class="jc-toolbar">
+    <div class="jc-chips" id="jc-chips">
+    <span class="jc-chip active" data-filter="all">Tất cả <span class="count" id="cnt-all">0</span></span>
+    <span class="jc-chip" data-filter="running">▶ Đang chạy <span class="count" id="cnt-running">0</span></span>
+    <span class="jc-chip" data-filter="blocked">🔒 Đợi <span class="count" id="cnt-blocked">0</span></span>
+    <span class="jc-chip" data-filter="idle">💤 Nghỉ <span class="count" id="cnt-idle">0</span></span>
+    <span class="jc-chip" data-filter="done">🏁 Xong <span class="count" id="cnt-done">0</span></span>
+    </div>
+    <input type="text" class="jc-search" id="jc-search" placeholder="🔍 Tìm theo tên job..." />
+  </div>
+</section>
+
+<!-- ── Section 3: Jobs grid ── -->
+<section class="jc-section jc-jobs-frame">
+  <div class="jc-section-title">📦 Danh sách job</div>
+  <div id="jc-content">
+    <p class="jc-empty"><span class="icon">⏳</span><br>Đang tải...</p>
+  </div>
+</section>
+
+<!-- ── Section 4: Conflict matrix info ── -->
+<details class="jc-section jc-conflict-info" id="jc-conflict-info">
+  <summary>
+    <span>ℹ️ Phân loại xung đột — tại sao job bị mờ?</span>
+    <span class="jc-hint">(click để xem)</span>
+  </summary>
+  <div class="jc-conflict-body" id="jc-conflict-body">
+    <p class="jc-empty"><span class="icon">⏳</span></p>
+  </div>
+</details>
 
 <style>
-  .jc-card { border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:14px 16px;
-    background:rgba(255,255,255,.02); display:flex; flex-direction:column; gap:8px; }
-  .jc-card.run { border-color:rgba(34,197,94,.45); background:rgba(34,197,94,.06);
-    box-shadow:0 0 0 1px rgba(34,197,94,.25); }
-  .jc-card.run .jc-dot { animation:jcpulse 1.2s infinite; }
-  @keyframes jcpulse { 0%,100%{opacity:1} 50%{opacity:.3} }
-  .jc-head { display:flex; align-items:center; gap:8px; }
-  .jc-name { font-weight:600; font-size:14px; }
-  .jc-badge { margin-left:auto; font-size:11px; padding:2px 9px; border-radius:11px; font-weight:600; white-space:nowrap; }
-  .jc-badge.run { background:rgba(34,197,94,.18); color:#34d399; }
-  .jc-badge.done { background:rgba(59,130,246,.18); color:#60a5fa; }
-  .jc-badge.idle { background:rgba(148,163,184,.16); color:#94a3b8; }
-  .jc-bar { height:7px; border-radius:4px; background:rgba(148,163,184,.18); overflow:hidden; }
-  .jc-bar > div { height:100%; background:linear-gradient(90deg,#34d399,#60a5fa); transition:width .4s; }
-  .jc-meta { font-size:11.5px; color:var(--text-muted,#94a3b8); display:flex; flex-wrap:wrap; gap:10px; }
-  .jc-extra { font-size:12px; font-weight:500; }
-  .jc-msg { font-size:11px; color:var(--text-muted); font-style:italic; min-height:1em; }
-  .jc-cur { font-size:10.5px; color:#a78bfa; word-break:break-all; }
-  .jc-actions { display:flex; gap:8px; margin-top:2px; }
-  .jc-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
-  .jc-dot.run { background:#34d399; } .jc-dot.done { background:#60a5fa; } .jc-dot.idle { background:#64748b; }
-  .jc-card.stuck { border-color:rgba(239,68,68,.5); background:rgba(239,68,68,.07);
-    box-shadow:0 0 0 1px rgba(239,68,68,.3); }
-  .jc-card.stuck .jc-dot { background:#f87171; animation:jcpulse 1s infinite; }
-  .jc-badge.stuck { background:rgba(239,68,68,.18); color:#f87171; }
-  .jc-card.intr { border-color:rgba(245,158,11,.4); background:rgba(245,158,11,.05); }
-  .jc-badge.intr { background:rgba(245,158,11,.18); color:#fbbf24; }
+.jc-conflict-info {
+  margin-top: 20px; padding: 0; border-radius: 12px;
+  background: rgba(255,255,255,.02); border: 1px solid rgba(255,255,255,.06);
+  overflow: hidden; transition: border-color .25s;
+}
+.jc-conflict-info[open] { border-color: rgba(167,139,250,.25); }
+.jc-conflict-info summary {
+  list-style: none; cursor: pointer; padding: 14px 18px;
+  font-size: 13px; font-weight: 600; color: var(--text, #e2e8f0);
+  display: flex; justify-content: space-between; align-items: center;
+  transition: background .2s;
+}
+.jc-conflict-info summary:hover { background: rgba(255,255,255,.03); }
+.jc-conflict-info summary::-webkit-details-marker { display: none; }
+.jc-conflict-info summary::after {
+  content: '⌄'; font-size: 14px; transition: transform .25s; opacity: .6;
+}
+.jc-conflict-info[open] summary::after { transform: rotate(180deg); }
+.jc-conflict-info .jc-hint { font-size: 11px; font-weight: 400; color: var(--text-muted,#94a3b8); margin-right: 8px; }
+.jc-conflict-body { padding: 4px 18px 16px; }
+.jc-cgroup {
+  margin-bottom: 12px; padding: 12px 14px;
+  border-radius: 10px; background: rgba(255,255,255,.025);
+  border-left: 3px solid var(--accent, #94a3b8);
+}
+.jc-cgroup.idx-0 { border-left-color: #60a5fa; background: rgba(96,165,250,.05); }
+.jc-cgroup.idx-1 { border-left-color: #f59e0b; background: rgba(245,158,11,.05); }
+.jc-cgroup.indep { border-left-color: #34d399; background: rgba(52,211,153,.05); }
+.jc-cgroup-head { font-size: 12.5px; font-weight: 600; }
+.jc-cgroup-reason { font-size: 11px; color: var(--text-muted, #94a3b8); margin: 2px 0 8px; font-style: italic; }
+.jc-cgroup-members { display: flex; flex-wrap: wrap; gap: 6px; }
+.jc-cmember {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 8px;
+  background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.06);
+  font-size: 11.5px; font-weight: 500;
+  color: var(--text, #e2e8f0);
+}
+.jc-cmember .ico { font-size: 13px; }
 </style>
+
+<!-- ── Section 5: Shortcuts footer ── -->
+<section class="jc-section jc-shortcuts">
+  <strong>🔗 Trang tổng quan SEO</strong>
+  <div class="links">
+    <a href="/seo/history" title="Timeline + diff + CSV export">📈 SEO History</a>
+    <a href="/seo/cwv/diff" title="CWV diff tuần này vs tuần trước">📊 CWV Diff</a>
+    <a href="/seo/schema" title="JSON-LD schema audit + gap">🔖 Schema audit</a>
+    <a href="/seo" title="SEO Dashboard">🔍 SEO Dashboard</a>
+  </div>
+</section>
 
 <script>
 let _jcTimer = null;
+let _jcFilter = 'all';
+let _jcSearch = '';
+let _jcView = localStorage.getItem('jc_view') || 'grid';
+let _jcLastData = null;
+let _jcStructSig = null;   // signature cấu trúc DOM hiện tại (rebuild nếu khác)
+const POLL_BUSY = 4000;    // 4s khi có job running
+const POLL_IDLE = 10000;   // 10s khi tất cả idle (đỡ flicker + đỡ tốn CPU)
 
 async function loadJobs() {
   try {
     const r = await fetch('{{ url_for("api_jobs") }}');
     const data = await r.json();
-    renderJobs(data);
+    _jcLastData = data;
+    renderAll(data);
+    // Smart polling: chậm lại khi idle để bớt nhấp nháy
+    if (_jcTimer) clearInterval(_jcTimer);
+    const hasRunning = (data.jobs || []).some(j => j.running);
+    _jcTimer = setInterval(loadJobs, hasRunning ? POLL_BUSY : POLL_IDLE);
   } catch (e) { console.error(e); }
 }
 
-function renderJobs(data) {
-  const jobs = (data.jobs || []).slice().sort((a,b) => (b.running?1:0) - (a.running?1:0));
-  const rc = data.running_count || 0;
-  const stuckN = jobs.filter(j => j.stuck).length;
-  let txt = rc > 0 ? `🟢 ${rc} job đang chạy` : '💤 Không có job nào đang chạy';
-  if (stuckN > 0) txt += ` · ⚠️ ${stuckN} treo!`;
-  if (data.snapshot_saved_at) txt += `  ·  💾 lưu lúc ${String(data.snapshot_saved_at).replace('T',' ').slice(0,16)}`;
-  document.getElementById('jc-summary').textContent = txt;
-  const grid = document.getElementById('jc-grid');
-  grid.innerHTML = jobs.map(cardHtml).join('');
+function classifyJob(j, blockedBy) {
+  if (j.running && j.stuck) return 'stuck';
+  if (j.running) return 'running';
+  if (blockedBy) return 'blocked';
+  if (j.interrupted) return 'intr';
+  if (j.finished_at) return 'done';
+  return 'idle';
 }
 
-function cardHtml(j) {
-  const pct = j.total > 0 ? Math.min(100, Math.round(j.done * 100 / j.total)) : (j.running ? 0 : 0);
-  let cls, badge, dot;
-  if (j.running && j.stuck) { cls='stuck'; badge='⚠️ Treo ~'+Math.round((j.stuck_seconds||0)/60)+'m'; dot='run'; }
-  else if (j.running)       { cls='run';  badge='▶️ Đang chạy'; dot='run'; }
-  else if (j.interrupted)   { cls='intr'; badge='⚠️ Ngắt (restart)'; dot='idle'; }
-  else if (j.finished_at)   { cls='done'; badge='🏁 Đã xong'; dot='done'; }
-  else                      { cls='idle'; badge='💤 Nghỉ';     dot='idle'; }
-  const stopBtn = (j.running && j.stop)
-    ? `<button class="btn btn-sm" style="background:#dc2626;color:#fff" onclick="stopJob('${j.stop}','${j.key}')">⏹ Dừng</button>`
-    : '';
-  const cur = (j.running && j.current)
-    ? `<div class="jc-cur" title="${esc(j.current)}">⏳ ${esc(j.current).replace('https://sintech.vn','').slice(0,60)}</div>` : '';
+function buildBlockedMap(jobs) {
+  const runningKeys = new Set(jobs.filter(j => j.running).map(j => j.key));
+  const runningByKey = {};
+  jobs.filter(j => j.running).forEach(j => runningByKey[j.key] = j);
+  const blocked = {};
+  jobs.forEach(j => {
+    if (j.running) return;
+    const bls = (j.conflicts_with || []).filter(k => runningKeys.has(k));
+    if (bls.length) blocked[j.key] = bls.map(k => (runningByKey[k]||{}).name || k).join(', ');
+  });
+  return blocked;
+}
+
+function renderAll(data) {
+  const jobs = data.jobs || [];
+  const blockedBy = buildBlockedMap(jobs);
+
+  // Annotate state + sort
+  jobs.forEach(j => { j._state = classifyJob(j, blockedBy[j.key]); });
+  const order = { stuck: 0, running: 1, blocked: 2, intr: 3, done: 4, idle: 5 };
+  jobs.sort((a, b) => (order[a._state] || 9) - (order[b._state] || 9));
+
+  // Stats
+  const counts = { running: 0, blocked: 0, done: 0, idle: 0 };
+  jobs.forEach(j => {
+    if (j._state === 'running' || j._state === 'stuck') counts.running++;
+    else if (j._state === 'blocked') counts.blocked++;
+    else if (j._state === 'done') counts.done++;
+    else counts.idle++;
+  });
+  animateCount('stat-running', counts.running);
+  animateCount('stat-blocked', counts.blocked);
+  animateCount('stat-done', counts.done);
+  animateCount('stat-total', jobs.length);
+  document.getElementById('stat-running-sub').textContent =
+    counts.running > 0 ? 'đang xử lý nền · click 📋 đổi view' : 'không có job nào đang chạy';
+  document.getElementById('stat-blocked-sub').textContent =
+    counts.blocked > 0 ? `đợi ${counts.running} job xong` : 'không có job nào bị chặn';
+  if (data.snapshot_saved_at) {
+    document.getElementById('stat-saved').textContent =
+      'lưu ' + String(data.snapshot_saved_at).replace('T',' ').slice(11, 16);
+  }
+
+  // Chip counters
+  document.getElementById('cnt-all').textContent = jobs.length;
+  document.getElementById('cnt-running').textContent = counts.running;
+  document.getElementById('cnt-blocked').textContent = counts.blocked;
+  document.getElementById('cnt-idle').textContent = counts.idle;
+  document.getElementById('cnt-done').textContent = counts.done;
+
+  renderGroups(jobs, blockedBy);
+  renderConflictInfo(data);
+}
+
+let _jcConflictRendered = false;
+function renderConflictInfo(data) {
+  if (_jcConflictRendered) return;  // Info tĩnh, render 1 lần
+  const cgroups = data.conflict_groups || [];
+  const indep = data.independent_jobs || [];
+  if (!cgroups.length && !indep.length) return;
+  const body = document.getElementById('jc-conflict-body');
+  if (!body) return;
+  let html = '';
+  cgroups.forEach((g, i) => {
+    html += `<div class="jc-cgroup idx-${i}">
+      <div class="jc-cgroup-head">${esc(g.label)}</div>
+      <div class="jc-cgroup-reason">${esc(g.reason)}</div>
+      <div class="jc-cgroup-members">
+        ${g.members.map(m =>
+          `<span class="jc-cmember"><span class="ico">${m.icon||'⚙️'}</span>${esc(m.name)}</span>`
+        ).join('')}
+      </div>
+    </div>`;
+  });
+  if (indep.length) {
+    html += `<div class="jc-cgroup indep">
+      <div class="jc-cgroup-head">🚀 Job độc lập (không xung đột với ai)</div>
+      <div class="jc-cgroup-reason">Có thể chạy song song với mọi job khác</div>
+      <div class="jc-cgroup-members">
+        ${indep.map(m =>
+          `<span class="jc-cmember" title="${esc(m.reason)}"><span class="ico">${m.icon||'⚙️'}</span>${esc(m.name)}</span>`
+        ).join('')}
+      </div>
+    </div>`;
+  }
+  body.innerHTML = html;
+  _jcConflictRendered = true;
+}
+
+function animateCount(elId, target) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const cur = parseInt(el.textContent) || 0;
+  if (cur === target) return;
+  const step = target > cur ? 1 : -1;
+  const interval = Math.max(20, 200 / Math.abs(target - cur));
+  let n = cur;
+  clearInterval(el._anim);
+  el._anim = setInterval(() => {
+    n += step;
+    el.textContent = n;
+    if (n === target) clearInterval(el._anim);
+  }, interval);
+}
+
+function renderGroups(jobs, blockedBy) {
+  const content = document.getElementById('jc-content');
+  const search = (_jcSearch || '').trim().toLowerCase();
+
+  let filtered = jobs.slice();
+  if (search) {
+    filtered = filtered.filter(j =>
+      (j.name || '').toLowerCase().includes(search) ||
+      (j.key || '').toLowerCase().includes(search) ||
+      (j.extra || '').toLowerCase().includes(search)
+    );
+  }
+  if (_jcFilter !== 'all') {
+    filtered = filtered.filter(j => {
+      if (_jcFilter === 'running') return j._state === 'running' || j._state === 'stuck';
+      return j._state === _jcFilter;
+    });
+  }
+
+  // ─── Build structure signature ───
+  // Nếu cấu trúc (số card, state, blocked, group bucket) giống lần trước → chỉ update fields inline (no DOM wipe).
+  // Khác → full re-render.
+  const structSig = filtered.map(j =>
+    `${j.key}:${j._state}:${blockedBy[j.key] ? 'B' : '_'}`
+  ).join('|') + `|f:${_jcFilter}|s:${_jcSearch}|v:${_jcView}`;
+
+  if (structSig === _jcStructSig && content.querySelector('.jc-card')) {
+    // ─── In-place update mode ───
+    filtered.forEach(j => updateCardInPlace(j, blockedBy[j.key]));
+    return;
+  }
+  _jcStructSig = structSig;
+
+  if (filtered.length === 0) {
+    content.innerHTML = `<div class="jc-empty"><span class="icon">🔍</span><br>
+      ${search ? 'Không tìm thấy job nào khớp với "' + esc(search) + '"' : 'Không có job nào ở nhóm này'}</div>`;
+    return;
+  }
+
+  // Group when filter = all, otherwise plain grid
+  if (_jcFilter === 'all' && !search) {
+    const groups = [
+      { key: 'running', label: '📌 Đang chạy', emoji: '▶', states: ['running', 'stuck'] },
+      { key: 'blocked', label: '🔒 Đang đợi', emoji: '🔒', states: ['blocked'] },
+      { key: 'intr', label: '⚠️ Bị ngắt (cần restart)', emoji: '⚠️', states: ['intr'] },
+      { key: 'idle', label: '💤 Nghỉ', emoji: '💤', states: ['idle'] },
+      { key: 'done', label: '🏁 Đã hoàn thành', emoji: '🏁', states: ['done'] },
+    ];
+    let html = '';
+    groups.forEach(g => {
+      const items = filtered.filter(j => g.states.includes(j._state));
+      if (items.length === 0) return;
+      html += `<div class="jc-group jc-group-${g.key}">
+        <div class="jc-group-head">
+          <h3>${g.label}</h3>
+          <span class="jc-group-count">${items.length} job</span>
+        </div>
+        <div class="jc-grid ${_jcView === 'list' ? 'list' : ''}">
+          ${items.map(j => cardHtml(j, blockedBy[j.key])).join('')}
+        </div>
+      </div>`;
+    });
+    content.innerHTML = html;
+  } else {
+    content.innerHTML = `<div class="jc-grid ${_jcView === 'list' ? 'list' : ''}">
+      ${filtered.map(j => cardHtml(j, blockedBy[j.key])).join('')}
+    </div>`;
+  }
+}
+
+// ─── In-place update các field thay đổi trên 1 card (không động chạm DOM structure) ───
+function updateCardInPlace(j, blockedReason) {
+  const el = document.querySelector(`.jc-card[data-key="${j.key}"]`);
+  if (!el) return;
+  const pct = j.total > 0 ? Math.min(100, Math.round(j.done * 100 / j.total)) : 0;
+
+  // Progress bar
+  const bar = el.querySelector('.jc-bar > div');
+  if (bar && bar.style.width !== pct + '%') bar.style.width = pct + '%';
+  const pctEl = el.querySelector('.pct');
+  if (pctEl && pctEl.textContent !== pct + '%') pctEl.textContent = pct + '%';
+
+  // Done / total numbers
+  const strongs = el.querySelectorAll('.jc-meta strong');
+  if (strongs[0]) strongs[0].textContent = j.done.toLocaleString();
+  const metaSpan = el.querySelector('.jc-meta span');
+  if (metaSpan) {
+    metaSpan.innerHTML =
+      `<strong>${j.done.toLocaleString()}</strong> / ${j.total.toLocaleString()}`;
+  }
+
+  // Extra info
+  const extra = el.querySelector('.jc-extra');
+  if (extra && extra.textContent !== (j.extra || '')) extra.textContent = j.extra || '';
+
+  // Message
+  const msg = el.querySelector('.jc-msg');
+  const newMsg = j.message || '';
+  if (msg) {
+    if (msg.textContent !== newMsg) msg.textContent = newMsg;
+  } else if (newMsg) {
+    const cur = el.querySelector('.jc-cur');
+    const after = cur || el.querySelector('.jc-progress-wrap');
+    if (after) {
+      const m = document.createElement('div');
+      m.className = 'jc-msg';
+      m.textContent = newMsg;
+      after.insertAdjacentElement('afterend', m);
+    }
+  }
+
+  // Current URL (running only)
+  const curEl = el.querySelector('.jc-cur');
+  if (j.running && j.current) {
+    const newCur = '⏳ ' + j.current.replace('https://sintech.vn', '').slice(0, 72);
+    if (curEl) {
+      if (curEl.textContent !== newCur) {
+        curEl.textContent = newCur;
+        curEl.title = j.current;
+      }
+    } else {
+      // Cần thêm mới (state changed running) — fall back full re-render
+      _jcStructSig = null;
+      return;
+    }
+  } else if (curEl) {
+    // Job vừa dừng — xoá current
+    curEl.remove();
+  }
+
+  // Times
   const times = [];
   if (j.started_at)  times.push('▶ ' + String(j.started_at).replace('T',' ').slice(0,16));
   if (j.finished_at) times.push('🏁 ' + String(j.finished_at).replace('T',' ').slice(0,16));
+  const timesEl = el.querySelector('.jc-times');
+  const newTimes = times.join(' · ');
+  if (timesEl) {
+    if (timesEl.textContent !== newTimes) timesEl.textContent = newTimes;
+  } else if (newTimes) {
+    const actions = el.querySelector('.jc-actions');
+    if (actions) {
+      const t = document.createElement('div');
+      t.className = 'jc-times';
+      t.textContent = newTimes;
+      actions.insertAdjacentElement('beforebegin', t);
+    }
+  }
+
+  // Stop button visibility
+  const actionsEl = el.querySelector('.jc-actions');
+  let stopBtn = actionsEl ? actionsEl.querySelector('button.stop') : null;
+  if (j.running && j.stop && !stopBtn && actionsEl) {
+    stopBtn = document.createElement('button');
+    stopBtn.className = 'btn btn-sm stop';
+    stopBtn.textContent = '⏹ Dừng';
+    stopBtn.onclick = () => stopJob(j.stop, j.key);
+    actionsEl.appendChild(stopBtn);
+  } else if (!j.running && stopBtn) {
+    stopBtn.remove();
+  }
+}
+
+function cardHtml(j, blockedReason) {
+  const pct = j.total > 0 ? Math.min(100, Math.round(j.done * 100 / j.total)) : 0;
+  let cls, badge;
+  if (j.running && j.stuck) { cls='stuck'; badge='⚠️ Treo ~' + Math.round((j.stuck_seconds||0)/60) + 'm'; }
+  else if (j.running)       { cls='run';  badge='Đang chạy'; }
+  else if (j.interrupted)   { cls='intr'; badge='Ngắt'; }
+  else if (j.finished_at)   { cls='done'; badge='Đã xong'; }
+  else                      { cls='idle'; badge='Nghỉ'; }
+
+  const blockedAttr = blockedReason
+    ? ` data-blocked-reason="🔒 Đợi: ${esc(blockedReason).slice(0,32)}"`
+    : '';
+  if (blockedReason) cls += ' blocked';
+
+  const stopBtn = (j.running && j.stop)
+    ? `<button class="btn btn-sm stop" onclick="stopJob('${j.stop}','${j.key}')">⏹ Dừng</button>`
+    : '';
+  const cur = (j.running && j.current)
+    ? `<div class="jc-cur" title="${esc(j.current)}">⏳ ${esc(j.current).replace('https://sintech.vn','').slice(0,72)}</div>` : '';
+  const times = [];
+  if (j.started_at)  times.push('▶ ' + String(j.started_at).replace('T',' ').slice(0,16));
+  if (j.finished_at) times.push('🏁 ' + String(j.finished_at).replace('T',' ').slice(0,16));
+  const timesHtml = times.length ? `<div class="jc-times">${times.join(' · ')}</div>` : '';
+  const msgHtml = j.message ? `<div class="jc-msg">${esc(j.message)}</div>` : '';
+
   return `
-  <div class="jc-card ${cls}">
+  <div class="jc-card ${cls}" data-key="${esc(j.key)}"${blockedAttr}>
     <div class="jc-head">
-      <span class="jc-dot ${dot}"></span>
-      <span style="font-size:17px">${j.icon||'⚙️'}</span>
-      <span class="jc-name">${esc(j.name)}</span>
+      <div class="jc-icon-wrap">${j.icon || '⚙️'}</div>
+      <div class="jc-name-stack">
+        <div class="jc-name" title="${esc(j.name)}">${esc(j.name)}</div>
+        <div style="font-size:10.5px;color:var(--text-muted,#94a3b8);margin-top:2px">${esc(j.key)}</div>
+      </div>
       <span class="jc-badge ${cls}">${badge}</span>
     </div>
-    <div class="jc-bar"><div style="width:${pct}%"></div></div>
+    <div class="jc-progress-wrap">
+      <div class="jc-bar"><div style="width:${pct}%"></div></div>
+      <span class="pct">${pct}%</span>
+    </div>
     <div class="jc-meta">
-      <span><strong>${j.done}</strong>/${j.total} (${pct}%)</span>
+      <span><strong>${j.done.toLocaleString()}</strong> / ${j.total.toLocaleString()}</span>
       <span class="jc-extra">${esc(j.extra)}</span>
     </div>
     ${cur}
-    <div class="jc-msg">${esc(j.message)}</div>
-    <div class="jc-meta">${times.join(' · ')}</div>
+    ${msgHtml}
+    ${timesHtml}
     <div class="jc-actions">
       <a class="btn btn-sm btn-ghost" href="${j.page}">Mở trang →</a>
       ${stopBtn}
@@ -116,17 +899,51 @@ function cardHtml(j) {
 }
 
 async function stopJob(url, key) {
-  if (!confirm('⏹ Dừng job này? Item đang chạy sẽ xong rồi mới dừng.')) return;
+  if (!confirm('⏹ Dừng job này?\nItem đang xử lý sẽ xong rồi mới dừng.')) return;
   try { await fetch(url, {method:'POST'}); } catch(e) {}
   setTimeout(loadJobs, 800);
 }
 
-function esc(s) {
-  return (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toggleView() {
+  _jcView = _jcView === 'grid' ? 'list' : 'grid';
+  localStorage.setItem('jc_view', _jcView);
+  document.getElementById('jc-view-toggle').textContent = _jcView === 'list' ? '⊞' : '📋';
+  if (_jcLastData) renderAll(_jcLastData);
 }
 
+function esc(s) {
+  return (s==null?'':String(s)).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// Filter chips
+document.getElementById('jc-chips').addEventListener('click', e => {
+  const chip = e.target.closest('.jc-chip');
+  if (!chip) return;
+  document.querySelectorAll('.jc-chip').forEach(c => c.classList.remove('active'));
+  chip.classList.add('active');
+  _jcFilter = chip.dataset.filter;
+  if (_jcLastData) renderAll(_jcLastData);
+});
+
+// Search debounce
+let _searchTimer = null;
+document.getElementById('jc-search').addEventListener('input', e => {
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => {
+    _jcSearch = e.target.value;
+    if (_jcLastData) renderAll(_jcLastData);
+  }, 180);
+});
+
+// Init view toggle text
+document.getElementById('jc-view-toggle').textContent = _jcView === 'list' ? '⊞' : '📋';
+
+// Filter chips invalidate signature để force re-render đúng
+document.getElementById('jc-chips').addEventListener('click', () => { _jcStructSig = null; });
+document.getElementById('jc-search').addEventListener('input', () => { _jcStructSig = null; });
+
 loadJobs();
-_jcTimer = setInterval(loadJobs, 3000);
 </script>
 
 {% endblock %}

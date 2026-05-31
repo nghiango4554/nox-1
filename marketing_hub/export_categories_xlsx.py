@@ -3,9 +3,11 @@ import re
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill
 import os
+import local_config as _lcfg
 
 SITEMAP_URL = "https://sintech.vn/sitemap_collections_1.xml"
-OUT_DIR = r"C:\Users\NGHIANGO\Desktop\Sintech\Chồng iu\Tài liệu"
+_desktop_sintech = _lcfg.get("DESKTOP_SINTECH", r"C:\Users\NGHIANGO\Desktop\Sintech")
+OUT_DIR = os.path.join(_desktop_sintech, "Chồng iu", "Tài liệu")
 OUT_FILE = os.path.join(OUT_DIR, "Sintech_Categories.xlsx")
 
 NAME_MAP = {

@@ -1,12 +1,11 @@
 """Routes: ALT Manager — 14 endpoint (P1-P5 audit/edit/bulk ALT text).
 
-Tách từ app.py (Batch 2 refactor). Pattern: copy template từ routes/system.py.
-Đăng ký vào app qua `register(app)` (manual add_url_rule, giữ nguyên endpoint name).
+Đăng ký qua `register(app)` (manual add_url_rule — giữ flat endpoint name).
 
 Dep:
-- alt_manager (module chính, summarize/list/save)
-- haravan_client (PUT ảnh ALT + update_product body_html)
-- content_writer._gen_alt_for_position (AI gen 1 ảnh sản phẩm)
+- alt_manager (module chính: summarize/list/save)
+- haravan_client (PUT ALT ảnh + update_product body_html)
+- content_writer._gen_alt_for_position (AI gen 1 ảnh SP)
 """
 
 from flask import render_template, request, jsonify

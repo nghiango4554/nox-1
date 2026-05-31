@@ -1,4 +1,4 @@
-"""Routes: Products New + Blog Writer redirect — 6 endpoint (Batch 8 cleanup).
+"""Routes: Products New + Blog Writer redirect — 6 endpoint.
 
 /products/new flow (5 phase):
   - GET  /products/new                — form
@@ -240,7 +240,7 @@ def products_new_create():
 # ─────────────────────── REGISTRATION ────────────────────────────
 
 def register(app):
-    """Đăng ký 6 route Products + legacy redirect (Batch 8 cleanup)."""
+    """Đăng ký 6 route Products + legacy redirect."""
     app.add_url_rule("/blog-writer", "blog_writer_redirect", blog_writer_redirect)
     app.add_url_rule("/products/new", "products_new_form", products_new_form)
     app.add_url_rule("/products/new/preview",

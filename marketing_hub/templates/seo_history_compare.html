@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}So sánh snapshot · SEO · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
+<span class="crumb"></span>
+<a href="{{ url_for('seo_history_page') }}" class="muted" style="font-weight:500">📈 Lịch sử</a>
+<span class="crumb"></span>
+<span style="font-weight:600">📊 So sánh #{{ a.id }} ↔ #{{ b.id }}</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('seo_history_page') }}">← Lịch sử</a>
+{% endblock %}
+
+{% block content %}
+
+<style>
+.cmp-header {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;
+}
+.cmp-side {
+  background: var(--surface, #fff); border: 1px solid var(--border, #e2e8f0);
+  border-radius: 10px; padding: 16px;
+}
+.cmp-side.a { border-left: 4px solid #60a5fa; }
+.cmp-side.b { border-left: 4px solid #a78bfa; }
+.cmp-side .tag { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: .5px; }
+.cmp-side .ts { font-size: 18px; font-weight: 600; margin: 6px 0 4px; }
+.cmp-side .note { font-size: 13px; color: #475569; font-style: italic; }
+
+.cmp-table {
+  width: 100%; border-collapse: collapse; background: var(--surface, #fff);
+  border-radius: 10px; overflow: hidden; border: 1px solid var(--border, #e2e8f0);
+}
+.cmp-table th, .cmp-table td {
+  padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border, #e2e8f0); font-size: 14px;
+}
+.cmp-table th { background: #f1f5f9; font-weight: 600; }
+.cmp-table tr:last-child td { border-bottom: none; }
+.cmp-table .num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.cmp-table .delta { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.cmp-table .delta.good { color: #166534; background: rgba(34,197,94,0.08); }
+.cmp-table .delta.bad { color: #991b1b; background: rgba(239,68,68,0.08); }
+.cmp-table .delta.neutral { color: #64748b; }
+
+.summary-banner {
+  padding: 14px 18px; border-radius: 10px; margin-bottom: 20px; font-size: 14px;
+}
+.summary-banner.regress { background: rgba(239,68,68,0.08); border-left: 4px solid #ef4444; }
+.summary-banner.progress { background: rgba(34,197,94,0.08); border-left: 4px solid #22c55e; }
+.summary-banner.neutral { background: rgba(148,163,184,0.08); border-left: 4px solid #94a3b8; }
+</style>
+
+{# Tính summary banner: avg_score delta là chỉ số chính #}
+{% set avg_diff = diffs|selectattr('key', 'equalto', 'avg_score')|first %}
+{% if avg_diff %}
+  {% if avg_diff.trend == 'good' %}
+    <div class="summary-banner progress">
+      🟢 <strong>Tiến bộ:</strong> Avg SEO tăng {{ '%+.1f'|format(avg_diff.delta) }}đ
+      ({{ avg_diff.a }} → {{ avg_diff.b }})
+    </div>
+  {% elif avg_diff.trend == 'bad' %}
+    <div class="summary-banner regress">
+      🔴 <strong>Regression:</strong> Avg SEO giảm {{ '%+.1f'|format(avg_diff.delta) }}đ
+      ({{ avg_diff.a }} → {{ avg_diff.b }}) — kiểm tra nguyên nhân
+    </div>
+  {% else %}
+    <div class="summary-banner neutral">
+      ⚪ <strong>Ổn định:</strong> Avg SEO Δ {{ '%+.1f'|format(avg_diff.delta) }}đ (chênh lệch <5đ)
+    </div>
+  {% endif %}
+{% endif %}
+
+<div class="cmp-header">
+  <div class="cmp-side a">
+    <div class="tag">Snapshot A · #{{ a.id }}</div>
+    <div class="ts">{{ a.captured_at }}</div>
+    <div class="note">{{ a.note or '— không note —' }}</div>
+  </div>
+  <div class="cmp-side b">
+    <div class="tag">Snapshot B · #{{ b.id }}</div>
+    <div class="ts">{{ b.captured_at }}</div>
+    <div class="note">{{ b.note or '— không note —' }}</div>
+  </div>
+</div>
+
+<table class="cmp-table">
+  <thead>
+    <tr>
+      <th>Metric</th>
+      <th class="num">A (#{{ a.id }})</th>
+      <th class="num">B (#{{ b.id }})</th>
+      <th class="delta">Δ (B-A)</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in diffs %}
+      <tr>
+        <td>{{ d.label }}</td>
+        <td class="num">{{ d.a }}</td>
+        <td class="num">{{ d.b }}</td>
+        <td class="delta {{ d.trend }}">
+          {% if d.delta > 0 %}+{{ d.delta }}
+          {% elif d.delta < 0 %}{{ d.delta }}
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="muted" style="margin-top:16px;font-size:12px;text-align:center">
+  Δ ≥ +5đ = 🟢 tiến bộ · Δ ≤ -5đ = 🔴 regression · |Δ| < 5đ = ⚪ ổn định ·
+  cho count: ↑ = tốt với good/ok, ↓ = tốt với bad/broken_links
+</div>
+
+{% endblock %}

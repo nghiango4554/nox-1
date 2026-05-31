@@ -1,8 +1,6 @@
 """Routes: SEO Quality — 7 endpoint (duplicates + inlinks + indexability +
 broken-links page + check-links + recheck-broken + link-check-status).
 
-Tách từ app.py (Batch 5B refactor). Low risk — chỉ là read + bg check job.
-
 Dep:
 - seo as seo_mod (link_check_state, start_link_check_async, LINK_ERROR_LABELS)
 - db.seo_* (find_duplicates, inlinks_summary, orphan_pages, top_inlinks,

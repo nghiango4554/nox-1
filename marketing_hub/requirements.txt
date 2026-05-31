@@ -7,3 +7,13 @@ lxml==6.1.0
 markdown==3.10.2
 anthropic>=0.98.0
 openai>=2.0.0
+
+# Google integrations (Sheets API, GSC, Gemini AI)
+google-genai>=1.0.0
+google-api-python-client>=2.0.0
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.2.0
+
+# Excel export
+openpyxl>=3.1.0

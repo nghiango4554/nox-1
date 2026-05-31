@@ -46,7 +46,28 @@ LINK_ERROR_LABELS = {
     "invalid_url":        ("❓", "URL sai cú pháp",       "Link viết sai chuẩn URL"),
     "chunked_error":      ("📦", "Response truyền dở",    "Server đứt giữa chừng khi gửi"),
     "other_error":        ("⚠️", "Lỗi khác",              "Lỗi không phân loại được"),
+    "social_share_skip":  ("🔗", "Nút share mạng XH",    "Pinterest/Facebook/Twitter share button — luôn bị chặn crawl, không phải link gãy"),
 }
+
+
+# Pattern URL bỏ qua khi check link — toàn share button mạng XH, các domain này
+# luôn trả 429/403 cho bot. Coi như OK, không tính vào broken count.
+LINK_PRESKIP_PATTERNS = [
+    "pinterest.com/pin/create/link",
+    "pinterest.com/pin/create/button",
+    "facebook.com/sharer/sharer.php",
+    "facebook.com/sharer.php",
+    "twitter.com/intent/tweet",
+    "x.com/intent/tweet",
+    "plus.google.com/share",
+    "linkedin.com/sharing/share-offsite",
+    "linkedin.com/shareArticle",
+    "reddit.com/submit",
+    "telegram.me/share/url",
+    "t.me/share/url",
+    "api.whatsapp.com/send",
+    "wa.me/?text=",
+]
 
 
 def _classify_link_error(exc: Exception) -> str:
@@ -156,13 +177,14 @@ TIMEOUT = 10  # Aggressive (B): bỏ retry, accept URL chậm/fail để ưu ti�
 WORKERS = 15  # sweet spot — Haravan/Sintech throttle khi >20 concurrent từ 1 IP
 DELAY_PER_WORKER = 0.05  # stagger nhỏ để tránh burst → throttle
 CRAWL_BATCH_SIZE = 20  # update progress mỗi 20 → status tick mượt, dễ debug stuck
+WRITE_BATCH_SIZE = 50  # gom 50 URL → 1 DB transaction thay vì 100 open/commit
 SITEMAP_TIMEOUT = 60  # sitemap.xml chậm thật → giữ timeout cao
 CRAWL_RETRY = 0  # Aggressive: KHÔNG retry, fail thì fail (~5-10% URL slow) — tăng tốc 2-3x
 
 # Link check params (tuned 2026-05-12 — 5-8x faster)
-LINK_CHECK_WORKERS = 30
-LINK_CHECK_TIMEOUT = 8  # HEAD timeout
-LINK_CHECK_TIMEOUT_GET = 8  # GET fallback timeout
+LINK_CHECK_WORKERS = 60
+LINK_CHECK_TIMEOUT = 3  # HEAD timeout — 3s đủ, quá 3s coi như broken
+LINK_CHECK_TIMEOUT_GET = 3  # GET fallback timeout
 LINK_CHECK_BATCH_SIZE = 50  # DB write batch
 HOST_FAIL_THRESHOLD = 3  # Sau N link cùng host fail → skip remaining cùng host
 
@@ -871,6 +893,7 @@ def run_crawl(limit: int = None, auto_check_links: bool = True):
         failed = 0
         done = 0
         stopped = False
+        _write_buf = []  # buffer (result, links) trước khi flush batch vào DB
         with ThreadPoolExecutor(max_workers=WORKERS) as ex:
             futures = {ex.submit(_crawl_with_delay, u): u for u in urls}
             for fut in as_completed(futures):
@@ -886,9 +909,7 @@ def run_crawl(limit: int = None, auto_check_links: bool = True):
                     result = fut.result()
                     result["last_run_id"] = run_id
                     links = result.pop("_links", [])
-                    db.seo_upsert_page(result)
-                    if links:
-                        db.seo_replace_links(result["url"], links)
+                    _write_buf.append((result, links))
                     if (result.get("status_code") or 0) < 400 and result.get("status_code"):
                         success += 1
                     else:
@@ -896,9 +917,17 @@ def run_crawl(limit: int = None, auto_check_links: bool = True):
                 except Exception:
                     failed += 1
                 done += 1
+                # Flush batch vào DB mỗi WRITE_BATCH_SIZE URL
+                if len(_write_buf) >= WRITE_BATCH_SIZE:
+                    db.seo_upsert_pages_batch(_write_buf)
+                    _write_buf.clear()
                 if done % CRAWL_BATCH_SIZE == 0 or done == total:
                     db.seo_update_run_progress(run_id, total, success, failed)
                     _set_state(done=done, success=success, failed=failed)
+        # Flush còn lại
+        if _write_buf:
+            db.seo_upsert_pages_batch(_write_buf)
+            _write_buf.clear()
 
         if stopped:
             db.seo_finish_run(run_id, "stopped", done, success, failed)
@@ -959,6 +988,11 @@ def _check_link(target: str) -> tuple:
     Trả (target, status_code, error_kind).
     error_kind = None nếu OK, hoặc 1 trong các key của LINK_ERROR_LABELS nếu fail.
     """
+    # Pre-skip social share buttons — đỡ tốn HTTP + đỡ false positive 429
+    tlow = target.lower()
+    for pat in LINK_PRESKIP_PATTERNS:
+        if pat in tlow:
+            return target, 0, "social_share_skip"
     headers = {"User-Agent": USER_AGENT}
     try:
         r = requests.head(target, headers=headers, timeout=LINK_CHECK_TIMEOUT, allow_redirects=True)
@@ -993,8 +1027,6 @@ def run_link_check_streaming(stop_when_crawl_done: bool = True, poll_interval: i
     """
     import time as _t
     with _link_state_lock:
-        if _link_state["running"]:
-            return
         _link_state.update({"running": True, "checked": 0, "total": 0, "broken": 0})
 
     host_fail_count = {}
@@ -1050,7 +1082,7 @@ def run_link_check_streaming(stop_when_crawl_done: bool = True, poll_interval: i
                         pending_batch.append((status_code, error_kind, target))
                         with _link_state_lock:
                             _link_state["checked"] += 1
-                            if status_code >= 400 or status_code == 0:
+                            if (status_code >= 400 or status_code == 0) and error_kind != "social_share_skip":
                                 _link_state["broken"] += 1
                                 if host:
                                     host_fail_count[host] = host_fail_count.get(host, 0) + 1
@@ -1083,6 +1115,10 @@ def start_link_check_streaming_async() -> bool:
     with _link_state_lock:
         if _link_state["running"]:
             return False
+        # Pre-set running SYNC để frontend bắt được status ngay sau redirect.
+        _link_state["running"] = True
+        _link_state["checked"] = 0
+        _link_state["broken"] = 0
     t = threading.Thread(target=run_link_check_streaming, daemon=True)
     t.start()
     return True
@@ -1147,7 +1183,7 @@ def run_link_check(limit: int = None, only_targets: list = None):
                     pending_batch.append((status_code, error_kind, target))
                     with _link_state_lock:
                         _link_state["checked"] += 1
-                        if status_code >= 400 or status_code == 0:
+                        if (status_code >= 400 or status_code == 0) and error_kind != "social_share_skip":
                             _link_state["broken"] += 1
                             if host:
                                 host_fail_count[host] = host_fail_count.get(host, 0) + 1
@@ -1180,6 +1216,10 @@ def start_link_check_async(limit: int = None, only_targets: list = None) -> bool
     with _link_state_lock:
         if _link_state["running"]:
             return False
+        # Pre-set running SYNC để frontend bắt được status ngay sau redirect.
+        _link_state["running"] = True
+        _link_state["checked"] = 0
+        _link_state["broken"] = 0
     t = threading.Thread(target=run_link_check, args=(limit, only_targets), daemon=True)
     t.start()
     return True
@@ -1196,6 +1236,15 @@ def start_crawl_async(limit: int = None, auto_check_links: bool = True) -> bool:
     snap = state_snapshot()
     if snap["status"] in ("fetching_sitemap", "crawling"):
         return False
+    # Pre-set state SYNC để GET /seo ngay sau redirect đã thấy status đúng.
+    # Tránh race: nếu để run_crawl set state, browser có thể render TRƯỚC khi
+    # thread chạy → JS không khởi động polling → user phải F5 mới thấy realtime.
+    _set_state(
+        status="fetching_sitemap",
+        total=0, done=0, success=0, failed=0,
+        message="Đang khởi tạo crawl...",
+        should_stop=False,
+    )
     t = threading.Thread(target=run_crawl, args=(limit, auto_check_links), daemon=True)
     t.start()
     return True

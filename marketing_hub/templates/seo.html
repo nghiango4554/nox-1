@@ -45,126 +45,237 @@
 
 {% block content %}
 
-{# ───────────── 1. KPI COMPACT ───────────── #}
+{# ───────────── 1. KPI COMPACT (frame indigo) ───────────── #}
+<section class="seo-section seo-frame-indigo">
+<div class="seo-section-title">
+  📊 Tổng quan SEO
+  <small>Snapshot điểm + phân loại URL</small>
+</div>
+{% set ok_count = stats.ok if stats.ok is defined else (stats.total - stats.good - stats.bad) %}
 <div class="seo-kpi-row">
-  <div class="seo-kpi-cell">
-    <div class="seo-kpi-num">{{ stats.total }}</div>
+  {# Total + distribution mini bar #}
+  <div class="seo-kpi-cell seo-kpi-total">
+    <div class="seo-kpi-num" data-target="{{ stats.total }}">0</div>
     <div class="seo-kpi-label">Tổng URL</div>
+    {% if stats.total > 0 %}
+    <div class="seo-kpi-dist"
+         title="🟢 {{ stats.good }} tốt · 🟡 {{ ok_count }} OK · 🔴 {{ stats.bad }} cần sửa">
+      <div class="seo-kpi-dist-seg seo-kpi-dist-good"
+           style="width: {{ (stats.good * 100 / stats.total)|round(1) }}%"></div>
+      <div class="seo-kpi-dist-seg seo-kpi-dist-ok"
+           style="width: {{ (ok_count * 100 / stats.total)|round(1) }}%"></div>
+      <div class="seo-kpi-dist-seg seo-kpi-dist-bad"
+           style="width: {{ (stats.bad * 100 / stats.total)|round(1) }}%"></div>
+    </div>
+    {% endif %}
   </div>
-  <div class="seo-kpi-cell">
-    <div class="seo-kpi-num">{{ stats.avg_score }}<span class="seo-kpi-unit">/100</span></div>
+
+  {# Avg score #}
+  <div class="seo-kpi-cell seo-kpi-avg">
+    <div class="seo-kpi-num">
+      <span data-target="{{ stats.avg_score }}">0</span><span class="seo-kpi-unit">/100</span>
+    </div>
     <div class="seo-kpi-label">Điểm TB</div>
   </div>
+
+  {# Good / OK / Bad — clickable filters #}
   <a href="?band=good" class="seo-kpi-cell seo-kpi-good">
-    <div class="seo-kpi-num">{{ stats.good }}</div>
+    <div class="seo-kpi-num" data-target="{{ stats.good }}">0</div>
     <div class="seo-kpi-label">🟢 Tốt (≥80)</div>
   </a>
   <a href="?band=ok" class="seo-kpi-cell seo-kpi-ok">
-    <div class="seo-kpi-num">{{ stats.ok if stats.ok is defined else (stats.total - stats.good - stats.bad) }}</div>
+    <div class="seo-kpi-num" data-target="{{ ok_count }}">0</div>
     <div class="seo-kpi-label">🟡 OK (60-79)</div>
   </a>
   <a href="?band=bad" class="seo-kpi-cell seo-kpi-bad">
-    <div class="seo-kpi-num">{{ stats.bad }}</div>
+    <div class="seo-kpi-num" data-target="{{ stats.bad }}">0</div>
     <div class="seo-kpi-label">🔴 Cần sửa (&lt;60)</div>
   </a>
+
+  {# By_type — modern pills với icon circle #}
   <div class="seo-kpi-cell seo-kpi-types">
-    <div class="seo-kpi-label" style="margin-bottom:4px">Phân loại</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">
-      <a href="?type=product" class="seo-mini-pill" title="Sản phẩm">🛍️ {{ stats.by_type.get('product', 0) }}</a>
-      <a href="?type=collection" class="seo-mini-pill" title="Collection">📂 {{ stats.by_type.get('collection', 0) }}</a>
-      <a href="?type=blog" class="seo-mini-pill" title="Blog">📝 {{ stats.by_type.get('blog', 0) }}</a>
-      <a href="?type=page" class="seo-mini-pill" title="Page">📄 {{ stats.by_type.get('page', 0) }}</a>
+    <div class="seo-kpi-label" style="margin:0 0 8px 0">Phân loại</div>
+    <div class="seo-types-grid">
+      <a href="?type=product" class="seo-type-pill" title="Sản phẩm">
+        <span class="seo-type-icon seo-type-icon-product">🛍️</span>
+        <span class="seo-type-meta">
+          <span class="seo-type-count">{{ stats.by_type.get('product', 0) }}</span>
+          <span class="seo-type-name">SP</span>
+        </span>
+      </a>
+      <a href="?type=collection" class="seo-type-pill" title="Collection">
+        <span class="seo-type-icon seo-type-icon-collection">📂</span>
+        <span class="seo-type-meta">
+          <span class="seo-type-count">{{ stats.by_type.get('collection', 0) }}</span>
+          <span class="seo-type-name">Cate</span>
+        </span>
+      </a>
+      <a href="?type=blog" class="seo-type-pill" title="Blog">
+        <span class="seo-type-icon seo-type-icon-blog">📝</span>
+        <span class="seo-type-meta">
+          <span class="seo-type-count">{{ stats.by_type.get('blog', 0) }}</span>
+          <span class="seo-type-name">Blog</span>
+        </span>
+      </a>
+      <a href="?type=page" class="seo-type-pill" title="Page">
+        <span class="seo-type-icon seo-type-icon-page">📄</span>
+        <span class="seo-type-meta">
+          <span class="seo-type-count">{{ stats.by_type.get('page', 0) }}</span>
+          <span class="seo-type-name">Page</span>
+        </span>
+      </a>
     </div>
   </div>
 </div>
+</section>
 
-{# ───────────── 2. PIPELINE PROGRESS (Phase 1 Crawl + Phase 2 Link check) ───────────── #}
+{# ───────────── 2. PIPELINE PROGRESS (Phase 1 Crawl + Phase 2 Link check) — frame emerald ───────────── #}
 {% set link_state = link_state or {'running': False, 'checked': 0, 'total': 0, 'broken': 0} %}
 {% set crawl_running = state.status in ('fetching_sitemap', 'crawling') %}
 {% set link_running = link_state.running %}
 {% set pipeline_visible = crawl_running or link_running %}
-<section class="card seo-progress-card{% if not pipeline_visible %} hidden{% endif %}"
-         id="seo-progress-card" style="margin-top:14px">
-  <div style="margin-bottom:10px">
-    <strong style="font-size:15px">⏳ Pipeline crawl SEO</strong>
-    <span class="muted" style="font-size:12px;margin-left:8px">
-      Phase 1 quét trang &amp; chấm điểm · Phase 2 check broken external links
-    </span>
+<section class="seo-section seo-frame-emerald seo-progress-card{% if not pipeline_visible %} hidden{% endif %}"
+         id="seo-progress-card">
+  <div class="seo-section-title">
+    ⏳ Pipeline crawl SEO
+    <small>Phase 1 quét &amp; chấm điểm · Phase 2 check broken links</small>
   </div>
 
-  {# ─ Phase 1: Crawl URL ─ #}
-  <div class="pipeline-phase" id="pipe-phase1">
-    <div class="pipeline-phase-head">
-      <span class="pipeline-badge" id="phase1-badge">
-        {% if crawl_running %}🔄 Đang chạy
-        {% elif state.status == 'done' %}✅ Hoàn tất
-        {% elif state.status == 'failed' %}❌ Lỗi
-        {% else %}⏸ Idle{% endif %}
-      </span>
-      <span class="pipeline-phase-title">Phase 1 — 🌐 Crawl URL</span>
-      <span class="pipeline-phase-msg muted" id="seo-state-msg">{{ state.message or '—' }}</span>
-      <span class="pipeline-phase-meta muted">
-        <strong id="seo-state-done">{{ state.done }}</strong>/<span id="seo-state-total">{{ state.total }}</span>
-        · ✅ <span id="seo-state-success">{{ state.success }}</span>
-        · ❌ <span id="seo-state-failed">{{ state.failed }}</span>
-        · <strong id="seo-progress-pct">{% if state.total %}{{ (state.done * 100 // state.total) }}{% else %}0{% endif %}%</strong>
-      </span>
-    </div>
-    <div class="seo-progress-bar">
-      <div id="seo-progress-fill" class="seo-progress-fill"
-           style="width: {% if state.total %}{{ (state.done * 100 // state.total) }}{% else %}0{% endif %}%"></div>
-    </div>
-  </div>
+  {% set phase1_pct = (state.done * 100 // state.total) if state.total else 0 %}
+  {% set phase1_cls = 'seo-pipe-running' if crawl_running
+                      else ('seo-pipe-failed' if state.status == 'failed'
+                            else ('seo-pipe-done' if state.status == 'done' else 'seo-pipe-idle')) %}
+  {% set phase2_pct = (link_state.checked * 100 // link_state.total) if link_state.total else 0 %}
+  {% set phase2_cls = 'seo-pipe-running' if link_running
+                      else ('seo-pipe-done' if link_state.checked > 0 else 'seo-pipe-idle') %}
 
-  {# ─ Phase 2: Link check ─ #}
-  <div class="pipeline-phase" id="pipe-phase2" style="margin-top:10px">
-    <div class="pipeline-phase-head">
-      <span class="pipeline-badge" id="phase2-badge">
-        {% if link_running %}🔄 Đang chạy
-        {% elif link_state.checked > 0 %}✅ Hoàn tất
-        {% else %}⏸ Idle{% endif %}
-      </span>
-      <span class="pipeline-phase-title">Phase 2 — 🔗 Check broken links</span>
-      <span class="pipeline-phase-meta muted">
-        <strong id="link-checked">{{ link_state.checked }}</strong>/<span id="link-total">{{ link_state.total }}</span>
-        · 💀 <span id="link-broken">{{ link_state.broken }}</span> gãy
-        · <strong id="link-pct">{% if link_state.total %}{{ (link_state.checked * 100 // link_state.total) }}{% else %}0{% endif %}%</strong>
-      </span>
+  <div class="seo-pipeline-grid">
+    {# ─ Phase 1: Crawl URL ─ #}
+    <div class="seo-pipe-card {{ phase1_cls }}" id="pipe-phase1">
+      <div class="seo-pipe-head">
+        <span class="seo-pipe-icon">🌐</span>
+        <span class="seo-pipe-title">Phase 1 — Crawl URL</span>
+        <span class="seo-pipe-badge" id="phase1-badge">
+          {% if crawl_running %}🔄 Đang chạy
+          {% elif state.status == 'done' %}✅ Hoàn tất
+          {% elif state.status == 'failed' %}❌ Lỗi
+          {% else %}⏸ Idle{% endif %}
+        </span>
+      </div>
+      <div class="seo-pipe-msg" id="seo-state-msg">{{ state.message or '—' }}</div>
+      <div class="seo-pipe-bar">
+        <div id="seo-progress-fill" class="seo-pipe-fill" style="width: {{ phase1_pct }}%"></div>
+        <span class="seo-pipe-pct" id="seo-progress-pct">{{ phase1_pct }}%</span>
+      </div>
+      <div class="seo-pipe-stats">
+        <span class="seo-pipe-stat">
+          <span class="seo-pipe-stat-val">
+            <strong id="seo-state-done">{{ state.done }}</strong>/<span id="seo-state-total">{{ state.total }}</span>
+          </span>
+          <span class="seo-pipe-stat-lbl">Tiến độ</span>
+        </span>
+        <span class="seo-pipe-stat seo-pipe-stat-ok">
+          <span class="seo-pipe-stat-val">✅ <span id="seo-state-success">{{ state.success }}</span></span>
+          <span class="seo-pipe-stat-lbl">OK</span>
+        </span>
+        <span class="seo-pipe-stat seo-pipe-stat-fail">
+          <span class="seo-pipe-stat-val">❌ <span id="seo-state-failed">{{ state.failed }}</span></span>
+          <span class="seo-pipe-stat-lbl">Lỗi</span>
+        </span>
+        <span class="seo-pipe-stat seo-pipe-stat-rate">
+          <span class="seo-pipe-stat-val"><span id="phase1-rate">—</span>/s</span>
+          <span class="seo-pipe-stat-lbl">Tốc độ</span>
+        </span>
+        <span class="seo-pipe-stat seo-pipe-stat-eta">
+          <span class="seo-pipe-stat-val" id="phase1-eta">—</span>
+          <span class="seo-pipe-stat-lbl">ETA</span>
+        </span>
+      </div>
     </div>
-    <div class="seo-progress-bar">
-      <div id="link-progress-fill" class="seo-progress-fill"
-           style="width: {% if link_state.total %}{{ (link_state.checked * 100 // link_state.total) }}{% else %}0{% endif %}%"></div>
+
+    {# ─ Phase 2: Link check ─ #}
+    <div class="seo-pipe-card {{ phase2_cls }}" id="pipe-phase2">
+      <div class="seo-pipe-head">
+        <span class="seo-pipe-icon">🔗</span>
+        <span class="seo-pipe-title">Phase 2 — Check broken links</span>
+        <span class="seo-pipe-badge" id="phase2-badge">
+          {% if link_running %}🔄 Đang chạy
+          {% elif link_state.checked > 0 %}✅ Hoàn tất
+          {% else %}⏸ Idle{% endif %}
+        </span>
+      </div>
+      <div class="seo-pipe-msg">
+        {% if link_running %}Đang check {{ link_state.total }} URL ngoại từ trang đã crawl…
+        {% elif link_state.checked > 0 %}Đã check {{ link_state.checked }} link, tìm thấy {{ link_state.broken }} broken.
+        {% else %}Chưa chạy — sẽ tự động sau khi Phase 1 hoàn tất.{% endif %}
+      </div>
+      <div class="seo-pipe-bar">
+        <div id="link-progress-fill" class="seo-pipe-fill" style="width: {{ phase2_pct }}%"></div>
+        <span class="seo-pipe-pct" id="link-pct">{{ phase2_pct }}%</span>
+      </div>
+      <div class="seo-pipe-stats">
+        <span class="seo-pipe-stat">
+          <span class="seo-pipe-stat-val">
+            <strong id="link-checked">{{ link_state.checked }}</strong>/<span id="link-total">{{ link_state.total }}</span>
+          </span>
+          <span class="seo-pipe-stat-lbl">Tiến độ</span>
+        </span>
+        <span class="seo-pipe-stat seo-pipe-stat-fail">
+          <span class="seo-pipe-stat-val">💀 <span id="link-broken">{{ link_state.broken }}</span></span>
+          <span class="seo-pipe-stat-lbl">Gãy</span>
+        </span>
+        <span class="seo-pipe-stat seo-pipe-stat-rate">
+          <span class="seo-pipe-stat-val"><span id="phase2-rate">—</span>/s</span>
+          <span class="seo-pipe-stat-lbl">Tốc độ</span>
+        </span>
+        <span class="seo-pipe-stat seo-pipe-stat-eta">
+          <span class="seo-pipe-stat-val" id="phase2-eta">—</span>
+          <span class="seo-pipe-stat-lbl">ETA</span>
+        </span>
+      </div>
     </div>
   </div>
 </section>
 
-{# ───────────── 3. TOP ISSUES (Vấn đề ưu tiên sửa) ───────────── #}
+{# ───────────── 3. TOP ISSUES (Vấn đề ưu tiên sửa) — frame amber, Phase S4 redesign ───────────── #}
 {% if top_issues %}
-<section class="card" style="margin-top:14px">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-    <div>
-      <h3 style="margin:0;font-size:15px">🎯 Vấn đề ưu tiên sửa</h3>
-      <small class="muted">Click 1 vấn đề → filter list URL có lỗi đó.</small>
+<section class="seo-section seo-frame-amber">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <div class="seo-section-title" style="margin:0">
+      🎯 Vấn đề ưu tiên sửa
+      <small>Click 1 vấn đề → filter list URL có lỗi đó</small>
     </div>
     {% if filters.issue %}
       <a href="?" class="btn btn-sm">✕ Bỏ filter "{{ filters.issue }}"</a>
     {% endif %}
   </div>
-  <div class="seo-issue-chips">
+  <div class="seo-issue-grid">
     {% for it in top_issues %}
-      <a href="?issue={{ it.code }}" class="seo-issue-chip seo-issue-{{ it.level }}{% if filters.issue == it.code %} seo-chip-active{% endif %}">
-        <span>{{ it.icon }}</span>
-        <span>{{ it.label }}</span>
-        <span class="seo-issue-count">{{ it.count }}</span>
+      {% set prio = 'critical' if it.count >= 500 else ('high' if it.count >= 100 else 'medium') %}
+      {% set prio_label = 'CRITICAL' if prio == 'critical' else ('HIGH' if prio == 'high' else 'MEDIUM') %}
+      <a href="?issue={{ it.code }}#seo-url-list"
+         class="seo-issue-card seo-issue-prio-{{ prio }}{% if filters.issue == it.code %} seo-issue-active{% endif %}"
+         title="{{ it.count }} URL · {{ it.label }}">
+        <div class="seo-issue-card-head">
+          <span class="seo-issue-icon">{{ it.icon }}</span>
+          <span class="seo-issue-prio-badge">{{ prio_label }}</span>
+        </div>
+        <div class="seo-issue-count">{{ it.count }}</div>
+        <div class="seo-issue-count-lbl">URL bị ảnh hưởng</div>
+        <div class="seo-issue-label">{{ it.label }}</div>
+        {% if it.fix %}<div class="seo-issue-fix">💡 {{ it.fix }}</div>{% endif %}
       </a>
     {% endfor %}
   </div>
 </section>
 {% endif %}
 
-{# ───────────── 4. BÁO CÁO CHUYÊN SÂU (4 ô grid) ───────────── #}
-<section class="card" style="margin-top:14px">
-  <h3 style="margin:0 0 12px 0;font-size:15px">🔧 Báo cáo chuyên sâu</h3>
+{# ───────────── 4. BÁO CÁO CHUYÊN SÂU (4 ô grid) — frame blue ───────────── #}
+<section class="seo-section seo-frame-blue">
+  <div class="seo-section-title">
+    🔧 Báo cáo chuyên sâu
+    <small>Drilldown duplicate · broken · rules · indexability · inlinks · CWV</small>
+  </div>
   <div class="seo-deep-grid">
     <a href="{{ url_for('seo_duplicates') }}" class="seo-deep-cell">
       <div class="seo-deep-icon">🔁</div>
@@ -211,65 +322,90 @@
   </div>
 </section>
 
-{# ───────────── 5. FILTER + PAGE LIST ───────────── #}
-<section class="card seo-list-section" style="margin-top:14px">
+{# ───────────── 5. FILTER + PAGE LIST — frame neutral ───────────── #}
+<section class="seo-section seo-frame-neutral seo-list-section" id="seo-url-list">
   <div class="seo-list-head">
-    <h3 style="margin:0;font-size:15px">
+    <div class="seo-section-title" style="margin-bottom:6px">
       📋 Danh sách URL
-      <span class="muted" style="font-weight:400;font-size:13px">
-        — {{ total_filtered }} kết quả{% if total_pages > 1 %} · trang {{ page_num }}/{{ total_pages }}{% endif %}
-      </span>
-    </h3>
+      <small>{{ total_filtered }} kết quả{% if total_pages > 1 %} · trang {{ page_num }}/{{ total_pages }}{% endif %}</small>
+    </div>
   </div>
 
-  <form method="get" class="seo-filter-form seo-filter-sticky">
-    <input type="text" name="q" value="{{ filters.q }}"
-           placeholder="🔍 Tìm URL hoặc title..." class="seo-filter-input">
-    <select name="type" class="seo-filter-select">
-      <option value="">Tất cả loại</option>
-      <option value="product"    {% if filters.type == 'product' %}selected{% endif %}>🛍️ Sản phẩm</option>
-      <option value="collection" {% if filters.type == 'collection' %}selected{% endif %}>📂 Collection</option>
-      <option value="blog"       {% if filters.type == 'blog' %}selected{% endif %}>📝 Blog</option>
-      <option value="page"       {% if filters.type == 'page' %}selected{% endif %}>📄 Page</option>
-      <option value="other"      {% if filters.type == 'other' %}selected{% endif %}>❓ Other</option>
-    </select>
-    <select name="band" class="seo-filter-select">
-      <option value="">Tất cả điểm</option>
-      <option value="bad"  {% if filters.band == 'bad'  %}selected{% endif %}>🔴 Cần sửa</option>
-      <option value="ok"   {% if filters.band == 'ok'   %}selected{% endif %}>🟡 OK</option>
-      <option value="good" {% if filters.band == 'good' %}selected{% endif %}>🟢 Tốt</option>
-    </select>
-    <select name="sort" class="seo-filter-select">
-      <option value="score_asc"  {% if filters.sort == 'score_asc'  %}selected{% endif %}>↑ Điểm thấp trước</option>
-      <option value="score_desc" {% if filters.sort == 'score_desc' %}selected{% endif %}>↓ Điểm cao trước</option>
-      <option value="recent"     {% if filters.sort == 'recent'     %}selected{% endif %}>🕐 Crawl gần nhất</option>
-      <option value="url"        {% if filters.sort == 'url'        %}selected{% endif %}>🔤 URL A→Z</option>
-    </select>
-    {% if filters.issue %}
-      <input type="hidden" name="issue" value="{{ filters.issue }}">
-    {% endif %}
-    <button class="btn btn-primary btn-sm" type="submit">Lọc</button>
-    <a href="{{ url_for('seo_dashboard') }}" class="btn btn-sm btn-ghost">Reset</a>
-  </form>
+  {# ─── Active filter chips (Phase S5) ─── #}
+  {% set has_filter = filters.q or filters.type or filters.band or filters.issue or (filters.sort and filters.sort != 'score_asc') %}
+  {% if has_filter %}
+  <div class="seo-active-filters">
+    <span class="seo-active-filters-lbl">Đang lọc:</span>
+    {% if filters.q %}<span class="seo-chip-active-tag">🔍 "{{ filters.q }}"</span>{% endif %}
+    {% if filters.type %}<span class="seo-chip-active-tag">📦 {{ filters.type }}</span>{% endif %}
+    {% if filters.band %}<span class="seo-chip-active-tag">
+      {% if filters.band == 'good' %}🟢 Tốt{% elif filters.band == 'ok' %}🟡 OK{% else %}🔴 Cần sửa{% endif %}
+    </span>{% endif %}
+    {% if filters.issue %}<span class="seo-chip-active-tag">🎯 {{ filters.issue }}</span>{% endif %}
+    {% if filters.sort and filters.sort != 'score_asc' %}<span class="seo-chip-active-tag">📊 {{ filters.sort }}</span>{% endif %}
+    <a href="{{ url_for('seo_dashboard') }}" class="seo-chip-clear">✕ Bỏ tất cả</a>
+  </div>
+  {% endif %}
+
+  {# ─── Filter bar collapsible (Phase S5) ─── #}
+  <details class="seo-filter-collapse"{% if has_filter or not pages %} open{% endif %}>
+    <summary class="seo-filter-summary">
+      <span class="seo-filter-summary-icon">▶</span>
+      <span class="seo-filter-summary-text">🔧 Bộ lọc &amp; sắp xếp</span>
+      <span class="seo-filter-summary-hint">{% if has_filter %}Đang áp dụng{% else %}Click để mở{% endif %}</span>
+    </summary>
+    <form method="get" class="seo-filter-form">
+      <input type="text" name="q" value="{{ filters.q }}"
+             placeholder="🔍 Tìm URL hoặc title..." class="seo-filter-input">
+      <select name="type" class="seo-filter-select">
+        <option value="">Tất cả loại</option>
+        <option value="product"    {% if filters.type == 'product' %}selected{% endif %}>🛍️ Sản phẩm</option>
+        <option value="collection" {% if filters.type == 'collection' %}selected{% endif %}>📂 Collection</option>
+        <option value="blog"       {% if filters.type == 'blog' %}selected{% endif %}>📝 Blog</option>
+        <option value="page"       {% if filters.type == 'page' %}selected{% endif %}>📄 Page</option>
+        <option value="other"      {% if filters.type == 'other' %}selected{% endif %}>❓ Other</option>
+      </select>
+      <select name="band" class="seo-filter-select">
+        <option value="">Tất cả điểm</option>
+        <option value="bad"  {% if filters.band == 'bad'  %}selected{% endif %}>🔴 Cần sửa</option>
+        <option value="ok"   {% if filters.band == 'ok'   %}selected{% endif %}>🟡 OK</option>
+        <option value="good" {% if filters.band == 'good' %}selected{% endif %}>🟢 Tốt</option>
+      </select>
+      <select name="sort" class="seo-filter-select">
+        <option value="score_asc"  {% if filters.sort == 'score_asc'  %}selected{% endif %}>↑ Điểm thấp trước</option>
+        <option value="score_desc" {% if filters.sort == 'score_desc' %}selected{% endif %}>↓ Điểm cao trước</option>
+        <option value="recent"     {% if filters.sort == 'recent'     %}selected{% endif %}>🕐 Crawl gần nhất</option>
+        <option value="url"        {% if filters.sort == 'url'        %}selected{% endif %}>🔤 URL A→Z</option>
+      </select>
+      {% if filters.issue %}
+        <input type="hidden" name="issue" value="{{ filters.issue }}">
+      {% endif %}
+      <button class="btn btn-primary btn-sm" type="submit">Lọc</button>
+      <a href="{{ url_for('seo_dashboard') }}" class="btn btn-sm btn-ghost">Reset</a>
+    </form>
+  </details>
 
   {% if pages %}
-    <div class="table-wrap">
-    <table class="table seo-table">
+    <div class="table-wrap seo-table-wrap">
+    <table class="table seo-table seo-table-modern">
       <thead>
         <tr>
-          <th class="col-stt">STT</th>
+          <th class="col-stt">#</th>
           <th>URL</th>
           <th>Loại</th>
           <th>Status</th>
           <th>Điểm</th>
           <th>Vấn đề</th>
-          <th>Hành động</th>
+          <th class="col-action">Hành động</th>
         </tr>
       </thead>
       <tbody>
         {% for p in pages %}
         {% set issue_list = (p.issues|from_json) if p.issues else [] %}
-        <tr>
+        {% set errors = issue_list | selectattr('level', 'equalto', 'error') | list %}
+        {% set warns  = issue_list | selectattr('level', 'equalto', 'warn')  | list %}
+        {% set score_band = 'good' if (p.score or 0) >= 80 else ('ok' if (p.score or 0) >= 60 else 'bad') %}
+        <tr class="seo-row seo-row-{{ score_band if p.last_crawled else 'idle' }}">
           <td class="col-stt">{{ (page_num - 1) * 50 + loop.index }}</td>
           <td class="seo-url-cell">
             <a href="{{ p.url }}" target="_blank" rel="noopener" class="seo-url-link">{{ p.url }}</a>
@@ -278,35 +414,41 @@
           <td><span class="seo-type seo-type-{{ p.url_type or 'other' }}">{{ p.url_type or '—' }}</span></td>
           <td>
             {% if p.status_code %}
-              {% if p.status_code < 400 %}
-                <span class="pill" style="background:rgba(34,197,94,0.15);color:#86efac">{{ p.status_code }}</span>
-              {% else %}
-                <span class="pill" style="background:rgba(239,68,68,0.15);color:#fca5a5">{{ p.status_code }}</span>
-              {% endif %}
+              <span class="seo-status-pill seo-status-{{ 'ok' if p.status_code < 400 else 'fail' }}">{{ p.status_code }}</span>
             {% else %}
               <span class="muted">—</span>
             {% endif %}
           </td>
           <td>
             {% if p.score is not none and p.last_crawled %}
-              {% if p.score >= 80 %}<span class="seo-score seo-score-good">{{ p.score }}</span>
-              {% elif p.score >= 60 %}<span class="seo-score seo-score-ok">{{ p.score }}</span>
-              {% else %}<span class="seo-score seo-score-bad">{{ p.score }}</span>
-              {% endif %}
+              <span class="seo-score-modern seo-score-{{ score_band }}" title="Điểm SEO {{ p.score }}/100">
+                <span class="seo-score-num">{{ p.score }}</span>
+                <span class="seo-score-max">/100</span>
+              </span>
             {% else %}<span class="muted">—</span>{% endif %}
           </td>
           <td>
-            {% set errors = issue_list | selectattr('level', 'equalto', 'error') | list %}
-            {% set warns  = issue_list | selectattr('level', 'equalto', 'warn')  | list %}
-            {% if errors %}<span class="pill pill-error">{{ errors|length }} lỗi</span>{% endif %}
-            {% if warns  %}<span class="pill pill-warn">{{ warns|length }} cảnh báo</span>{% endif %}
-            {% if not errors and not warns and p.last_crawled %}
-              <span class="pill" style="background:rgba(34,197,94,0.15);color:#4ade80">tốt</span>
+            {% if errors or warns %}
+              <span class="seo-issue-mini" title="{{ errors|length }} lỗi · {{ warns|length }} cảnh báo">
+                {% if errors %}<span class="seo-issue-dot seo-issue-dot-err">🔴 {{ errors|length }}</span>{% endif %}
+                {% if warns %}<span class="seo-issue-dot seo-issue-dot-warn">🟡 {{ warns|length }}</span>{% endif %}
+              </span>
+            {% elif p.last_crawled %}
+              <span class="seo-issue-mini"><span class="seo-issue-dot seo-issue-dot-ok">🟢 OK</span></span>
+            {% else %}
+              <span class="muted">chưa crawl</span>
             {% endif %}
-            {% if not p.last_crawled %}<span class="muted">chưa crawl</span>{% endif %}
           </td>
-          <td>
-            <a href="{{ url_for('seo_url_detail', page_id=p.id) }}" class="btn btn-sm">Chi tiết →</a>
+          <td class="col-action">
+            <div class="seo-action-grp">
+              <a href="{{ url_for('seo_url_detail', page_id=p.id) }}"
+                 class="seo-action-btn" title="Xem chi tiết URL">👁</a>
+              <button type="button" class="seo-action-btn seo-copy-btn"
+                      data-url="{{ p.url }}" title="Copy URL">📋</button>
+              <form action="{{ url_for('seo_url_recrawl', page_id=p.id) }}" method="post" style="display:inline">
+                <button type="submit" class="seo-action-btn" title="Re-crawl URL này">🔄</button>
+              </form>
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -316,17 +458,41 @@
 
     {% if total_pages > 1 %}
       {% set qs = request.args.to_dict() %}
-      <div class="seo-pagination">
-        {% if page_num > 1 %}
-          {% set _ = qs.update({'page': page_num - 1}) %}
-          <a class="btn btn-sm" href="?{{ qs|urlencode }}">← Trước</a>
+      <nav class="seo-pagination-modern" aria-label="Pagination">
+        {% set _ = qs.update({'page': 1}) %}
+        <a class="seo-page-btn{% if page_num == 1 %} disabled{% endif %}"
+           href="{% if page_num > 1 %}?{{ qs|urlencode }}{% else %}#{% endif %}" title="Trang đầu">«</a>
+        {% set _ = qs.update({'page': page_num - 1}) %}
+        <a class="seo-page-btn{% if page_num == 1 %} disabled{% endif %}"
+           href="{% if page_num > 1 %}?{{ qs|urlencode }}{% else %}#{% endif %}" title="Trang trước">‹</a>
+
+        {# Page number window: current ±2 #}
+        {% set start_p = [1, page_num - 2]|max %}
+        {% set end_p = [total_pages, page_num + 2]|min %}
+        {% if start_p > 1 %}
+          {% set _ = qs.update({'page': 1}) %}
+          <a class="seo-page-btn" href="?{{ qs|urlencode }}">1</a>
+          {% if start_p > 2 %}<span class="seo-page-ellipsis">…</span>{% endif %}
         {% endif %}
-        <span class="muted">Trang {{ page_num }}/{{ total_pages }}</span>
-        {% if page_num < total_pages %}
-          {% set _ = qs.update({'page': page_num + 1}) %}
-          <a class="btn btn-sm" href="?{{ qs|urlencode }}">Sau →</a>
+        {% for pn in range(start_p, end_p + 1) %}
+          {% set _ = qs.update({'page': pn}) %}
+          <a class="seo-page-btn{% if pn == page_num %} active{% endif %}"
+             href="?{{ qs|urlencode }}">{{ pn }}</a>
+        {% endfor %}
+        {% if end_p < total_pages %}
+          {% if end_p < total_pages - 1 %}<span class="seo-page-ellipsis">…</span>{% endif %}
+          {% set _ = qs.update({'page': total_pages}) %}
+          <a class="seo-page-btn" href="?{{ qs|urlencode }}">{{ total_pages }}</a>
         {% endif %}
-      </div>
+
+        {% set _ = qs.update({'page': page_num + 1}) %}
+        <a class="seo-page-btn{% if page_num == total_pages %} disabled{% endif %}"
+           href="{% if page_num < total_pages %}?{{ qs|urlencode }}{% else %}#{% endif %}" title="Trang sau">›</a>
+        {% set _ = qs.update({'page': total_pages}) %}
+        <a class="seo-page-btn{% if page_num == total_pages %} disabled{% endif %}"
+           href="{% if page_num < total_pages %}?{{ qs|urlencode }}{% else %}#{% endif %}" title="Trang cuối">»</a>
+        <span class="seo-page-info">Trang <strong>{{ page_num }}</strong>/{{ total_pages }}</span>
+      </nav>
     {% endif %}
   {% else %}
     <div style="padding:40px 12px;text-align:center">
@@ -343,8 +509,8 @@
   {% endif %}
 </section>
 
-{# ───────────── 6. QUẢN LÝ DATA (collapsible) ───────────── #}
-<details class="card seo-admin-card" style="margin-top:14px"{% if not snapshots and stats.total == 0 %} open{% endif %}>
+{# ───────────── 6. QUẢN LÝ DATA (collapsible) — frame violet ───────────── #}
+<details class="seo-section seo-frame-violet seo-admin-card"{% if not snapshots and stats.total == 0 %} open{% endif %}>
   <summary class="seo-admin-summary">
     <span style="font-size:15px;font-weight:600">⚙️ Quản lý data</span>
     <span class="muted" style="font-size:13px">
@@ -476,6 +642,86 @@
 
 {% block scripts %}
 <style>
+/* ═══════════════════════════════════════════════════════
+   Phase S1 — SEO Section framing palette (30/5/2026)
+   6 frame distinct: indigo / emerald / amber / blue / neutral / violet
+   ═══════════════════════════════════════════════════════ */
+:root {
+  --seo-indigo:  #4f46e5; --seo-indigo-bg:  #eef2ff; --seo-indigo-border:  #c7d2fe;
+  --seo-emerald: #059669; --seo-emerald-bg: #ecfdf5; --seo-emerald-border: #6ee7b7;
+  --seo-amber:   #d97706; --seo-amber-bg:   #fffbeb; --seo-amber-border:   #fcd34d;
+  --seo-blue:    #2563eb; --seo-blue-bg:    #eff6ff; --seo-blue-border:    #93c5fd;
+  --seo-violet:  #7c3aed; --seo-violet-bg:  #f5f3ff; --seo-violet-border:  #c4b5fd;
+  --seo-slate:   #475569; --seo-slate-bg:   #f8fafc; --seo-slate-border:   #cbd5e1;
+}
+
+.seo-section {
+  margin: 0 0 16px 0;
+  border-radius: 16px;
+  padding: 18px 20px;
+  border: 1px solid var(--seo-frame-border, #e2e8f0);
+  background: var(--seo-frame-bg, #ffffff);
+  box-shadow: 0 1px 3px rgba(15,23,42,.04);
+  position: relative;
+  transition: box-shadow .25s ease, border-color .25s ease;
+}
+.seo-section:hover { box-shadow: 0 4px 12px rgba(15,23,42,.08); }
+
+.seo-section-title {
+  font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .6px;
+  color: var(--seo-slate);
+  margin: 0 0 12px 0;
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap;
+}
+.seo-section-title::before {
+  content: ''; width: 4px; height: 16px; border-radius: 2px;
+  background: var(--seo-frame-accent, var(--seo-indigo));
+  flex-shrink: 0;
+}
+.seo-section-title small {
+  font-weight: 500; text-transform: none; letter-spacing: 0;
+  color: var(--seo-slate); opacity: .75; font-size: 12px;
+}
+
+/* ─── Frame variants ─── */
+.seo-frame-indigo {
+  --seo-frame-bg: linear-gradient(135deg, #eef2ff 0%, #f5f3ff 100%);
+  --seo-frame-border: #c7d2fe;
+  --seo-frame-accent: var(--seo-indigo);
+}
+.seo-frame-emerald {
+  --seo-frame-bg: linear-gradient(135deg, #ecfdf5 0%, #f8fafc 100%);
+  --seo-frame-border: #6ee7b7;
+  --seo-frame-accent: var(--seo-emerald);
+}
+.seo-frame-amber {
+  --seo-frame-bg: linear-gradient(135deg, #fffbeb 0%, #fff7ed 100%);
+  --seo-frame-border: #fcd34d;
+  --seo-frame-accent: var(--seo-amber);
+}
+.seo-frame-blue {
+  --seo-frame-bg: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+  --seo-frame-border: #93c5fd;
+  --seo-frame-accent: var(--seo-blue);
+}
+.seo-frame-violet {
+  --seo-frame-bg: linear-gradient(135deg, #f5f3ff 0%, #faf5ff 100%);
+  --seo-frame-border: #c4b5fd;
+  --seo-frame-accent: var(--seo-violet);
+}
+.seo-frame-neutral {
+  --seo-frame-bg: #ffffff;
+  --seo-frame-border: #e2e8f0;
+  --seo-frame-accent: var(--seo-slate);
+}
+
+/* ─── Override .seo-admin-card khi đã là seo-section ─── */
+details.seo-section.seo-admin-card { padding: 0; overflow: hidden; }
+details.seo-section.seo-admin-card .seo-admin-summary { padding: 14px 20px; }
+details.seo-section.seo-admin-card .seo-admin-body { padding: 0 20px 18px; }
+
 /* ─────────── Redesigned SEO page styles ─────────── */
 
 /* Trang SEO: bỏ giới hạn 1400px của .content để giàn hết ra mép phải */
@@ -507,87 +753,329 @@
 .seo-table .pill, .seo-table .seo-score, .seo-table .seo-type { display: inline-flex; }
 .seo-pagination { margin-top: 12px; }
 
+/* ═══ Phase S2 — KPI cards modern (30/5/2026) ═══ */
 .seo-kpi-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
 }
 .seo-kpi-cell {
-  background: var(--surface-2, var(--surface));
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px;
+  --kpi-accent: var(--seo-slate);
+  --kpi-accent-shadow: rgba(15,23,42,.12);
+  background: rgba(255,255,255,.78);
+  border: 1px solid rgba(255,255,255,.65);
+  border-radius: 14px;
+  padding: 16px 18px;
   text-decoration: none;
   color: inherit;
-  transition: transform .12s, border-color .12s, background .12s;
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  box-shadow: 0 1px 3px rgba(15,23,42,.04);
+  transition: transform .25s cubic-bezier(.2,.8,.2,1),
+              box-shadow .25s ease,
+              border-color .25s ease;
 }
-a.seo-kpi-cell:hover { transform: translateY(-2px); border-color: var(--border-strong); }
-.seo-kpi-num {
-  font-size: 28px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -.5px;
+.seo-kpi-cell::after {
+  content: ''; position: absolute; right: -32px; top: -32px;
+  width: 92px; height: 92px; border-radius: 50%;
+  background: var(--kpi-accent); opacity: .09;
+  pointer-events: none;
+  transition: opacity .25s ease, transform .35s ease;
 }
-.seo-kpi-unit { font-size: 14px; color: var(--text-muted); font-weight: 500; margin-left: 2px; }
-.seo-kpi-label { font-size: 12px; color: var(--text-muted); margin-top: 6px; }
-.seo-kpi-good { border-color: rgba(34,197,94,0.35); }
-.seo-kpi-good .seo-kpi-num { color: #4ade80; }
-.seo-kpi-ok { border-color: rgba(234,179,8,0.35); }
-.seo-kpi-ok .seo-kpi-num { color: #facc15; }
-.seo-kpi-bad { border-color: rgba(239,68,68,0.35); }
-.seo-kpi-bad .seo-kpi-num { color: #f87171; }
+.seo-kpi-cell:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px var(--kpi-accent-shadow);
+  border-color: var(--kpi-accent);
+}
+.seo-kpi-cell:hover::after { opacity: .15; transform: scale(1.1); }
+a.seo-kpi-cell { cursor: pointer; }
 
-.seo-kpi-types { padding: 12px 14px; }
-.seo-mini-pill {
-  display: inline-flex;
+.seo-kpi-num {
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -.8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--kpi-accent);
+  position: relative; z-index: 1;
+}
+.seo-kpi-unit { font-size: 15px; font-weight: 500; color: var(--seo-slate); opacity: .7; margin-left: 2px; }
+.seo-kpi-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--seo-slate);
+  margin-top: 6px;
+  position: relative; z-index: 1;
+}
+
+/* Band accent — total / avg / good / ok / bad */
+.seo-kpi-total { --kpi-accent: var(--seo-indigo); --kpi-accent-shadow: rgba(79,70,229,.22); }
+.seo-kpi-avg   { --kpi-accent: var(--seo-violet); --kpi-accent-shadow: rgba(124,58,237,.22); }
+.seo-kpi-good  { --kpi-accent: #059669; --kpi-accent-shadow: rgba(5,150,105,.22); }
+.seo-kpi-ok    { --kpi-accent: #d97706; --kpi-accent-shadow: rgba(217,119,6,.22); }
+.seo-kpi-bad   { --kpi-accent: #dc2626; --kpi-accent-shadow: rgba(220,38,38,.22); }
+.seo-kpi-types { --kpi-accent: var(--seo-blue); --kpi-accent-shadow: rgba(37,99,235,.18); }
+
+/* Distribution mini bar inline */
+.seo-kpi-dist {
+  display: flex;
+  height: 7px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(15,23,42,.08);
+  margin-top: 10px;
+  cursor: help;
+  position: relative; z-index: 1;
+  box-shadow: inset 0 1px 2px rgba(15,23,42,.05);
+}
+.seo-kpi-dist-seg {
+  height: 100%;
+  transition: width .9s cubic-bezier(.2,.8,.2,1);
+  position: relative;
+}
+.seo-kpi-dist-seg:not(:last-child) { border-right: 1px solid rgba(255,255,255,.6); }
+.seo-kpi-dist-good { background: linear-gradient(180deg, #10b981, #059669); }
+.seo-kpi-dist-ok   { background: linear-gradient(180deg, #f59e0b, #d97706); }
+.seo-kpi-dist-bad  { background: linear-gradient(180deg, #ef4444, #dc2626); }
+
+/* Types modern pills - icon trong colored circle */
+.seo-kpi-types { padding: 14px 16px; align-items: stretch; }
+.seo-types-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  position: relative; z-index: 1;
+}
+.seo-type-pill {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  background: var(--surface-3, rgba(255,255,255,0.05));
-  border: 1px solid var(--border);
+  gap: 8px;
+  padding: 6px 10px 6px 6px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.7);
+  border: 1px solid rgba(15,23,42,.06);
+  text-decoration: none;
+  color: inherit;
+  transition: transform .15s ease, border-color .15s ease, background .15s ease;
+}
+.seo-type-pill:hover {
+  transform: translateY(-2px);
+  border-color: var(--seo-indigo);
+  background: #ffffff;
+}
+.seo-type-icon {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.seo-type-icon-product    { background: #fef3c7; }
+.seo-type-icon-collection { background: #dbeafe; }
+.seo-type-icon-blog       { background: #fce7f3; }
+.seo-type-icon-page       { background: #e0e7ff; }
+.seo-type-meta { display: flex; flex-direction: column; line-height: 1.15; }
+.seo-type-count {
+  font-size: 13px; font-weight: 700;
+  color: var(--seo-slate);
+  font-variant-numeric: tabular-nums;
+}
+.seo-type-name {
+  font-size: 10.5px; color: var(--seo-slate); opacity: .65;
+  text-transform: uppercase; letter-spacing: .3px;
+}
+
+/* Legacy mini-pill — giữ cho nơi khác dùng */
+.seo-mini-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(255,255,255,.7);
+  border: 1px solid rgba(15,23,42,.08);
   border-radius: 6px;
   padding: 3px 8px;
   font-size: 12px;
   text-decoration: none;
   color: inherit;
 }
-.seo-mini-pill:hover { border-color: var(--accent); }
+.seo-mini-pill:hover { border-color: var(--seo-indigo); }
 
 /* progress card */
 .seo-progress-card.hidden { display: none; }
 
-/* pipeline phases */
-.pipeline-phase {
-  background: rgba(255,255,255,0.015);
-  border: 1px solid var(--border-soft, var(--border));
-  border-radius: 8px;
-  padding: 10px 12px;
+/* ═══ Phase S3 — Pipeline dual-lane redesign (30/5/2026) ═══ */
+.seo-pipeline-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
 }
-.pipeline-phase-head {
+@media (max-width: 900px) {
+  .seo-pipeline-grid { grid-template-columns: 1fr; }
+}
+
+.seo-pipe-card {
+  --pipe-accent: var(--seo-slate);
+  --pipe-shadow: rgba(15,23,42,.06);
+  background: rgba(255,255,255,.85);
+  border: 1px solid rgba(255,255,255,.6);
+  border-left: 4px solid var(--pipe-accent);
+  border-radius: 12px;
+  padding: 14px 16px;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
-  font-size: 13px;
+  box-shadow: 0 1px 3px var(--pipe-shadow);
+  transition: border-color .3s ease, box-shadow .3s ease, transform .3s ease;
+  position: relative;
+  overflow: hidden;
 }
-.pipeline-phase-title { font-weight: 600; }
-.pipeline-phase-msg { flex: 1; min-width: 200px; font-size: 12px; }
-.pipeline-phase-meta {
+.seo-pipe-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px var(--pipe-shadow);
+}
+
+/* State variants */
+.seo-pipe-running {
+  --pipe-accent: var(--seo-emerald);
+  --pipe-shadow: rgba(5,150,105,.20);
+  box-shadow: 0 4px 14px var(--pipe-shadow);
+}
+.seo-pipe-done    { --pipe-accent: var(--seo-blue); --pipe-shadow: rgba(37,99,235,.16); }
+.seo-pipe-failed  { --pipe-accent: #dc2626; --pipe-shadow: rgba(220,38,38,.20); }
+.seo-pipe-idle    { --pipe-accent: var(--seo-slate); opacity: .92; }
+
+/* Head row */
+.seo-pipe-head {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13.5px;
+}
+.seo-pipe-icon { font-size: 20px; line-height: 1; }
+.seo-pipe-title {
+  flex: 1;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -.2px;
+}
+.seo-pipe-badge {
+  font-size: 10.5px; font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--pipe-accent);
+  color: #ffffff;
+  letter-spacing: .3px;
+  white-space: nowrap;
+  text-transform: uppercase;
+  box-shadow: 0 1px 3px var(--pipe-shadow);
+}
+.seo-pipe-idle .seo-pipe-badge {
+  background: rgba(71,85,105,.18);
+  color: var(--seo-slate);
+  box-shadow: none;
+}
+
+/* Message row */
+.seo-pipe-msg {
   font-size: 12px;
+  color: var(--seo-slate);
+  min-height: 1.1em;
+  line-height: 1.4;
+  opacity: .9;
+}
+
+/* Progress bar — gradient + shimmer */
+.seo-pipe-bar {
+  position: relative;
+  height: 14px;
+  background: rgba(15,23,42,.08);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(15,23,42,.05);
+}
+.seo-pipe-fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--pipe-accent), color-mix(in srgb, var(--pipe-accent) 65%, #ffffff));
+  border-radius: 8px;
+  transition: width .5s cubic-bezier(.2,.8,.2,1);
+  position: relative;
+  overflow: hidden;
+}
+.seo-pipe-running .seo-pipe-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,.55) 50%,
+    rgba(255,255,255,0) 100%);
+  animation: seoPipeShimmer 1.4s linear infinite;
+}
+@keyframes seoPipeShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.seo-pipe-pct {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 4px rgba(255,255,255,.9);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Stats grid */
+.seo-pipe-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 6px;
+}
+.seo-pipe-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 9px;
+  background: rgba(255,255,255,.7);
+  border: 1px solid rgba(15,23,42,.05);
+  border-radius: 8px;
+}
+.seo-pipe-stat-val {
+  font-size: 13px; font-weight: 700;
+  color: #0f172a;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  line-height: 1.2;
 }
-.pipeline-badge {
-  font-size: 11px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid var(--border);
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-weight: 500;
-  white-space: nowrap;
+.seo-pipe-stat-lbl {
+  font-size: 9.5px; font-weight: 600;
+  color: var(--seo-slate); opacity: .7;
+  text-transform: uppercase; letter-spacing: .3px;
+}
+.seo-pipe-stat-ok   .seo-pipe-stat-val { color: var(--seo-emerald); }
+.seo-pipe-stat-fail .seo-pipe-stat-val { color: #dc2626; }
+.seo-pipe-stat-rate .seo-pipe-stat-val,
+.seo-pipe-stat-eta  .seo-pipe-stat-val { color: var(--seo-blue); }
+
+/* Legacy progress bar — giữ vì có thể chỗ khác dùng */
+.seo-progress-bar {
+  position: relative;
+  height: 10px;
+  background: rgba(15,23,42,.08);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.seo-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--seo-emerald), #34d399);
+  border-radius: 6px;
+  transition: width .5s ease;
 }
 
 /* deep grid */
@@ -615,23 +1103,413 @@ a.seo-kpi-cell:hover { transform: translateY(-2px); border-color: var(--border-s
 /* sticky filter */
 .seo-list-section { padding-top: 12px; }
 .seo-list-head { padding: 0 4px 8px; }
+
+/* ═══ Phase S5 — URL list table modern (30/5/2026) ═══ */
+
+/* Active filter chips */
+.seo-active-filters {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: rgba(252,211,77,.12);
+  border: 1px dashed rgba(217,119,6,.3);
+  border-radius: 8px;
+}
+.seo-active-filters-lbl {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .4px;
+  color: var(--seo-amber);
+}
+.seo-chip-active-tag {
+  font-size: 11.5px; font-weight: 600;
+  background: #ffffff;
+  border: 1px solid var(--seo-amber-border);
+  color: var(--seo-amber);
+  padding: 3px 9px; border-radius: 12px;
+}
+.seo-chip-clear {
+  font-size: 11px; font-weight: 600;
+  background: #dc2626; color: #ffffff;
+  padding: 3px 10px; border-radius: 12px;
+  text-decoration: none;
+  margin-left: auto;
+}
+.seo-chip-clear:hover { background: #b91c1c; }
+
+/* Filter collapsible */
+.seo-filter-collapse {
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  transition: border-color .2s ease;
+}
+.seo-filter-collapse[open] { border-color: var(--seo-indigo); }
+.seo-filter-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 14px;
+  display: flex; align-items: center; gap: 10px;
+  user-select: none;
+  font-size: 12.5px; font-weight: 700;
+  color: var(--seo-slate);
+  transition: background .15s ease;
+}
+.seo-filter-summary::-webkit-details-marker { display: none; }
+.seo-filter-summary:hover { background: rgba(79,70,229,.04); }
+.seo-filter-summary-icon {
+  font-size: 9px;
+  transition: transform .2s ease;
+  color: var(--seo-indigo);
+}
+.seo-filter-collapse[open] .seo-filter-summary-icon { transform: rotate(90deg); }
+.seo-filter-summary-text { flex: 1; }
+.seo-filter-summary-hint {
+  font-size: 10.5px; font-weight: 500;
+  color: var(--seo-slate); opacity: .65;
+  text-transform: uppercase; letter-spacing: .3px;
+}
+.seo-filter-collapse .seo-filter-form {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  padding: 10px 14px 14px;
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* Legacy sticky filter (still used as fallback) */
 .seo-filter-sticky {
   position: sticky;
   top: 0;
-  background: var(--surface, #1a1a1a);
+  background: var(--surface, #ffffff);
   z-index: 10;
   padding: 10px 4px;
   margin: 0 -4px 10px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid #e2e8f0;
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
   align-items: center;
 }
 
+/* Table modern + sticky header */
+.seo-table-wrap {
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  overflow: auto;
+  background: #ffffff;
+  max-height: 70vh;
+}
+.seo-table-modern { width: 100%; border-collapse: separate; border-spacing: 0; }
+.seo-table-modern thead th {
+  position: sticky;
+  top: 0;
+  background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+  border-bottom: 1px solid #cbd5e1;
+  z-index: 5;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--seo-slate);
+  padding: 10px 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+.seo-table-modern tbody td {
+  padding: 10px 12px;
+  font-size: 12.5px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+.seo-table-modern tbody tr:last-child td { border-bottom: none; }
+
+/* Row hover + accent left border by band */
+.seo-row {
+  transition: background .15s ease, box-shadow .15s ease;
+  position: relative;
+}
+.seo-row td:first-child {
+  border-left: 3px solid transparent;
+  transition: border-color .15s ease;
+}
+.seo-row-good td:first-child { border-left-color: #10b981; }
+.seo-row-ok   td:first-child { border-left-color: #f59e0b; }
+.seo-row-bad  td:first-child { border-left-color: #ef4444; }
+.seo-row:hover {
+  background: linear-gradient(90deg, rgba(79,70,229,.04), rgba(79,70,229,.02));
+  box-shadow: inset 0 0 0 1px rgba(79,70,229,.1);
+}
+.seo-row:hover td:first-child { border-left-width: 4px; }
+
+/* Status pill */
+.seo-status-pill {
+  display: inline-flex; align-items: center;
+  font-size: 12px; font-weight: 700;
+  padding: 3px 9px; border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.seo-status-ok   { background: #d1fae5; color: #047857; }
+.seo-status-fail { background: #fee2e2; color: #b91c1c; }
+
+/* Score badge — big chip color-coded */
+.seo-score-modern {
+  display: inline-flex; align-items: baseline; gap: 2px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  box-shadow: 0 1px 3px rgba(15,23,42,.06);
+}
+.seo-score-modern.seo-score-good { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #065f46; }
+.seo-score-modern.seo-score-ok   { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #92400e; }
+.seo-score-modern.seo-score-bad  { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #991b1b; }
+.seo-score-num { font-size: 17px; }
+.seo-score-max { font-size: 10.5px; opacity: .65; font-weight: 600; }
+
+/* Issue mini icons */
+.seo-issue-mini { display: inline-flex; gap: 5px; flex-wrap: wrap; }
+.seo-issue-dot {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 11.5px; font-weight: 700;
+  padding: 2px 8px; border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.seo-issue-dot-err  { background: #fee2e2; color: #b91c1c; }
+.seo-issue-dot-warn { background: #fef3c7; color: #92400e; }
+.seo-issue-dot-ok   { background: #d1fae5; color: #047857; }
+
+/* Action quick buttons */
+.col-action { width: 130px; text-align: center; }
+.seo-action-grp {
+  display: inline-flex; gap: 4px;
+  align-items: center;
+}
+.seo-action-btn {
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 7px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: var(--seo-slate);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all .15s ease;
+  padding: 0;
+}
+.seo-action-btn:hover {
+  background: var(--seo-indigo);
+  border-color: var(--seo-indigo);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(79,70,229,.25);
+}
+.seo-copy-btn.copied {
+  background: var(--seo-emerald) !important;
+  border-color: var(--seo-emerald) !important;
+  color: #ffffff !important;
+}
+
+/* Pagination modern */
+.seo-pagination-modern {
+  display: flex; align-items: center; justify-content: center;
+  gap: 4px; flex-wrap: wrap;
+  margin-top: 16px;
+  padding: 10px;
+}
+.seo-page-btn {
+  min-width: 34px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  font-size: 12.5px; font-weight: 700;
+  color: var(--seo-slate);
+  text-decoration: none;
+  font-variant-numeric: tabular-nums;
+  transition: all .15s ease;
+}
+.seo-page-btn:hover:not(.disabled):not(.active) {
+  background: rgba(79,70,229,.08);
+  border-color: var(--seo-indigo);
+  color: var(--seo-indigo);
+  transform: translateY(-1px);
+}
+.seo-page-btn.active {
+  background: var(--seo-indigo);
+  border-color: var(--seo-indigo);
+  color: #ffffff;
+  box-shadow: 0 3px 8px rgba(79,70,229,.3);
+  cursor: default;
+}
+.seo-page-btn.disabled {
+  opacity: .35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.seo-page-ellipsis {
+  padding: 0 4px;
+  color: var(--seo-slate);
+  font-weight: 700;
+}
+.seo-page-info {
+  margin-left: 12px;
+  font-size: 12px;
+  color: var(--seo-slate);
+  opacity: .75;
+}
+
 .seo-chip-active {
   border-color: var(--accent) !important;
   background: var(--accent-soft) !important;
+}
+
+/* ═══ Phase S4 — Top issues card grid (30/5/2026) ═══ */
+html { scroll-behavior: smooth; }
+#seo-url-list { scroll-margin-top: 24px; }
+
+.seo-issue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.seo-issue-card {
+  --prio-accent: var(--seo-blue);
+  --prio-bg: #eff6ff;
+  --prio-border: #93c5fd;
+  --prio-shadow: rgba(37,99,235,.18);
+  background: var(--prio-bg);
+  border: 1px solid var(--prio-border);
+  border-left: 4px solid var(--prio-accent);
+  border-radius: 12px;
+  padding: 14px 16px;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+  overflow: hidden;
+  transition: transform .25s cubic-bezier(.2,.8,.2,1),
+              box-shadow .25s ease,
+              border-color .25s ease;
+  box-shadow: 0 1px 3px rgba(15,23,42,.05);
+}
+.seo-issue-card::after {
+  content: '';
+  position: absolute;
+  right: -28px; top: -28px;
+  width: 84px; height: 84px;
+  border-radius: 50%;
+  background: var(--prio-accent);
+  opacity: .08;
+  transition: opacity .25s ease, transform .35s ease;
+  pointer-events: none;
+}
+.seo-issue-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px var(--prio-shadow);
+  border-color: var(--prio-accent);
+}
+.seo-issue-card:hover::after { opacity: .16; transform: scale(1.18); }
+
+/* Priority variants */
+.seo-issue-prio-critical {
+  --prio-accent: #dc2626;
+  --prio-bg: #fef2f2;
+  --prio-border: #fca5a5;
+  --prio-shadow: rgba(220,38,38,.22);
+}
+.seo-issue-prio-high {
+  --prio-accent: #d97706;
+  --prio-bg: #fffbeb;
+  --prio-border: #fcd34d;
+  --prio-shadow: rgba(217,119,6,.22);
+}
+.seo-issue-prio-medium {
+  --prio-accent: #2563eb;
+  --prio-bg: #eff6ff;
+  --prio-border: #93c5fd;
+  --prio-shadow: rgba(37,99,235,.18);
+}
+
+.seo-issue-active {
+  outline: 2px solid var(--prio-accent);
+  outline-offset: 2px;
+  box-shadow: 0 8px 22px var(--prio-shadow);
+}
+.seo-issue-active::before {
+  content: '✓';
+  position: absolute;
+  left: 8px; bottom: 8px;
+  font-size: 11px; font-weight: 800;
+  color: white;
+  background: var(--prio-accent);
+  border-radius: 50%;
+  width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2;
+}
+
+.seo-issue-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2px;
+  position: relative; z-index: 1;
+}
+.seo-issue-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+.seo-issue-prio-badge {
+  font-size: 9.5px;
+  font-weight: 800;
+  background: var(--prio-accent);
+  color: white;
+  padding: 3px 9px;
+  border-radius: 10px;
+  letter-spacing: .6px;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px var(--prio-shadow);
+}
+.seo-issue-count {
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--prio-accent);
+  line-height: 1.05;
+  letter-spacing: -.8px;
+  font-variant-numeric: tabular-nums;
+  position: relative; z-index: 1;
+  margin-top: 2px;
+}
+.seo-issue-count-lbl {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--seo-slate);
+  opacity: .75;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 6px;
+}
+.seo-issue-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.35;
+  position: relative; z-index: 1;
+}
+.seo-issue-fix {
+  font-size: 11.5px;
+  color: var(--seo-slate);
+  line-height: 1.45;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(15,23,42,.12);
+  opacity: .9;
+  position: relative; z-index: 1;
 }
 
 /* admin collapsible */
@@ -696,6 +1574,59 @@ a.seo-kpi-cell:hover { transform: translateY(-2px); border-color: var(--border-s
     return "⏸ Idle";
   }
 
+  /* ═══ Phase S3 — rate/ETA rolling sample window ═══ */
+  const phase1Stats = { samples: [] };
+  const phase2Stats = { samples: [] };
+
+  function pushSample(stats, done, running) {
+    if (!running) { stats.samples = []; return; }
+    const now = performance.now();
+    stats.samples.push({ t: now, done });
+    if (stats.samples.length > 8) stats.samples.shift();
+  }
+
+  function calcRateETA(stats, done, total) {
+    if (stats.samples.length < 2) return { rate: 0, etaSec: null };
+    const first = stats.samples[0];
+    const last = stats.samples[stats.samples.length - 1];
+    const dT = (last.t - first.t) / 1000;
+    const dDone = last.done - first.done;
+    if (dT < 0.4 || dDone <= 0) return { rate: 0, etaSec: null };
+    const rate = dDone / dT;
+    const remaining = Math.max(0, total - done);
+    const etaSec = rate > 0 ? remaining / rate : null;
+    return { rate, etaSec };
+  }
+
+  function fmtRate(r) {
+    if (!r) return "—";
+    if (r >= 10) return Math.round(r).toString();
+    return r.toFixed(1);
+  }
+  function fmtETA(sec) {
+    if (sec === null || !isFinite(sec) || sec < 0) return "—";
+    if (sec < 1) return "<1s";
+    if (sec < 60) return Math.round(sec) + "s";
+    if (sec < 3600) {
+      const m = Math.floor(sec / 60);
+      const s = Math.round(sec % 60);
+      return s > 0 ? m + "m " + s + "s" : m + "m";
+    }
+    const h = Math.floor(sec / 3600);
+    const m = Math.round((sec % 3600) / 60);
+    return m > 0 ? h + "h " + m + "m" : h + "h";
+  }
+
+  function setCardState(cardId, running, success, hasFailed) {
+    const card = $(cardId);
+    if (!card) return;
+    card.classList.remove("seo-pipe-running", "seo-pipe-done", "seo-pipe-failed", "seo-pipe-idle");
+    if (running) card.classList.add("seo-pipe-running");
+    else if (hasFailed) card.classList.add("seo-pipe-failed");
+    else if (success) card.classList.add("seo-pipe-done");
+    else card.classList.add("seo-pipe-idle");
+  }
+
   async function tick() {
     try {
       const r = await fetch("{{ url_for('seo_status') }}", { cache: "no-store" });
@@ -704,7 +1635,7 @@ a.seo-kpi-cell:hover { transform: translateY(-2px); border-color: var(--border-s
       const ls = data.link_state || {};
 
       // Phase 1 - crawl
-      $("seo-state-msg") && ($("seo-state-msg").textContent = s.message || "");
+      $("seo-state-msg") && ($("seo-state-msg").textContent = s.message || "—");
       $("seo-state-done") && ($("seo-state-done").textContent = s.done || 0);
       $("seo-state-total") && ($("seo-state-total").textContent = s.total || 0);
       $("seo-state-success") && ($("seo-state-success").textContent = s.success || 0);
@@ -715,6 +1646,13 @@ a.seo-kpi-cell:hover { transform: translateY(-2px); border-color: var(--border-s
       $("seo-progress-pct") && ($("seo-progress-pct").textContent = sPct + "%");
       const crawlRunning = s.status === "fetching_sitemap" || s.status === "crawling";
       $("phase1-badge") && ($("phase1-badge").textContent = badgeFor(crawlRunning, s.status === "done", s.status));
+      setCardState("pipe-phase1", crawlRunning, s.status === "done", s.status === "failed");
+
+      // Phase 1 - rate + ETA
+      pushSample(phase1Stats, sDone, crawlRunning);
+      const rateETA1 = calcRateETA(phase1Stats, sDone, sTotal);
+      $("phase1-rate") && ($("phase1-rate").textContent = fmtRate(rateETA1.rate));
+      $("phase1-eta") && ($("phase1-eta").textContent = crawlRunning ? fmtETA(rateETA1.etaSec) : "—");
 
       // Phase 2 - link check
       $("link-checked") && ($("link-checked").textContent = ls.checked || 0);
@@ -725,6 +1663,13 @@ a.seo-kpi-cell:hover { transform: translateY(-2px); border-color: var(--border-s
       $("link-progress-fill") && ($("link-progress-fill").style.width = lPct + "%");
       $("link-pct") && ($("link-pct").textContent = lPct + "%");
       $("phase2-badge") && ($("phase2-badge").textContent = badgeFor(ls.running, ls.checked > 0, null));
+      setCardState("pipe-phase2", ls.running, ls.checked > 0 && !ls.running, false);
+
+      // Phase 2 - rate + ETA
+      pushSample(phase2Stats, lDone, ls.running);
+      const rateETA2 = calcRateETA(phase2Stats, lDone, lTotal);
+      $("phase2-rate") && ($("phase2-rate").textContent = fmtRate(rateETA2.rate));
+      $("phase2-eta") && ($("phase2-eta").textContent = ls.running ? fmtETA(rateETA2.etaSec) : "—");
 
       // Card visibility
       const card = $("seo-progress-card");
@@ -746,9 +1691,109 @@ a.seo-kpi-cell:hover { transform: translateY(-2px); border-color: var(--border-s
 
   const initialCrawl = "{{ state.status }}";
   const initialLinkRunning = {{ 'true' if link_state and link_state.running else 'false' }};
-  if (initialCrawl === "fetching_sitemap" || initialCrawl === "crawling" || initialLinkRunning) {
+
+  function startNormalPolling() {
+    if (timer) return;
     timer = setInterval(tick, 1500);
   }
+
+  if (initialCrawl === "fetching_sitemap" || initialCrawl === "crawling" || initialLinkRunning) {
+    startNormalPolling();
+  } else {
+    /* Defensive warmup: poll 5 tick × 1.5s sau page load để bắt status
+       race-condition khi user vừa bấm "Crawl" — backend đã pre-set state
+       nhưng thread có thể chưa kịp set total/message. Nếu phát hiện running
+       → upgrade lên polling thường, không cần F5. */
+    let warmupTicks = 0;
+    const warmup = setInterval(async () => {
+      warmupTicks++;
+      try {
+        const r = await fetch("{{ url_for('seo_status') }}", { cache: "no-store" });
+        const data = await r.json();
+        const running = (data.state && (data.state.status === "fetching_sitemap" || data.state.status === "crawling"))
+                     || (data.link_state && data.link_state.running);
+        if (running) {
+          clearInterval(warmup);
+          startNormalPolling();
+          tick();
+        } else if (warmupTicks >= 5) {
+          clearInterval(warmup);
+        }
+      } catch (e) {
+        if (warmupTicks >= 5) clearInterval(warmup);
+      }
+    }, 1500);
+  }
+
+  /* ═══ Phase S2 — KPI count-up animation (easeOutCubic ~800ms) ═══ */
+  function animateCountUp(el, target, duration) {
+    duration = duration || 800;
+    const isFloat = target % 1 !== 0;
+    const decimals = isFloat ? 1 : 0;
+    const startTime = performance.now();
+    function frame(now) {
+      const progress = Math.min((now - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const value = target * eased;
+      el.textContent = isFloat ? value.toFixed(decimals) : Math.floor(value);
+      if (progress < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        el.textContent = isFloat ? target.toFixed(decimals) : target;
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function runCountUps() {
+    document.querySelectorAll('.seo-kpi-row [data-target]').forEach(function (el) {
+      const target = parseFloat(el.dataset.target);
+      if (!isNaN(target)) animateCountUp(el, target);
+    });
+  }
+
+  if ('IntersectionObserver' in window) {
+    const row = document.querySelector('.seo-kpi-row');
+    if (row) {
+      const io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { runCountUps(); io.disconnect(); }
+        });
+      }, { threshold: 0.2 });
+      io.observe(row);
+    }
+  } else {
+    runCountUps();
+  }
+
+  /* ═══ Phase S5 — Copy URL clipboard action ═══ */
+  document.querySelectorAll('.seo-copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const url = btn.dataset.url || '';
+      if (!url) return;
+      const fallback = function () {
+        const ta = document.createElement('textarea');
+        ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+      };
+      const showCopied = function () {
+        const original = btn.innerHTML;
+        btn.classList.add('copied');
+        btn.innerHTML = '✓';
+        setTimeout(function () {
+          btn.classList.remove('copied');
+          btn.innerHTML = original;
+        }, 1100);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(showCopied).catch(function () { fallback(); showCopied(); });
+      } else {
+        fallback(); showCopied();
+      }
+    });
+  });
 })();
 </script>
 {% endblock %}
