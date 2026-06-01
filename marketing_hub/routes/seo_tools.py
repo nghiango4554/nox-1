@@ -143,7 +143,7 @@ def seo_title_meta_page():
         issue_filter = None
     if sort not in ("score_asc", "n_issues_desc", "url"):
         sort = "score_asc"
-    if sync_filter not in ("synced", "unsynced"):
+    if sync_filter not in ("synced", "unsynced", "error"):
         sync_filter = None
     items = seo_mod.list_title_meta_pages(
         url_type=url_type, issue_filter=issue_filter, sort=sort, limit=2000,
@@ -151,12 +151,14 @@ def seo_title_meta_page():
     )
     summary = seo_mod.title_meta_summary()
     fix_state = seo_mod.title_meta_fix_state()
+    tiers = seo_mod.load_tiers()
     return render_template(
         "seo_title_meta.html",
         items=items, summary=summary, fix_state=fix_state,
         url_type=url_type, issue_filter=issue_filter, sort=sort,
         sync_filter=sync_filter,
         issue_labels=seo_mod.TITLE_META_LABELS,
+        tiers=tiers,
     )
 
 
@@ -170,6 +172,19 @@ def seo_title_meta_fix():
     try:
         result = seo_mod.fix_title_meta_for_url(url,
             force_title=force_title, force_meta=force_meta)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Lỗi server: {e}"}), 500
+    return jsonify(result), 200 if result.get("ok") else 400
+
+
+def seo_title_meta_preview():
+    """Gen 3 title + 3 meta cho 1 URL (KHÔNG PUT) → frontend cho vợ click chọn 1/3 + 1/3."""
+    payload = request.get_json(silent=True) or request.form
+    url = (payload.get("url") or "").strip()
+    if not url:
+        return jsonify({"ok": False, "error": "Thiếu url"}), 400
+    try:
+        result = seo_mod.preview_title_meta_for_url(url)
     except Exception as e:
         return jsonify({"ok": False, "error": f"Lỗi server: {e}"}), 500
     return jsonify(result), 200 if result.get("ok") else 400
@@ -197,7 +212,7 @@ def seo_title_meta_fix_all_start():
         url_type = None
     if issue_filter and issue_filter not in seo_mod.ALL_TITLE_META_CODES:
         issue_filter = None
-    if sync_filter not in ("synced", "unsynced"):
+    if sync_filter not in ("synced", "unsynced", "error"):
         sync_filter = None
     started = seo_mod.start_title_meta_fix_all_async(
         url_type=url_type, issue_filter=issue_filter, sync_filter=sync_filter)
@@ -215,6 +230,91 @@ def seo_title_meta_fix_all_stop():
 
 def seo_title_meta_fix_all_status():
     return jsonify(seo_mod.title_meta_fix_state())
+
+
+def seo_title_meta_tier_products():
+    """Lấy SP theo tầng (collection handles) cho bảng phân tầng.
+    Body: {handles:[...], mode:'issues'|'all'}."""
+    payload = request.get_json(silent=True) or {}
+    handles = payload.get("handles") or []
+    if isinstance(handles, str):
+        handles = [h.strip() for h in handles.split(",") if h.strip()]
+    handles = [h for h in handles if isinstance(h, str) and h]
+    mode = (payload.get("mode") or "issues").strip()
+    if mode not in ("issues", "all"):
+        mode = "issues"
+    if not handles:
+        return jsonify({"ok": False, "error": "Thiếu handles"}), 400
+    try:
+        items = seo_mod.list_tier_products(handles, mode=mode)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Lỗi server: {e}"}), 500
+    return jsonify({"ok": True, "items": items, "count": len(items), "mode": mode})
+
+
+def seo_title_meta_regen_all():
+    """Gen lại TẤT CẢ SP product có lỗi title/meta — GỒM cả SP đã sync (không skip).
+    Áp prompt spec-inject mới cho toàn bộ. Tự dừng khi hết quota AI."""
+    try:
+        pages = seo_mod.list_title_meta_pages(url_type="product", limit=100000)
+        urls = [p["url"] for p in pages]
+        res = seo_mod.start_title_meta_fix_urls_async(urls)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Lỗi server: {e}"}), 500
+    return jsonify(res), 200 if res.get("ok") else 409
+
+
+def seo_title_meta_regen_remaining():
+    """Gen TIẾP các SP product lỗi CHƯA gen lần nào (url không nằm trong synced set).
+    Dùng để tiếp tục sau khi quota dừng — không gen lại SP đã xong."""
+    try:
+        pages = seo_mod.list_title_meta_pages(url_type="product", limit=100000)
+        synced = seo_mod.synced_title_meta_urls()
+        urls = [p["url"] for p in pages if p["url"] not in synced]
+        res = seo_mod.start_title_meta_fix_urls_async(urls)
+        res.setdefault("remaining", len(urls))
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Lỗi server: {e}"}), 500
+    return jsonify(res), 200 if res.get("ok") else 409
+
+
+def seo_title_meta_regen_dual():
+    """Dual-AI: gen SP product lỗi CHƯA gen (unsynced) bằng Codex + Claude SONG SONG.
+    Chỉ chạy khi cả 2 provider khả dụng (guard trong seo_mod)."""
+    try:
+        pages = seo_mod.list_title_meta_pages(url_type="product", limit=100000)
+        synced = seo_mod.synced_title_meta_urls()
+        urls = [p["url"] for p in pages if p["url"] not in synced]
+        res = seo_mod.start_title_meta_fix_dual_async(urls)
+        res.setdefault("remaining", len(urls))
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Lỗi server: {e}"}), 500
+    return jsonify(res), 200 if res.get("ok") else 409
+
+
+def seo_title_meta_tier_progress():
+    """Tiến độ fix title/meta theo từng tầng (cho badge % trên ô tầng)."""
+    try:
+        return jsonify({"ok": True, **seo_mod.tier_progress()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)[:200], "tiers": []}), 500
+
+
+def seo_title_meta_fix_filtered():
+    """Gen+Sync thẳng Haravan cho tập SP đã lọc (phân tầng). Không duyệt.
+    Body: {urls:[...]}."""
+    payload = request.get_json(silent=True) or {}
+    urls = payload.get("urls") or []
+    if not isinstance(urls, list):
+        return jsonify({"ok": False, "error": "urls phải là list"}), 400
+    urls = [u for u in urls if isinstance(u, str) and u]
+    if len(urls) > 800:
+        return jsonify({"ok": False, "error": f"Quá nhiều SP ({len(urls)}), giới hạn 800/lần."}), 400
+    try:
+        res = seo_mod.start_title_meta_fix_urls_async(urls)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Lỗi server: {e}"}), 500
+    return jsonify(res), 200 if res.get("ok") else 409
 
 
 def seo_title_meta_gen_map():
@@ -596,11 +696,18 @@ def register(app):
     # Title/Meta (7)
     app.add_url_rule("/seo/title-meta", "seo_title_meta_page", seo_title_meta_page)
     app.add_url_rule("/seo/title-meta/fix", "seo_title_meta_fix", seo_title_meta_fix, methods=["POST"])
+    app.add_url_rule("/seo/title-meta/preview", "seo_title_meta_preview", seo_title_meta_preview, methods=["POST"])
     app.add_url_rule("/seo/title-meta/regen", "seo_title_meta_regen", seo_title_meta_regen, methods=["POST"])
     app.add_url_rule("/seo/title-meta/fix-all/start", "seo_title_meta_fix_all_start", seo_title_meta_fix_all_start, methods=["POST"])
     app.add_url_rule("/seo/title-meta/fix-all/stop", "seo_title_meta_fix_all_stop", seo_title_meta_fix_all_stop, methods=["POST"])
     app.add_url_rule("/api/seo/title-meta/fix-all/status", "seo_title_meta_fix_all_status", seo_title_meta_fix_all_status)
     app.add_url_rule("/api/seo/title-meta/gen-map", "seo_title_meta_gen_map", seo_title_meta_gen_map)
+    app.add_url_rule("/seo/title-meta/tier-products", "seo_title_meta_tier_products", seo_title_meta_tier_products, methods=["POST"])
+    app.add_url_rule("/api/seo/title-meta/tier-progress", "seo_title_meta_tier_progress", seo_title_meta_tier_progress)
+    app.add_url_rule("/seo/title-meta/regen-all", "seo_title_meta_regen_all", seo_title_meta_regen_all, methods=["POST"])
+    app.add_url_rule("/seo/title-meta/regen-remaining", "seo_title_meta_regen_remaining", seo_title_meta_regen_remaining, methods=["POST"])
+    app.add_url_rule("/seo/title-meta/regen-dual", "seo_title_meta_regen_dual", seo_title_meta_regen_dual, methods=["POST"])
+    app.add_url_rule("/seo/title-meta/fix-filtered", "seo_title_meta_fix_filtered", seo_title_meta_fix_filtered, methods=["POST"])
 
     # GSC (3)
     app.add_url_rule("/seo/gsc", "seo_gsc_page", seo_gsc_page)

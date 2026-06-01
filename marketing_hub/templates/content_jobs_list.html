@@ -315,6 +315,9 @@
           {% if j.product_title %}
           <div class="muted" style="font-size:11px;margin-top:2px">{{ j.product_title[:120] }}</div>
           {% endif %}
+          {% if j.spec_conflict_json %}
+          <div style="margin-top:3px"><span style="display:inline-block;padding:1px 7px;border-radius:7px;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:10.5px;font-weight:600" title="Thông số mô tả gốc lệch với web — mở chi tiết để verify">⚠️ Spec lệch</span></div>
+          {% endif %}
           {% if j.error %}
           <div style="color:#f87171;font-size:11px;margin-top:2px">⚠️ {{ j.error[:200] }}</div>
           {% endif %}

@@ -94,7 +94,7 @@ TEMPLATE_DESCRIPTIONS = {
 }
 TEMPLATE_BLOCKS = {
     "A": """H2: [Tên SP]
-  Intro 2-4 câu + [**Sintech**](https://sintech.vn).
+  Intro đúng 3 câu (1 đoạn) + [**Sintech**](https://sintech.vn).
 H2: Điểm nổi bật của [tên SP]
   (Đoạn dẫn ≥2 câu)
   H3: Thiết kế & cảm giác sử dụng
@@ -108,7 +108,7 @@ H2: Vì sao nên mua tại Sintech (đúng 2 đoạn × 2 câu)
 H2: Câu hỏi thường gặp về [tên SP] (mỗi câu hỏi là H3, 4-6 câu)
 [Outro] [Author signature] [Outline table]""",
     "B": """H2: [Tên SP]
-  Intro 2-4 câu + [**Sintech**](https://sintech.vn).
+  Intro đúng 3 câu (1 đoạn) + [**Sintech**](https://sintech.vn).
 H2: Cảm giác đầu tiên khi mở hộp
 H2: Trên bàn làm việc / setup gaming
   (Đoạn dẫn ≥2 câu)
@@ -124,7 +124,7 @@ H2: Vì sao nên mua tại Sintech (đúng 2 đoạn × 2 câu)
 H2: Câu hỏi thường gặp về [tên SP] (mỗi câu hỏi là H3, 4-6 câu)
 [Outro] [Author signature] [Outline table]""",
     "C": """H2: [Tên SP]
-  Intro 2-4 câu + [**Sintech**](https://sintech.vn).
+  Intro đúng 3 câu (1 đoạn) + [**Sintech**](https://sintech.vn).
 H2: [Tên SP] giải quyết vấn đề gì
 H2: So với mặt bằng chung trong tầm giá
   (Đoạn dẫn ≥2 câu)
@@ -137,7 +137,7 @@ H2: Vì sao nên mua tại Sintech (đúng 2 đoạn × 2 câu)
 H2: Câu hỏi thường gặp về [tên SP] (mỗi câu hỏi là H3, 4-6 câu)
 [Outro] [Author signature] [Outline table]""",
     "D": """H2: [Tên SP]
-  Intro 2-4 câu + [**Sintech**](https://sintech.vn).
+  Intro đúng 3 câu (1 đoạn) + [**Sintech**](https://sintech.vn).
 H2: [Tên SP] dành cho cấu hình nào
 H2: Cách chọn [loại SP] không sai bước
   (Đoạn dẫn ≥2 câu)
@@ -222,7 +222,7 @@ Trả về **1 JSON object duy nhất** với schema chính xác:
   "metas": ["meta 1 (140-160 ký tự, có CTA HOA)", "meta 2", "meta 3"],
   "keywords": "keyword chính, keyword phụ 1, keyword phụ 2, ...",
   "outline_md": "Bảng Markdown 2 cột (| Cấp heading | Nội dung |) chỉ liệt kê H2/H3 đã dùng trong body.",
-  "body_md": "TOÀN BỘ bài viết Markdown — KHÔNG H1, chỉ H2 và H3. H2 đầu tiên là TÊN SẢN PHẨM, nằm TRÊN intro. Intro 2-4 câu sau H2 đầu, có CTA [**Sintech**](https://sintech.vn). Body có đủ 3-6 internal link dạng [**anchor**](url) — KHÔNG dùng **[anchor](url)**. Section 'Vì sao nên mua tại Sintech' đúng 2 đoạn × 2 câu, BẮT BUỘC chèn nguyên văn câu chính sách. Outro 2-3 câu mở bằng 'Tóm lại,/Nói ngắn gọn,/Sau tất cả,/Kết lại,' + có [**Sintech**](https://sintech.vn). Bài tổng 800-2700 từ. Public dùng 'bạn', KHÔNG dùng 'anh'."
+  "body_md": "TOÀN BỘ bài viết Markdown — KHÔNG H1, chỉ H2 và H3. H2 đầu tiên là TÊN SẢN PHẨM, nằm TRÊN intro. Intro đúng 3 câu (1 đoạn) sau H2 đầu, có CTA [**Sintech**](https://sintech.vn). Body có đủ 3-6 internal link dạng [**anchor**](url) — KHÔNG dùng **[anchor](url)**. Section 'Vì sao nên mua tại Sintech' đúng 2 đoạn × 2 câu, BẮT BUỘC chèn nguyên văn câu chính sách. Outro 2-3 câu mở bằng 'Tóm lại,/Nói ngắn gọn,/Sau tất cả,/Kết lại,' + có [**Sintech**](https://sintech.vn). Bài tổng 800-2700 từ. Public dùng 'bạn', KHÔNG dùng 'anh'."
 }}
 
 QUAN TRỌNG:
@@ -289,6 +289,18 @@ def _build_user_prompt(product_info: dict) -> str:
             f"Cấu trúc cụ thể PHẢI tuân theo:\n```\n{template_block}\n```\n"
             f"TUYỆT ĐỐI KHÔNG đổi sang template khác. Mọi H2/H3 phải đúng theo cấu trúc trên.\n"
         )
+    comp = (product_info.get("competitor_headings") or "").strip()
+    if comp:
+        # giới hạn ~25 dòng để khỏi phình prompt
+        comp_lines = comp.splitlines()[:25]
+        user_prompt += (
+            "\n**🔍 HEADING ĐỐI THỦ (SERP top — CHỈ để hiểu nhu cầu khách + tìm khoảng trống, "
+            "TUYỆT ĐỐI KHÔNG copy cấu trúc/câu chữ):**\n"
+            + "\n".join(comp_lines)
+            + "\n→ Dùng để: đảm bảo bài cover các câu hỏi mua hàng thật khách quan tâm, "
+            "tìm góc Sintech làm tốt hơn. KHÔNG bê nguyên bộ heading này.\n"
+        )
+
     if product_info.get("usp"):
         user_prompt += f"**USP nhấn mạnh:** {product_info['usp']}\n"
 
@@ -353,7 +365,10 @@ def _build_user_prompt(product_info: dict) -> str:
         "12. **BẮT BUỘC author signature CUỐI bài** (sau outro paragraph), nguyên văn in nghiêng:\n"
         "    *Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Q7, TP.HCM.*\n"
         "13. **FAQ section**: Section 'Câu hỏi thường gặp' là H2, **mỗi câu hỏi BẮT BUỘC là H3** (`### [câu hỏi]?`). KHÔNG để câu hỏi dạng paragraph thường hoặc bold. Câu trả lời 2-4 câu paragraph ngay sau H3.\n"
-        "14. Output 1 JSON object đúng schema {analysis_md, titles, metas, keywords, outline_md, body_md}, KHÔNG markdown code fence."
+        "14. Output 1 JSON object đúng schema {analysis_md, titles, metas, keywords, outline_md, body_md}, KHÔNG markdown code fence.\n"
+        "15. **BẢNG**: bài SP có **1-3 bảng** Markdown. Nếu SP có spec số (dung lượng/tốc độ/kích thước/cổng…) BẮT BUỘC có ≥1 bảng (vd 'Thông số nổi bật' hoặc 'Chọn theo nhu cầu'). **Trước mỗi bảng ≥2 câu dẫn, sau mỗi bảng 2-3 câu tóm tắt.** KHÔNG để H2/section vừa mở đã là bảng/bullet ngay. Chỉ bỏ bảng khi SP gần như không có spec số.\n"
+        "16. **Banlist body** (cấm tuyệt đối): bền bỉ, đẹp mắt, vượt trội, đỉnh cao, đáng mua nhất, tốt nhất, tuyệt đối, cho phép, Free ship, workflow, lọc model, range sản phẩm, search intent, category này. **KHÔNG dấu chấm phẩy `;`**. KHÔNG câu lộ nội bộ kiểu 'Collection hiện có…/Range sản phẩm…/Theo research nội bộ…'.\n"
+        "17. **Tên linh kiện** viết chuẩn: Cpu/Ram/Main/Card/Case/Vga/Fan (in hoa chữ đầu); SSD/NVME/PCIE/RTX/HDMI/USB-C/4K/8GB in hoa. Thuật ngữ lạ thêm giải thích ngắn trong ngoặc (vd 'TBW (tổng dung lượng ghi bảo hành)')."
     )
     return user_prompt
 

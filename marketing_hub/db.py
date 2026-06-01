@@ -197,6 +197,7 @@ CREATE TABLE IF NOT EXISTS content_jobs (
     ai_body_html TEXT,
     internal_links_json TEXT,          -- [{"url":..., "anchor":..., "score":...}, ...]
     ai_stats_json TEXT,                -- {"word_count":..., "model":..., "cost":...}
+    spec_conflict_json TEXT,           -- [{"field","body","web"}] spec gốc LỆCH spec web (chờ vợ verify)
     ai_generated_at TEXT,
     -- người dùng chỉnh sửa & chọn
     selected_title_idx INTEGER,        -- 0|1|2 (radio)
@@ -292,6 +293,20 @@ CREATE TABLE IF NOT EXISTS seo_schema_history (
     UNIQUE(week_no, year)
 );
 CREATE INDEX IF NOT EXISTS idx_seo_schema_history_week ON seo_schema_history(year, week_no);
+
+-- Map collection (handle) → product, sync 1 lần từ Haravan API.
+-- Dùng cho phân tầng SP ở /seo/title-meta (Tầng 1→2→3 = collection).
+CREATE TABLE IF NOT EXISTS collection_products (
+    collection_handle TEXT NOT NULL,
+    product_id INTEGER NOT NULL,
+    product_handle TEXT,
+    product_title TEXT,
+    product_url TEXT,
+    synced_at TEXT,
+    PRIMARY KEY (collection_handle, product_id)
+);
+CREATE INDEX IF NOT EXISTS idx_colprod_handle ON collection_products(collection_handle);
+CREATE INDEX IF NOT EXISTS idx_colprod_url ON collection_products(product_url);
 """
 
 
@@ -363,6 +378,8 @@ def init_db():
         conn.execute("ALTER TABLE content_jobs ADD COLUMN ai_analysis_md TEXT")
     if "is_money_product" not in cj_cols:
         conn.execute("ALTER TABLE content_jobs ADD COLUMN is_money_product INTEGER DEFAULT 0")
+    if "spec_conflict_json" not in cj_cols:
+        conn.execute("ALTER TABLE content_jobs ADD COLUMN spec_conflict_json TEXT")
     # Default sync_meta_title + sync_meta_desc = 1 (em đã chốt sync hết, không cần tick)
     conn.execute("UPDATE content_jobs SET sync_meta_title=1, sync_meta_desc=1 WHERE sync_meta_title=0 OR sync_meta_desc=0")
 
@@ -2624,3 +2641,100 @@ def seo_schema_missing(missing: str = "product", url_type: str = None, limit: in
     rows = conn.execute(sql, args).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ─────────── Collection → Product map (phân tầng /seo/title-meta) ───────────
+
+def collection_products_replace(collection_handle: str, products: list, synced_at: str = None):
+    """Xóa + ghi lại toàn bộ SP của 1 collection. products = list dict Haravan
+    (cần id; handle/title optional). Idempotent per collection."""
+    if synced_at is None:
+        synced_at = datetime.now().isoformat(timespec="seconds")
+    conn = get_conn()
+    conn.execute("DELETE FROM collection_products WHERE collection_handle=?", (collection_handle,))
+    rows = []
+    for p in products:
+        pid = p.get("id")
+        if pid is None:
+            continue
+        h = p.get("handle")
+        url = f"https://sintech.vn/products/{h}" if h else None
+        rows.append((collection_handle, pid, h, p.get("title"), url, synced_at))
+    if rows:
+        conn.executemany(
+            "INSERT OR REPLACE INTO collection_products "
+            "(collection_handle, product_id, product_handle, product_title, product_url, synced_at) "
+            "VALUES (?,?,?,?,?,?)", rows)
+    conn.commit()
+    conn.close()
+    return len(rows)
+
+
+def collection_products_urls(handles) -> set:
+    """Set product_url (distinct) thuộc bất kỳ collection nào trong `handles`."""
+    handles = [h for h in (handles or []) if h]
+    if not handles:
+        return set()
+    conn = get_conn()
+    ph = ",".join("?" * len(handles))
+    rows = conn.execute(
+        f"SELECT DISTINCT product_url FROM collection_products "
+        f"WHERE collection_handle IN ({ph}) AND product_url IS NOT NULL", handles).fetchall()
+    conn.close()
+    return {r["product_url"] for r in rows}
+
+
+def collection_products_rows(handles) -> list:
+    """List dict {product_url, product_handle, product_title} distinct cho handles."""
+    handles = [h for h in (handles or []) if h]
+    if not handles:
+        return []
+    conn = get_conn()
+    ph = ",".join("?" * len(handles))
+    rows = conn.execute(
+        f"SELECT product_url, MAX(product_handle) handle, MAX(product_title) title "
+        f"FROM collection_products WHERE collection_handle IN ({ph}) AND product_url IS NOT NULL "
+        f"GROUP BY product_url", handles).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def collection_products_handle_counts() -> dict:
+    """handle → số SP đã sync."""
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT collection_handle, COUNT(*) n FROM collection_products GROUP BY collection_handle").fetchall()
+    conn.close()
+    return {r["collection_handle"]: r["n"] for r in rows}
+
+
+def collection_products_stats() -> dict:
+    conn = get_conn()
+    r = conn.execute(
+        "SELECT COUNT(DISTINCT collection_handle) n_col, COUNT(*) n_rows, "
+        "COUNT(DISTINCT product_url) n_products, MAX(synced_at) last_sync "
+        "FROM collection_products").fetchone()
+    conn.close()
+    return {"collections": r["n_col"] or 0, "rows": r["n_rows"] or 0,
+            "products": r["n_products"] or 0, "last_sync": r["last_sync"]}
+
+
+def seo_pages_by_urls(urls) -> dict:
+    """url → dict (cột title/meta/score/issues...) cho danh sách urls. Phục vụ
+    chế độ 'xem tất cả SP' (kể cả SP không có lỗi title/meta)."""
+    urls = [u for u in (urls or []) if u]
+    if not urls:
+        return {}
+    conn = get_conn()
+    out = {}
+    CH = 400
+    for i in range(0, len(urls), CH):
+        chunk = urls[i:i + CH]
+        ph = ",".join("?" * len(chunk))
+        rows = conn.execute(
+            f"SELECT id, url, url_type, title, title_len, meta_desc, meta_desc_len, "
+            f"score, issues, last_crawled FROM seo_pages WHERE url IN ({ph})", chunk).fetchall()
+        for r in rows:
+            out[r["url"]] = dict(r)
+    conn.close()
+    return out

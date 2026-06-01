@@ -23,6 +23,100 @@
   </p>
 </section>
 
+{# ───── PHÂN TẦNG SẢN PHẨM (Tầng 1 → 2 → 3) ───── #}
+<style>
+  .tier-grid { display:grid; gap:10px;
+    grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); }
+  .tier-card {
+    text-align:left; cursor:pointer; padding:12px 14px; border-radius:12px;
+    border:1px solid rgba(148,163,184,0.22); background:rgba(148,163,184,0.06);
+    transition:transform .12s, box-shadow .12s, border-color .12s; color:inherit;
+    display:flex; flex-direction:column; gap:4px; }
+  .tier-card:hover { transform:translateY(-3px); border-color:#0ea5e9;
+    box-shadow:0 6px 18px rgba(14,165,233,0.18); }
+  .tier-card.t1 { background:linear-gradient(135deg, rgba(99,102,241,0.10), rgba(14,165,233,0.06)); }
+  .tier-card .tc-name { font-weight:700; font-size:14px; line-height:1.25; }
+  .tier-card .tc-sub  { font-size:11px; color:var(--text-muted, #94a3b8); }
+  .tier-card .tc-icon { font-size:20px; }
+  .tier-card.active { border-color:#22c55e; box-shadow:0 0 0 2px rgba(34,197,94,0.35); }
+  .tier-prog { height:6px; border-radius:4px; background:rgba(148,163,184,0.22);
+    overflow:hidden; margin-top:6px; }
+  .tier-prog-bar { height:100%; border-radius:4px; transition:width .4s ease; }
+  .tier-prog-bar.green { background:linear-gradient(90deg,#22c55e,#16a34a); }
+  .tier-prog-bar.amber { background:linear-gradient(90deg,#facc15,#f59e0b); }
+  .tier-prog-bar.red   { background:linear-gradient(90deg,#f87171,#ef4444); }
+  .tier-prog-label { font-size:10.5px; color:var(--text-muted,#94a3b8); margin-top:3px; display:block; }
+  .tier-prog-label.clean { color:#34d399; font-weight:600; }
+  .tier-bc { font-size:13px; }
+  .tier-bc a { color:#0ea5e9; cursor:pointer; text-decoration:none; }
+  .tier-bc a:hover { text-decoration:underline; }
+  .tm-mode-toggle { display:inline-flex; border:1px solid rgba(148,163,184,0.3); border-radius:8px; overflow:hidden; }
+  .tm-mode-toggle button { border:0; background:transparent; padding:6px 12px; cursor:pointer; font-size:12px; color:var(--text-muted); }
+  .tm-mode-toggle button.on { background:#0ea5e9; color:#fff; font-weight:600; }
+</style>
+
+<section class="card" id="tier-nav" style="margin-top:14px">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+    <strong>🗂️ Phân tầng sản phẩm theo collection</strong>
+    <span class="tier-bc muted" id="tier-breadcrumb"></span>
+    <span style="flex:1"></span>
+    <button class="btn btn-sm btn-ghost" id="tier-back-btn" onclick="tierGoTop()" style="display:none">⟲ Về Tầng 1</button>
+  </div>
+  <div id="tier-grid" class="tier-grid"></div>
+  <p class="muted" id="tier-hint" style="margin:10px 0 0;font-size:12px">
+    Bấm 1 ô <strong>Tầng 1</strong> → mở các ô <strong>Tầng 2</strong> → bấm 1 ô Tầng 2 để nạp toàn bộ SP của tầng vào bảng dưới + bộ lọc.
+  </p>
+</section>
+
+{# Thanh context khi đã mở 1 Tầng 2: bộ lọc T3 + toggle + Gen/Sync #}
+<section class="card" id="tier-context" style="margin-top:14px;display:none;border-left:3px solid #0ea5e9">
+  <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+    <strong id="tier-ctx-title" style="font-size:14px">—</strong>
+
+    <label class="muted" style="font-size:13px;margin-left:6px">Tầng 3:</label>
+    <select id="tier-t3-filter" onchange="tierApplyFilter()">
+      <option value="">Tất cả Tầng 3</option>
+    </select>
+
+    <label class="muted" style="font-size:13px">Trạng thái:</label>
+    <select id="tier-status-filter" onchange="tierRender()">
+      <option value="">Tất cả</option>
+      <option value="issue">⚠️ Có lỗi title/meta</option>
+      <option value="clean">✅ Không lỗi</option>
+      <option value="unsynced">⬜ Chưa sync</option>
+      <option value="synced">✅ Đã sync</option>
+    </select>
+
+    <label class="muted" style="font-size:13px">Sắp xếp:</label>
+    <select id="tier-sort" onchange="tierRender()">
+      <option value="score_asc">↑ Điểm thấp trước</option>
+      <option value="n_issues_desc">Nhiều lỗi trước</option>
+      <option value="url">🔤 URL A→Z</option>
+    </select>
+
+    <label class="muted" style="font-size:13px">Tìm:</label>
+    <input id="tier-search" type="text" placeholder="URL / title..."
+           oninput="tierApplyFilter()" style="padding:6px 10px;font-size:12px;min-width:150px">
+
+    <span class="tm-mode-toggle">
+      <button id="tier-mode-issues" onclick="tierSetMode('issues')">⚠️ Chỉ SP lỗi</button>
+      <button id="tier-mode-all" class="on" onclick="tierSetMode('all')">📦 Tất cả SP</button>
+    </span>
+
+    <span style="margin-left:4px;padding:6px 12px;background:rgba(34,197,94,0.14);border-radius:8px;color:#22c55e;font-weight:600;font-size:13px;white-space:nowrap">
+      📦 <span id="tier-count">0</span> SP
+    </span>
+
+    <span style="flex:1"></span>
+    <button type="button" class="btn btn-primary" style="background:#16a34a" onclick="tierGenSyncFiltered()" id="tier-gensync-btn">
+      ⚡ Gen + Sync thẳng Haravan (đã lọc)
+    </button>
+  </div>
+  <div class="muted" id="tier-ctx-note" style="margin-top:8px;font-size:11.5px">
+    ⚡ Gen+Sync chạy ngầm trên đúng tập SP đang hiển thị — KHÔNG cần duyệt từng cái. Tiến độ realtime ở khung bên dưới.
+  </div>
+</section>
+
 {# ───── KPI ───── #}
 <div class="kpi-grid" style="margin-top:14px">
   <div class="kpi">
@@ -30,6 +124,36 @@
     <div class="kpi-num" style="color:#f87171">{{ summary.total }}</div>
     <div class="kpi-label">URL có lỗi title/meta</div>
   </div>
+
+  {# Tiến độ gen BỀN VỮNG (đọc file backup — không mất khi restart) #}
+  {% if summary.product_synced is defined %}
+  <a class="kpi" style="text-decoration:none;color:inherit"
+     href="{{ url_for('seo_title_meta_page', type='product', sync='synced') }}"
+     title="SP product đã từng gen+sync title/meta (căn cứ file backup local)">
+    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(34,197,94,0.18);color:#34d399">✅</div></div>
+    <div class="kpi-num" style="color:#34d399">{{ summary.product_synced }}</div>
+    <div class="kpi-label">SP đã gen+sync
+      {% if summary.product_total %}<span class="muted" style="font-size:11px">({{ (summary.product_synced * 100 // summary.product_total) }}%)</span>{% endif %}
+    </div>
+  </a>
+  <a class="kpi" style="text-decoration:none;color:inherit"
+     href="{{ url_for('seo_title_meta_page', type='product', sync='unsynced') }}"
+     title="SP product có lỗi nhưng CHƯA gen lần nào">
+    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(148,163,184,0.18);color:#94a3b8">⬜</div></div>
+    <div class="kpi-num">{{ summary.product_unsynced }}</div>
+    <div class="kpi-label">SP chưa gen (còn lại)</div>
+  </a>
+  {% if summary.product_error %}
+  <a class="kpi" style="text-decoration:none;color:inherit"
+     href="{{ url_for('seo_title_meta_page', type='product', sync='error') }}"
+     title="SP product gen+sync title/meta đã FAIL (đọc từ log lỗi bền vững)">
+    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(248,113,113,0.18);color:#f87171">⚠️</div></div>
+    <div class="kpi-num" style="color:#f87171">{{ summary.product_error }}</div>
+    <div class="kpi-label">SP gen lỗi</div>
+  </a>
+  {% endif %}
+  {% endif %}
+
   {% for code, count in summary.by_code.items() %}
   {% set lbl = issue_labels.get(code, ('❓', code)) %}
   <a class="kpi" style="text-decoration:none;color:inherit"
@@ -74,6 +198,7 @@
       <option value="">Tất cả</option>
       <option value="unsynced" {% if sync_filter == 'unsynced' %}selected{% endif %}>⬜ Chưa sync</option>
       <option value="synced"   {% if sync_filter == 'synced'   %}selected{% endif %}>✅ Đã sync</option>
+      <option value="error"    {% if sync_filter == 'error'    %}selected{% endif %}>⚠️ Gen lỗi</option>
     </select>
 
     <button type="submit" class="btn btn-primary btn-sm">Lọc</button>
@@ -93,6 +218,21 @@
     <button type="button" class="btn" onclick="stopFixAllJob()" id="fix-stop-btn"
             style="display:none;background:#dc2626;color:white">
       ⏹️ Dừng job
+    </button>
+    <button type="button" class="btn" onclick="startRegenRemainingJob()" id="regen-remaining-btn"
+            style="background:#0d9488;color:white"
+            title="Chỉ gen các SP CHƯA gen lần nào (bỏ qua SP đã sync) — dùng để gen tiếp sau khi quota dừng.">
+      ▶️ Gen tiếp SP chưa gen
+    </button>
+    <button type="button" class="btn" onclick="startRegenAllJob()" id="regen-all-btn"
+            style="background:#7c3aed;color:white"
+            title="Gen lại toàn bộ SP có lỗi title/meta — GỒM cả SP đã sync. Áp prompt spec mới, tự dừng khi hết quota.">
+      ♻️ Gen lại TẤT CẢ (gồm đã sync)
+    </button>
+    <button type="button" class="btn" onclick="startDualAIJob()" id="dual-ai-btn"
+            style="background:linear-gradient(135deg,#7c3aed,#0ea5e9);color:white;font-weight:600"
+            title="Codex + Claude gen SONG SONG (~2x tốc độ) trên các SP CHƯA gen. ⚠️ Đốt 2 quota cùng lúc — chỉ bấm khi cả 2 provider đang rảnh.">
+      ⚡⚡ Dual-AI Gen (Codex + Claude)
     </button>
     <button type="button" class="btn" onclick="copyTitleMetaTable()" id="copy-btn">
       📋 Copy bảng
@@ -122,6 +262,10 @@
     <div id="fix-current-row" style="margin-top:8px;font-size:12px;display:none">
       <span class="muted">Đang xử lý:</span>
       <code id="fix-current-url" style="font-size:11px"></code>
+    </div>
+    <div id="fix-dual-row" style="margin-top:8px;font-size:12px;display:none">
+      <span style="color:#a78bfa;font-weight:600">🤖 Codex:</span> <code id="dual-codex-url" style="font-size:11px">—</code>
+      <span style="margin-left:16px;color:#38bdf8;font-weight:600">🧠 Claude:</span> <code id="dual-claude-url" style="font-size:11px">—</code>
     </div>
     <div id="fix-message" style="margin-top:6px;font-size:12px"></div>
   </div>
@@ -176,17 +320,8 @@
   .tm-fix-btn { font-size:11px; padding:4px 10px; }
 </style>
 
-<section class="card" style="margin-top:16px;padding:0">
-  {% if not items %}
-    <p class="muted" style="margin:0;text-align:center;padding:24px">
-      {% if summary.total == 0 %}
-        🎉 Tất cả URL đã clean title/meta. Quét lại nếu cần refresh.
-      {% else %}
-        Không có URL nào khớp filter hiện tại. <a href="{{ url_for('seo_title_meta_page') }}">Reset</a>.
-      {% endif %}
-    </p>
-  {% else %}
-  <table class="tm-table">
+<section class="card" id="tm-table-section" style="margin-top:16px;padding:0">
+  <table class="tm-table" id="tm-table">
     <colgroup>
       <col style="width:42px">
       <col style="width:52px">
@@ -213,7 +348,7 @@
         <th style="text-align:center">Gen lại</th>
       </tr>
     </thead>
-    <tbody>
+    <tbody id="tm-tbody">
       {% for it in items %}
       <tr data-url="{{ it.url }}">
         <td class="tm-stt">{{ loop.index }}</td>
@@ -283,6 +418,7 @@
         <td class="status-cell" style="text-align:center">
           <span class="tm-status" data-url="{{ it.url }}" style="font-size:11px">
             {% if it.synced %}<span style="color:#34d399;font-weight:600">✅ Đã sync</span>
+            {% elif it.gen_error %}<span style="color:#f87171;font-weight:600" title="{{ it.gen_error }}">⚠️ Gen lỗi</span>
             {% else %}<span style="color:#94a3b8">⬜ Chưa sync</span>{% endif %}
           </span>
         </td>
@@ -308,42 +444,151 @@
       {% endfor %}
     </tbody>
   </table>
-  {% endif %}
+  <p class="muted" id="tm-empty"
+     style="margin:0;text-align:center;padding:24px;{% if items %}display:none{% endif %}">
+    {% if summary.total == 0 %}
+      🎉 Tất cả URL đã clean title/meta. Quét lại nếu cần refresh.
+    {% else %}
+      Không có URL nào khớp filter hiện tại. <a href="{{ url_for('seo_title_meta_page') }}">Reset</a>.
+    {% endif %}
+  </p>
 </section>
 
 <script>
-// ─── Single fix (per row) ───
+// ─── Single fix (per row) — GEN 3 phương án → vợ CLICK chọn 1 title + 1 meta → mới PUT ───
+let _tmPickerSeq = 0;
+
 async function fixTitleMetaSingle(btn) {
   const row = btn.closest('tr');
   const url = row.dataset.url;
   if (!url) return;
-  if (!confirm(`🔧 Auto-fix title + meta cho:\n${url}\n\nCodex sẽ sinh 3 phương án + lấy M1 (SPEC) → PUT Haravan. Tốn ~30-60s. Tiếp tục?`)) return;
+
+  // Toggle: panel đang mở → đóng lại
+  const nxt = row.nextElementSibling;
+  if (nxt && nxt.classList.contains('tm-picker-row')) {
+    nxt.remove(); btn.textContent = '🔧 Auto-fix'; row.style.background = '';
+    return;
+  }
 
   const oldText = btn.textContent;
   row.style.background = 'rgba(250,204,21,0.12)';
   btn.disabled = true;
-  btn.textContent = '⏳ Đang gen...';
+  btn.textContent = '⏳ Đang gen 3 phương án...';
 
   try {
-    const resp = await fetch('{{ url_for("seo_title_meta_fix") }}', {
+    const resp = await fetch('{{ url_for("seo_title_meta_preview") }}', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({url}),
     });
     const data = await resp.json();
+    btn.disabled = false;
     if (data.ok) {
-      applyFixResultToRow(row, data);
-      alert(`✅ ${data.message}\nTitle mới (${data.title_len}c): ${data.new_title}\nMeta mới (${data.meta_len}c): ${data.new_meta}\nBackup: ${data.backup}`);
+      renderTitleMetaPicker(row, url, data);
+      btn.textContent = '✖ Đóng';
+      row.style.background = 'rgba(14,165,233,0.08)';
     } else {
       row.style.background = 'rgba(239,68,68,0.10)';
       btn.textContent = oldText;
-      btn.disabled = false;
-      alert('❌ Lỗi: ' + (data.error || 'Unknown') + (data.raw ? '\n\nCodex raw: ' + data.raw.substring(0, 300) : ''));
+      alert('❌ Lỗi: ' + (data.error || 'Unknown') + (data.raw ? '\n\nAI raw: ' + data.raw.substring(0, 300) : ''));
     }
   } catch (err) {
     btn.textContent = oldText;
     btn.disabled = false;
+    row.style.background = '';
     alert('❌ Network: ' + err);
+  }
+}
+
+// Dựng panel chọn 3 title + 3 meta (radio). Invalid độ dài → disable + badge đỏ.
+function renderTitleMetaPicker(row, url, data) {
+  const pid = 'tmpk' + (++_tmPickerSeq);
+  const buildOpts = (arr, lens, oks, group, kind) => {
+    if (!arr || !arr.length) return '<div class="muted" style="padding:6px">AI không trả phương án.</div>';
+    let firstValid = oks.indexOf(true);
+    if (firstValid < 0) firstValid = -1;  // không có cái nào hợp lệ → không auto-check
+    return arr.map((txt, i) => {
+      const ok = oks[i];
+      const badge = ok
+        ? `<span class="ok" style="font-weight:600">${lens[i]}c OK</span>`
+        : `<span style="color:#f87171;font-weight:600">${lens[i]}c ✗</span>`;
+      const checked = (i === firstValid) ? 'checked' : '';
+      const dis = ok ? '' : 'disabled';
+      const lbl = kind === 'title' ? `T${i+1}` : `M${i+1}`;
+      return `<label class="tm-pick-opt" style="display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border-radius:8px;cursor:${ok?'pointer':'not-allowed'};opacity:${ok?1:0.55}">
+        <input type="radio" name="${group}" value="${escapeHtml(txt)}" ${checked} ${dis} style="margin-top:3px">
+        <span style="flex:1">
+          <span class="muted" style="font-size:10.5px;margin-right:6px">${lbl}</span>${escapeHtml(txt)}
+          <span style="margin-left:6px;font-size:10.5px">${badge}</span>
+        </span>
+      </label>`;
+    }).join('');
+  };
+
+  const specTag = data.spec_used
+    ? '<span style="color:#34d399;font-size:11px">✓ Đã đọc spec thật từ mô tả SP</span>'
+    : '<span style="color:#fbbf24;font-size:11px">⚠ SP không có body mô tả — AI gen từ tên</span>';
+  const retryTag = data.retried ? ' · <span style="color:#fbbf24;font-size:11px">↻ đã retry chỉnh độ dài</span>' : '';
+
+  const tr = document.createElement('tr');
+  tr.className = 'tm-picker-row';
+  tr.innerHTML = `<td colspan="10" style="background:#0b1220;padding:14px 18px;border-top:2px solid #0ea5e9">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <strong style="color:#7dd3fc">🎯 Chọn 1 Title + 1 Meta để sync</strong>
+      <span>${specTag}${retryTag}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <div style="font-weight:600;margin-bottom:4px;color:#cbd5e1">Title (≤61c)</div>
+        ${buildOpts(data.titles, data.title_lens, data.title_ok, pid + '_t', 'title')}
+      </div>
+      <div>
+        <div style="font-weight:600;margin-bottom:4px;color:#cbd5e1">Meta (140-160c)</div>
+        ${buildOpts(data.metas, data.meta_lens, data.meta_ok, pid + '_m', 'meta')}
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+      <button type="button" class="btn btn-primary" style="background:#22c55e"
+              onclick="confirmTitleMetaPick(this, '${pid}', ${JSON.stringify(url).replace(/"/g,'&quot;')})">✅ Sync phương án đã chọn lên Haravan</button>
+      <span class="tm-pick-msg muted" style="font-size:12px"></span>
+    </div>
+  </td>`;
+  row.parentNode.insertBefore(tr, row.nextSibling);
+}
+
+async function confirmTitleMetaPick(btn, pid, url) {
+  const panel = btn.closest('.tm-picker-row');
+  const msg = panel.querySelector('.tm-pick-msg');
+  const t = panel.querySelector(`input[name="${pid}_t"]:checked`);
+  const m = panel.querySelector(`input[name="${pid}_m"]:checked`);
+  if (!t || !m) { msg.textContent = '⚠ Chọn đủ 1 title + 1 meta (hợp lệ) trước đã.'; msg.style.color = '#fbbf24'; return; }
+
+  btn.disabled = true;
+  const oldT = btn.textContent;
+  btn.textContent = '⏳ Đang PUT Haravan...';
+  msg.style.color = '#94a3b8'; msg.textContent = 'Đang ghi metafields + backup + Sheet...';
+  try {
+    const resp = await fetch('{{ url_for("seo_title_meta_fix") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({url, title: t.value, meta: m.value}),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      const row = panel.previousElementSibling;
+      panel.remove();
+      const fixBtn = row.querySelector('.tm-fix-btn');
+      if (fixBtn) fixBtn.textContent = '🔧 Auto-fix';
+      applyFixResultToRow(row, data);
+      fetchTierProgress();
+      alert(`✅ ${data.message}\nTitle (${data.title_len}c): ${data.new_title}\nMeta (${data.meta_len}c): ${data.new_meta}\nBackup: ${data.backup}`);
+    } else {
+      btn.disabled = false; btn.textContent = oldT;
+      msg.style.color = '#f87171'; msg.textContent = '❌ ' + (data.error || 'Lỗi');
+    }
+  } catch (err) {
+    btn.disabled = false; btn.textContent = oldT;
+    msg.style.color = '#f87171'; msg.textContent = '❌ Network: ' + err;
   }
 }
 
@@ -446,6 +691,60 @@ async function startFixAllJob() {
   } catch (err) { alert('❌ ' + err); }
 }
 
+async function startDualAIJob() {
+  if (!confirm('⚡⚡ DUAL-AI GEN — Codex + Claude chạy SONG SONG (~2x nhanh) trên các SP CHƯA gen?\n\n⚠️ ĐỐT 2 QUOTA CÙNG LÚC — chỉ bấm khi cả 2 provider đang RẢNH (không cần cho FB/blog/content). Mỗi provider tự dừng khi hết quota, provider kia gánh tiếp. Tiếp tục?')) return;
+  const btn = document.getElementById('dual-ai-btn');
+  btn.disabled = true; const old = btn.textContent; btn.textContent = '⏳ Đang khởi động...';
+  try {
+    const resp = await fetch('{{ url_for("seo_title_meta_regen_dual") }}', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}',
+    });
+    const data = await resp.json();
+    btn.disabled = false; btn.textContent = old;
+    if (!data.ok) { alert('❌ ' + (data.error || 'Không start được')); return; }
+    _appliedResults.clear();
+    document.getElementById('fix-all-report').style.display = 'block';
+    startPolling();
+    alert(`✅ Dual-AI đã start ${data.count} SP — Codex + Claude chạy song song. Theo dõi 2 luồng ở khung "Job Auto-fix".`);
+  } catch (e) { btn.disabled = false; btn.textContent = old; alert('❌ ' + e); }
+}
+
+async function startRegenRemainingJob() {
+  if (!confirm('▶️ Gen TIẾP các SP CHƯA gen lần nào (bỏ qua SP đã sync)?\n\nDùng để tiếp tục sau khi quota dừng. Chạy ngầm, tự dừng khi hết quota. Tiếp tục?')) return;
+  const btn = document.getElementById('regen-remaining-btn');
+  btn.disabled = true; const old = btn.textContent; btn.textContent = '⏳ Đang khởi động...';
+  try {
+    const resp = await fetch('{{ url_for("seo_title_meta_regen_remaining") }}', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}',
+    });
+    const data = await resp.json();
+    btn.disabled = false; btn.textContent = old;
+    if (!data.ok) { alert('❌ ' + (data.error || 'Không start được')); return; }
+    _appliedResults.clear();
+    document.getElementById('fix-all-report').style.display = 'block';
+    startPolling();
+    alert(`✅ Đã start gen ${data.count} SP chưa gen. Theo dõi ở khung "Job Auto-fix".`);
+  } catch (e) { btn.disabled = false; btn.textContent = old; alert('❌ ' + e); }
+}
+
+async function startRegenAllJob() {
+  if (!confirm('♻️ GEN LẠI TẤT CẢ SP có lỗi title/meta — GỒM cả SP đã sync?\n\n~1058 SP, mỗi SP ~30-60s, chạy ngầm nhiều giờ. Tự dừng khi hết quota AI (bấm lại để gen tiếp). SP cũ được backup. Tiếp tục?')) return;
+  const btn = document.getElementById('regen-all-btn');
+  btn.disabled = true; const old = btn.textContent; btn.textContent = '⏳ Đang khởi động...';
+  try {
+    const resp = await fetch('{{ url_for("seo_title_meta_regen_all") }}', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}',
+    });
+    const data = await resp.json();
+    btn.disabled = false; btn.textContent = old;
+    if (!data.ok) { alert('❌ ' + (data.error || 'Không start được')); return; }
+    _appliedResults.clear();
+    document.getElementById('fix-all-report').style.display = 'block';
+    startPolling();
+    alert(`✅ Đã start gen lại ${data.count} SP (gồm đã sync). Theo dõi ở khung "Job Auto-fix".`);
+  } catch (e) { btn.disabled = false; btn.textContent = old; alert('❌ ' + e); }
+}
+
 async function stopFixAllJob() {
   if (!confirm('⏹️ Dừng job? Bài đang chạy sẽ xong rồi mới dừng.')) return;
   try {
@@ -492,7 +791,7 @@ async function pollStatus() {
       }
       _appliedResults.add(url);
     }
-    if (!s.running) stopPolling();
+    if (!s.running) { stopPolling(); fetchTierProgress(); }
   } catch (err) { console.error(err); }
 }
 
@@ -512,9 +811,19 @@ function renderStatus(s) {
     allBtn.disabled = true;
     allBtn.textContent = '⏳ Đang chạy...';
     stopBtn.style.display = 'inline-block';
-    if (s.current_url) {
-      currentRow.style.display = 'block';
-      document.getElementById('fix-current-url').textContent = s.current_url.replace('https://sintech.vn', '');
+    const dualRow = document.getElementById('fix-dual-row');
+    if (s.mode === 'dual') {
+      currentRow.style.display = 'none';
+      dualRow.style.display = 'block';
+      const fmt = (u, q) => (u ? u.replace('https://sintech.vn', '') : (q ? '⛔ hết quota' : '⏳ chờ...'));
+      document.getElementById('dual-codex-url').textContent = fmt(s.current_codex, s.quota_codex);
+      document.getElementById('dual-claude-url').textContent = fmt(s.current_claude, s.quota_claude);
+    } else {
+      dualRow.style.display = 'none';
+      if (s.current_url) {
+        currentRow.style.display = 'block';
+        document.getElementById('fix-current-url').textContent = s.current_url.replace('https://sintech.vn', '');
+      }
     }
   } else {
     badge.textContent = s.finished_at ? '🏁 Hoàn tất' : '— Chưa chạy';
@@ -524,6 +833,8 @@ function renderStatus(s) {
     allBtn.textContent = '🚀 Auto-fix tất cả (Codex AI)';
     stopBtn.style.display = 'none';
     currentRow.style.display = 'none';
+    const dualRow = document.getElementById('fix-dual-row');
+    if (dualRow) dualRow.style.display = 'none';
   }
   document.getElementById('fix-total').textContent = s.total || 0;
   document.getElementById('fix-total-mirror').textContent = s.total || 0;
@@ -600,6 +911,292 @@ function markStatus(row, kind) {
 
 // Cột Trạng thái giờ render server-side theo cờ `synced` (nguồn: file backup),
 // nhất quán với filter Sync — không cần fetch gen-map (Sheet) nữa.
+
+// ═══════════════ PHÂN TẦNG SẢN PHẨM ═══════════════
+const TIERS = {{ tiers.tiers|tojson }};
+const HANDLE_COUNTS = {{ tiers.handle_counts|tojson }};
+const ISSUE_LABELS = {{ issue_labels|tojson }};
+
+const _tier = { t1: null, t2: null, mode: 'all', t3handle: '', loaded: [] };
+let _origTbody = null;
+let _tierProgress = null;
+
+function _progHtml(p) {
+  if (!p) return '';
+  if (p.need === 0) return `<span class="tier-prog-label clean">✓ Sạch (0 lỗi title/meta)</span>`;
+  const c = p.pct >= 90 ? 'green' : (p.pct >= 50 ? 'amber' : 'red');
+  return `<div class="tier-prog"><div class="tier-prog-bar ${c}" style="width:${p.pct}%"></div></div>
+    <span class="tier-prog-label">🔧 ${p.pct}% đã fix · ${p.fixed}/${p.need} SP lỗi</span>`;
+}
+
+async function fetchTierProgress() {
+  try {
+    const r = await fetch('{{ url_for("seo_title_meta_tier_progress") }}');
+    const d = await r.json();
+    if (d.ok) { _tierProgress = d; renderTierGrid(); }
+  } catch (e) { /* im lặng */ }
+}
+
+function tierHandleCount(node) {
+  // số SP đã sync của 1 node (gộp handle node + các con, distinct ~ approx = max chứ ko cộng dồn trùng)
+  let hs = [];
+  if (node.handle) hs.push(node.handle);
+  (node.children || []).forEach(c => { if (c.handle) hs.push(c.handle); });
+  let s = 0; hs.forEach(h => s += (HANDLE_COUNTS[h] || 0));
+  return s;
+}
+
+function tierGoTop() {
+  _tier.t1 = null; _tier.t2 = null; _tier.t3handle = '';
+  document.getElementById('tier-context').style.display = 'none';
+  document.getElementById('tier-back-btn').style.display = 'none';
+  document.getElementById('tier-breadcrumb').innerHTML = '';
+  document.getElementById('tier-hint').style.display = 'block';
+  tierRestoreOriginalTable();
+  renderTierGrid();
+}
+
+function renderTierGrid() {
+  const grid = document.getElementById('tier-grid');
+  const bc = document.getElementById('tier-breadcrumb');
+  const backBtn = document.getElementById('tier-back-btn');
+  grid.innerHTML = '';
+
+  if (_tier.t1 === null) {
+    // Tầng 1
+    backBtn.style.display = 'none';
+    bc.innerHTML = '';
+    TIERS.forEach((t1, i) => {
+      const n3 = (t1.children || []).reduce((a, c) => a + (c.children || []).length, 0);
+      const p = _tierProgress && _tierProgress.tiers && _tierProgress.tiers[i];
+      const div = document.createElement('div');
+      div.className = 'tier-card t1';
+      div.onclick = () => tierOpenT1(i);
+      div.innerHTML = `<span class="tc-icon">${t1.icon || '📦'}</span>
+        <span class="tc-name">${escapeHtml(t1.name)}</span>
+        <span class="tc-sub">${(t1.children || []).length} nhóm · ${n3} tầng 3</span>
+        ${_progHtml(p)}`;
+      grid.appendChild(div);
+    });
+  } else {
+    // Tầng 2 của T1 đã chọn
+    const t1 = TIERS[_tier.t1];
+    backBtn.style.display = 'inline-block';
+    bc.innerHTML = `<a onclick="tierGoTop()">Tầng 1</a> › <strong>${escapeHtml(t1.name)}</strong>`;
+    const t1p = _tierProgress && _tierProgress.tiers && _tierProgress.tiers[_tier.t1];
+    (t1.children || []).forEach((t2, j) => {
+      const cnt = tierHandleCount(t2);
+      const p = t1p && t1p.t2 && t1p.t2[j];
+      const div = document.createElement('div');
+      div.className = 'tier-card' + (_tier.t2 === j ? ' active' : '');
+      div.onclick = () => tierOpenT2(j);
+      div.innerHTML = `<span class="tc-name">${escapeHtml(t2.name)}</span>
+        <span class="tc-sub">${(t2.children || []).length} tầng 3 · ~${cnt} SP</span>
+        ${_progHtml(p)}`;
+      grid.appendChild(div);
+    });
+  }
+}
+
+function tierOpenT1(i) {
+  _tier.t1 = i; _tier.t2 = null; _tier.t3handle = '';
+  document.getElementById('tier-hint').style.display = 'block';
+  document.getElementById('tier-context').style.display = 'none';
+  renderTierGrid();
+}
+
+function tierOpenT2(j) {
+  _tier.t2 = j; _tier.t3handle = '';
+  const t1 = TIERS[_tier.t1], t2 = t1.children[j];
+  renderTierGrid();
+  document.getElementById('tier-hint').style.display = 'none';
+
+  // build T3 filter dropdown
+  const sel = document.getElementById('tier-t3-filter');
+  sel.innerHTML = '<option value="">Tất cả Tầng 3</option>';
+  (t2.children || []).forEach(t3 => {
+    if (!t3.handle) return;
+    const o = document.createElement('option');
+    o.value = t3.handle; o.textContent = t3.name + ` (${HANDLE_COUNTS[t3.handle] || 0})`;
+    sel.appendChild(o);
+  });
+  document.getElementById('tier-ctx-title').textContent = `📂 ${t1.name} › ${t2.name}`;
+  document.getElementById('tier-context').style.display = 'block';
+  tierLoad();
+}
+
+function tierCurrentHandles() {
+  const t2 = TIERS[_tier.t1].children[_tier.t2];
+  if (_tier.t3handle) return [_tier.t3handle];
+  const hs = [];
+  if (t2.handle) hs.push(t2.handle);
+  (t2.children || []).forEach(c => { if (c.handle) hs.push(c.handle); });
+  return hs.length ? hs : (t2.handle ? [t2.handle] : []);
+}
+
+async function tierLoad() {
+  const handles = tierCurrentHandles();
+  const tbody = document.getElementById('tm-tbody');
+  if (_origTbody === null) _origTbody = tbody.innerHTML;  // lưu bảng gốc 1 lần
+  tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:20px" class="muted">⏳ Đang nạp SP...</td></tr>`;
+  document.getElementById('tm-empty').style.display = 'none';
+  if (!handles.length) { _tier.loaded = []; tierRender(); return; }
+  try {
+    const resp = await fetch('{{ url_for("seo_title_meta_tier_products") }}', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({handles, mode: _tier.mode}),
+    });
+    const data = await resp.json();
+    _tier.loaded = data.ok ? (data.items || []) : [];
+  } catch (e) { _tier.loaded = []; }
+  tierRender();
+}
+
+function tierSetMode(m) {
+  _tier.mode = m;
+  document.getElementById('tier-mode-issues').classList.toggle('on', m === 'issues');
+  document.getElementById('tier-mode-all').classList.toggle('on', m === 'all');
+  tierLoad();
+}
+
+function tierApplyFilter() {
+  const t3 = document.getElementById('tier-t3-filter').value;
+  if (t3 !== _tier.t3handle) { _tier.t3handle = t3; tierLoad(); }
+  else tierRender();  // chỉ đổi ô search → render lại từ cache
+}
+
+function tierRender() {
+  const q = (document.getElementById('tier-search').value || '').toLowerCase().trim();
+  const status = document.getElementById('tier-status-filter').value;
+  const sortV = document.getElementById('tier-sort').value;
+  let items = _tier.loaded.slice();
+  if (q) items = items.filter(it =>
+    (it.url || '').toLowerCase().includes(q) || (it.title || '').toLowerCase().includes(q));
+  if (status === 'issue')         items = items.filter(it => (it.n_issues || 0) > 0);
+  else if (status === 'clean')    items = items.filter(it => (it.n_issues || 0) === 0);
+  else if (status === 'unsynced') items = items.filter(it => !it.synced);
+  else if (status === 'synced')   items = items.filter(it => it.synced);
+  if (sortV === 'score_asc')        items.sort((a, b) => ((a.score == null ? 100 : a.score) - (b.score == null ? 100 : b.score)) || ((b.n_issues || 0) - (a.n_issues || 0)));
+  else if (sortV === 'n_issues_desc') items.sort((a, b) => (b.n_issues || 0) - (a.n_issues || 0));
+  else if (sortV === 'url')         items.sort((a, b) => (a.url || '').localeCompare(b.url || ''));
+  _tier.rendered = items;
+  document.getElementById('tier-count').textContent = items.length;
+  const tbody = document.getElementById('tm-tbody');
+  if (!items.length) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:20px" class="muted">Không có SP nào khớp (đổi chế độ "Tất cả SP" để xem cả SP đã clean).</td></tr>`;
+  } else {
+    tbody.innerHTML = items.map((it, i) => tmRenderRow(it, i + 1)).join('');
+  }
+  document.getElementById('tm-empty').style.display = 'none';
+}
+
+function tierRestoreOriginalTable() {
+  if (_origTbody !== null) {
+    document.getElementById('tm-tbody').innerHTML = _origTbody;
+    document.getElementById('tm-empty').style.display = '{{ 'none' if items else 'block' }}';
+  }
+}
+
+// ─── Render 1 dòng bảng — KHỚP chính xác template Jinja để tái dùng mọi handler ───
+function _typeIcon(t) {
+  return ({product:'🛍️', collection:'📂', blog:'📝', page:'📄'})[t] || '❓';
+}
+function _titleLenBadge(eff) {
+  if (eff === 0) return '<span class="err">❌ thiếu</span>';
+  if (eff < 20)  return '<span class="warn">⚠ ngắn</span>';
+  if (eff > 61)  return '<span class="warn">⚠ dài</span>';
+  return '<span class="ok">OK</span>';
+}
+function _metaLenBadge(len) {
+  if (len === 0)  return '<span class="err">❌ thiếu</span>';
+  if (len < 140)  return '<span class="warn">⚠ ngắn</span>';
+  if (len > 160)  return '<span class="warn">⚠ dài</span>';
+  return '<span class="ok">OK</span>';
+}
+function _scoreCell(s) {
+  if (s === null || s === undefined) return '<span class="muted">—</span>';
+  const cls = s >= 80 ? 'good' : (s >= 60 ? 'ok' : 'bad');
+  return `<span class="tm-score ${cls}">${s}</span>`;
+}
+function _issueChips(codes) {
+  return (codes || []).map(c => {
+    const lbl = ISSUE_LABELS[c] || ['❓', c];
+    let cls = 'warn';
+    if (c === 'no_title' || c === 'no_meta') cls = 'err';
+    else if (c === 'duplicate_title' || c === 'duplicate_meta') cls = 'dup';
+    return `<span class="tm-chip ${cls}" title="${escapeHtml(lbl[1])}">${lbl[0]} ${escapeHtml(lbl[1])}</span>`;
+  }).join('');
+}
+
+function tmRenderRow(it, idx) {
+  const t = it.url_type || '';
+  const urlShort = (it.url || '').replace('https://sintech.vn', '');
+  const urlDisp = urlShort.length > 60 ? urlShort.substring(0, 60) + '…' : urlShort;
+  const effLen = (it.title_stripped_len !== undefined) ? it.title_stripped_len : (it.title_len || 0);
+  const titleHtml = it.title
+    ? `<div class="tm-text" title="${escapeHtml(it.title)}">${escapeHtml(it.title)}</div>`
+    : `<div class="tm-text empty">(rỗng)</div>`;
+  const fullNote = (it.title_len !== effLen)
+    ? `<span style="color:#94a3b8;font-size:11px">(${it.title_len}c full)</span>` : '';
+  const metaHtml = it.meta_desc
+    ? `<div class="tm-text" title="${escapeHtml(it.meta_desc)}">${escapeHtml(it.meta_desc)}</div>`
+    : `<div class="tm-text empty">(rỗng)</div>`;
+  const statusHtml = it.synced
+    ? '<span style="color:#34d399;font-weight:600">✅ Đã sync</span>'
+    : '<span style="color:#94a3b8">⬜ Chưa sync</span>';
+  const actionHtml = (t === 'product')
+    ? `<button type="button" class="btn btn-primary fix-btn tm-fix-btn" onclick="fixTitleMetaSingle(this)">🔧 Auto-fix</button>`
+    : `<span class="muted" style="font-size:10.5px">Sửa tay admin</span>`;
+  const regenHtml = (t === 'product')
+    ? `<button type="button" class="btn tm-fix-btn" onclick="regenTitleMetaSingle(this)" style="background:#0ea5e9;color:#fff" title="Gen lại title+meta rồi sync Haravan">🔄 Gen+Sync</button>`
+    : `<span class="muted" style="font-size:10.5px">—</span>`;
+
+  return `<tr data-url="${escapeHtml(it.url)}">
+    <td class="tm-stt">${idx}</td>
+    <td>${_typeIcon(t)}<span class="tm-url-type">${escapeHtml(t)}</span></td>
+    <td><a href="${escapeHtml(it.url)}" target="_blank" rel="noopener" class="tm-url" title="${escapeHtml(it.url)}">${escapeHtml(urlDisp)}</a></td>
+    <td class="title-cell">${titleHtml}
+      <div class="tm-len"><strong>${effLen}c</strong> ${fullNote} ${_titleLenBadge(effLen)}</div></td>
+    <td class="meta-cell">${metaHtml}
+      <div class="tm-len"><strong>${it.meta_desc_len || 0}c</strong> ${_metaLenBadge(it.meta_desc_len || 0)}</div></td>
+    <td class="issue-cell"><div class="tm-issues">${_issueChips(it.issue_codes)}</div></td>
+    <td style="text-align:center">${_scoreCell(it.score)}</td>
+    <td class="status-cell" style="text-align:center"><span class="tm-status" data-url="${escapeHtml(it.url)}" style="font-size:11px">${statusHtml}</span></td>
+    <td class="action-cell" style="text-align:center">${actionHtml}</td>
+    <td class="regen-cell" style="text-align:center">${regenHtml}</td>
+  </tr>`;
+}
+
+// ─── Gen + Sync thẳng Haravan trên tập SP đang hiển thị (đã lọc) ───
+async function tierGenSyncFiltered() {
+  const items = _tier.rendered || [];
+  const urls = items.filter(it => (it.url_type || 'product') === 'product').map(it => it.url);
+  if (!urls.length) { alert('Không có SP nào trong bảng để gen.'); return; }
+  const t2 = TIERS[_tier.t1].children[_tier.t2];
+  const scope = _tier.t3handle
+    ? document.getElementById('tier-t3-filter').selectedOptions[0].textContent
+    : t2.name;
+  if (!confirm(`⚡ GEN + SYNC THẲNG HARAVAN (không duyệt) cho ${urls.length} SP\n\nTầng: ${scope}\nChế độ: ${_tier.mode === 'all' ? 'Tất cả SP' : 'Chỉ SP lỗi'}\n\nMỗi SP ~30-60s gọi Codex, chạy ngầm. Em sẽ check lại title/meta sau. Tiếp tục?`)) return;
+  const btn = document.getElementById('tier-gensync-btn');
+  btn.disabled = true; const old = btn.textContent; btn.textContent = '⏳ Đang khởi động...';
+  try {
+    const resp = await fetch('{{ url_for("seo_title_meta_fix_filtered") }}', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({urls}),
+    });
+    const data = await resp.json();
+    btn.disabled = false; btn.textContent = old;
+    if (!data.ok) { alert('❌ ' + (data.error || 'Không start được')); return; }
+    _appliedResults.clear();
+    document.getElementById('fix-all-report').style.display = 'block';
+    startPolling();
+    alert(`✅ Đã start gen+sync ${data.count} SP. Theo dõi tiến độ ở khung "Job Auto-fix".`);
+  } catch (e) { btn.disabled = false; btn.textContent = old; alert('❌ ' + e); }
+}
+
+// init grid
+renderTierGrid();
+fetchTierProgress();
 </script>
 
 {% endblock %}

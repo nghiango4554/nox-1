@@ -98,3 +98,31 @@ def call_ai(system_prompt: str, user_prompt: str,
             continue
 
     raise AIQuotaError("Tất cả provider AI đều fail/hết quota. " + " | ".join(errors))
+
+
+def call_ai_single(provider: str, system_prompt: str, user_prompt: str,
+                   timeout: int = DEFAULT_TIMEOUT,
+                   reasoning_effort: str = "low",
+                   temperature: float | None = None) -> str:
+    """Gọi DUY NHẤT 1 provider — KHÔNG fallback chéo. Dùng cho dual-AI (mỗi worker
+    ghim cứng 1 provider). Raise AIQuotaError nếu provider này không khả dụng / hết
+    quota / output rỗng (để worker tự dừng, không đụng quota provider kia)."""
+    if provider not in _ORDER:
+        raise ValueError(f"Unknown provider: {provider}")
+    avail, call, rate_exc = _spec(provider)
+    try:
+        if not avail():
+            raise AIQuotaError(f"{provider}: không khả dụng")
+    except AIQuotaError:
+        raise
+    except Exception as e:
+        raise AIQuotaError(f"{provider}: lỗi check ({str(e)[:60]})")
+    try:
+        out = call(system_prompt, user_prompt, timeout, reasoning_effort, temperature)
+    except rate_exc as e:
+        raise AIQuotaError(f"{provider}: hết quota/rate limit ({str(e)[:80]})")
+    except Exception as e:
+        raise RuntimeError(f"{provider}: lỗi ({str(e)[:80]})")
+    if out and out.strip():
+        return out
+    raise AIQuotaError(f"{provider}: output rỗng")

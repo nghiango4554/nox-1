@@ -201,7 +201,7 @@ Rút từ 70 SP đã sync thực tế (M1 chiếm 57% lượt vợ chọn → đ
 ### Cấu trúc heading:
 - **KHÔNG H1** — chỉ dùng H2 và H3
 - **H2 đầu tiên phải nằm TRÊN intro** — tên SP hoặc keyword chính
-- Sau H2 đầu mới đến đoạn mở bài 2-4 câu
+- Sau H2 đầu mới đến đoạn mở bài **đúng 3 câu, 1 đoạn duy nhất** (chuẩn bản chốt)
 - **MỌI H2 (kể cả H2 trong body) BẮT BUỘC có đoạn dẫn ≥ 2 câu** ngay dưới heading, bao quát toàn bộ nội dung của H2 đó, RỒI mới tới H3 con. Cấm để H2 đứng kề H3 mà không có đoạn dẫn.
 - KHÔNG dùng `---` hoặc `***` làm separator
 
@@ -211,7 +211,7 @@ Rút từ 70 SP đã sync thực tế (M1 chiếm 57% lượt vợ chọn → đ
 - Logic: thông số → dùng để làm gì → ai nên quan tâm
 - Public dùng "bạn", KHÔNG dùng "anh"
 
-### Cấm các cụm SEOer/học thuật:
+### Cấm các cụm SEOer/học thuật (banlist body — đồng bộ prompt master bản chốt):
 - "trong bài này"
 - "sản phẩm này mang lại"
 - "người dùng sẽ"
@@ -222,6 +222,33 @@ Rút từ 70 SP đã sync thực tế (M1 chiếm 57% lượt vợ chọn → đ
 - "khôn nhất"
 - "chia sẻ với bạn"
 - "đem đến"
+- "cho phép"
+- "bền bỉ"
+- "đẹp mắt"
+- "vượt trội"
+- "đỉnh cao"
+- "đáng mua nhất"
+- "tốt nhất"
+- "tuyệt đối"
+- "Free ship"
+- "workflow"
+- "lọc model"
+- "range sản phẩm"
+
+### CẤM dấu chấm phẩy `;` trong body (cả meta lẫn bài viết).
+
+### Các CÂU lộ research/nội bộ — TUYỆT ĐỐI KHÔNG xuất hiện trong bài public:
+- "Collection Sintech hiện có..."
+- "Range sản phẩm trải từ..."
+- "Bảng dưới chia theo range..."
+- "Cách này giúp bạn lọc model..."
+- "Workflow đang dùng..."
+- "Search intent của category..."
+- "Theo dữ liệu research nội bộ..."
+- "Nguồn công khai chưa đủ..."
+- "Trang hãng chưa ghi rõ..."
+
+→ Thay bằng cách viết buyer-facing. Ví dụ SAI: *"Collection hiện có nhiều model từ 500k đến 1tr."* → ĐÚNG: *"Mức giá thay đổi theo kích thước, tính năng và nhu cầu. Bạn nên xác định mục đích trước khi chọn."*
 
 ### Độ dài bài tổng:
 - **Tối thiểu 800 từ — tối đa 2700 từ.**
@@ -235,7 +262,7 @@ Rút từ 70 SP đã sync thực tế (M1 chiếm 57% lượt vợ chọn → đ
 
 ## 7. Quy tắc intro
 
-Intro nằm ngay sau H2 đầu tiên. Cần có:
+Intro nằm ngay sau H2 đầu tiên. **Đúng 3 câu, gói trong 1 đoạn duy nhất.** Cần có:
 - Sản phẩm là gì
 - Phù hợp với ai
 - Lợi ích chính / nhu cầu sử dụng
@@ -352,6 +379,21 @@ Ví dụ:
 - Ưu tiên PSREF nếu là Lenovo
 - Phải đúng: mã máy, CPU, GPU, TGP, RAM, SSD, màn hình, cổng, Wifi/BT, trọng lượng, OS
 - KHÔNG tự nâng TGP
+
+### Riêng cho VGA:
+- Kiểm tra: chip, VRAM, bus, băng thông, cổng xuất hình, bus PCIE, nguồn phụ
+- Phân biệt đúng phiên bản: OC / White / Black / 2 fan / 3 fan
+- KHÔNG tự ghi FPS nếu chưa có benchmark phù hợp
+- KHÔNG tự khẳng định công suất PSU nếu chưa xem card cụ thể
+
+### Riêng cho SSD:
+- Kiểm tra: dung lượng, chuẩn M.2 hay SATA, PCIE Gen, form factor, tốc độ đọc/ghi, TBW, DRAM (nếu hãng ghi)
+- **Phân biệt rõ M.2 SATA và M.2 NVMe** (dễ mua sai khe)
+- Nếu tốc độ trang hãng ≠ vỏ hộp → nêu trong phần Phân tích, bài public dùng số đã xác minh chắc
+
+### Cách trình bày spec trong bài public (KHÔNG dump datasheet):
+Mỗi spec nên: **(1) nêu spec → (2) giải thích ngắn dùng để làm gì → (3) chốt khi nào khách cần quan tâm.**
+> VD: *"PCIe Gen3 x4 phù hợp máy cần SSD NVMe gọn cho Windows và ứng dụng cơ bản. Bạn nên kiểm tra khe M.2 trên laptop/Main trước khi mua."*
 
 ---
 
@@ -544,6 +586,27 @@ Nội dung phải thực tế, giúp khách tránh mua sai.
 
 ---
 
+## 12B. Quy tắc BẢNG + bullet (bài sản phẩm) — chuẩn bản chốt
+
+- **Bài sản phẩm: 1-3 bảng** (`<table>`). KHÔNG lạm dụng bảng, KHÔNG tạo bảng chỉ để kéo dài bài.
+- **Trước mỗi bảng:** BẮT BUỘC ≥2 câu dẫn tự nhiên (không để H2/H3 vừa mở ra đã là bảng ngay).
+- **Sau mỗi bảng:** BẮT BUỘC 2-3 câu tóm tắt ngắn (không lặp lại toàn bộ bảng, không giải thích quá dài).
+- **Trước mỗi bullet list:** ≥2 câu dẫn (không để section mở ra là bullet ngay).
+- SP có spec rõ (dung lượng, tốc độ, kích thước, cổng…) → **NÊN có ít nhất 1 bảng** "Thông số nổi bật" hoặc bảng chọn theo nhu cầu. Chỉ bỏ bảng khi SP gần như không có spec số (vd lót chuột).
+- Loại bảng nên dùng: chọn theo nhu cầu · so sánh chuẩn · kiểm tra tương thích · chọn theo thiết bị/kích thước/cấu hình · lỗi dễ gặp.
+
+## 12C. Chuẩn viết tên linh kiện & thuật ngữ — chuẩn bản chốt
+
+- Viết nhất quán (in hoa chữ đầu): **Cpu · Ram · Main · Card · Case · Vga · Fan · Headphone**
+- Chuẩn/đơn vị viết IN HOA đúng: **SSD · NVME · AI · 4K · 8GB · 16GB · RTX · DLSS · HDMI · DISPLAYPORT · USB-C · PCIE**
+- Thuật ngữ mới/ít phổ biến → thêm giải thích tiếng Việt ngắn trong ngoặc: *Hot-swap (thay switch không cần hàn)* · *Grommet (bắt arm xuyên bàn)* · *Dual chamber (thiết kế hai khoang)* · *TBW (tổng dung lượng ghi bảo hành)*
+
+## 12D. Định dạng giá (khi thật sự cần nhắc) — chuẩn bản chốt
+
+- **KHÔNG dùng số thập phân:** ❌ 0.65tr · 1.1tr · 2.05tr · 3.39tr
+- **Dùng:** ✅ 650k · 1tr100k · 2tr050k · 3tr390k · range: 500k–700k, 1tr200k–1tr800k
+- Áp dụng thống nhất ở bài SEO, bảng giá, meta (khi cần). Bài SP thường KHÔNG nêu giá trong body trừ khi user yêu cầu.
+
 ## 13. Section "Vì sao nên mua tại Sintech" — bắt buộc
 
 **Đúng 2 đoạn × 2 câu.**
@@ -726,7 +789,10 @@ Bài blog không cần đủ tất cả section SP, nhưng vẫn cần:
 - [ ] **KHÔNG H1** — chỉ H2 và H3
 - [ ] **H2 đầu** nằm trên intro, là tên SP / keyword chính
 - [ ] **MỌI H2 có ≥2 câu dẫn** trước khi tới H3 con (không để H2 đứng kề H3)
-- [ ] Intro có CTA `[**Sintech**](https://sintech.vn)`
+- [ ] Intro **đúng 3 câu, 1 đoạn**, có CTA `[**Sintech**](https://sintech.vn)`
+- [ ] Bài SP có **1-3 bảng**; **≥2 câu dẫn trước bảng + 2-3 câu tóm sau bảng**; không mở H2/bullet bằng bảng/bullet ngay
+- [ ] **KHÔNG dấu `;`** trong body; KHÔNG câu lộ research nội bộ (Collection hiện có / Range sản phẩm / Theo research nội bộ…)
+- [ ] Tên linh kiện viết chuẩn (Cpu/Ram/Vga…, SSD/NVME/PCIE in hoa); thuật ngữ lạ có giải thích trong ngoặc
 - [ ] Outro có `[**Sintech**](https://sintech.vn)`, mở bằng "Tóm lại,/Nói ngắn gọn,/Sau tất cả,/Kết lại,"
 - [ ] **KHÔNG có H2/H3 'Kết lại / Tổng kết / Lời kết'** trước outro — outro mở thẳng dạng `<p>`
 - [ ] **Author signature** ở cuối bài (sau outro): *Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Q7, TP.HCM.*
@@ -741,5 +807,5 @@ Bài blog không cần đủ tất cả section SP, nhưng vẫn cần:
 - [ ] **FAQ 4-6 câu**, mỗi câu trả lời 2-4 câu
 - [ ] **Outline** là bảng 2 cột, chỉ liệt kê H2/H3 đã dùng
 - [ ] Bài tổng **800-2700 từ** (dưới 800 → thin content)
-- [ ] Forbidden phrases bị loại: "trong bài này / sản phẩm này mang lại / người dùng sẽ / category này / search intent / khôn nhất / carte này / chia sẻ với bạn / đem đến"
+- [ ] Forbidden phrases bị loại (banlist mở rộng): "trong bài này / sản phẩm này mang lại / người dùng sẽ / category này / search intent / khôn nhất / chia sẻ với bạn / đem đến / cho phép / bền bỉ / đẹp mắt / vượt trội / đỉnh cao / đáng mua nhất / tốt nhất / tuyệt đối / Free ship / workflow / lọc model / range sản phẩm"
 - [ ] Nếu là biến thể màu → góc nhìn unique theo bảng mục 17

@@ -55,6 +55,26 @@
     ⚠️ {{ job.error }}
   </div>
   {% endif %}
+  {% if spec_conflicts %}
+  <div style="margin-top:10px;padding:10px 12px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px">
+    <div style="color:#f59e0b;font-weight:700;font-size:13px;margin-bottom:6px">
+      ⚠️ Thông số LỆCH giữa mô tả gốc và web — cần verify trước khi sync ({{ spec_conflicts|length }})
+    </div>
+    <table style="border-collapse:collapse;font-size:12.5px;width:100%;max-width:520px">
+      <tr style="color:#94a3b8;text-align:left">
+        <th style="padding:3px 8px">Thông số</th><th style="padding:3px 8px">Mô tả gốc</th><th style="padding:3px 8px">Web tra cứu</th>
+      </tr>
+      {% for c in spec_conflicts %}
+      <tr style="border-top:1px solid rgba(148,163,184,0.2)">
+        <td style="padding:3px 8px;font-weight:600">{{ c.field }}</td>
+        <td style="padding:3px 8px;color:#34d399">{{ c.body }}</td>
+        <td style="padding:3px 8px;color:#f87171">{{ c.web }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <div class="muted" style="font-size:11px;margin-top:6px">AI đã gen theo mô tả GỐC. Nếu web đúng hơn → chỉnh body/title/meta rồi sync lại.</div>
+  </div>
+  {% endif %}
 </section>
 
 {# ───── ACTIONS BAR ───── #}
@@ -64,6 +84,15 @@
     <button class="btn btn-primary" type="submit"
             onclick="return confirm('Đẩy job vào queue + start worker (chạy ngầm ~2-3 phút/bài)?')">
       📥 {{ 'Gen lại' if job.status == 'draft' else 'Đẩy vào queue gen AI' }}
+    </button>
+  </form>
+  {% endif %}
+
+  {% if job.ai_body_html or job.edited_body_html %}
+  <form method="post" action="{{ url_for('content_jobs_spec_block', job_id=job.id) }}" style="display:inline">
+    <button class="btn" type="submit" style="background:#0ea5e9;color:white"
+            onclick="return confirm('Cào thông số web + tạo/làm mới BẢNG thông số kỹ thuật (khối trích dẫn) cuối bài?\n~30-60s. Bảng cũ (nếu có) sẽ được thay.')">
+      📊 Tạo bảng thông số KT
     </button>
   </form>
   {% endif %}
@@ -259,6 +288,7 @@
       <button type="button" class="cj-tb-btn" onclick="cjCmd('formatBlock', 'H2')" title="Heading 2">H2</button>
       <button type="button" class="cj-tb-btn" onclick="cjCmd('formatBlock', 'H3')" title="Heading 3">H3</button>
       <button type="button" class="cj-tb-btn" onclick="cjCmd('formatBlock', 'P')" title="Paragraph">¶</button>
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('formatBlock', 'BLOCKQUOTE')" title="Khối trích dẫn — bọc vùng đang chọn vào blockquote (theme Sintech render thành BẢNG thông số)">❝ Trích dẫn</button>
       <span class="cj-tb-sep"></span>
       <button type="button" class="cj-tb-btn" onclick="cjCmd('insertUnorderedList')" title="Bullet list">•—</button>
       <button type="button" class="cj-tb-btn" onclick="cjCmd('insertOrderedList')" title="Numbered list">1.</button>
@@ -274,11 +304,22 @@
       <span class="cj-tb-sep"></span>
       <button type="button" class="cj-tb-btn" onclick="cjCmd('undo')" title="Undo">↶</button>
       <button type="button" class="cj-tb-btn" onclick="cjCmd('redo')" title="Redo">↷</button>
+      <span class="cj-tb-sep"></span>
+      <button type="button" class="cj-tb-btn" onclick="cjApplyFullFormat(this)" title="Áp toàn bộ định dạng Sintech: font Arial, H2/H3 đậm, link đỏ, viền bảng" style="background:linear-gradient(135deg,#7c3aed,#e74c3c);color:white;font-weight:700;padding:5px 12px">🎨 Format full</button>
     </div>
     <style>
       .cj-tb-btn { background:transparent;border:1px solid transparent;color:inherit;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;min-width:28px;height:26px;display:inline-flex;align-items:center;justify-content:center; }
       .cj-tb-btn:hover { background:rgba(0,0,0,0.06);border-color:var(--border); }
       .cj-tb-sep { width:1px;height:18px;background:var(--border);margin:0 4px; }
+      /* Khối trích dẫn (blockquote) — hiện rõ trong editor như bảng spec để vợ phân biệt với text thường.
+         Nhãn ::before chỉ là gợi ý trong editor, KHÔNG lưu vào body_html / KHÔNG lên web. */
+      #view-preview blockquote { position:relative; border:1px solid #cbd5e1; border-left:4px solid #e74c3c; background:#f8fafc; border-radius:8px; padding:30px 18px 14px; margin:18px 0; }
+      #view-preview blockquote::before { content:"📊 KHỐI TRÍCH DẪN → web Sintech render thành BẢNG thông số"; position:absolute; top:0; left:0; right:0; background:#e74c3c; color:#fff; font-size:10px; font-weight:700; letter-spacing:.03em; padding:3px 10px; border-radius:7px 7px 0 0; }
+      #view-preview blockquote h3 { font-size:13pt; font-weight:700; color:#0f172a; margin:14px 0 6px; border-bottom:1px solid #e2e8f0; padding-bottom:4px; }
+      #view-preview blockquote h3:first-of-type { margin-top:0; }
+      #view-preview blockquote ul { margin:6px 0 10px; padding-left:20px; }
+      #view-preview blockquote li { margin:3px 0; }
+      #view-preview blockquote li strong { color:#0f172a; }
     </style>
 
     <div id="view-preview" contenteditable="true" spellcheck="false" lang="vi"
@@ -397,6 +438,42 @@
   function cjInsertLink() {
     const url = prompt('Nhập URL (bao gồm https://):', 'https://sintech.vn');
     if (url) cjCmd('createLink', url);
+  }
+
+  // ─── Auto-format Sintech (port từ /collection-content) ───
+  function cjStripPasteWrapper(editor) {
+    const WRAPPER_ATTRS = ['data-turn-id-container','data-is-intersecting','data-writing-block','data-message-id','data-message-author-role','data-testid'];
+    const WRAPPER_CLASS = ['R6Vx5W_','_threadScrollVars','text-token-','has-data-','scroll-mb-','focus:outline','pointer-events','relative w-full overflow-visible','thread-','markdown','prose','dark:','empty:','wrap-break-word','flex w-full','flex max-w-full','flex-col','gap-1','gap-4','markdown-new-styling'];
+    const isWrapper = el => { for (const a of WRAPPER_ATTRS) if (el.hasAttribute(a)) return true; const cls = el.className || ''; return WRAPPER_CLASS.some(p => (typeof cls === 'string') && cls.includes(p)); };
+    const unwrap = el => { const p = el.parentNode; while (el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); };
+    editor.querySelectorAll('section').forEach(unwrap);
+    for (let i = 0; i < 15; i++) { let changed = false; editor.querySelectorAll('div').forEach(el => { if (isWrapper(el)) { unwrap(el); changed = true; } }); if (!changed) break; }
+    const STRIP_ATTRS = ['data-turn-id-container','data-is-intersecting','data-start','data-end','data-is-last-node','data-is-only-node','data-writing-block','data-message-id','data-message-author-role','data-testid','data-node-index'];
+    editor.querySelectorAll('*').forEach(el => STRIP_ATTRS.forEach(a => el.removeAttribute(a)));
+    editor.querySelectorAll('div.contents').forEach(d => { if (!d.textContent.trim()) d.remove(); });
+  }
+
+  function cjApplyFullFormat(btn) {
+    const editor = document.getElementById('view-preview');
+    if (!editor) return;
+    cjStripPasteWrapper(editor);
+    editor.style.fontFamily = 'Arial, sans-serif'; editor.style.fontSize = '14px';
+    editor.style.fontWeight = '500'; editor.style.lineHeight = '1.65'; editor.style.color = '#000000';
+    const H2 = {fontSize:'17pt',fontWeight:'700',color:'#000000',margin:'24px 0 5px',lineHeight:'1.38',fontFamily:'Arial, sans-serif',fontStyle:'normal',textDecoration:'none'};
+    const H3 = {fontSize:'13pt',fontWeight:'700',color:'#000000',margin:'18px 0 4px',lineHeight:'1.38',fontFamily:'Arial, sans-serif',fontStyle:'normal',textDecoration:'none'};
+    const P  = {fontFamily:'Arial, sans-serif',fontSize:'12pt',fontWeight:'500',lineHeight:'1.65',margin:'10px 0',color:'#000000'};
+    let nH2=0,nH3=0,nLinks=0,nTables=0;
+    editor.querySelectorAll('h2').forEach(h => { Object.assign(h.style,H2); h.querySelectorAll('*').forEach(c=>{Object.assign(c.style,H2);c.style.letterSpacing='';}); nH2++; });
+    editor.querySelectorAll('h3').forEach(h => { Object.assign(h.style,H3); h.querySelectorAll('*').forEach(c=>{Object.assign(c.style,H3);c.style.letterSpacing='';}); nH3++; });
+    editor.querySelectorAll('p').forEach(p => { Object.assign(p.style,P); p.querySelectorAll('span, em, u').forEach(c=>{ if(!c.closest('a')){c.style.fontFamily='Arial, sans-serif';c.style.fontSize='12pt';c.style.fontWeight='500';c.style.lineHeight='1.65';}}); });
+    editor.querySelectorAll('a').forEach(a => { a.style.color='#e74c3c'; a.style.textDecoration='underline'; a.style.fontWeight='700'; a.querySelectorAll('*').forEach(c=>{c.style.color='#e74c3c';c.style.textDecoration='underline';c.style.fontWeight='700';}); if(!/<strong/i.test(a.innerHTML)){a.innerHTML='<strong style="color:#e74c3c;text-decoration:underline;font-weight:700">'+a.innerHTML+'</strong>';} nLinks++; });
+    editor.querySelectorAll('table').forEach(t => { t.style.borderCollapse='collapse'; t.style.width='100%'; t.style.margin='14px 0'; t.style.fontSize='11pt'; t.style.fontFamily='Arial, sans-serif'; nTables++; });
+    editor.querySelectorAll('td, th').forEach(c => { c.style.border='1px solid #cccccc'; c.style.padding='8px 10px'; c.style.verticalAlign='top'; c.style.color='#000000'; c.style.fontFamily='Arial, sans-serif'; });
+    editor.querySelectorAll('th').forEach(th => { th.style.fontWeight='700'; th.style.background='#f4f4f4'; th.style.textAlign='left'; });
+    editor.querySelectorAll('ul, ol').forEach(l => { l.style.margin='10px 0'; l.style.paddingLeft='28px'; l.style.fontFamily='Arial, sans-serif'; l.style.fontSize='12pt'; l.style.fontWeight='500'; l.style.lineHeight='1.65'; });
+    editor.querySelectorAll('li').forEach(li => { li.style.margin='6px 0'; li.style.color='#000000'; li.style.fontSize='12pt'; li.style.fontWeight='500'; li.style.fontFamily='Arial, sans-serif'; li.style.lineHeight='1.65'; });
+    syncPreviewToTextarea(); updateContentStats();
+    if (btn) { const o=btn.textContent; btn.textContent=`✓ ${nH2}H2 ${nH3}H3 ${nLinks}link ${nTables}table`; setTimeout(()=>{btn.textContent=o;},1400); }
   }
   function cjAlign(dir) {
     const editor = document.getElementById('view-preview');

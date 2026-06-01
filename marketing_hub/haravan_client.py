@@ -168,6 +168,27 @@ def get_product(product_id: int) -> dict:
     return data.get("product", {})
 
 
+def list_products_in_collection(collection_id: int, fields: str = "id,handle,title",
+                                max_pages: int = 60) -> list:
+    """Tất cả SP thuộc 1 collection (custom hoặc smart) qua /products.json?collection_id=.
+    Phân trang 250/lần. Read-only (GET)."""
+    out = []
+    page = 1
+    while page <= max_pages:
+        params = {"collection_id": collection_id, "limit": 250, "page": page}
+        if fields:
+            params["fields"] = fields
+        data = _request("GET", "/products.json", params=params)
+        batch = data.get("products", [])
+        if not batch:
+            break
+        out.extend(batch)
+        if len(batch) < 250:
+            break
+        page += 1
+    return out
+
+
 def update_product(product_id: int, fields: dict) -> dict:
     payload = {"product": fields}
     data = _request("PUT", f"/products/{product_id}.json", payload=payload)

@@ -140,6 +140,10 @@ def content_jobs_detail_page(job_id):
         ai_stats = json.loads(job["ai_stats_json"]) if job.get("ai_stats_json") else {}
     except Exception:
         ai_stats = {}
+    try:
+        spec_conflicts = json.loads(job["spec_conflict_json"]) if job.get("spec_conflict_json") else []
+    except Exception:
+        spec_conflicts = []
     return render_template(
         "content_jobs_detail.html",
         job=job,
@@ -147,6 +151,7 @@ def content_jobs_detail_page(job_id):
         internal_link_list=internal_link_list,
         outline=outline,
         ai_stats=ai_stats,
+        spec_conflicts=spec_conflicts,
     )
 
 
@@ -360,6 +365,41 @@ def content_jobs_stats_api():
 
 # ─────────────────────── REGISTRATION ────────────────────────────
 
+def content_jobs_spec_block(job_id):
+    """Tạo/làm mới khối <blockquote> thông số kỹ thuật cuối bài.
+    Theme Sintech tự render blockquote này thành BẢNG thông số trên web."""
+    import re
+    job = db.content_job_get(job_id)
+    if not job:
+        flash("Job không tồn tại.", "error")
+        return redirect(url_for("content_jobs_list_page"))
+    product_name = job.get("product_title") or ""
+    try:
+        import serper_search
+        if not serper_search.is_serper_available():
+            flash("⚠️ Chưa có SERPER_API_KEY — không cào được spec.", "error")
+            return redirect(url_for("content_jobs_detail_page", job_id=job_id))
+        sp = serper_search.fetch_product_specs(f"{product_name} thông số")
+        if not sp.get("ok") or not sp.get("specs"):
+            flash("❌ Không cào được thông số từ web cho SP này.", "error")
+            return redirect(url_for("content_jobs_detail_page", job_id=job_id))
+        info = content_writer._fetch_product_info(job["product_url"]) or {}
+        body_src = content_writer._strip_html(info.get("body_html") or "")
+        bq = content_writer.build_spec_block_for_specs(
+            product_name, sp["specs"], vendor=job.get("vendor") or "", body_text=body_src)
+        if not bq:
+            flash("❌ Không tạo được khối thông số (AI gom nhóm lỗi).", "error")
+            return redirect(url_for("content_jobs_detail_page", job_id=job_id))
+        body = job.get("edited_body_html") or job.get("ai_body_html") or ""
+        body = re.sub(r"<blockquote>.*?</blockquote>", "", body, flags=re.S).rstrip()
+        new_body = body + "\n" + bq
+        db.content_job_update(job_id, edited_body_html=new_body)
+        flash(f"✅ Đã chèn/làm mới bảng thông số kỹ thuật (nguồn: {sp.get('source_url','')[:50]}).", "success")
+    except Exception as e:
+        flash(f"❌ Lỗi tạo bảng thông số: {e}", "error")
+    return redirect(url_for("content_jobs_detail_page", job_id=job_id))
+
+
 def register(app):
     """Đăng ký 15 route Content Product Jobs."""
     app.add_url_rule("/content-jobs", "content_jobs_list_page", content_jobs_list_page)
@@ -377,6 +417,8 @@ def register(app):
                      "content_jobs_queue_stop", content_jobs_queue_stop, methods=["POST"])
     app.add_url_rule("/api/content-jobs/queue-status",
                      "content_jobs_queue_status_api", content_jobs_queue_status_api)
+    app.add_url_rule("/content-jobs/<int:job_id>/spec-block",
+                     "content_jobs_spec_block", content_jobs_spec_block, methods=["POST"])
     app.add_url_rule("/content-jobs/<int:job_id>/save",
                      "content_jobs_save", content_jobs_save, methods=["POST"])
     app.add_url_rule("/content-jobs/<int:job_id>/toggle-money",

@@ -38,6 +38,9 @@ _STYLE_LIST = "font-family:Arial,sans-serif;font-size:11pt;color:#000000;line-he
 _STYLE_LINK = "color:#e74c3c;font-weight:700;text-decoration:underline"
 _STYLE_LINK_INNER_STRONG = "color:#e74c3c;font-weight:700;text-decoration:underline"
 _STYLE_STRONG = "font-weight:700"
+_STYLE_TABLE = "border-collapse:collapse;width:100%;margin:14px 0;font-size:11pt;font-family:Arial,sans-serif"
+_STYLE_TH = "border:1px solid #cccccc;padding:8px 10px;vertical-align:top;color:#000000;font-family:Arial,sans-serif;font-weight:700;background:#f4f4f4;text-align:left"
+_STYLE_TD = "border:1px solid #cccccc;padding:8px 10px;vertical-align:top;color:#000000;font-family:Arial,sans-serif"
 
 
 def validate_body_md(body_md: str) -> list:
@@ -165,6 +168,13 @@ def apply_sintech_style(html: str) -> str:
     for strong in soup.find_all("strong"):
         if not strong.get("style"):
             strong["style"] = _STYLE_STRONG
+    # Bảng trong mô tả: theme Haravan KHÔNG tự style → phải inline viền/padding
+    for table in soup.find_all("table"):
+        table["style"] = _STYLE_TABLE
+    for th in soup.find_all("th"):
+        th["style"] = _STYLE_TH
+    for td in soup.find_all("td"):
+        td["style"] = _STYLE_TD
 
     return str(soup)
 
@@ -572,6 +582,20 @@ def _strip_html(html: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def build_spec_block_for_specs(product_name: str, web_specs: list, vendor: str = "",
+                               body_text: str = "") -> str:
+    """Tạo khối <blockquote> thông số kỹ thuật từ web_specs. Rỗng nếu fail.
+    KHÔNG đưa Tình trạng/Bảo hành vào bảng (đã bỏ theo yêu cầu)."""
+    try:
+        import spec_block
+        if not web_specs:
+            return ""
+        return spec_block.build_spec_blockquote(product_name, web_specs, brand=vendor)
+    except Exception as e:
+        print(f"[spec_block skip] {e}")
+        return ""
+
+
 def md_to_html(text: str) -> str:
     """Convert Markdown body → HTML cho Haravan body_html.
 
@@ -642,14 +666,54 @@ def gen_text_phase(job_id: int) -> dict:
         if is_money_auto and not is_money_db:
             db.content_job_update(job_id, is_money_product=1)
 
+        # 🔧 Web spec research (Serper) — bổ sung THÔNG SỐ THẬT để AI gen chuẩn spec/chức năng.
+        # Gộp body_html gốc (ưu tiên) + spec cào từ web. Lỗi/không key → bỏ qua, job vẫn chạy.
+        web_spec_text = ""
+        web_spec_source = ""
+        web_raw_specs = []
+        spec_conflicts = []
+        try:
+            import serper_search
+            if serper_search.is_serper_available():
+                _sp = serper_search.fetch_product_specs(f"{product_name} thông số")
+                if _sp.get("ok"):
+                    web_spec_text = _sp.get("specs_text", "")
+                    web_spec_source = _sp.get("source_url", "")
+                    web_raw_specs = _sp.get("specs", [])
+                    # So spec gốc (mô tả Haravan) vs spec web → flag lệch cho vợ verify
+                    if web_raw_specs and existing_text:
+                        spec_conflicts = serper_search.detect_spec_conflicts(existing_text, web_raw_specs)
+        except Exception as e:
+            print(f"[web spec research skip] {e}")
+
+        _spec_parts = []
+        if existing_text:
+            _spec_parts.append(existing_text)
+        if web_spec_text:
+            _spec_parts.append(f"[Thông số tra cứu từ web — {web_spec_source}]:\n{web_spec_text}")
+        combined_specs = "\n\n".join(_spec_parts).strip()
+
+        # 🔍 Research ĐỐI THỦ (SERP) — cào heading top results để hiểu nhu cầu khách
+        # + tìm khoảng trống nội dung. CHỈ để tham khảo, prompt cấm copy cấu trúc/câu chữ.
+        competitor_headings = ""
+        try:
+            import serper_search
+            if serper_search.is_serper_available():
+                _rc = serper_search.research_competitor_headings(product_name, max_urls=3)
+                if _rc.get("ok"):
+                    competitor_headings = _rc.get("competitor_headings_text", "")
+        except Exception as e:
+            print(f"[competitor research skip] {e}")
+
         product_info = {
             "product_name": product_name,
             "product_type": product_type,
             "vendor": vendor,
-            "specs": existing_text or "(SP chưa có mô tả — viết dựa trên tên SP)",
+            "specs": combined_specs or "(SP chưa có mô tả — viết dựa trên tên SP)",
             "suggested_links": suggestions,
             "template_id": template_id,
             "keyword_research": kr_data,
+            "competitor_headings": competitor_headings,
             "is_money_product": is_money,
         }
         ai_result = ai_writer.generate_blog_post(product_info)
@@ -666,6 +730,13 @@ def gen_text_phase(job_id: int) -> dict:
 
         # Convert MD → HTML preview (chưa inject ảnh — ảnh worker thêm sau)
         body_html_preview = apply_sintech_style(md_to_html(ai_result["body_markdown"]))
+
+        # 🔖 Khối thông số kỹ thuật <blockquote> cuối bài — theme Sintech tự render thành BẢNG.
+        # Dùng web_raw_specs (đã cào) + dữ liệu xác minh; raw (không style) để theme tự xử lý.
+        _spec_bq = build_spec_block_for_specs(product_name, web_raw_specs, vendor=vendor,
+                                              body_text=existing_text)
+        if _spec_bq:
+            body_html_preview = body_html_preview.rstrip() + "\n" + _spec_bq
 
         db.content_job_update(
             job_id,
@@ -684,6 +755,8 @@ def gen_text_phase(job_id: int) -> dict:
             internal_links_json=json.dumps(suggestions, ensure_ascii=False),
             ai_stats_json=json.dumps({
                 **ai_result["stats"],
+                "web_spec_source": web_spec_source or None,
+                "spec_conflicts": spec_conflicts or None,
                 "keyword_research": {
                     "core_keywords": kr_data.get("core_keywords", []),
                     "raw_count": len(kr_data.get("raw_suggestions", [])),
@@ -691,6 +764,7 @@ def gen_text_phase(job_id: int) -> dict:
                     "intent_summary": {k: len(v) for k, v in (kr_data.get("by_intent") or {}).items() if v},
                 } if kr_data else None,
             }, ensure_ascii=False),
+            spec_conflict_json=(json.dumps(spec_conflicts, ensure_ascii=False) if spec_conflicts else None),
             ai_generated_at=datetime.now().isoformat(timespec="seconds"),
             selected_title_idx=0,
             selected_meta_idx=0,

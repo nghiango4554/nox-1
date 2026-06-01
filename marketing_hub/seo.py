@@ -1686,7 +1686,8 @@ def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
                            sync_filter: str = None) -> list:
     """Lấy URL có ít nhất 1 lỗi title/meta, kèm full list issue codes.
     Tự tính thêm 2 mã duplicate_title / duplicate_meta từ DB.
-    sync_filter: 'synced' = chỉ SP đã sync · 'unsynced' = chỉ SP chưa sync · None = tất cả.
+    sync_filter: 'synced' = chỉ SP đã sync · 'unsynced' = chỉ SP chưa sync ·
+                 'error' = chỉ SP gen+sync đã FAIL · None = tất cả.
     """
     conn = db.get_conn()
     rows = conn.execute("""
@@ -1708,6 +1709,8 @@ def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
             dup_metas.add(u)
 
     synced_set = synced_title_meta_urls()
+    tm_errs = tm_error_map()
+    error_set = set(tm_errs.keys())
 
     out = []
     for r in rows:
@@ -1727,9 +1730,12 @@ def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
         if issue_filter and issue_filter not in codes:
             continue
         is_synced = r["url"] in synced_set
+        is_errored = r["url"] in error_set
         if sync_filter == "synced" and not is_synced:
             continue
         if sync_filter == "unsynced" and is_synced:
+            continue
+        if sync_filter == "error" and not is_errored:
             continue
         # Strip " – Sintech" suffix trước khi đánh giá title length
         # seo_pages.title lưu full <title> tag; rule áp cho phần custom (không có suffix).
@@ -1752,9 +1758,12 @@ def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
         if issue_filter and issue_filter not in codes:
             continue
         is_synced = r["url"] in synced_set
+        is_errored = r["url"] in error_set
         if sync_filter == "synced" and not is_synced:
             continue
         if sync_filter == "unsynced" and is_synced:
+            continue
+        if sync_filter == "error" and not is_errored:
             continue
         out.append({
             "id": r["id"],
@@ -1770,6 +1779,7 @@ def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
             "n_issues": len(codes),
             "last_crawled": r["last_crawled"],
             "synced": is_synced,
+            "gen_error": tm_errs.get(r["url"], {}).get("error"),
         })
 
     if sort == "score_asc":
@@ -1781,8 +1791,130 @@ def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
     return out[:limit]
 
 
+_TIERS_CACHE = {"data": None, "mtime": 0}
+
+
+def load_tiers() -> dict:
+    """Đọc data/seo_tiers.json (cache theo mtime). Trả dict gốc + bổ sung
+    handle_counts (handle→số SP đã sync) cho UI hiển thị badge."""
+    p = Path(__file__).parent / "data" / "seo_tiers.json"
+    try:
+        mt = p.stat().st_mtime
+    except OSError:
+        return {"tiers": [], "handle_counts": {}}
+    if _TIERS_CACHE["data"] is None or _TIERS_CACHE["mtime"] != mt:
+        with open(p, encoding="utf-8") as f:
+            data = json.load(f)
+        _TIERS_CACHE["data"] = data
+        _TIERS_CACHE["mtime"] = mt
+    data = dict(_TIERS_CACHE["data"])
+    try:
+        data["handle_counts"] = db.collection_products_handle_counts()
+    except Exception:
+        data["handle_counts"] = {}
+    return data
+
+
+def _strip_title_suffix_len(raw_title: str) -> int:
+    stripped = re.sub(r"\s*[-–—|]\s*sintech.*$", "", raw_title or "",
+                      flags=re.IGNORECASE).strip()
+    return len(stripped)
+
+
+def list_tier_products(handles, mode: str = "issues", limit: int = 5000) -> list:
+    """SP thuộc bất kỳ collection nào trong `handles`.
+    mode='issues' → chỉ SP đang có lỗi title/meta (giao với list_title_meta_pages).
+    mode='all'    → tất cả SP trong collection (SP clean → issue_codes=[]).
+    Item cùng schema với list_title_meta_pages để tái dùng UI bảng.
+    """
+    urls = db.collection_products_urls(handles)
+    if not urls:
+        return []
+    tm = {p["url"]: p for p in list_title_meta_pages(limit=100000)}
+
+    if mode == "all":
+        synced = synced_title_meta_urls()
+        seo_rows = db.seo_pages_by_urls(list(urls))
+        col_rows = {r["product_url"]: r for r in db.collection_products_rows(handles)}
+        out = []
+        for u in urls:
+            if u in tm:
+                out.append(tm[u])
+                continue
+            sr = seo_rows.get(u) or {}
+            cr = col_rows.get(u) or {}
+            raw_title = sr.get("title") or cr.get("title") or ""
+            out.append({
+                "id": sr.get("id"),
+                "url": u,
+                "url_type": sr.get("url_type") or "product",
+                "title": raw_title,
+                "title_len": sr.get("title_len") or len(raw_title),
+                "title_stripped_len": _strip_title_suffix_len(raw_title),
+                "meta_desc": sr.get("meta_desc") or "",
+                "meta_desc_len": sr.get("meta_desc_len") or 0,
+                "score": sr.get("score"),
+                "issue_codes": [],
+                "n_issues": 0,
+                "last_crawled": sr.get("last_crawled"),
+                "synced": u in synced,
+            })
+    else:
+        out = [tm[u] for u in urls if u in tm]
+
+    out.sort(key=lambda x: (x["score"] if x.get("score") is not None else 100,
+                            -x.get("n_issues", 0)))
+    return out[:limit]
+
+
+def _node_handles(node) -> list:
+    """Gộp handle của 1 node + tất cả con/cháu (để tính SP distinct của tầng)."""
+    hs = []
+    if node.get("handle"):
+        hs.append(node["handle"])
+    for c in node.get("children", []) or []:
+        if c.get("handle"):
+            hs.append(c["handle"])
+        for g in c.get("children", []) or []:
+            if g.get("handle"):
+                hs.append(g["handle"])
+    return hs
+
+
+def tier_progress() -> dict:
+    """Tiến độ FIX title/meta theo từng tầng.
+    need  = SP trong tầng đang có lỗi title/meta.
+    fixed = trong số đó đã sync (đã gen+sync lên Haravan).
+    pct   = fixed/need (100% nếu need=0 → tầng đã sạch).
+    Trả nested theo đúng thứ tự TIERS để frontend map theo index.
+    """
+    data = load_tiers()
+    issue_urls = {p["url"] for p in list_title_meta_pages(limit=100000)}
+    synced = synced_title_meta_urls()
+
+    def calc(handles):
+        urls = db.collection_products_urls(handles)
+        total = len(urls)
+        need_set = urls & issue_urls
+        need = len(need_set)
+        fixed = len(need_set & synced)
+        pct = round(fixed / need * 100) if need else 100
+        return {"total": total, "need": need, "fixed": fixed, "pct": pct}
+
+    out = []
+    for t1 in data["tiers"]:
+        t2list = [calc(_node_handles(t2)) for t2 in (t1.get("children") or [])]
+        node = calc(_node_handles(t1))
+        node["t2"] = t2list
+        out.append(node)
+    return {"tiers": out}
+
+
 def title_meta_summary() -> dict:
-    """Đếm số URL theo từng mã issue title/meta + tổng."""
+    """Đếm số URL theo từng mã issue title/meta + tổng.
+    Kèm tiến độ gen BỀN VỮNG (đọc file backup, không phụ thuộc job in-memory):
+    product_synced = SP product lỗi đã từng gen+sync · product_unsynced = còn lại chưa gen.
+    """
     pages = list_title_meta_pages(limit=10000)
     by_code = {}
     by_type = {}
@@ -1791,10 +1923,21 @@ def title_meta_summary() -> dict:
             by_code[c] = by_code.get(c, 0) + 1
         t = p["url_type"] or "other"
         by_type[t] = by_type.get(t, 0) + 1
+    synced_set = synced_title_meta_urls()
+    error_set = errored_title_meta_urls()
+    product_pages = [p for p in pages if p["url_type"] == "product"]
+    product_synced = sum(1 for p in product_pages if p["url"] in synced_set)
+    product_error = sum(1 for p in product_pages if p["url"] in error_set)
     return {
         "total": len(pages),
         "by_code": by_code,
         "by_type": by_type,
+        "product_total": len(product_pages),
+        "product_synced": product_synced,
+        "product_unsynced": len(product_pages) - product_synced,
+        "product_error": product_error,
+        "synced_total_all": len(synced_set),
+        "error_total_all": len(error_set),
     }
 
 
@@ -1839,28 +1982,50 @@ OUTPUT BẮT BUỘC: chỉ JSON thuần (KHÔNG markdown code fence, KHÔNG text
 }"""
 
 
-def _gen_title_meta_via_codex(product_title: str, url: str,
-                              current_title: str = "", current_meta: str = "") -> dict:
-    """Gen 3 title + 3 meta qua AI fallback chain (Codex→Claude→Gemini). Return {ok, titles[], metas[], error}."""
-    import ai_provider
+# Giới hạn độ dài (đồng bộ với rule + validate cứng dưới)
+_TITLE_MAX = 61
+_META_MIN, _META_MAX = 140, 160
 
-    user_msg = f"""SP cần viết:
-- Tên SP / chủ đề: {product_title}
-- URL: {url}
-- Title hiện tại (cần thay): {current_title or '(rỗng)'} [{len(current_title)}c]
-- Meta hiện tại (cần thay): {current_meta or '(rỗng)'} [{len(current_meta)}c]
+# Marker section "thông số kỹ thuật" — 86% SP AI-gen có heading này (khảo sát 120 SP).
+_SPEC_MARKER_RE = re.compile(r"(thông\s*số\s*kỹ\s*thuật|cấu\s*hình|specifications?|thông\s*số)", re.I)
 
-Sinh 3 title + 3 meta mới theo rule. Trả JSON thuần."""
 
-    try:
-        raw = ai_provider.call_ai(_TITLE_META_SYSTEM_PROMPT, user_msg, timeout=120)
-    except ai_provider.AIQuotaError as e:
-        return {"ok": False, "error": f"AI hết quota (mọi provider): {e}"}
-    except Exception as e:
-        return {"ok": False, "error": f"AI error: {e}"}
+def _build_spec_excerpt(body_html: str, max_total: int = 2200) -> str:
+    """Strip HTML body_html → lấy 3 vùng spec THẬT cho AI (chống bịa cấu hình).
 
-    text = raw.strip()
-    # Strip code fence nếu có
+    - Head 500c: tên SP, brand, model, "cũ đẹp"
+    - Spec section 1200c: cắt từ marker 'thông số kỹ thuật|cấu hình' (SP AI-gen, ~86%)
+    - Tail 600c: fallback cho SP cũ liệt kê spec ở CUỐI (laptop/VGA cũ, ~14%)
+    """
+    if not body_html:
+        return ""
+    text = re.sub(r"<(script|style)[\s\S]*?</\1>", " ", body_html, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"&nbsp;|&amp;|&[a-z]+;|&#\d+;", " ", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return ""
+
+    head = text[:500]
+    parts = ["[ĐẦU MÔ TẢ] " + head]
+
+    m = _SPEC_MARKER_RE.search(text)
+    if m:
+        spec = text[m.start(): m.start() + 1200].strip()
+        if spec and spec not in head:
+            parts.append("[THÔNG SỐ] " + spec)
+
+    if len(text) > 600:
+        tail = text[-600:].strip()
+        if tail and tail not in head and (not m or tail not in text[m.start(): m.start() + 1200]):
+            parts.append("[CUỐI MÔ TẢ] " + tail)
+
+    return "\n".join(parts)[:max_total + 300]
+
+
+def _parse_title_meta_json(raw: str) -> dict:
+    """Parse output AI → {ok, titles[], metas[]} hoặc {ok:False, error, raw}."""
+    text = (raw or "").strip()
     text = re.sub(r"^```(?:json)?\s*", "", text)
     text = re.sub(r"\s*```\s*$", "", text)
     try:
@@ -1868,31 +2033,168 @@ Sinh 3 title + 3 meta mới theo rule. Trả JSON thuần."""
     except json.JSONDecodeError:
         m = re.search(r"\{[\s\S]*\}", text)
         if not m:
-            return {"ok": False, "error": "Codex trả không phải JSON.", "raw": text[:500]}
+            return {"ok": False, "error": "AI trả không phải JSON.", "raw": text[:500]}
         try:
             data = json.loads(m.group(0))
         except json.JSONDecodeError as e:
             return {"ok": False, "error": f"JSON parse lỗi: {e}", "raw": text[:500]}
-
     titles = data.get("titles") or []
     metas = data.get("metas") or []
     if len(titles) < 1 or len(metas) < 1:
-        return {"ok": False, "error": "Codex không trả đủ titles/metas.", "raw": text[:500]}
+        return {"ok": False, "error": "AI không trả đủ titles/metas.", "raw": text[:500]}
     return {"ok": True, "titles": titles, "metas": metas}
+
+
+def _length_hint(titles: list, metas: list) -> tuple:
+    """Đếm candidate hợp lệ + build hint sửa độ dài. Return (n_title_ok, n_meta_ok, hint)."""
+    bad, n_t, n_m = [], 0, 0
+    for i, t in enumerate(titles):
+        L = len((t or "").strip())
+        if L > _TITLE_MAX:
+            bad.append(f"Title #{i+1} dài {L}c (>{_TITLE_MAX}) → rút ngắn ≤{_TITLE_MAX}c")
+        else:
+            n_t += 1
+    for i, mt in enumerate(metas):
+        L = len((mt or "").strip())
+        if L > _META_MAX:
+            bad.append(f"Meta #{i+1} dài {L}c (>{_META_MAX}) → rút còn 145-158c")
+        elif L < _META_MIN:
+            bad.append(f"Meta #{i+1} ngắn {L}c (<{_META_MIN}) → viết thêm tới 145-158c")
+        else:
+            n_m += 1
+    return n_t, n_m, "; ".join(bad)
+
+
+def _first_valid(cands: list, lo: int, hi: int):
+    """Candidate ĐẦU TIÊN có độ dài trong [lo, hi]. None nếu không có."""
+    for c in cands:
+        s = (c or "").strip()
+        if lo <= len(s) <= hi:
+            return s
+    return None
+
+
+def _gen_title_meta_via_codex(product_title: str, url: str,
+                              current_title: str = "", current_meta: str = "",
+                              body_excerpt: str = "", tags: str = "",
+                              provider: str = None) -> dict:
+    """Gen 3 title + 3 meta qua AI fallback chain (Codex→Claude→Gemini).
+
+    - Inject `body_excerpt` (spec THẬT từ body_html) + `tags` → AI không bịa cấu hình.
+    - Retry 1 LẦN với hint nếu lần đầu KHÔNG có title hợp lệ HOẶC không có meta hợp lệ.
+    Return {ok, titles[], metas[], retried, error}.
+    """
+    import ai_provider
+
+    spec_block = (
+        "\n- Trích MÔ TẢ SP (spec THẬT — CHỈ dùng số liệu/cấu hình xuất hiện ở đây, "
+        f"TUYỆT ĐỐI không bịa thêm cấu hình):\n{body_excerpt}"
+        if body_excerpt else ""
+    )
+    tag_block = f"\n- Tags Haravan: {tags}" if tags else ""
+
+    base_msg = f"""SP cần viết:
+- Tên SP / chủ đề: {product_title}
+- URL: {url}
+- Title hiện tại (cần thay): {current_title or '(rỗng)'} [{len(current_title)}c]
+- Meta hiện tại (cần thay): {current_meta or '(rỗng)'} [{len(current_meta)}c]{tag_block}{spec_block}
+
+Sinh 3 title + 3 meta mới theo rule. Trả JSON thuần."""
+
+    def _call(hint: str = "") -> dict:
+        msg = base_msg
+        if hint:
+            msg += (f"\n\n⚠️ LẦN TRƯỚC SAI ĐỘ DÀI: {hint}\n"
+                    "Lần này TỰ ĐẾM ký tự từng câu, sửa cho ĐÚNG giới hạn rồi mới trả.")
+        if provider:
+            raw = ai_provider.call_ai_single(provider, _TITLE_META_SYSTEM_PROMPT, msg, timeout=120)
+        else:
+            raw = ai_provider.call_ai(_TITLE_META_SYSTEM_PROMPT, msg, timeout=120)
+        return _parse_title_meta_json(raw)
+
+    try:
+        parsed = _call()
+    except ai_provider.AIQuotaError as e:
+        return {"ok": False, "error": f"AI hết quota (mọi provider): {e}"}
+    except Exception as e:
+        return {"ok": False, "error": f"AI error: {e}"}
+    if not parsed["ok"]:
+        return parsed
+
+    titles, metas = parsed["titles"], parsed["metas"]
+    n_t, n_m, hint = _length_hint(titles, metas)
+    retried = False
+    if (n_t == 0 or n_m == 0) and hint:
+        retried = True
+        try:
+            retry = _call(hint)
+            if retry["ok"]:
+                rt, rm, _ = _length_hint(retry["titles"], retry["metas"])
+                # Chỉ nhận retry nếu cải thiện (có thêm candidate hợp lệ)
+                if rt + rm > n_t + n_m:
+                    titles, metas = retry["titles"], retry["metas"]
+        except Exception:
+            pass  # giữ kết quả lần 1
+
+    return {"ok": True, "titles": titles, "metas": metas, "retried": retried}
 
 
 _TITLE_META_BACKUP_DIR = Path(__file__).parent.parent / "data" / "title_meta_fix_backup"
 
+# ─── Log lỗi gen BỀN VỮNG (không mất khi restart) ───
+# Map url → {error, ts}. Ghi khi gen/sync FAIL (trừ hết-quota: tạm thời, không tính lỗi).
+# Xóa khi SP đó gen lại THÀNH CÔNG → dùng cho cột Trạng thái + bộ lọc "gen lỗi".
+_TITLE_META_ERROR_LOG = Path(__file__).parent.parent / "data" / "title_meta_errors.json"
+_tm_error_lock = threading.Lock()
 
-def fix_title_meta_for_url(url: str, force_title: str = None, force_meta: str = None) -> dict:
-    """Auto-fix title + meta của 1 URL: gọi Codex gen → PUT Haravan metafields_global_*.
-    Nếu force_title/force_meta cung cấp thì dùng luôn, skip Codex.
-    Support: product. Blog/page/collection: TODO sau.
-    """
+
+def _load_tm_errors() -> dict:
+    try:
+        return json.loads(_TITLE_META_ERROR_LOG.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_tm_errors(d: dict) -> None:
+    try:
+        _TITLE_META_ERROR_LOG.parent.mkdir(parents=True, exist_ok=True)
+        _TITLE_META_ERROR_LOG.write_text(
+            json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _record_tm_error(url: str, error: str) -> None:
+    with _tm_error_lock:
+        d = _load_tm_errors()
+        d[url] = {"error": (str(error) or "Lỗi không rõ")[:300],
+                  "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        _save_tm_errors(d)
+
+
+def _clear_tm_error(url: str) -> None:
+    with _tm_error_lock:
+        d = _load_tm_errors()
+        if url in d:
+            d.pop(url, None)
+            _save_tm_errors(d)
+
+
+def errored_title_meta_urls() -> set:
+    """Set URL gen+sync title/meta đã FAIL (bền vững, đọc từ log)."""
+    return set(_load_tm_errors().keys())
+
+
+def tm_error_map() -> dict:
+    """Map url → {error, ts} cho UI tooltip/badge."""
+    return _load_tm_errors()
+
+
+def _resolve_product_for_url(url: str) -> dict:
+    """URL → {ok, haravan_id, product, product_name, old_title, old_meta} hoặc {ok:False, error}."""
     url_type = classify_url(url)
     if url_type != "product":
         return {"ok": False, "error": f"Loại '{url_type}' chưa hỗ trợ auto-fix (chỉ product)."}
-
     path = urlparse(url).path
     m = re.search(r"/products/([^/]+)", path)
     if not m:
@@ -1902,34 +2204,119 @@ def fix_title_meta_for_url(url: str, force_title: str = None, force_meta: str = 
     if not row:
         return {"ok": False, "error": "Không tìm thấy SP trong DB local. Sync Haravan products trước."}
     haravan_id = row["haravan_id"]
-
     try:
         product = haravan_client.get_product(haravan_id)
     except Exception as e:
         return {"ok": False, "error": f"Fetch product lỗi: {e}"}
+    return {
+        "ok": True,
+        "haravan_id": haravan_id,
+        "product": product,
+        "product_name": product.get("title") or row.get("title") or handle,
+        "old_title": product.get("metafields_global_title_tag") or "",
+        "old_meta": product.get("metafields_global_description_tag") or "",
+    }
 
-    product_name = product.get("title") or row.get("title") or handle
-    old_title = product.get("metafields_global_title_tag") or ""
-    old_meta = product.get("metafields_global_description_tag") or ""
+
+def preview_title_meta_for_url(url: str) -> dict:
+    """Gen 3 title + 3 meta cho 1 URL — CHỈ preview, KHÔNG PUT.
+
+    Phục vụ UI cho vợ click chọn 1/3 title + 1/3 meta trước khi sync.
+    """
+    info = _resolve_product_for_url(url)
+    if not info["ok"]:
+        return info
+    product = info["product"]
+    body_excerpt = _build_spec_excerpt(product.get("body_html") or "")
+    tags = product.get("tags") or ""
+    gen = _gen_title_meta_via_codex(
+        info["product_name"], url, info["old_title"], info["old_meta"],
+        body_excerpt=body_excerpt, tags=tags,
+    )
+    if not gen["ok"]:
+        return {"ok": False, "error": gen["error"], "raw": gen.get("raw")}
+    titles = [(t or "").strip() for t in gen["titles"][:3] if (t or "").strip()]
+    metas = [(mt or "").strip() for mt in gen["metas"][:3] if (mt or "").strip()]
+    return {
+        "ok": True,
+        "url": url,
+        "old_title": info["old_title"],
+        "old_meta": info["old_meta"],
+        "titles": titles,
+        "title_lens": [len(t) for t in titles],
+        "title_ok": [len(t) <= _TITLE_MAX for t in titles],
+        "metas": metas,
+        "meta_lens": [len(mt) for mt in metas],
+        "meta_ok": [_META_MIN <= len(mt) <= _META_MAX for mt in metas],
+        "spec_used": bool(body_excerpt),
+        "retried": gen.get("retried", False),
+    }
+
+
+def fix_title_meta_for_url(url: str, force_title: str = None, force_meta: str = None,
+                           provider: str = None) -> dict:
+    """Wrapper: gọi gen+sync rồi cập nhật LOG LỖI bền vững.
+    - Thành công → xóa url khỏi log lỗi.
+    - Fail (trừ hết-quota: tạm thời) → ghi url vào log lỗi.
+    """
+    result = _fix_title_meta_impl(url, force_title=force_title,
+                                  force_meta=force_meta, provider=provider)
+    try:
+        if result.get("ok"):
+            _clear_tm_error(url)
+        else:
+            err = result.get("error") or ""
+            if "quota" not in err.lower():  # hết quota = tạm thời, không tính lỗi gen
+                _record_tm_error(url, err)
+    except Exception:
+        pass
+    return result
+
+
+def _fix_title_meta_impl(url: str, force_title: str = None, force_meta: str = None,
+                         provider: str = None) -> dict:
+    """Auto-fix title + meta của 1 URL: gọi Codex gen → PUT Haravan metafields_global_*.
+    Nếu force_title/force_meta cung cấp thì dùng luôn, skip Codex.
+    `provider`: ghim cứng 1 provider AI ("codex"/"claude") cho dual-AI; None = fallback chain.
+    Support: product. Blog/page/collection: TODO sau.
+    """
+    info = _resolve_product_for_url(url)
+    if not info["ok"]:
+        return info
+    haravan_id = info["haravan_id"]
+    product = info["product"]
+    product_name = info["product_name"]
+    old_title = info["old_title"]
+    old_meta = info["old_meta"]
 
     if force_title and force_meta:
         new_title = force_title.strip()
         new_meta = force_meta.strip()
         ai_used = False
     else:
-        gen = _gen_title_meta_via_codex(product_name, url, old_title, old_meta)
+        body_excerpt = _build_spec_excerpt(product.get("body_html") or "")
+        tags = product.get("tags") or ""
+        gen = _gen_title_meta_via_codex(product_name, url, old_title, old_meta,
+                                        body_excerpt=body_excerpt, tags=tags,
+                                        provider=provider)
         if not gen["ok"]:
             return {"ok": False, "error": gen["error"], "raw": gen.get("raw")}
-        new_title = gen["titles"][0].strip()
-        new_meta = gen["metas"][0].strip()
+        # Chọn candidate HỢP LỆ đầu tiên (sau retry) thay vì cứng [0] (xưa hay PUT bản sai).
+        new_title = _first_valid(gen["titles"], 1, _TITLE_MAX)
+        new_meta = _first_valid(gen["metas"], _META_MIN, _META_MAX)
         ai_used = True
+        if not new_title or not new_meta:
+            return {"ok": False,
+                    "error": "AI không gen được title/meta đúng độ dài (đã retry 1 lần).",
+                    "gen_title": (gen["titles"][0].strip() if gen["titles"] else ""),
+                    "gen_meta": (gen["metas"][0].strip() if gen["metas"] else "")}
 
-    # Validate length cứng
-    if len(new_title) > 61:
-        return {"ok": False, "error": f"Title gen {len(new_title)}c > 61c — Codex output sai.",
+    # Validate length cứng (chốt chặn cho cả nhánh force vợ chọn từ UI)
+    if len(new_title) > _TITLE_MAX:
+        return {"ok": False, "error": f"Title {len(new_title)}c > {_TITLE_MAX}c — không hợp lệ.",
                 "gen_title": new_title, "gen_meta": new_meta}
-    if len(new_meta) > 160 or len(new_meta) < 140:
-        return {"ok": False, "error": f"Meta gen {len(new_meta)}c ngoài 140-160 — Codex output sai.",
+    if len(new_meta) > _META_MAX or len(new_meta) < _META_MIN:
+        return {"ok": False, "error": f"Meta {len(new_meta)}c ngoài {_META_MIN}-{_META_MAX} — không hợp lệ.",
                 "gen_title": new_title, "gen_meta": new_meta}
 
     # Backup
@@ -2119,6 +2506,206 @@ def start_title_meta_fix_all_async(url_type: str = None, issue_filter: str = Non
                          args=(url_type, issue_filter, sync_filter), daemon=True)
     t.start()
     return True
+
+
+def run_title_meta_fix_urls(urls: list):
+    """Gen+Sync 1 danh sách URL SP cụ thể (đã lọc sẵn ở frontend — phân tầng).
+    KHÔNG skip SP đã gen: vợ chủ động chọn tập này, sẽ tự check title/meta sau.
+    Tái dùng _title_meta_fix_state để frontend poll realtime y như Auto-fix tất cả."""
+    fixable = [u for u in dict.fromkeys(urls or []) if u and "/products/" in u]
+
+    with _title_meta_fix_lock:
+        _title_meta_fix_state.update({
+            "running": True, "stop_requested": False, "mode": "filtered",
+            "total": len(fixable), "checked": 0,
+            "success": 0, "failed": 0, "skipped": 0,
+            "current_url": "", "quota_hit": False,
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+            "finished_at": None,
+            "message": f"Bắt đầu gen+sync {len(fixable)} SP (đã lọc theo tầng).",
+            "results": {},
+        })
+
+    for u in fixable:
+        with _title_meta_fix_lock:
+            if _title_meta_fix_state["stop_requested"]:
+                break
+            _title_meta_fix_state["current_url"] = u
+        try:
+            result = fix_title_meta_for_url(u)
+        except Exception as e:
+            result = {"ok": False, "error": f"Exception: {e}"}
+        quota_hit = (not result.get("ok")) and ("quota" in (result.get("error") or "").lower())
+        with _title_meta_fix_lock:
+            _title_meta_fix_state["checked"] += 1
+            if result.get("ok"):
+                _title_meta_fix_state["success"] += 1
+                status = "success"
+            else:
+                _title_meta_fix_state["failed"] += 1
+                status = "failed"
+            _title_meta_fix_state["results"][u] = {
+                "status": status,
+                "new_title": result.get("new_title"),
+                "new_meta": result.get("new_meta"),
+                "title_len": result.get("title_len"),
+                "meta_len": result.get("meta_len"),
+                "error": result.get("error"),
+            }
+            if quota_hit:
+                # Hết quota AI → dừng sạch (đừng fail hết phần còn lại). Lần này SP vừa rồi
+                # tính là failed; rollback để không tính nó vào "đã xử lý" gây hiểu nhầm.
+                _title_meta_fix_state["checked"] -= 1
+                _title_meta_fix_state["failed"] -= 1
+                _title_meta_fix_state["results"].pop(u, None)
+                _title_meta_fix_state["stop_requested"] = True
+                _title_meta_fix_state["quota_hit"] = True
+        if quota_hit:
+            break
+
+    with _title_meta_fix_lock:
+        quota = _title_meta_fix_state.get("quota_hit")
+        was_stopped = _title_meta_fix_state["stop_requested"] and not quota
+        _title_meta_fix_state["running"] = False
+        _title_meta_fix_state["mode"] = None
+        _title_meta_fix_state["finished_at"] = datetime.now().isoformat(timespec="seconds")
+        _title_meta_fix_state["current_url"] = ""
+        if quota:
+            prefix = "⛔ Dừng vì hết quota AI"
+        elif was_stopped:
+            prefix = "⏹️ Đã dừng"
+        else:
+            prefix = "🏁 Hoàn tất"
+        _title_meta_fix_state["message"] = (
+            f"{prefix} — đã gen {_title_meta_fix_state['success']} SP "
+            f"(❌ {_title_meta_fix_state['failed']}) / tổng {_title_meta_fix_state['total']}. "
+            + ("Đợi quota reset rồi bấm lại để gen tiếp phần còn lại." if quota else "")
+        )
+
+
+def start_title_meta_fix_urls_async(urls: list) -> dict:
+    with _title_meta_fix_lock:
+        if _title_meta_fix_state["running"]:
+            return {"ok": False, "error": "Job đang chạy rồi."}
+    clean = [u for u in dict.fromkeys(urls or []) if u and "/products/" in u]
+    if not clean:
+        return {"ok": False, "error": "Không có SP hợp lệ trong tập đã lọc."}
+    t = threading.Thread(target=run_title_meta_fix_urls, args=(clean,), daemon=True)
+    t.start()
+    return {"ok": True, "count": len(clean)}
+
+
+# ─────────────────── DUAL-AI: Codex + Claude song song ───────────────────
+
+def run_title_meta_fix_dual(urls: list):
+    """Gen+Sync 2 LUỒNG song song: 1 worker ghim Codex, 1 worker ghim Claude.
+    Cùng bốc SP từ 1 hàng đợi chung (tự cân bằng tải). Quota theo TỪNG provider:
+    1 provider hết → worker đó nghỉ, worker kia chạy tiếp. Cả 2 hết → dừng.
+    """
+    queue = [u for u in dict.fromkeys(urls or []) if u and "/products/" in u]
+
+    with _title_meta_fix_lock:
+        _title_meta_fix_state.update({
+            "running": True, "stop_requested": False, "mode": "dual",
+            "total": len(queue), "checked": 0,
+            "success": 0, "failed": 0, "skipped": 0,
+            "current_url": "", "quota_hit": False,
+            "current_codex": "", "current_claude": "",
+            "quota_codex": False, "quota_claude": False,
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+            "finished_at": None,
+            "message": f"Dual-AI: gen {len(queue)} SP bằng Codex + Claude song song.",
+            "results": {},
+        })
+
+    def worker(prov: str):
+        cur_key = f"current_{prov}"
+        quota_key = f"quota_{prov}"
+        while True:
+            with _title_meta_fix_lock:
+                if _title_meta_fix_state["stop_requested"] or not queue:
+                    break
+                url = queue.pop(0)
+                _title_meta_fix_state[cur_key] = url
+            try:
+                result = fix_title_meta_for_url(url, provider=prov)
+            except Exception as e:
+                result = {"ok": False, "error": f"Exception: {e}"}
+            is_quota = (not result.get("ok")) and ("quota" in (result.get("error") or "").lower())
+            with _title_meta_fix_lock:
+                if is_quota:
+                    # Trả SP về hàng đợi cho worker kia làm; worker này nghỉ.
+                    queue.insert(0, url)
+                    _title_meta_fix_state[quota_key] = True
+                    _title_meta_fix_state[cur_key] = ""
+                    break
+                _title_meta_fix_state["checked"] += 1
+                if result.get("ok"):
+                    _title_meta_fix_state["success"] += 1
+                    status = "success"
+                else:
+                    _title_meta_fix_state["failed"] += 1
+                    status = "failed"
+                _title_meta_fix_state["results"][url] = {
+                    "status": status, "provider": prov,
+                    "new_title": result.get("new_title"),
+                    "new_meta": result.get("new_meta"),
+                    "title_len": result.get("title_len"),
+                    "meta_len": result.get("meta_len"),
+                    "error": result.get("error"),
+                }
+                _title_meta_fix_state[cur_key] = ""
+
+    tc = threading.Thread(target=worker, args=("codex",), daemon=True)
+    tk = threading.Thread(target=worker, args=("claude",), daemon=True)
+    tc.start()
+    tk.start()
+    tc.join()
+    tk.join()
+
+    with _title_meta_fix_lock:
+        st = _title_meta_fix_state
+        both_quota = st["quota_codex"] and st["quota_claude"]
+        leftover = len(queue)
+        st["running"] = False
+        st["mode"] = None
+        st["finished_at"] = datetime.now().isoformat(timespec="seconds")
+        st["current_codex"] = st["current_claude"] = st["current_url"] = ""
+        if st["stop_requested"]:
+            prefix = "⏹️ Đã dừng"
+        elif both_quota:
+            prefix = "⛔ Cả Codex + Claude đều hết quota"
+            st["quota_hit"] = True
+        else:
+            prefix = "🏁 Hoàn tất"
+        qnote = ""
+        if (st["quota_codex"] or st["quota_claude"]) and not both_quota:
+            out = "Codex" if st["quota_codex"] else "Claude"
+            qnote = f" ({out} hết quota, provider kia gánh nốt)"
+        st["message"] = (
+            f"{prefix}{qnote} — gen {st['success']} SP (❌ {st['failed']}) / tổng {st['total']}. "
+            + (f"Còn {leftover} SP chưa làm, đợi quota reset bấm lại." if leftover else "")
+        )
+
+
+def start_title_meta_fix_dual_async(urls: list) -> dict:
+    """Khởi động dual-AI. Guard: phải có CẢ Codex + Claude khả dụng + chưa có job nào chạy."""
+    import ai_provider
+    with _title_meta_fix_lock:
+        if _title_meta_fix_state["running"]:
+            return {"ok": False, "error": "Job đang chạy rồi — dừng job hiện tại trước."}
+    avail = ai_provider.available_providers()
+    missing = [p for p in ("codex", "claude") if p not in avail]
+    if missing:
+        return {"ok": False,
+                "error": f"Dual-AI cần CẢ Codex + Claude khả dụng. Thiếu: {', '.join(missing)}. "
+                         f"(Đang có: {', '.join(avail) or 'không có'})"}
+    clean = [u for u in dict.fromkeys(urls or []) if u and "/products/" in u]
+    if not clean:
+        return {"ok": False, "error": "Không có SP hợp lệ trong tập."}
+    t = threading.Thread(target=run_title_meta_fix_dual, args=(clean,), daemon=True)
+    t.start()
+    return {"ok": True, "count": len(clean), "providers": ["codex", "claude"]}
 
 
 # ─── Gen lại TỪNG SP qua hàng chờ (realtime, dùng chung state với fix-all) ───
