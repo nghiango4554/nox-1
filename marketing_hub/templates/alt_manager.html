@@ -140,6 +140,7 @@
         <th style="width:140px">Loại</th>
         <th style="width:140px">Vendor</th>
         <th style="width:200px;text-align:center">ALT Coverage ảnh SP</th>
+        <th style="width:96px;text-align:center">Ngày sync</th>
         <th style="width:140px;text-align:center">Action</th>
       </tr>
     </thead>
@@ -174,6 +175,9 @@
             {% if it.good %}<span style="color:#15803d;font-weight:600">✅{{ it.good }}</span>{% endif %}
           </div>
         </td>
+        <td style="text-align:center;font-size:11px;white-space:nowrap">
+          {% if it.alt_synced_at %}<span style="color:#15803d">{{ it.alt_synced_at }}</span>{% else %}<span class="muted">—</span>{% endif %}
+        </td>
         <td style="text-align:center">
           <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
             <button class="btn btn-sm btn-primary" id="gen-btn-{{ it.product_id }}"
@@ -188,7 +192,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="6" style="padding:24px;text-align:center" class="muted">Không có SP nào khớp filter.</td></tr>
+      <tr><td colspan="7" style="padding:24px;text-align:center" class="muted">Không có SP nào khớp filter.</td></tr>
       {% endfor %}
     </tbody>
   </table>

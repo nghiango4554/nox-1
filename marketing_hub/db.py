@@ -310,13 +310,25 @@ CREATE INDEX IF NOT EXISTS idx_colprod_url ON collection_products(product_url);
 """
 
 
+_WAL_SET = False  # journal_mode=WAL chỉ cần set 1 LẦN/tiến trình (bền trong file DB)
+
+
 def get_conn():
+    global _WAL_SET
     conn = sqlite3.connect(DB_PATH, timeout=30)  # 30s busy timeout
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout=30000")    # đặt TRƯỚC để mọi pragma sau tôn trọng
     conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode=WAL")      # WAL cho concurrent read/write
-    conn.execute("PRAGMA busy_timeout=30000")    # retry 30s nếu DB locked (tránh lock khi nhiều job cùng ghi)
-    conn.execute("PRAGMA synchronous=NORMAL")    # nhanh hơn FULL, vẫn safe với WAL
+    conn.execute("PRAGMA synchronous=NORMAL")    # per-conn, non-blocking
+    # WAL là persistent property của file DB → set 1 lần lúc khởi động (không contention).
+    # Trước đây set MỖI connection → khi đang crawl ghi liên tục, pragma này kẹt chờ lock
+    # tới 30s/lần → vào trang title-meta lúc crawl bị treo ~60s. Giờ bỏ khỏi hot path.
+    if not _WAL_SET:
+        try:
+            conn.execute("PRAGMA journal_mode=WAL")
+            _WAL_SET = True
+        except Exception:
+            pass
     return conn
 
 
@@ -339,6 +351,7 @@ def init_db():
         "desc_h1_count": "INTEGER DEFAULT 0",
         "desc_h1_text": "TEXT",
         "desc_h1_scanned_at": "TEXT",
+        "desc_h1_fixed_at": "TEXT",  # thời điểm fix H1→H2 + PUT Haravan (cột "Ngày sync")
         "desc_word_count": "INTEGER",
         "desc_empty_scanned_at": "TEXT",
         # Schema validator (Task 4 SEO Crawl Optimization, 30/5/2026)
@@ -382,6 +395,11 @@ def init_db():
         conn.execute("ALTER TABLE content_jobs ADD COLUMN spec_conflict_json TEXT")
     # Default sync_meta_title + sync_meta_desc = 1 (em đã chốt sync hết, không cần tick)
     conn.execute("UPDATE content_jobs SET sync_meta_title=1, sync_meta_desc=1 WHERE sync_meta_title=0 OR sync_meta_desc=0")
+
+    # haravan_products: cột alt_synced_at — cột "Ngày sync" ở /alt-manager (lúc PUT alt lên Haravan)
+    hv_cols = {r["name"] for r in conn.execute("PRAGMA table_info(haravan_products)").fetchall()}
+    if "alt_synced_at" not in hv_cols:
+        conn.execute("ALTER TABLE haravan_products ADD COLUMN alt_synced_at TEXT")
 
     # ─── Blog Pillar/Cluster (T4) ───
     conn.execute("""
@@ -960,7 +978,7 @@ def seo_h1_in_desc_list(url_type: str = None, only_violations: bool = True,
     """List URL đã quét H1-trong-mô-tả. only_violations=True chỉ trả URL có ≥1 H1."""
     conn = get_conn()
     sql = """SELECT url, url_type, desc_h1_count, desc_h1_text, desc_h1_scanned_at,
-                    title, score
+                    desc_h1_fixed_at, title, score
              FROM seo_pages
              WHERE desc_h1_scanned_at IS NOT NULL"""
     args = []
@@ -974,6 +992,58 @@ def seo_h1_in_desc_list(url_type: str = None, only_violations: bool = True,
     rows = conn.execute(sql, args).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def seo_mark_desc_h1_fixed(url: str, fixed_at: str):
+    """Ghi thời điểm fix H1→H2 + PUT Haravan thành công (cột 'Ngày sync')."""
+    conn = get_conn()
+    conn.execute("UPDATE seo_pages SET desc_h1_fixed_at = ? WHERE url = ?", (fixed_at, url))
+    conn.commit()
+    conn.close()
+
+
+def seo_urls_by_type(types: list) -> list:
+    """Tất cả URL trong seo_pages thuộc các url_type cho trước (dùng cho re-crawl FULL)."""
+    if not types:
+        return []
+    conn = get_conn()
+    ph = ",".join("?" * len(types))
+    rows = conn.execute(
+        f"SELECT url FROM seo_pages WHERE url_type IN ({ph}) AND url IS NOT NULL",
+        list(types),
+    ).fetchall()
+    conn.close()
+    return [r["url"] for r in rows]
+
+
+def execute_write(sql: str, params=(), retries: int = 8):
+    """Execute 1 câu write + commit, RETRY khi 'database is locked' (vd lúc re-crawl ghi DB nặng).
+    Mỗi lần mở/đóng connection riêng → retry an toàn. Backoff tăng dần."""
+    import time as _t
+    for attempt in range(retries):
+        conn = get_conn()
+        try:
+            conn.execute(sql, params)
+            conn.commit()
+            conn.close()
+            return
+        except sqlite3.OperationalError as e:
+            conn.close()
+            if "locked" in str(e).lower() and attempt < retries - 1:
+                _t.sleep(min(0.4 * (attempt + 1), 3.0))
+                continue
+            raise
+
+
+def mark_alt_synced(product_id: int, synced_at: str = None):
+    """Ghi thời điểm PUT ALT (ảnh SP/mô tả) lên Haravan — cột 'Ngày sync' ở /alt-manager."""
+    conn = get_conn()
+    conn.execute(
+        "UPDATE haravan_products SET alt_synced_at = ? WHERE haravan_id = ?",
+        (synced_at or datetime.now().isoformat(timespec="seconds"), product_id),
+    )
+    conn.commit()
+    conn.close()
 
 
 def seo_upsert_empty_desc(url: str, url_type: str, word_count: int, scanned_at: str):
@@ -2021,13 +2091,10 @@ def content_job_update(job_id: int, **fields):
     fields["updated_at"] = datetime.now().isoformat(timespec="seconds")
     keys = list(fields.keys())
     sets = ", ".join(f"{k}=?" for k in keys)
-    conn = get_conn()
-    conn.execute(
+    execute_write(  # retry khi DB locked (vd đang crawl)
         f"UPDATE content_jobs SET {sets} WHERE id=?",
         [*[fields[k] for k in keys], job_id],
     )
-    conn.commit()
-    conn.close()
 
 
 def content_job_delete(job_id: int):

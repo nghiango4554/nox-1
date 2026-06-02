@@ -1,7 +1,7 @@
 """spec_block.py — Gom spec thô → khối <blockquote> thông số kỹ thuật cho theme Sintech.
 
-Theme Sintech tự render <blockquote> chứa <h3> nhóm + <ul><li><strong>Nhãn:</strong> giá trị</li>
-thành BẢNG thông số kỹ thuật trên web. Hàm này tạo đúng markup đó.
+Theme Sintech render <blockquote> chứa tiêu đề nhóm = <p><strong>…</strong></p> (TEXT THƯỜNG,
+không dùng <h3> — vợ chốt 2/6) + <ul><li><strong>Nhãn:</strong> giá trị</li>. Hàm này tạo đúng markup đó.
 
 Nguồn spec: list [{label, value}] (vd từ serper_search.fetch_product_specs) hoặc text.
 AI chỉ làm việc GOM NHÓM + chuẩn hoá nhãn — KHÔNG bịa spec mới.
@@ -53,7 +53,9 @@ def _render_blockquote(groups: list) -> str:
                 continue
             rows.append(f"<li><strong>{label}:</strong> {val}</li>")
         if rows:
-            parts.append(f"<h3>{title}</h3><ul>{''.join(rows)}</ul>")
+            # RULE (vợ chốt 2/6): tiêu đề nhóm trong khối trích dẫn = TEXT THƯỜNG (in đậm),
+            # KHÔNG dùng <h3> nữa.
+            parts.append(f"<p><strong>{title}</strong></p><ul>{''.join(rows)}</ul>")
     parts.append("</blockquote>")
     html = "".join(parts)
     return html if "<li>" in html else ""

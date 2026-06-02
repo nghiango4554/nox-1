@@ -91,6 +91,13 @@ WORDING:
 - Phân biệt: thông tin chắc ≠ dự đoán xu hướng ≠ số liệu tham khảo
 - CTA tự nhiên, KHÔNG ép thành đoạn bán hàng lộ liễu
 
+E-E-A-T — GIỌNG TRẢI NGHIỆM THẬT (Experience, tín hiệu Google ưu tiên):
+- Ưu tiên NGÔI THỨ NHẤT số nhiều "mình / bên mình / tụi mình" (giọng shop có trải nghiệm), KHÔNG viết như bài bách khoa khách quan khô khan.
+- Mỗi bài chèn 1-3 nhận định TRẢI NGHIỆM/THỰC TẾ thay vì chỉ liệt kê: "khi bên mình lắp thử cho khách thấy...", "dùng thực tế mình nhận thấy...", "nhiều khách phản hồi với bên mình rằng...". Viết "khi dùng mình thấy nó..." thay cho "sản phẩm có...".
+- KHÔNG bịa trải nghiệm phi lý (vd "mình đã test mọi tựa game") — chỉ nêu cảm nhận/quan sát hợp lý của một shop bán & lắp máy.
+- Tiêu đề KHÔNG phóng đại/gây sốc. Trong bài KHÔNG cam kết tuyệt đối ("chạy mượt 100%", "bao max setting mọi game", "bền vĩnh viễn").
+- KHÔNG internal link đánh lừa hay banner điều hướng dày đặc về trang bán hàng — link phải đúng ngữ cảnh người đọc cần.
+
 OUTPUT BẮT BUỘC: chỉ JSON thuần, KHÔNG markdown code fence.
 {
   "title": "...",
@@ -145,6 +152,13 @@ def _parse_blog_json(raw: str) -> dict:
 
     if not title or not meta or not body_html:
         return {"ok": False, "error": "AI trả thiếu field.", "raw": text[:500]}
+
+    # E-E-A-T: tự chèn hộp tác giả + Person schema cuối bài blog (idempotent).
+    try:
+        import author_block
+        body_html = author_block.ensure_author_box(body_html)
+    except Exception as _e:
+        print(f"[blog] author_box skip: {_e}")
 
     return {
         "ok": True,

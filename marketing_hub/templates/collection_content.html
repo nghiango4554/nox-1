@@ -247,6 +247,9 @@
   <td class="cc-cell-url">
     <a href="{{ j.collection_url }}" target="_blank" rel="noopener">{{ j.collection_url|replace('https://sintech.vn', '') }}</a>
   </td>
+  <td style="text-align:center;font-size:11px;white-space:nowrap">
+    {% if j.synced_at_disp %}<span style="color:#22c55e">{{ j.synced_at_disp }}</span>{% else %}<span class="cc-len-empty">—</span>{% endif %}
+  </td>
   <td style="text-align:center">
     <a href="{{ url_for('collection_content_detail_page', job_id=j.id) }}" class="btn btn-sm">✏️ Sửa</a>
     <button class="btn btn-sm btn-primary" onclick="genAIInline({{ j.id }}, this)">🤖 AI gen</button>
@@ -259,7 +262,7 @@
   <col style="width:36px"><col style="width:74px">
   <col style="width:21%"><col style="width:58px"><col style="width:58px"><col style="width:58px">
   <col style="width:62px"><col style="width:58px">
-  <col><col style="width:170px">
+  <col><col style="width:88px"><col style="width:170px">
 </colgroup>
 <thead>
   <tr>
@@ -269,6 +272,7 @@
     <th class="num" title="SEO quality score 0-100">⭐ Q</th>
     <th class="num" title="Readability score 0-100">📖 R</th>
     <th>URL</th>
+    <th style="text-align:center">Ngày sync</th>
     <th style="text-align:center">Hành động</th>
   </tr>
 </thead>

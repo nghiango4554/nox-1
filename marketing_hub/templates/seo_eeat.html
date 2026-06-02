@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}E-E-A-T audit · SEO · Sintech Hub{% endblock %}
+{% block content %}
+<style>
+  .ee-sec { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+  .ee-sec-title { font-weight:700; font-size:15px; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
+  .ee-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid rgba(255,255,255,.05); font-size:13px; }
+  .ee-row:last-child { border-bottom:none; }
+  .ee-badge { flex-shrink:0; width:24px; text-align:center; }
+  .ee-ok { color:#34d399; } .ee-bad { color:#f87171; } .ee-warn { color:#facc15; }
+  .ee-num { font-weight:700; }
+  .ee-muted { color:var(--text-muted,#94a3b8); font-size:12px; }
+  .ee-bar { height:7px; background:var(--border); border-radius:4px; overflow:hidden; flex:1; max-width:160px; }
+  .ee-bar > div { height:100%; border-radius:4px; }
+</style>
+
+<h1 style="font-size:20px;margin:0 0 4px">🛡️ Audit E-E-A-T (Experience · Expertise · Authority · Trust)</h1>
+<p class="ee-muted" style="margin:0 0 16px">Gom tín hiệu E-E-A-T từ data crawl + schema audit sẵn có → checklist gap để xử dần. Theo HEROSEO checklist.</p>
+
+{# ───── EXPERIENCE ───── #}
+<div class="ee-sec">
+  <div class="ee-sec-title">🙋 Experience — Trải nghiệm</div>
+  <div class="ee-row"><span class="ee-badge ee-ok">✓</span>
+    <div>Rule viết blog ngôi thứ nhất "mình/bên mình" + nhận định trải nghiệm thật <span class="ee-muted">(đã vá vào prompt blog 2/6 — áp cho bài gen mới)</span></div></div>
+  <div class="ee-row"><span class="ee-badge ee-muted">•</span>
+    <div class="ee-muted">Cấm tiêu đề phóng đại / cam kết tuyệt đối / internal link đánh lừa — đã đưa vào prompt.</div></div>
+</div>
+
+{# ───── EXPERTISE ───── #}
+<div class="ee-sec">
+  <div class="ee-sec-title">🎓 Expertise — Chuyên môn (Tác giả)</div>
+  <div class="ee-row">
+    <span class="ee-badge ee-ok">👤</span>
+    <div>Hồ sơ tác giả: <strong>{{ author.name }}</strong> — {{ author.job_title }}
+      {% if author.url %}· <a href="{{ author.url }}" target="_blank" rel="noopener" style="color:#60a5fa">Facebook</a>{% endif %}
+      <div class="ee-muted">Person schema (sameAs) tự chèn cuối bài blog khi gen / bấm nút 👤 Tác giả.</div></div>
+  </div>
+  <div class="ee-row">
+    {% set ap = (blog_jobs_author * 100 // blog_jobs_total) if blog_jobs_total else 0 %}
+    <span class="ee-badge {{ 'ee-ok' if ap>=100 else ('ee-warn' if ap>0 else 'ee-bad') }}">{{ '✓' if ap>=100 else '⚠' }}</span>
+    <div style="flex:1">Hộp tác giả trên bài blog (jobs):
+      <span class="ee-num">{{ blog_jobs_author }}/{{ blog_jobs_total }}</span> bài
+      <div class="ee-bar" style="margin-top:5px"><div style="width:{{ ap }}%;background:{{ '#34d399' if ap>=100 else '#facc15' }}"></div></div></div>
+    <a class="btn btn-sm" href="{{ url_for('blog_content_page') }}">Mở Blog →</a>
+  </div>
+  <div class="ee-row">
+    {% set ar = (blog_article * 100 // blog_audited) if blog_audited else 0 %}
+    <span class="ee-badge {{ 'ee-ok' if ar>=90 else 'ee-warn' }}">{{ '✓' if ar>=90 else '⚠' }}</span>
+    <div>Article schema trên blog: <span class="ee-num">{{ blog_article }}/{{ blog_audited }}</span> ({{ ar }}%) <span class="ee-muted">— theme Haravan tự inject</span></div>
+  </div>
+  <div class="ee-row">
+    <span class="ee-badge {{ 'ee-ok' if blog_faq>0 else 'ee-bad' }}">{{ '✓' if blog_faq>0 else '✗' }}</span>
+    <div>FAQPage schema trên blog: <span class="ee-num">{{ blog_faq }}/{{ blog_audited }}</span>
+      <span class="ee-muted">— gap đã biết (blog chưa có FAQ schema). <a href="{{ url_for('seo_schema_page') }}" style="color:#60a5fa">Xem schema →</a></span></div>
+  </div>
+</div>
+
+{# ───── TRUST ───── #}
+<div class="ee-sec">
+  <div class="ee-sec-title">🔒 Trust — Độ tin cậy</div>
+  {% for t in trust %}
+  <div class="ee-row">
+    <span class="ee-badge {{ 'ee-ok' if t.ok else 'ee-bad' }}">{{ '✓' if t.ok else '✗' }}</span>
+    <div style="flex:1">{{ t.label }}
+      {% if t.url %}<a href="{{ t.url }}" target="_blank" rel="noopener" class="ee-muted" style="color:#60a5fa">{{ t.url|replace('https://sintech.vn','') }}</a>
+      {% else %}<span class="ee-muted">— chưa thấy trang này (tạo trên Haravan admin)</span>{% endif %}</div>
+  </div>
+  {% endfor %}
+  <div class="ee-row">
+    <span class="ee-badge {{ 'ee-ok' if home_org else 'ee-bad' }}">{{ '✓' if home_org else '✗' }}</span>
+    <div>Organization schema trang chủ {{ '— có' if home_org else '— thiếu' }}</div>
+  </div>
+  <div class="ee-row">
+    <span class="ee-badge {{ 'ee-ok' if broken_pages==0 else 'ee-warn' }}">{{ '✓' if broken_pages==0 else '⚠' }}</span>
+    <div style="flex:1">Trang lỗi 4xx: <span class="ee-num">{{ broken_pages }}</span> · Link gãy: <span class="ee-num">{{ broken_links }}</span>
+      <span class="ee-muted">(hạn chế 404/broken)</span></div>
+    <a class="btn btn-sm" href="{{ url_for('seo_dashboard') }}">Mở /seo →</a>
+  </div>
+</div>
+
+<p class="ee-muted">Mục offsite (PR/báo chí/guest post/social) & cấu hình theme (SSL, mobile, GDPR, footer địa chỉ) không audit ở đây — xử trên Haravan admin / kế hoạch marketing.</p>
+{% endblock %}

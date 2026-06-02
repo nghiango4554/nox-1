@@ -242,7 +242,53 @@
        title="Báo cáo real-time: mỗi SP up Haravan xong tự ghi cột F/G/H + trạng thái">
       📊 Mở Sheet báo cáo
     </a>
+
+    {# ── Re-crawl RIÊNG trang này: refresh seo_pages cho nhóm SP title/meta ── #}
+    <span style="width:1px;height:24px;background:var(--border);margin:0 4px"></span>
+    <select id="recrawl-scope" class="btn-sm" style="padding:5px 8px"
+            title="Phạm vi crawl lại — full theo loại hoặc nhóm SP title/meta">
+      <option value="full_sp_col">Full SP + Full collection</option>
+      <option value="full_blog">Full blog</option>
+      <option value="issues">Chỉ SP đang lỗi title/meta</option>
+      <option value="synced">Chỉ SP đã sync</option>
+      <option value="all">SP lỗi + đã sync</option>
+    </select>
+    <select id="recrawl-workers" class="btn-sm" style="padding:5px 8px"
+            title="Số luồng crawl. Sintech cap ~2 req/s nên thêm luồng KHÔNG nhanh hơn. Quan trọng: ≥5 luồng làm TREO trang title-meta khi đang crawl (GIL). Khuyên để 4.">
+      <option value="2">2 luồng</option>
+      <option value="4" selected>4 luồng (khuyên dùng — trang vẫn mượt)</option>
+      <option value="8">8 luồng (⚠️ vào trang chậm khi crawl)</option>
+      <option value="15">15 luồng (⚠️ treo trang khi crawl)</option>
+    </select>
+    <button type="button" class="btn" onclick="startRecrawl()" id="recrawl-btn"
+            style="background:#0891b2;color:white"
+            title="Crawl lại CHỈ nhóm SP title/meta (không đụng crawl toàn site) — refresh seo_pages để bảng rớt SP đã sạch + cập nhật điểm sau sync.">
+      🔄 Re-crawl trang này
+    </button>
+    <button type="button" class="btn" onclick="stopRecrawl()" id="recrawl-stop-btn"
+            style="display:none;background:#dc2626;color:white">
+      ⏹️ Dừng crawl
+    </button>
   </form>
+
+  {# Hàng báo cáo realtime RE-CRAWL riêng trang title-meta #}
+  <div id="recrawl-report" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(8,145,178,0.08);border-radius:8px;font-size:13px;border:1px solid rgba(8,145,178,0.3)">
+    <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:8px">
+      <strong>🔄 Re-crawl trang title/meta:</strong>
+      <span id="recrawl-state-badge" style="padding:2px 10px;border-radius:12px;font-weight:600;font-size:12px">—</span>
+      <span class="muted" id="recrawl-scope-label" style="font-size:11px"></span>
+    </div>
+    <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;margin-bottom:8px">
+      <div id="recrawl-bar" style="height:100%;width:0%;background:#0891b2;border-radius:4px;transition:width .3s"></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:18px;font-weight:500">
+      <span>📋 Tổng: <strong id="recrawl-total">0</strong></span>
+      <span>🔄 Đã crawl: <strong id="recrawl-done">0</strong>/<span id="recrawl-total-mirror">0</span></span>
+      <span style="color:#34d399">✅ OK: <strong id="recrawl-success">0</strong></span>
+      <span style="color:#f87171">❌ Lỗi: <strong id="recrawl-failed">0</strong></span>
+    </div>
+    <div id="recrawl-message" class="muted" style="margin-top:6px;font-size:12px"></div>
+  </div>
 
   {# Hàng báo cáo realtime job fix-all #}
   <div id="fix-all-report" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(59,130,246,0.08);border-radius:8px;font-size:13px;border:1px solid rgba(59,130,246,0.25)">
@@ -344,12 +390,13 @@
         <th>Lỗi</th>
         <th style="text-align:center">Điểm</th>
         <th style="text-align:center">Trạng thái</th>
+        <th style="text-align:center">Ngày sync</th>
         <th style="text-align:center">Hành động</th>
         <th style="text-align:center">Gen lại</th>
       </tr>
     </thead>
     <tbody id="tm-tbody">
-      {% for it in items %}
+      {% for it in items[:50] %}
       <tr data-url="{{ it.url }}">
         <td class="tm-stt">{{ loop.index }}</td>
         <td>
@@ -422,6 +469,9 @@
             {% else %}<span style="color:#94a3b8">⬜ Chưa sync</span>{% endif %}
           </span>
         </td>
+        <td class="synced-at-cell muted" style="text-align:center;font-size:11px;white-space:nowrap">
+          {% if it.synced_at %}<span style="color:#34d399">{{ it.synced_at }}</span>{% else %}<span style="color:#cbd5e1">—</span>{% endif %}
+        </td>
         <td class="action-cell" style="text-align:center">
           {% if it.url_type == 'product' %}
             <button type="button" class="btn btn-primary fix-btn tm-fix-btn"
@@ -452,6 +502,23 @@
       Không có URL nào khớp filter hiện tại. <a href="{{ url_for('seo_title_meta_page') }}">Reset</a>.
     {% endif %}
   </p>
+
+  {# Phân trang nhẹ: 50 dòng đầu render server-side, phần còn lại nạp dần qua "Xem thêm" #}
+  {% if items|length > 50 %}
+  <div style="text-align:center;padding:14px 0 18px">
+    <button type="button" class="btn" id="tm-more-btn" onclick="tmShowMore()"
+            style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;font-weight:600">
+      ⬇️ Xem thêm 50 (còn {{ items|length - 50 }})
+    </button>
+    <button type="button" class="btn" id="tm-showall-btn" onclick="tmShowAll()"
+            style="background:#334155;color:#e2e8f0;border:1px solid #475569;font-weight:600;margin-left:6px"
+            title="Hiện toàn bộ dòng còn lại trong 1 lần — để Ctrl+F tìm xuyên hết bảng (trang sẽ nặng hơn).">
+      📂 Hiện hết (còn {{ items|length - 50 }})
+    </button>
+    <div class="muted" style="font-size:11px;margin-top:6px">Đang hiện <span id="tm-shown-count">50</span>/{{ items|length }} dòng</div>
+  </div>
+  <script id="tm-more-data" type="application/json">{{ items[50:]|tojson }}</script>
+  {% endif %}
 </section>
 
 <script>
@@ -532,7 +599,7 @@ function renderTitleMetaPicker(row, url, data) {
 
   const tr = document.createElement('tr');
   tr.className = 'tm-picker-row';
-  tr.innerHTML = `<td colspan="10" style="background:#0b1220;padding:14px 18px;border-top:2px solid #0ea5e9">
+  tr.innerHTML = `<td colspan="11" style="background:#0b1220;padding:14px 18px;border-top:2px solid #0ea5e9">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <strong style="color:#7dd3fc">🎯 Chọn 1 Title + 1 Meta để sync</strong>
       <span>${specTag}${retryTag}</span>
@@ -853,29 +920,46 @@ function renderStatus(s) {
 
 // ─── Copy bảng (TSV) ───
 function copyTitleMetaTable() {
-  const table = document.querySelector('table.data-table');
-  if (!table) return;
-  const headers = ['#','Loại','URL','Title','Title len','Meta','Meta len','Lỗi','Điểm'];
-  const lines = [headers.join('\t')];
-  table.querySelectorAll('tbody tr').forEach((tr,i) => {
+  // Copy TOÀN BỘ: dòng đang hiển thị (DOM) + dòng chưa "Xem thêm" (còn trong _tmMore JSON).
+  const headers = ['#','Loại','URL','Title','Title len','Meta','Meta len','Lỗi','Điểm','Ngày sync'];
+  const rows = [];
+  document.querySelectorAll('#tm-tbody tr[data-url]').forEach(tr => {
     const tds = tr.querySelectorAll('td');
-    if (tds.length < 8) return;
-    const loai = tds[1].querySelector('span.muted')?.textContent.trim() || '';
-    const url = tr.dataset.url || '';
-    const title = tds[3].querySelector('div')?.textContent.trim().replace(/\s+/g,' ') || '';
-    const titleLen = tds[3].querySelector('strong')?.textContent.trim() || '';
-    const meta = tds[4].querySelector('div')?.textContent.trim().replace(/\s+/g,' ') || '';
-    const metaLen = tds[4].querySelector('strong')?.textContent.trim() || '';
-    const issues = [...tds[5].querySelectorAll('div')].map(d => d.textContent.trim()).join(' | ');
-    const score = tds[6].textContent.trim();
-    lines.push([i+1, loai, url, title, titleLen, meta, metaLen, issues, score].join('\t'));
+    if (tds.length < 9) return;
+    rows.push([
+      tds[1].querySelector('.tm-url-type')?.textContent.trim() || '',
+      tr.dataset.url || '',
+      tds[3].querySelector('.tm-text')?.textContent.trim().replace(/\s+/g,' ') || '',
+      tds[3].querySelector('strong')?.textContent.trim() || '',
+      tds[4].querySelector('.tm-text')?.textContent.trim().replace(/\s+/g,' ') || '',
+      tds[4].querySelector('strong')?.textContent.trim() || '',
+      [...tds[5].querySelectorAll('.tm-chip')].map(d => d.textContent.trim()).join(' | '),
+      tds[6].textContent.trim(),
+      tds[8].textContent.trim().replace('—',''),
+    ]);
   });
+  (_tmMore || []).forEach(it => {
+    const effLen = (it.title_stripped_len !== undefined) ? it.title_stripped_len : (it.title_len || 0);
+    rows.push([
+      it.url_type || '',
+      it.url || '',
+      (it.title || '').replace(/\s+/g,' '),
+      String(effLen),
+      (it.meta_desc || '').replace(/\s+/g,' '),
+      String(it.meta_desc_len || 0),
+      (it.issue_codes || []).map(c => (ISSUE_LABELS[c] ? ISSUE_LABELS[c][1] : c)).join(' | '),
+      it.score == null ? '' : String(it.score),
+      it.synced_at || '',
+    ]);
+  });
+  const lines = [headers.join('\t')];
+  rows.forEach((r, i) => lines.push([i + 1, ...r].join('\t')));
   const btn = document.getElementById('copy-btn');
   const oldText = btn.textContent;
   navigator.clipboard.writeText(lines.join('\n')).then(() => {
-    btn.textContent = `✅ Copy ${lines.length - 1} dòng`;
+    btn.textContent = `✅ Copy ${rows.length} dòng`;
     setTimeout(() => { btn.textContent = oldText; }, 2000);
-  });
+  }).catch(() => alert('Không copy được — clipboard bị trình duyệt chặn (cần HTTPS hoặc localhost).'));
 }
 
 // Auto-load status khi vào trang
@@ -1038,8 +1122,9 @@ async function tierLoad() {
   const handles = tierCurrentHandles();
   const tbody = document.getElementById('tm-tbody');
   if (_origTbody === null) _origTbody = tbody.innerHTML;  // lưu bảng gốc 1 lần
-  tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:20px" class="muted">⏳ Đang nạp SP...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:20px" class="muted">⏳ Đang nạp SP...</td></tr>`;
   document.getElementById('tm-empty').style.display = 'none';
+  ['tm-more-btn','tm-showall-btn'].forEach(id => { const b = document.getElementById(id); if (b) b.style.display = 'none'; });  // tier mode: ẩn "Xem thêm"/"Hiện hết"
   if (!handles.length) { _tier.loaded = []; tierRender(); return; }
   try {
     const resp = await fetch('{{ url_for("seo_title_meta_tier_products") }}', {
@@ -1083,7 +1168,7 @@ function tierRender() {
   document.getElementById('tier-count').textContent = items.length;
   const tbody = document.getElementById('tm-tbody');
   if (!items.length) {
-    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:20px" class="muted">Không có SP nào khớp (đổi chế độ "Tất cả SP" để xem cả SP đã clean).</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:20px" class="muted">Không có SP nào khớp (đổi chế độ "Tất cả SP" để xem cả SP đã clean).</td></tr>`;
   } else {
     tbody.innerHTML = items.map((it, i) => tmRenderRow(it, i + 1)).join('');
   }
@@ -1094,6 +1179,8 @@ function tierRestoreOriginalTable() {
   if (_origTbody !== null) {
     document.getElementById('tm-tbody').innerHTML = _origTbody;
     document.getElementById('tm-empty').style.display = '{{ 'none' if items else 'block' }}';
+    _tmShown = document.querySelectorAll('#tm-tbody tr').length;
+    _tmSyncMoreBtn();  // hiện lại "Xem thêm" nếu còn dòng chưa nạp
   }
 }
 
@@ -1144,6 +1231,9 @@ function tmRenderRow(it, idx) {
   const statusHtml = it.synced
     ? '<span style="color:#34d399;font-weight:600">✅ Đã sync</span>'
     : '<span style="color:#94a3b8">⬜ Chưa sync</span>';
+  const syncedAtHtml = it.synced_at
+    ? `<span style="color:#34d399">${escapeHtml(it.synced_at)}</span>`
+    : '<span style="color:#cbd5e1">—</span>';
   const actionHtml = (t === 'product')
     ? `<button type="button" class="btn btn-primary fix-btn tm-fix-btn" onclick="fixTitleMetaSingle(this)">🔧 Auto-fix</button>`
     : `<span class="muted" style="font-size:10.5px">Sửa tay admin</span>`;
@@ -1162,6 +1252,7 @@ function tmRenderRow(it, idx) {
     <td class="issue-cell"><div class="tm-issues">${_issueChips(it.issue_codes)}</div></td>
     <td style="text-align:center">${_scoreCell(it.score)}</td>
     <td class="status-cell" style="text-align:center"><span class="tm-status" data-url="${escapeHtml(it.url)}" style="font-size:11px">${statusHtml}</span></td>
+    <td class="synced-at-cell" style="text-align:center;font-size:11px;white-space:nowrap">${syncedAtHtml}</td>
     <td class="action-cell" style="text-align:center">${actionHtml}</td>
     <td class="regen-cell" style="text-align:center">${regenHtml}</td>
   </tr>`;
@@ -1192,6 +1283,103 @@ async function tierGenSyncFiltered() {
     startPolling();
     alert(`✅ Đã start gen+sync ${data.count} SP. Theo dõi tiến độ ở khung "Job Auto-fix".`);
   } catch (e) { btn.disabled = false; btn.textContent = old; alert('❌ ' + e); }
+}
+
+// ───── RE-CRAWL riêng trang title/meta ─────
+let _recrawlPoll = null;
+async function startRecrawl() {
+  const scope = document.getElementById('recrawl-scope').value;
+  const workers = document.getElementById('recrawl-workers').value;
+  const labels = {full_sp_col:'FULL SP + FULL collection', full_blog:'FULL blog', issues:'chỉ SP đang lỗi title/meta', synced:'chỉ SP đã sync', all:'SP lỗi + đã sync'};
+  if (!confirm(`🔄 Re-crawl lại nhóm SP title/meta (${labels[scope]}) · ${workers} luồng?\n\nChỉ crawl nhóm SP này (KHÔNG đụng crawl toàn site). Xong trang tự reload để cập nhật bảng.`)) return;
+  const btn = document.getElementById('recrawl-btn');
+  btn.disabled = true; const old = btn.textContent; btn.textContent = '⏳ Đang khởi động...';
+  try {
+    const r = await fetch('{{ url_for("seo_title_meta_recrawl_start") }}', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({scope, workers}),
+    });
+    const data = await r.json();
+    btn.disabled = false; btn.textContent = old;
+    if (!data.ok) { alert('❌ ' + (data.error||'Không start được')); return; }
+    document.getElementById('recrawl-report').style.display = 'block';
+    document.getElementById('recrawl-btn').style.display = 'none';
+    document.getElementById('recrawl-stop-btn').style.display = '';
+    pollRecrawl();
+  } catch(e) { btn.disabled=false; btn.textContent=old; alert('❌ '+e); }
+}
+async function stopRecrawl() {
+  try { await fetch('{{ url_for("seo_title_meta_recrawl_stop") }}', {method:'POST'}); } catch(e){}
+}
+function _recrawlBadge(running) {
+  return running
+    ? '<span style="padding:2px 10px;border-radius:12px;background:rgba(8,145,178,.2);color:#22d3ee">● Đang crawl</span>'
+    : '<span style="padding:2px 10px;border-radius:12px;background:rgba(52,211,153,.2);color:#34d399">✓ Xong</span>';
+}
+async function pollRecrawl() {
+  if (_recrawlPoll) clearInterval(_recrawlPoll);
+  const tick = async () => {
+    let s;
+    try { s = await (await fetch('{{ url_for("seo_title_meta_recrawl_status") }}')).json(); }
+    catch(e){ return; }
+    const total = s.total||0, done = s.done||0;
+    document.getElementById('recrawl-total').textContent = total;
+    document.getElementById('recrawl-total-mirror').textContent = total;
+    document.getElementById('recrawl-done').textContent = done;
+    document.getElementById('recrawl-success').textContent = s.success||0;
+    document.getElementById('recrawl-failed').textContent = s.failed||0;
+    document.getElementById('recrawl-message').textContent = s.message||'';
+    document.getElementById('recrawl-scope-label').textContent = s.scope ? ('· '+s.scope+(s.workers?(' · '+s.workers+' luồng'):'')) : '';
+    document.getElementById('recrawl-bar').style.width = total ? Math.round(done/total*100)+'%' : '0%';
+    document.getElementById('recrawl-state-badge').innerHTML = _recrawlBadge(s.running);
+    if (!s.running) {
+      clearInterval(_recrawlPoll); _recrawlPoll = null;
+      document.getElementById('recrawl-stop-btn').style.display = 'none';
+      document.getElementById('recrawl-btn').style.display = '';
+      if (done > 0) setTimeout(() => location.reload(), 1500);
+    }
+  };
+  await tick();
+  _recrawlPoll = setInterval(tick, 1500);
+}
+{% if recrawl and recrawl.running %}
+document.getElementById('recrawl-report').style.display = 'block';
+document.getElementById('recrawl-btn').style.display = 'none';
+document.getElementById('recrawl-stop-btn').style.display = '';
+pollRecrawl();
+{% endif %}
+
+// ───── Phân trang nhẹ: 50 dòng đầu (server) + "Xem thêm" nạp tiếp 50 (tái dùng tmRenderRow) ─────
+let _tmMore = [];
+let _tmShown = 0;
+(function _tmInitMore(){
+  const el = document.getElementById('tm-more-data');
+  if (el) { try { _tmMore = JSON.parse(el.textContent) || []; } catch(e){ _tmMore = []; } }
+  _tmShown = document.querySelectorAll('#tm-tbody tr').length;
+})();
+function tmShowMore() {
+  if (!_tmMore.length) return;
+  const batch = _tmMore.splice(0, 50);
+  const html = batch.map((it, i) => tmRenderRow(it, _tmShown + i + 1)).join('');
+  document.getElementById('tm-tbody').insertAdjacentHTML('beforeend', html);
+  _tmShown += batch.length;
+  _tmSyncMoreBtn();
+}
+function tmShowAll() {
+  if (!_tmMore.length) return;
+  const html = _tmMore.map((it, i) => tmRenderRow(it, _tmShown + i + 1)).join('');
+  document.getElementById('tm-tbody').insertAdjacentHTML('beforeend', html);
+  _tmShown += _tmMore.length;
+  _tmMore = [];
+  _tmSyncMoreBtn();
+}
+function _tmSyncMoreBtn() {
+  const btn = document.getElementById('tm-more-btn');
+  const allBtn = document.getElementById('tm-showall-btn');
+  const cnt = document.getElementById('tm-shown-count');
+  if (cnt) cnt.textContent = _tmShown;
+  const has = _tmMore.length > 0;
+  if (btn) { btn.style.display = has ? '' : 'none'; if (has) btn.textContent = `⬇️ Xem thêm 50 (còn ${_tmMore.length})`; }
+  if (allBtn) { allBtn.style.display = has ? '' : 'none'; if (has) allBtn.textContent = `📂 Hiện hết (còn ${_tmMore.length})`; }
 }
 
 // init grid

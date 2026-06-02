@@ -150,6 +150,7 @@
         <th style="width:60px;text-align:center">H1<br>count</th>
         <th>H1 text trong mô tả</th>
         <th style="width:140px">Quét lúc</th>
+        <th style="width:96px;text-align:center">Ngày sync</th>
         <th style="width:140px;text-align:center">Hành động</th>
       </tr>
     </thead>
@@ -188,6 +189,9 @@
           {% endif %}
         </td>
         <td class="muted scan-time-cell" style="font-size:11px">{{ it.desc_h1_scanned_at or '—' }}</td>
+        <td class="synced-at-cell" style="text-align:center;font-size:11px;white-space:nowrap">
+          {% if it.synced_at_disp %}<span style="color:#34d399">{{ it.synced_at_disp }}</span>{% else %}<span style="color:#94a3b8">—</span>{% endif %}
+        </td>
         <td class="action-cell" style="text-align:center">
           {% if it.url_type in ('product', 'blog') and it.desc_h1_count > 0 %}
             <button type="button" class="btn btn-primary fix-btn"

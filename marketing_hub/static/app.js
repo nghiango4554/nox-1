@@ -117,25 +117,35 @@
   }
 })();
 
-// ─── Sidebar group collapse/expand toggle ───
+// ─── Sidebar group collapse/expand toggle (nhớ trạng thái mở/đóng) ───
 (() => {
+  const KEY = 'sb_open_groups';
+  let openSet;
+  try { openSet = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch (e) { openSet = new Set(); }
   document.querySelectorAll('.sb-group').forEach(group => {
     const link = group.querySelector('.sb-link');
     const caret = group.querySelector('.sb-caret');
     if (!link || !caret) return;
-    // Click trên caret → toggle group, không navigate
+    const key = group.dataset.group || (link.textContent || '').trim();
+    // Khôi phục: mở nếu đã lưu (group active sẵn do trang hiện tại thì giữ nguyên)
+    if (openSet.has(key)) group.classList.add('sb-group-active');
+    const persist = () => {
+      if (group.classList.contains('sb-group-active')) openSet.add(key); else openSet.delete(key);
+      try { localStorage.setItem(KEY, JSON.stringify([...openSet])); } catch (e) {}
+    };
+    // Click caret → toggle, không navigate
     caret.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       group.classList.toggle('sb-group-active');
+      persist();
     });
-    // Click trên link text (không phải caret) → toggle group NẾU sub-menu đang đóng, còn navigate bình thường
+    // Click link text → nếu đang đóng thì mở (không navigate); nếu đang mở thì navigate
     link.addEventListener('click', (e) => {
-      if (e.target === caret) return; // đã xử lý ở trên
-      const isOpen = group.classList.contains('sb-group-active');
-      if (!isOpen) {
+      if (e.target === caret) return;
+      if (!group.classList.contains('sb-group-active')) {
         e.preventDefault();
         group.classList.add('sb-group-active');
+        persist();
       }
     });
   });

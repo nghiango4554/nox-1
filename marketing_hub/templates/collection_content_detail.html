@@ -232,10 +232,6 @@
     <div class="cd-richtext" id="f-body" contenteditable="true" oninput="onBodyChange()" onpaste="onPaste(event)">{{ job.edited_body_html|safe }}</div>
     <textarea class="cd-textarea" id="f-body-source" style="display:none; border:none; border-top:1px solid var(--border); border-radius:0; min-height:300px"></textarea>
   </div>
-  <div class="cd-meter" id="meter-body" style="display:flex;justify-content:space-between;align-items:center">
-    <span id="body-len-text">{{ (job.edited_body_html or '')|length }} / 50,000 ký tự HTML (Haravan limit)</span>
-    <span id="body-len-warn" style="font-size:11px"></span>
-  </div>
 </div>
 
 <div class="cd-actions">
@@ -406,27 +402,44 @@ function applyFullFormat(btn) {
     nLinks++;
   });
 
-  // ─── 6. Style tables: viền + padding ───
+  // ─── 6. Style tables: viền ĐẦY ĐỦ 4 cạnh + grid rõ + header tách ───
   let nTables = 0;
   editor.querySelectorAll('table').forEach(t => {
     t.style.borderCollapse = 'collapse';
     t.style.width = '100%';
-    t.style.margin = '14px 0';
+    t.style.margin = '16px 0';
     t.style.fontSize = '11pt';
     t.style.fontFamily = 'Arial, sans-serif';
+    t.style.color = '#000000';
+    t.style.border = '2px solid #555555';   // KHUNG NGOÀI đậm → thấy rõ 2 bên + trên + dưới
+    t.setAttribute('border', '1');           // fallback cho theme/email client không đọc CSS
+    t.style.tableLayout = 'auto';
+    // bỏ cellspacing cũ nếu có → grid sát nhau
+    t.removeAttribute('cellspacing'); t.removeAttribute('cellpadding');
     nTables++;
   });
   editor.querySelectorAll('td, th').forEach(c => {
-    c.style.border = '1px solid #cccccc';
-    c.style.padding = '8px 10px';
+    c.style.border = '1px solid #999999';    // GRID trong rõ ở MỌI cạnh (gồm cạnh dưới hàng cuối)
+    c.style.padding = '9px 12px';
     c.style.verticalAlign = 'top';
     c.style.color = '#000000';
     c.style.fontFamily = 'Arial, sans-serif';
+    c.style.lineHeight = '1.55';
   });
   editor.querySelectorAll('th').forEach(th => {
     th.style.fontWeight = '700';
-    th.style.background = '#f4f4f4';
+    th.style.background = '#eef0f2';
+    th.style.color = '#111111';
     th.style.textAlign = 'left';
+    th.style.borderBottom = '2px solid #555555';  // gạch dưới header đậm → tách hàng tiêu đề
+  });
+  // Hàng cuối: ép viền dưới đậm bằng khung ngoài cho "đóng" bảng rõ ràng
+  editor.querySelectorAll('table').forEach(t => {
+    const rows = t.rows;
+    if (rows.length) {
+      const last = rows[rows.length - 1];
+      Array.from(last.cells).forEach(c => { c.style.borderBottom = '2px solid #555555'; });
+    }
   });
 
   // ─── 7. Style lists — font 12pt + weight 500 giống P ───
@@ -572,55 +585,7 @@ function compressHTMLPreview(html) {
 }
 
 function onBodyChange() {
-  const html = getBodyHTML();
-  const raw = html.length;
-  const compressed = compressHTMLPreview(html).length;
-  const n = compressed;  // check theo COMPRESSED size (server cũng compress trước sync)
-  const lenText = document.getElementById('body-len-text');
-  const warnEl = document.getElementById('body-len-warn');
-  const meter = document.getElementById('meter-body');
-
-  lenText.textContent = `Raw ${raw.toLocaleString('vi-VN')} → Compressed ${compressed.toLocaleString('vi-VN')} / 50,000 (Haravan)`;
-
-  let cls = 'cd-meter ok';
-  let warnMsg = '';
-  let blockSync = false;
-  if (n === 0) {
-    cls = 'cd-meter';
-    warnMsg = '';
-  } else if (n < 40000) {
-    cls = 'cd-meter ok';
-    warnMsg = `✅ OK sau compress (${Math.round(n*100/HARAVAN_BODY_LIMIT)}% giới hạn)`;
-  } else if (n < 47000) {
-    cls = 'cd-meter warn';
-    warnMsg = `⚠️ Gần đầy sau compress (${Math.round(n*100/HARAVAN_BODY_LIMIT)}% / 100%)`;
-  } else if (n <= HARAVAN_BODY_LIMIT) {
-    cls = 'cd-meter bad';
-    warnMsg = `🚨 SẮP VƯỢT — còn ${(HARAVAN_BODY_LIMIT - n).toLocaleString('vi-VN')} ký tự`;
-  } else {
-    cls = 'cd-meter bad';
-    warnMsg = `❌ VƯỢT LIMIT sau compress — dư ${(n - HARAVAN_BODY_LIMIT).toLocaleString('vi-VN')} ký tự`;
-    blockSync = true;
-  }
-
-  meter.className = cls + ' meter-body';
-  meter.style.display = 'flex';
-  warnEl.textContent = warnMsg;
-  warnEl.style.color = blockSync ? '#f87171' : (n > 250000 ? '#f59e0b' : (n > 200000 ? '#facc15' : '#34d399'));
-
-  // Disable / enable Sync button khi vượt limit
-  const btns = document.querySelectorAll('button');
-  btns.forEach(b => {
-    if (b.textContent.includes('Sync')) {
-      if (blockSync) {
-        b.disabled = true;
-        b.title = 'Body HTML vượt limit Haravan — rút gọn lại';
-      } else if (!b.title.includes('haravan_id')) {
-        b.disabled = false;
-        b.title = '';
-      }
-    }
-  });
+  // Đã bỏ ô đếm ký tự + cảnh báo giới hạn Haravan theo yêu cầu — cứ sync, Haravan tự báo nếu quá dài.
 }
 
 function onPaste(event) {
@@ -773,11 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function syncJob() {
-  const bodyLen = getBodyHTML().length;
-  if (bodyLen > HARAVAN_BODY_LIMIT) {
-    alert(`❌ Body HTML ${bodyLen.toLocaleString('vi-VN')} ký tự > Haravan limit ${HARAVAN_BODY_LIMIT.toLocaleString('vi-VN')}.\n\nRút gọn trước khi sync (Haravan sẽ trả lỗi "Mô tả quá dài").`);
-    return;
-  }
+  // Không chặn theo độ dài — cứ sync, nếu mô tả quá dài Haravan sẽ tự trả lỗi.
   if (!confirm('🚀 Sync collection lên Haravan? Body + title + meta sẽ bị ghi đè trên admin.')) return;
   await saveEdit();  // không truyền btn — không update text
   const btns = document.querySelectorAll('button');

@@ -49,6 +49,73 @@ def _load_psi_key() -> str:
 
 # ─────────────────────── H1 IN DESC (7 route) ────────────────────
 
+def seo_eeat_page():
+    """Bảng audit E-E-A-T — gom tín hiệu sẵn có trong DB thành checklist gap."""
+    import author_block
+    conn = db.get_conn()
+
+    def one(sql, args=()):
+        r = conn.execute(sql, args).fetchone()
+        return (r[0] if r else 0) or 0
+
+    # 1. Trang pháp lý / trust (TRUST checklist)
+    trust_defs = [
+        ("Giới thiệu / About", ["gioi-thieu", "ve-chung-toi", "about"]),
+        ("Liên hệ", ["lien-he", "contact"]),
+        ("Chính sách bảo mật", ["bao-mat", "privacy"]),
+        ("Điều khoản & điều kiện", ["dieu-khoan", "dieu-kien", "terms"]),
+        ("Đổi trả / Hoàn tiền / Bảo hành", ["doi-tra", "hoan-tien", "tra-hang", "bao-hanh", "return"]),
+        ("Chính sách vận chuyển", ["van-chuyen", "giao-hang", "shipping"]),
+    ]
+    trust = []
+    for label, slugs in trust_defs:
+        found = None
+        for s in slugs:
+            r = conn.execute(
+                "SELECT url FROM seo_pages WHERE url LIKE ? "
+                "AND (status_code=200 OR status_code IS NULL) LIMIT 1", (f"%{s}%",)
+            ).fetchone()
+            if r:
+                found = r["url"]
+                break
+        trust.append({"label": label, "ok": bool(found), "url": found})
+
+    # 2. 404 / broken
+    broken_pages = one("SELECT COUNT(*) FROM seo_pages WHERE status_code >= 400")
+    try:
+        broken_links = one("SELECT COUNT(*) FROM seo_links WHERE status_code >= 400 OR status_code = 0")
+    except Exception:
+        broken_links = 0
+
+    # 3. Organization schema homepage
+    home = conn.execute(
+        "SELECT schema_types FROM seo_pages WHERE url IN "
+        "('https://sintech.vn/','https://sintech.vn','https://www.sintech.vn/') LIMIT 1"
+    ).fetchone()
+    home_org = bool(home and home[0] and "Organization" in home[0])
+
+    # 4. Schema blog (Article / FAQ) — từ audit schema sẵn có
+    blog_audited = one("SELECT COUNT(*) FROM seo_pages WHERE url_type='blog' AND schema_scanned_at IS NOT NULL")
+    blog_article = one("SELECT COUNT(*) FROM seo_pages WHERE url_type='blog' AND schema_has_article=1")
+    blog_faq = one("SELECT COUNT(*) FROM seo_pages WHERE url_type='blog' AND schema_has_faq=1")
+
+    # 5. Author box coverage (trên blog_jobs ta quản lý)
+    try:
+        blog_jobs_total = one("SELECT COUNT(*) FROM blog_jobs WHERE edited_body_html IS NOT NULL AND edited_body_html != ''")
+        blog_jobs_author = one("SELECT COUNT(*) FROM blog_jobs WHERE edited_body_html LIKE '%data-author-box%'")
+    except Exception:
+        blog_jobs_total = blog_jobs_author = 0
+    conn.close()
+
+    return render_template(
+        "seo_eeat.html",
+        trust=trust, broken_pages=broken_pages, broken_links=broken_links,
+        home_org=home_org, blog_audited=blog_audited, blog_article=blog_article, blog_faq=blog_faq,
+        blog_jobs_total=blog_jobs_total, blog_jobs_author=blog_jobs_author,
+        author=author_block.AUTHOR,
+    )
+
+
 def seo_h1_in_desc_page():
     url_type = request.args.get("type") or None
     show_all = request.args.get("all") == "1"
@@ -64,6 +131,11 @@ def seo_h1_in_desc_page():
             it["desc_h1_list"] = json.loads(it["desc_h1_text"]) if it.get("desc_h1_text") else []
         except Exception:
             it["desc_h1_list"] = []
+        sa = it.get("desc_h1_fixed_at")  # cột "Ngày sync"
+        try:
+            it["synced_at_disp"] = datetime.fromisoformat(sa).strftime("%d/%m %H:%M") if sa else ""
+        except Exception:
+            it["synced_at_disp"] = (sa or "")[:16]
     return render_template(
         "seo_h1_in_desc.html",
         items=items, summary=summary, state=state,
@@ -159,6 +231,7 @@ def seo_title_meta_page():
         sync_filter=sync_filter,
         issue_labels=seo_mod.TITLE_META_LABELS,
         tiers=tiers,
+        recrawl=seo_mod.tm_recrawl_state(),
     )
 
 
@@ -226,6 +299,25 @@ def seo_title_meta_fix_all_stop():
     if stopped:
         return jsonify({"ok": True, "message": "Đã gửi yêu cầu dừng."})
     return jsonify({"ok": False, "error": "Không có job đang chạy."}), 400
+
+
+# ─── Re-crawl RIÊNG trang title-meta (refresh seo_pages cho nhóm SP title/meta) ───
+def seo_title_meta_recrawl_start():
+    payload = request.get_json(silent=True) or request.form
+    scope = (payload.get("scope") or "issues").strip()
+    res = seo_mod.start_title_meta_recrawl_async(scope=scope, workers=payload.get("workers"))
+    return jsonify(res), 200 if res.get("ok") else 409
+
+
+def seo_title_meta_recrawl_stop():
+    stopped = seo_mod.stop_title_meta_recrawl()
+    if stopped:
+        return jsonify({"ok": True, "message": "Đã gửi yêu cầu dừng."})
+    return jsonify({"ok": False, "error": "Không có re-crawl đang chạy."}), 400
+
+
+def seo_title_meta_recrawl_status():
+    return jsonify(seo_mod.tm_recrawl_state())
 
 
 def seo_title_meta_fix_all_status():
@@ -685,6 +777,7 @@ def seo_empty_desc_status():
 def register(app):
     """Đăng ký 33 route SEO Tools."""
     # H1 in desc (7)
+    app.add_url_rule("/seo/eeat", "seo_eeat_page", seo_eeat_page)
     app.add_url_rule("/seo/h1-in-desc", "seo_h1_in_desc_page", seo_h1_in_desc_page)
     app.add_url_rule("/seo/h1-in-desc/scan", "seo_h1_in_desc_scan", seo_h1_in_desc_scan, methods=["POST"])
     app.add_url_rule("/api/seo/h1-in-desc/status", "seo_h1_in_desc_status", seo_h1_in_desc_status)
@@ -701,6 +794,9 @@ def register(app):
     app.add_url_rule("/seo/title-meta/fix-all/start", "seo_title_meta_fix_all_start", seo_title_meta_fix_all_start, methods=["POST"])
     app.add_url_rule("/seo/title-meta/fix-all/stop", "seo_title_meta_fix_all_stop", seo_title_meta_fix_all_stop, methods=["POST"])
     app.add_url_rule("/api/seo/title-meta/fix-all/status", "seo_title_meta_fix_all_status", seo_title_meta_fix_all_status)
+    app.add_url_rule("/seo/title-meta/recrawl/start", "seo_title_meta_recrawl_start", seo_title_meta_recrawl_start, methods=["POST"])
+    app.add_url_rule("/seo/title-meta/recrawl/stop", "seo_title_meta_recrawl_stop", seo_title_meta_recrawl_stop, methods=["POST"])
+    app.add_url_rule("/api/seo/title-meta/recrawl/status", "seo_title_meta_recrawl_status", seo_title_meta_recrawl_status)
     app.add_url_rule("/api/seo/title-meta/gen-map", "seo_title_meta_gen_map", seo_title_meta_gen_map)
     app.add_url_rule("/seo/title-meta/tier-products", "seo_title_meta_tier_products", seo_title_meta_tier_products, methods=["POST"])
     app.add_url_rule("/api/seo/title-meta/tier-progress", "seo_title_meta_tier_progress", seo_title_meta_tier_progress)

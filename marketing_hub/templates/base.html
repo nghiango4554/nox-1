@@ -29,43 +29,69 @@
     <div id="sb-search-results" class="sb-search-results hidden"></div>
   </div>
 
-  <div class="sb-section">Workspace</div>
+  {# ───── TỔNG QUAN ───── #}
+  <div class="sb-section">Tổng quan</div>
   <a href="{{ url_for('dashboard') }}" class="sb-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
     <span class="sb-icon">📊</span><span>Dashboard</span>
-  </a>
-  <a href="{{ url_for('posts_page') }}" class="sb-link {% if request.endpoint == 'posts_page' %}active{% endif %}">
-    <span class="sb-icon">📝</span><span>Posts</span>
-  </a>
-  <a href="{{ url_for('calendar_page') }}" class="sb-link {% if request.endpoint == 'calendar_page' %}active{% endif %}">
-    <span class="sb-icon">📅</span><span>Calendar</span>
   </a>
   <a href="{{ url_for('jobs_center_page') }}" class="sb-link {% if request.endpoint == 'jobs_center_page' %}active{% endif %}">
     <span class="sb-icon">⚙️</span><span>Job Center</span>
   </a>
+
+  {# ───── FACEBOOK ───── #}
+  <div class="sb-section">Facebook</div>
+  <a href="{{ url_for('post_new') }}" class="sb-link {% if request.endpoint == 'post_new' %}active{% endif %}">
+    <span class="sb-icon">➕</span><span>Bài mới</span>
+  </a>
+  <a href="{{ url_for('posts_page') }}" class="sb-link {% if request.endpoint == 'posts_page' %}active{% endif %}">
+    <span class="sb-icon">📝</span><span>Bài đã đăng</span>
+  </a>
+  <a href="{{ url_for('calendar_page') }}" class="sb-link {% if request.endpoint == 'calendar_page' %}active{% endif %}">
+    <span class="sb-icon">📅</span><span>Lịch đăng</span>
+  </a>
+
+  {# ───── NỘI DUNG (sản xuất) ───── #}
+  <div class="sb-section">Nội dung</div>
+  <a href="{{ url_for('content_jobs_list_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('content_jobs') %}active{% endif %}">
+    <span class="sb-icon">🛠️</span><span>Content Jobs</span>
+  </a>
+  <a href="{{ url_for('collection_content_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('collection_content') %}active{% endif %}">
+    <span class="sb-icon">🗂️</span><span>Collection Content</span>
+  </a>
+  <a href="{{ url_for('blog_content_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('blog_content') %}active{% endif %}">
+    <span class="sb-icon">📰</span><span>Blog Content</span>
+  </a>
+  <a href="{{ url_for('products_new_form') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('products_new') %}active{% endif %}">
+    <span class="sb-icon">🛍️</span><span>SP mới (Haravan)</span>
+  </a>
   <a href="{{ url_for('alt_manager_page') }}" class="sb-link {% if request.endpoint and 'alt_manager' in request.endpoint %}active{% endif %}">
     <span class="sb-icon">🖼️</span><span>ALT ảnh</span>
   </a>
+
+  {# ───── SEO (gập) ───── #}
+  <div class="sb-section">Tối ưu &amp; Kho</div>
   {% set seo_active = request.endpoint and request.endpoint.startswith('seo') %}
-  <div class="sb-group {% if seo_active %}sb-group-active{% endif %}">
+  <div class="sb-group {% if seo_active %}sb-group-active{% endif %}" data-group="seo">
     <a href="{{ url_for('seo_dashboard') }}" class="sb-link {% if request.endpoint == 'seo_dashboard' %}active{% endif %}">
       <span class="sb-icon">🔍</span><span>SEO</span>
       <span class="sb-caret">▾</span>
     </a>
     <div class="sb-sub">
-      <a href="{{ url_for('seo_broken_links_page') }}" class="sb-sublink {% if request.endpoint == 'seo_broken_links_page' %}active{% endif %}">🔗 Broken links</a>
-      <a href="{{ url_for('seo_gsc_page') }}" class="sb-sublink {% if request.endpoint in ('seo_gsc_page', 'seo_gsc_task_page') %}active{% endif %}">🔵 Google Search Console</a>
-      <a href="{{ url_for('seo_duplicates') }}" class="sb-sublink {% if request.endpoint == 'seo_duplicates' %}active{% endif %}">🔁 Duplicates</a>
       <a href="{{ url_for('seo_title_meta_page') }}" class="sb-sublink {% if request.endpoint == 'seo_title_meta_page' %}active{% endif %}">📝 Title &amp; Meta</a>
       <a href="{{ url_for('seo_h1_in_desc_page') }}" class="sb-sublink {% if request.endpoint == 'seo_h1_in_desc_page' %}active{% endif %}">🔤 H1 trong mô tả</a>
       <a href="{{ url_for('seo_empty_desc_page') }}" class="sb-sublink {% if request.endpoint == 'seo_empty_desc_page' %}active{% endif %}">📭 SP thiếu mô tả</a>
+      <a href="{{ url_for('seo_duplicates') }}" class="sb-sublink {% if request.endpoint == 'seo_duplicates' %}active{% endif %}">🔁 Trùng lặp</a>
+      <a href="{{ url_for('seo_broken_links_page') }}" class="sb-sublink {% if request.endpoint == 'seo_broken_links_page' %}active{% endif %}">🔗 Link gãy</a>
       <a href="{{ url_for('seo_indexability_page') }}" class="sb-sublink {% if request.endpoint == 'seo_indexability_page' %}active{% endif %}">🚫 Indexability</a>
-      <a href="{{ url_for('seo_inlinks_page') }}" class="sb-sublink {% if request.endpoint == 'seo_inlinks_page' %}active{% endif %}">🕸️ Inlinks</a>
-      <a href="{{ url_for('seo_history_page') }}" class="sb-sublink {% if request.endpoint == 'seo_history_page' %}active{% endif %}">📈 History</a>
+      <a href="{{ url_for('seo_inlinks_page') }}" class="sb-sublink {% if request.endpoint == 'seo_inlinks_page' %}active{% endif %}">🕸️ Internal links</a>
+      <a href="{{ url_for('seo_gsc_page') }}" class="sb-sublink {% if request.endpoint in ('seo_gsc_page', 'seo_gsc_task_page') %}active{% endif %}">🔵 Search Console</a>
+      <a href="{{ url_for('seo_history_page') }}" class="sb-sublink {% if request.endpoint == 'seo_history_page' %}active{% endif %}">📈 Lịch sử</a>
     </div>
   </div>
 
+  {# ───── HARAVAN (gập) ───── #}
   {% set hv_active = request.endpoint and request.endpoint.startswith('haravan') %}
-  <div class="sb-group {% if hv_active %}sb-group-active{% endif %}">
+  <div class="sb-group {% if hv_active %}sb-group-active{% endif %}" data-group="haravan">
     <a href="{{ url_for('haravan_dashboard') }}" class="sb-link {% if request.endpoint == 'haravan_dashboard' %}active{% endif %}">
       <span class="sb-icon">🛒</span><span>Haravan</span>
       <span class="sb-caret">▾</span>
@@ -76,28 +102,13 @@
     </div>
   </div>
 
+  {# ───── KHÁC ───── #}
+  <div class="sb-section">Khác</div>
   <a href="{{ url_for('library_page') }}" class="sb-link {% if request.endpoint == 'library_page' %}active{% endif %}">
     <span class="sb-icon">📚</span><span>Thư viện ảnh</span>
   </a>
   <a href="{{ url_for('competitors_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('competitors') %}active{% endif %}">
     <span class="sb-icon">🥷</span><span>Đối thủ</span>
-  </a>
-
-  <div class="sb-section">Quick action</div>
-  <a href="{{ url_for('post_new') }}" class="sb-link {% if request.endpoint == 'post_new' %}active{% endif %}">
-    <span class="sb-icon">➕</span><span>Bài mới</span>
-  </a>
-  <a href="{{ url_for('products_new_form') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('products_new') %}active{% endif %}">
-    <span class="sb-icon">🛍️</span><span>SP mới (Haravan)</span>
-  </a>
-  <a href="{{ url_for('content_jobs_list_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('content_jobs') %}active{% endif %}">
-    <span class="sb-icon">📝</span><span>Content Jobs</span>
-  </a>
-  <a href="{{ url_for('collection_content_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('collection_content') %}active{% endif %}">
-    <span class="sb-icon">🗂️</span><span>Collection Content</span>
-  </a>
-  <a href="{{ url_for('blog_content_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('blog_content') %}active{% endif %}">
-    <span class="sb-icon">📰</span><span>Blog Content</span>
   </a>
 
   <div class="sb-bottom">
@@ -157,7 +168,7 @@
   </form>
 </div>
 
-<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script src="{{ url_for('static', filename='app.js') }}?v={{ now.timestamp()|int }}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

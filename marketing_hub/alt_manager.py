@@ -47,11 +47,21 @@ def classify_alt(alt: str | None) -> AltStatus:
     return "good"
 
 
+def _fmt_alt_synced(iso: str | None) -> str:
+    """ISO datetime → 'DD/MM HH:MM' cho cột 'Ngày sync' (rỗng nếu chưa sync)."""
+    if not iso:
+        return ""
+    try:
+        return datetime.fromisoformat(iso).strftime("%d/%m %H:%M")
+    except Exception:
+        return iso[:16]
+
+
 def _iter_product_images() -> list[dict[str, Any]]:
     """Parse all SP + images cross DB. Trả list dict {product_id, handle, title, type, vendor, images: [...]}."""
     conn = db.get_conn()
     rows = conn.execute("""
-        SELECT haravan_id, handle, title, product_type, vendor, status, images, last_synced, body_html
+        SELECT haravan_id, handle, title, product_type, vendor, status, images, last_synced, body_html, alt_synced_at
         FROM haravan_products
         WHERE images IS NOT NULL AND images != '' AND images != '[]'
     """).fetchall()
@@ -73,6 +83,7 @@ def _iter_product_images() -> list[dict[str, Any]]:
             "vendor": r["vendor"],
             "status": r["status"],
             "last_synced": r["last_synced"],
+            "alt_synced_at": r["alt_synced_at"],
             "images": imgs,
             "body_html": r["body_html"] or "",
         })
@@ -225,6 +236,7 @@ def list_products_paginated(
             "good": good_cnt,
             "missing_score": missing,
             "thumb": (p["images"][0].get("src") if p["images"] else None),
+            "alt_synced_at": _fmt_alt_synced(p.get("alt_synced_at")),
         })
 
     if sort == "total_desc":
@@ -314,8 +326,10 @@ def update_image_alt_local(product_id: int, image_id: int, new_alt: str) -> bool
         # Recalc images_no_alt để bulk gen biết skip SP đã xong
         no_alt_count = sum(1 for im in imgs if classify_alt(im.get("alt")) != "good")
         conn.execute(
-            "UPDATE haravan_products SET images = ?, images_no_alt = ? WHERE haravan_id = ?",
-            (json.dumps(imgs, ensure_ascii=False), no_alt_count, product_id),
+            "UPDATE haravan_products SET images = ?, images_no_alt = ?, alt_synced_at = ? "
+            "WHERE haravan_id = ?",
+            (json.dumps(imgs, ensure_ascii=False), no_alt_count,
+             datetime.now().isoformat(timespec="seconds"), product_id),
         )
         conn.commit()
     conn.close()
@@ -356,6 +370,7 @@ def worst_products(limit: int = 50, only_with_missing: bool = True) -> list[dict
             "good": good_cnt,
             "missing_score": missing,
             "thumb": (p["images"][0].get("src") if p["images"] else None),
+            "alt_synced_at": _fmt_alt_synced(p.get("alt_synced_at")),
         })
     items.sort(key=lambda x: (-x["missing_score"], -x["total"]))
     return items[:limit]
@@ -496,6 +511,7 @@ def gen_and_save_all_alts(product_id: int) -> dict[str, Any]:
                 try:
                     hv_client.update_product(product_id, {"body_html": new_html})
                     saved_desc = len(updates)
+                    db.mark_alt_synced(product_id)  # cột "Ngày sync"
                 except Exception:
                     failed += len(updates)
     except Exception:
@@ -631,6 +647,7 @@ def run_bulk_gen():
                 new_html = save_desc_image_alts(product_id, updates, live_html)
                 try:
                     hv_client.update_product(product_id, {"body_html": new_html})
+                    db.mark_alt_synced(product_id)  # cột "Ngày sync"
                     with _bulk_gen_lock:
                         _bulk_gen_state["saved"] += len(updates)
                         _bulk_gen_state["total"] += len(updates)

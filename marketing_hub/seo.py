@@ -1483,10 +1483,9 @@ def fix_h1_in_desc_for_url(url: str) -> dict:
     rescan = _scan_one_desc_h1(url)
     new_count = rescan["count"]
     text_json = json.dumps(rescan["texts"], ensure_ascii=False) if rescan["texts"] else None
-    db.seo_upsert_desc_h1(
-        url, url_type, new_count, text_json,
-        datetime.now().isoformat(timespec="seconds"),
-    )
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    db.seo_upsert_desc_h1(url, url_type, new_count, text_json, now_iso)
+    db.seo_mark_desc_h1_fixed(url, now_iso)  # cột "Ngày sync"
 
     return {
         "ok": True,
@@ -1667,18 +1666,196 @@ def synced_title_meta_urls() -> set:
     """Set URL đã từng gen+sync title/meta lên Haravan (căn cứ file backup).
     Nguồn local, không phụ thuộc Google Sheet → dùng cho cột Trạng thái + filter sync.
     """
-    urls = set()
+    return _synced_tm_index()[0]
+
+
+def synced_title_meta_map() -> dict:
+    """Map url → ngày gen+sync title/meta GẦN NHẤT ('DD/MM HH:MM') cho cột 'Ngày sync'."""
+    return _synced_tm_index()[1]
+
+
+_synced_tm_cache = {"sig": None, "set": set(), "map": {}}
+
+
+def _synced_tm_index():
+    """(set URL đã sync, map url→ngày) — đọc backup 1 LẦN rồi cache theo chữ ký thư mục
+    (số file + mtime mới nhất). Trước đây mỗi lần render trang glob+parse TOÀN BỘ file 2 lượt
+    → vào trang chậm (nhất là khi đang crawl, IO bận). Re-crawl KHÔNG tạo backup mới nên
+    cache giữ nguyên suốt phiên crawl → bỏ hẳn việc parse lại.
+    """
     try:
-        for f in _TITLE_META_BACKUP_DIR.glob("*.json"):
-            try:
-                u = json.loads(f.read_text(encoding="utf-8")).get("url")
-            except Exception:
-                u = None
-            if u:
-                urls.add(u)
+        files = list(_TITLE_META_BACKUP_DIR.glob("*.json"))
     except Exception:
-        pass
-    return urls
+        files = []
+    try:
+        sig = (len(files), max((f.stat().st_mtime for f in files), default=0.0))
+    except Exception:
+        sig = (len(files), 0.0)
+    if _synced_tm_cache["sig"] == sig:
+        return _synced_tm_cache["set"], _synced_tm_cache["map"]
+    urls, latest = set(), {}
+    for f in files:
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        u, ts = d.get("url"), d.get("ts")
+        if not u:
+            continue
+        urls.add(u)
+        if ts and (u not in latest or ts > latest[u]):
+            latest[u] = ts  # ts YYYYMMDD_HHMMSS → so chuỗi = so thời gian
+    disp = {}
+    for u, ts in latest.items():
+        try:
+            disp[u] = datetime.strptime(ts, "%Y%m%d_%H%M%S").strftime("%d/%m %H:%M")
+        except Exception:
+            disp[u] = ts
+    _synced_tm_cache.update({"sig": sig, "set": urls, "map": disp})
+    return urls, disp
+
+
+# ─────────────── RE-CRAWL RIÊNG cho /seo/title-meta ───────────────
+# Crawl lại CHỈ nhóm SP product liên quan title/meta (không đụng crawl toàn site).
+# Mục đích: sau khi sync title/meta mới lên Haravan, refresh seo_pages để bảng rớt
+# SP đã sạch lỗi + cập nhật điểm. Tái dùng crawl_one + seo_upsert_pages_batch.
+# Đo thực tế 2/6:
+#  - Throughput đụng trần ~2 req/s từ 4 luồng trở lên (Sintech rate-limit kết nối/1 IP)
+#    → thêm luồng KHÔNG crawl nhanh hơn.
+#  - QUAN TRỌNG: crawl chạy bằng thread trong tiến trình Flask → GIL convoy. Đo: 4 luồng
+#    thì vào trang title-meta lúc crawl vẫn ~8-13s (≈ idle); 5-6 luồng vọt lên 40-70s (treo);
+#    15 luồng timeout. DB từ tiến trình riêng vẫn nhanh → KHÔNG phải DB-lock, là GIL.
+#  → Default 4: vừa đủ throughput, vừa giữ trang mượt khi đang crawl.
+TM_RECRAWL_WORKERS = 4
+TM_RECRAWL_WORKERS_MAX = 40  # cap cứng — để em tự thử nếu muốn (nhưng ≥5 sẽ treo trang lúc crawl)
+
+_tm_recrawl_state = {
+    "running": False, "stop_requested": False,
+    "total": 0, "done": 0, "success": 0, "failed": 0,
+    "scope": "", "workers": 0, "started_at": None, "finished_at": None, "message": "",
+}
+_tm_recrawl_lock = threading.Lock()
+
+
+def tm_recrawl_state() -> dict:
+    with _tm_recrawl_lock:
+        return dict(_tm_recrawl_state)
+
+
+def stop_title_meta_recrawl() -> bool:
+    with _tm_recrawl_lock:
+        if _tm_recrawl_state["running"]:
+            _tm_recrawl_state["stop_requested"] = True
+            _tm_recrawl_state["message"] = "⏹️ Đang dừng — chờ URL hiện tại xong..."
+            return True
+    return False
+
+
+_TM_RECRAWL_SCOPES = ("full_sp_col", "full_blog", "issues", "synced", "all")
+
+
+def _tm_recrawl_target_urls(scope: str) -> list:
+    """URL cần recrawl theo scope:
+    'full_sp_col' = TOÀN BỘ SP product + collection (seo_pages)
+    'full_blog'   = TOÀN BỘ blog (seo_pages)
+    'issues'      = SP product đang có lỗi title/meta
+    'synced'      = SP product đã sync (verify đã sạch chưa)
+    'all'         = union issues + synced
+    """
+    if scope == "full_sp_col":
+        return db.seo_urls_by_type(["product", "collection"])
+    if scope == "full_blog":
+        return db.seo_urls_by_type(["blog"])
+    issue_urls = [p["url"] for p in list_title_meta_pages(url_type="product", limit=100000)]
+    if scope == "issues":
+        return issue_urls
+    synced_urls = [u for u in synced_title_meta_urls() if classify_url(u) == "product"]
+    if scope == "synced":
+        return synced_urls
+    return list(dict.fromkeys(issue_urls + synced_urls))  # 'all'
+
+
+def start_title_meta_recrawl_async(scope: str = "issues", workers: int = None) -> dict:
+    """Spawn thread re-crawl nhóm SP title/meta. Trả {ok, count, scope, workers} hoặc error."""
+    if scope not in _TM_RECRAWL_SCOPES:
+        scope = "full_sp_col"
+    try:
+        workers = int(workers) if workers else TM_RECRAWL_WORKERS
+    except (TypeError, ValueError):
+        workers = TM_RECRAWL_WORKERS
+    workers = max(4, min(workers, TM_RECRAWL_WORKERS_MAX))
+    with _tm_recrawl_lock:
+        if _tm_recrawl_state["running"]:
+            return {"ok": False, "error": "Đang chạy re-crawl rồi."}
+    urls = _tm_recrawl_target_urls(scope)
+    if not urls:
+        return {"ok": False, "error": "Không có SP nào để crawl."}
+    with _tm_recrawl_lock:
+        _tm_recrawl_state.update({
+            "running": True, "stop_requested": False,
+            "total": len(urls), "done": 0, "success": 0, "failed": 0,
+            "scope": scope, "workers": workers,
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+            "finished_at": None,
+            "message": f"Đang re-crawl {len(urls)} SP ({scope}) · {workers} luồng...",
+        })
+    threading.Thread(target=_tm_recrawl_worker, args=(urls, workers), daemon=True).start()
+    return {"ok": True, "count": len(urls), "scope": scope, "workers": workers}
+
+
+def _tm_recrawl_worker(urls: list, workers: int = TM_RECRAWL_WORKERS):
+    run_id = db.seo_create_run(notes="title_meta_recrawl")
+    write_buf, success, failed, done = [], 0, 0, 0
+    try:
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futures = {ex.submit(_crawl_with_delay, u): u for u in urls}
+            for fut in as_completed(futures):
+                with _tm_recrawl_lock:
+                    stop = _tm_recrawl_state["stop_requested"]
+                if stop:
+                    for f in futures:
+                        if not f.done():
+                            f.cancel()
+                    break
+                try:
+                    result = fut.result()
+                    result["last_run_id"] = run_id
+                    links = result.pop("_links", [])
+                    write_buf.append((result, links))
+                    sc = result.get("status_code") or 0
+                    if sc and sc < 400:
+                        success += 1
+                    else:
+                        failed += 1
+                except Exception:
+                    failed += 1
+                done += 1
+                if len(write_buf) >= WRITE_BATCH_SIZE:
+                    db.seo_upsert_pages_batch(write_buf)
+                    write_buf.clear()
+                if done % 20 == 0:
+                    with _tm_recrawl_lock:
+                        _tm_recrawl_state.update({"done": done, "success": success, "failed": failed})
+        if write_buf:
+            db.seo_upsert_pages_batch(write_buf)
+            write_buf.clear()
+        db.seo_finish_run(run_id, "done", len(urls), success, failed)
+    except Exception as e:
+        try:
+            db.seo_finish_run(run_id, "failed", len(urls), success, failed)
+        except Exception:
+            pass
+        with _tm_recrawl_lock:
+            _tm_recrawl_state["message"] = f"Lỗi worker: {str(e)[:160]}"
+    finally:
+        with _tm_recrawl_lock:
+            _tm_recrawl_state.update({
+                "running": False, "stop_requested": False,
+                "done": done, "success": success, "failed": failed,
+                "finished_at": datetime.now().isoformat(timespec="seconds"),
+            })
+            if not _tm_recrawl_state["message"].startswith("Lỗi"):
+                _tm_recrawl_state["message"] = f"Xong: {success} OK · {failed} lỗi · {done}/{len(urls)} SP."
 
 
 def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
@@ -1709,6 +1886,7 @@ def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
             dup_metas.add(u)
 
     synced_set = synced_title_meta_urls()
+    synced_map = synced_title_meta_map()
     tm_errs = tm_error_map()
     error_set = set(tm_errs.keys())
 
@@ -1779,6 +1957,7 @@ def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
             "n_issues": len(codes),
             "last_crawled": r["last_crawled"],
             "synced": is_synced,
+            "synced_at": synced_map.get(r["url"]),
             "gen_error": tm_errs.get(r["url"], {}).get("error"),
         })
 
@@ -1834,6 +2013,7 @@ def list_tier_products(handles, mode: str = "issues", limit: int = 5000) -> list
 
     if mode == "all":
         synced = synced_title_meta_urls()
+        synced_map = synced_title_meta_map()
         seo_rows = db.seo_pages_by_urls(list(urls))
         col_rows = {r["product_url"]: r for r in db.collection_products_rows(handles)}
         out = []
@@ -1858,6 +2038,7 @@ def list_tier_products(handles, mode: str = "issues", limit: int = 5000) -> list
                 "n_issues": 0,
                 "last_crawled": sr.get("last_crawled"),
                 "synced": u in synced,
+                "synced_at": synced_map.get(u),
             })
     else:
         out = [tm[u] for u in urls if u in tm]

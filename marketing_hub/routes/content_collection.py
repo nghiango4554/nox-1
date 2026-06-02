@@ -271,6 +271,12 @@ def collection_content_page():
     status_filter = request.args.get("status") or None
     view = request.args.get("view") or ("tier" if not status_filter else "flat")
     jobs = _collection_jobs_list(status=status_filter)
+    for j in jobs:  # cột "Ngày sync" — format ISO synced_at → DD/MM HH:MM
+        sa = j.get("synced_at")
+        try:
+            j["synced_at_disp"] = datetime.fromisoformat(sa).strftime("%d/%m %H:%M") if sa else ""
+        except Exception:
+            j["synced_at_disp"] = (sa or "")[:16]
     conn = db.get_conn()
     stats = {}
     for s in ("pending", "draft", "synced", "failed", "existing"):
@@ -383,15 +389,19 @@ def collection_content_sync(job_id):
     if not job.get("edited_title") or not job.get("edited_body_html"):
         return jsonify({"ok": False, "error": "Chưa có title/body — gen AI trước"}), 400
     import collection_content_writer as ccw
-    res = ccw.sync_collection_to_haravan(
-        int(job["haravan_id"]),
-        job["edited_title"],
-        job.get("edited_meta") or "",
-        job["edited_body_html"],
-    )
-    if job_sync.apply_sync_result(_collection_jobs_update, job_id, res):
-        return jsonify({"ok": True})
-    return jsonify(res), 500
+    try:
+        res = ccw.sync_collection_to_haravan(
+            int(job["haravan_id"]),
+            job["edited_title"],
+            job.get("edited_meta") or "",
+            job["edited_body_html"],
+        )
+        if job_sync.apply_sync_result(_collection_jobs_update, job_id, res):
+            return jsonify({"ok": True})
+        return jsonify(res), 500
+    except Exception as e:
+        # Luôn trả JSON (không để Flask trả HTML 500 → frontend báo 'Unexpected token <').
+        return jsonify({"ok": False, "error": f"Lỗi server khi sync: {e}"}), 500
 
 
 def collection_content_sync_all():

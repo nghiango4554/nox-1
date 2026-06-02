@@ -147,6 +147,7 @@ def alt_manager_save_desc(product_id):
     new_html = alt_manager.save_desc_image_alts(product_id, updates, live_html)
     try:
         hv_client.update_product(product_id, {"body_html": new_html})
+        alt_manager.db.mark_alt_synced(product_id)  # cột "Ngày sync"
         return jsonify({"ok": True, "saved": len(updates)})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)[:300]}), 500

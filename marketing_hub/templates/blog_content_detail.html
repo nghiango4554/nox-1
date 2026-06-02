@@ -261,6 +261,7 @@
       <button type="button" class="cd-tb-btn" onclick="insertLink()" title="Chèn link">🔗</button>
       <button type="button" class="cd-tb-btn" onclick="cmd('unlink')" title="Bỏ link">✂️🔗</button>
       <button type="button" class="cd-tb-btn" onclick="applyFullFormat(this)" title="Áp toàn bộ định dạng Sintech" style="background:linear-gradient(135deg,#7c3aed,#e74c3c);color:white;font-weight:700;padding:5px 12px">🎨 Format full</button>
+      <button type="button" class="cd-tb-btn" onclick="addAuthorBox(this)" title="Chèn hộp tác giả Trọng Nghĩa + Person schema (E-E-A-T) vào cuối bài" style="background:#0891b2;color:white;font-weight:600;padding:5px 10px">👤 Tác giả</button>
       <input type="color" class="cd-tb-color-input" id="color-picker" onchange="cmd('foreColor', this.value)" title="Màu chữ">
       <button type="button" class="cd-tb-btn" onclick="cmd('removeFormat')" title="Xóa định dạng">🧹</button>
       <span class="cd-tb-sep"></span>
@@ -494,6 +495,20 @@ function stripPasteWrapper(editor) {
   editor.querySelectorAll('div.contents').forEach(d => { if (!d.textContent.trim()) d.remove(); });
 }
 
+async function addAuthorBox(btn) {
+  if (!confirm('Chèn hộp tác giả Trọng Nghĩa + Person schema vào CUỐI bài? (sẽ lưu các sửa đổi đang mở trước)')) return;
+  const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳...';
+  try {
+    await saveEdit();  // lưu nội dung đang sửa để không mất khi reload
+    const r = await fetch(`{{ url_for('blog_content_add_author', job_id=job.id) }}`, { method: 'POST' });
+    const d = await r.json();
+    btn.disabled = false; btn.textContent = old;
+    if (!d.ok) { alert('❌ ' + (d.error || 'lỗi')); return; }
+    alert('✅ ' + (d.message || 'Xong'));
+    if (!d.already) location.reload();
+  } catch (e) { btn.disabled = false; btn.textContent = old; alert('❌ ' + e); }
+}
+
 function applyFullFormat(btn) {
   const editor = document.getElementById('f-body');
   stripPasteWrapper(editor);
@@ -542,16 +557,22 @@ function applyFullFormat(btn) {
 
   let nTables = 0;
   editor.querySelectorAll('table').forEach(t => {
-    t.style.borderCollapse = 'collapse'; t.style.width = '100%'; t.style.margin = '14px 0';
-    t.style.fontSize = '11pt'; t.style.fontFamily = 'Arial, sans-serif';
+    t.style.borderCollapse = 'collapse'; t.style.width = '100%'; t.style.margin = '16px 0';
+    t.style.fontSize = '11pt'; t.style.fontFamily = 'Arial, sans-serif'; t.style.color = '#000000';
+    t.style.border = '2px solid #555555'; t.setAttribute('border', '1');
+    t.removeAttribute('cellspacing'); t.removeAttribute('cellpadding');
     nTables++;
   });
   editor.querySelectorAll('td, th').forEach(c => {
-    c.style.border = '1px solid #cccccc'; c.style.padding = '8px 10px';
-    c.style.verticalAlign = 'top'; c.style.color = '#000000'; c.style.fontFamily = 'Arial, sans-serif';
+    c.style.border = '1px solid #999999'; c.style.padding = '9px 12px';
+    c.style.verticalAlign = 'top'; c.style.color = '#000000'; c.style.fontFamily = 'Arial, sans-serif'; c.style.lineHeight = '1.55';
   });
   editor.querySelectorAll('th').forEach(th => {
-    th.style.fontWeight = '700'; th.style.background = '#f4f4f4'; th.style.textAlign = 'left';
+    th.style.fontWeight = '700'; th.style.background = '#eef0f2'; th.style.color = '#111111';
+    th.style.textAlign = 'left'; th.style.borderBottom = '2px solid #555555';
+  });
+  editor.querySelectorAll('table').forEach(t => {
+    if (t.rows.length) Array.from(t.rows[t.rows.length - 1].cells).forEach(c => { c.style.borderBottom = '2px solid #555555'; });
   });
 
   editor.querySelectorAll('ul, ol').forEach(l => {

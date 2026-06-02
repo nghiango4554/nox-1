@@ -105,11 +105,9 @@ def _blog_jobs_update(job_id: int, **fields):
     fields["updated_at"] = datetime.now().isoformat(timespec="seconds")
     keys = list(fields.keys())
     sets = ", ".join(f"{k}=?" for k in keys)
-    conn = db.get_conn()
-    conn.execute(f"UPDATE blog_jobs SET {sets} WHERE id=?",
-                 [*[fields[k] for k in keys], job_id])
-    conn.commit()
-    conn.close()
+    db.execute_write(  # retry khi DB locked (vd đang crawl)
+        f"UPDATE blog_jobs SET {sets} WHERE id=?",
+        [*[fields[k] for k in keys], job_id])
 
 
 def _blog_image_dir(job_id):
@@ -484,16 +482,35 @@ def blog_content_save(job_id):
     return save_seo_job_edits(_blog_jobs_update, job_id)
 
 
+def blog_content_add_author(job_id):
+    """E-E-A-T: chèn hộp tác giả + Person schema vào CUỐI bài (idempotent)."""
+    job = _blog_jobs_get(job_id)
+    if not job:
+        return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
+    body = job.get("edited_body_html") or ""
+    if not body:
+        return jsonify({"ok": False, "error": "Bài chưa có nội dung — gen trước."}), 400
+    import author_block
+    if author_block.has_author_box(body):
+        return jsonify({"ok": True, "already": True, "message": "Bài đã có hộp tác giả rồi."})
+    _blog_jobs_update(job_id, edited_body_html=author_block.ensure_author_box(body))
+    return jsonify({"ok": True, "message": f"Đã chèn hộp tác giả {author_block.AUTHOR['name']}."})
+
+
 def blog_content_sync(job_id):
     """Vợ đã duyệt tay → sync thẳng lên Haravan, PUBLISH hiện (Google index được)."""
     job = _blog_jobs_get(job_id)
     if not job:
         return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
-    res = _push_blog_to_haravan(job, publish=True)
-    if _apply_blog_push(job_id, res):
-        return jsonify({"ok": True, "article_id": res.get("article_id"),
-                        "created": res.get("created"), "published": True})
-    return jsonify(res), 500
+    try:
+        res = _push_blog_to_haravan(job, publish=True)
+        if _apply_blog_push(job_id, res):
+            return jsonify({"ok": True, "article_id": res.get("article_id"),
+                            "created": res.get("created"), "published": True})
+        return jsonify(res), 500
+    except Exception as e:
+        # Luôn trả JSON (không để Flask trả HTML 500 → frontend báo 'Unexpected token <').
+        return jsonify({"ok": False, "error": f"Lỗi server khi sync: {e}"}), 500
 
 
 def blog_content_sync_all():
@@ -651,6 +668,8 @@ def register(app):
                      "blog_content_gen_title", blog_content_gen_title, methods=["POST"])
     app.add_url_rule("/blog-content/<int:job_id>/gen-meta",
                      "blog_content_gen_meta", blog_content_gen_meta, methods=["POST"])
+    app.add_url_rule("/blog-content/<int:job_id>/add-author",
+                     "blog_content_add_author", blog_content_add_author, methods=["POST"])
     app.add_url_rule("/blog-content/<int:job_id>/save",
                      "blog_content_save", blog_content_save, methods=["POST"])
     app.add_url_rule("/blog-content/<int:job_id>/sync",
