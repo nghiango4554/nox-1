@@ -254,11 +254,11 @@
       <option value="all">SP lỗi + đã sync</option>
     </select>
     <select id="recrawl-workers" class="btn-sm" style="padding:5px 8px"
-            title="Số luồng crawl. Sintech cap ~2 req/s nên thêm luồng KHÔNG nhanh hơn. Quan trọng: ≥5 luồng làm TREO trang title-meta khi đang crawl (GIL). Khuyên để 4.">
-      <option value="2">2 luồng</option>
-      <option value="4" selected>4 luồng (khuyên dùng — trang vẫn mượt)</option>
-      <option value="8">8 luồng (⚠️ vào trang chậm khi crawl)</option>
-      <option value="15">15 luồng (⚠️ treo trang khi crawl)</option>
+            title="Số luồng crawl. Crawl chạy ở tiến trình worker riêng → KHÔNG còn treo trang. Sintech cap ~2 req/s nên thêm luồng quá 8-15 cũng không nhanh hơn.">
+      <option value="4">4 luồng</option>
+      <option value="8" selected>8 luồng (khuyên dùng)</option>
+      <option value="15">15 luồng</option>
+      <option value="24">24 luồng (Sintech throttle — không nhanh hơn)</option>
     </select>
     <button type="button" class="btn" onclick="startRecrawl()" id="recrawl-btn"
             style="background:#0891b2;color:white"

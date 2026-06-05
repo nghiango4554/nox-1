@@ -1,0 +1,39 @@
+{
+  "scanned_at": "2026-06-02T17:34:10",
+  "total": 207,
+  "ok": 203,
+  "missing": [
+    {
+      "handle": "sua-chua-may-tinh",
+      "title": "Sửa Chữa Máy Tính",
+      "kind": "smart",
+      "len": 0,
+      "job_status": "failed",
+      "gen_len": 0
+    },
+    {
+      "handle": "dich-vu-ve-sinh-pc",
+      "title": "Dịch Vụ Vệ Sinh PC",
+      "kind": "smart",
+      "len": 0,
+      "job_status": "failed",
+      "gen_len": 0
+    },
+    {
+      "handle": "cac-hang-man-hinh-khac",
+      "title": "Các hãng màn hình khác",
+      "kind": "smart",
+      "len": 0,
+      "job_status": null,
+      "gen_len": 0
+    },
+    {
+      "handle": "laptop-theo-gia",
+      "title": "Laptop Theo Giá",
+      "kind": "smart",
+      "len": 0,
+      "job_status": "pending",
+      "gen_len": 0
+    }
+  ]
+}

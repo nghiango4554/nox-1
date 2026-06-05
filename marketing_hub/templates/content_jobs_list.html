@@ -351,6 +351,16 @@
     </tbody>
   </table>
   {% endif %}
+
+  {% if total_pages is defined and total_pages > 1 %}
+  {% set qs = ('&status=' ~ active_status) if active_status else '' %}
+  {% set qs = qs ~ (('&cate=' ~ active_cate|urlencode) if active_cate else '') %}
+  <div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:16px 0;flex-wrap:wrap">
+    {% if page > 1 %}<a class="btn btn-sm" href="?page=1{{ qs }}">«</a><a class="btn btn-sm" href="?page={{ page-1 }}{{ qs }}">‹ Trước</a>{% endif %}
+    <span class="muted" style="font-size:12.5px">Trang <strong>{{ page }}</strong>/{{ total_pages }} · tổng <strong>{{ total_jobs }}</strong> job (75/trang)</span>
+    {% if page < total_pages %}<a class="btn btn-sm" href="?page={{ page+1 }}{{ qs }}">Sau ›</a><a class="btn btn-sm" href="?page={{ total_pages }}{{ qs }}">»</a>{% endif %}
+  </div>
+  {% endif %}
 </section>
 </form>
 

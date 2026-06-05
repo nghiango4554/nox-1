@@ -270,6 +270,63 @@ def _set_state(**kw):
         _current_run.update(kw)
 
 
+# ─── AUTO-RESUME crawl SEO khi Flask sập/restart giữa chừng ───
+# Marker = "pipeline crawl đang chạy chưa kết thúc sạch". phase="crawl" (Phase 1) hoặc
+# "linkcheck" (Phase 2). Flask khởi động thấy marker còn → chạy tiếp:
+#   · Phase 1 dở → re-run full crawl (để link data đủ) → tự sang Phase 2.
+#   · Phase 2 dở → chỉ chạy lại link check (tự tiếp link chưa check: status_code IS NULL).
+_CRAWL_RESUME_FILE = Path(__file__).parent.parent / "data" / "seo_crawl_resume.json"
+
+
+def _write_crawl_resume(descriptor: dict) -> None:
+    try:
+        _CRAWL_RESUME_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _CRAWL_RESUME_FILE.write_text(
+            json.dumps(descriptor, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _clear_crawl_resume() -> None:
+    try:
+        _CRAWL_RESUME_FILE.unlink()
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+
+
+def resume_interrupted_crawl() -> dict:
+    """Gọi 1 LẦN lúc Flask khởi động. Nếu marker pipeline crawl còn → chạy tiếp.
+
+    Return {resumed: bool, phase, reason/error}.
+    """
+    try:
+        if not _CRAWL_RESUME_FILE.exists():
+            return {"resumed": False, "reason": "không có crawl dở"}
+        desc = json.loads(_CRAWL_RESUME_FILE.read_text(encoding="utf-8"))
+    except Exception as e:
+        return {"resumed": False, "error": f"đọc marker lỗi: {e}"}
+
+    # Đã có crawl / link-check chạy rồi → khỏi resume
+    if state_snapshot().get("status") in ("fetching_sitemap", "crawling", "stopping"):
+        return {"resumed": False, "reason": "crawl khác đang chạy"}
+    if link_check_state().get("running"):
+        return {"resumed": False, "reason": "link-check đang chạy"}
+
+    phase = desc.get("phase")
+    try:
+        if phase == "linkcheck":
+            # Phase 1 đã xong từ phiên trước → chỉ tiếp Phase 2 (link chưa check)
+            ok = start_link_check_streaming_async()
+            return {"resumed": bool(ok), "phase": "linkcheck"}
+        # phase == "crawl" (hoặc thiếu) → re-run full crawl + Phase 2
+        ok = start_crawl_async(auto_check_links=desc.get("auto_check_links", True))
+        return {"resumed": bool(ok), "phase": "crawl"}
+    except Exception as e:
+        return {"resumed": False, "error": str(e)}
+
+
 # ─────────────────────────── SITEMAP ───────────────────────────
 
 
@@ -879,6 +936,7 @@ def run_crawl(limit: int = None, auto_check_links: bool = True):
         started_at=datetime.now().isoformat(timespec="seconds"),
         message="Đang fetch sitemap...",
     )
+    _write_crawl_resume({"phase": "crawl", "auto_check_links": auto_check_links})
     try:
         urls = fetch_sitemap_urls()
         if limit:
@@ -934,6 +992,7 @@ def run_crawl(limit: int = None, auto_check_links: bool = True):
             _set_state(status="done", done=done, success=success, failed=failed,
                        message=f"Đã stop: {success} OK, {failed} lỗi (còn {total - done} URL chưa crawl).",
                        should_stop=False)
+            _clear_crawl_resume()  # vợ chủ động dừng → không auto-resume
             return  # bỏ qua link check + notify
         db.seo_finish_run(run_id, "done", total, success, failed)
         _set_state(status="done", done=done, success=success, failed=failed,
@@ -961,11 +1020,18 @@ def run_crawl(limit: int = None, auto_check_links: bool = True):
                 if started:
                     print("[crawl] Phase 2 link check started AFTER Phase 1 done (sequential)")
                     _set_state(message=f"Phase 1 xong ({success} OK). Phase 2 broken-link check vừa start...")
+                    # marker chuyển sang phase 'linkcheck' (start_link_check_streaming_async đã ghi)
+                else:
+                    _clear_crawl_resume()  # không start được Phase 2 → hết pipeline
             except Exception as e:
                 print(f"[crawl] Phase 2 link check fail to start: {e}")
+                _clear_crawl_resume()
+        else:
+            _clear_crawl_resume()  # không có Phase 2 → pipeline kết thúc sạch
     except Exception as e:
         db.seo_finish_run(run_id, "failed", 0, 0, 0)
         _set_state(status="failed", message=f"Lỗi: {e.__class__.__name__}: {str(e)[:200]}")
+        _clear_crawl_resume()  # crawl lỗi thật → không auto-resume
         try:
             import notifier
             notifier.send_telegram(f"❌ Crawl SEO lỗi: {e.__class__.__name__}: {str(e)[:200]}")
@@ -1108,6 +1174,7 @@ def run_link_check_streaming(stop_when_crawl_done: bool = True, poll_interval: i
     finally:
         with _link_state_lock:
             _link_state["running"] = False
+        _clear_crawl_resume()  # Phase 2 kết thúc → pipeline crawl xong sạch
 
 
 def start_link_check_streaming_async() -> bool:
@@ -1119,6 +1186,8 @@ def start_link_check_streaming_async() -> bool:
         _link_state["running"] = True
         _link_state["checked"] = 0
         _link_state["broken"] = 0
+    # Marker phase 'linkcheck' → restart giữa chừng sẽ tự chạy tiếp link chưa check.
+    _write_crawl_resume({"phase": "linkcheck"})
     t = threading.Thread(target=run_link_check_streaming, daemon=True)
     t.start()
     return True
@@ -1858,6 +1927,62 @@ def _tm_recrawl_worker(urls: list, workers: int = TM_RECRAWL_WORKERS):
                 _tm_recrawl_state["message"] = f"Xong: {success} OK · {failed} lỗi · {done}/{len(urls)} SP."
 
 
+def run_tm_recrawl(scope: str, workers, progress_cb, stop_cb) -> dict:
+    """Chạy re-crawl title-meta TRONG worker process riêng (qua job queue).
+    progress_cb(dict): ghi tiến độ vào job. stop_cb()->bool: check yêu cầu dừng.
+    ThreadPool chạy trong tiến trình worker → KHÔNG bóp GIL của Flask (web vẫn mượt)."""
+    if scope not in _TM_RECRAWL_SCOPES:
+        scope = "full_sp_col"
+    try:
+        workers = max(4, min(int(workers or TM_RECRAWL_WORKERS), TM_RECRAWL_WORKERS_MAX))
+    except (TypeError, ValueError):
+        workers = TM_RECRAWL_WORKERS
+    urls = _tm_recrawl_target_urls(scope)
+    total = len(urls)
+
+    def emit(done, success, failed, msg, running=True):
+        progress_cb({"running": running, "total": total, "done": done, "success": success,
+                     "failed": failed, "scope": scope, "workers": workers, "message": msg})
+
+    emit(0, 0, 0, f"Đang re-crawl {total} SP ({scope}) · {workers} luồng...")
+    if not urls:
+        emit(0, 0, 0, "Không có SP nào để crawl.", running=False)
+        return {"done": 0, "success": 0, "failed": 0, "total": 0}
+    run_id = db.seo_create_run(notes="title_meta_recrawl")
+    write_buf, success, failed, done = [], 0, 0, 0
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = {ex.submit(_crawl_with_delay, u): u for u in urls}
+        for fut in as_completed(futures):
+            if stop_cb():
+                for f in futures:
+                    if not f.done():
+                        f.cancel()
+                break
+            try:
+                result = fut.result()
+                result["last_run_id"] = run_id
+                links = result.pop("_links", [])
+                write_buf.append((result, links))
+                sc = result.get("status_code") or 0
+                if sc and sc < 400:
+                    success += 1
+                else:
+                    failed += 1
+            except Exception:
+                failed += 1
+            done += 1
+            if len(write_buf) >= WRITE_BATCH_SIZE:
+                db.seo_upsert_pages_batch(write_buf)
+                write_buf.clear()
+            if done % 10 == 0:
+                emit(done, success, failed, f"Đang re-crawl... {done}/{total}")
+    if write_buf:
+        db.seo_upsert_pages_batch(write_buf)
+    db.seo_finish_run(run_id, "done", total, success, failed)
+    emit(done, success, failed, f"Xong: {success} OK · {failed} lỗi · {done}/{total} SP.", running=False)
+    return {"done": done, "success": success, "failed": failed, "total": total}
+
+
 def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
                            sort: str = "score_asc", limit: int = 2000,
                            sync_filter: str = None) -> list:
@@ -2204,6 +2329,27 @@ def _build_spec_excerpt(body_html: str, max_total: int = 2200) -> str:
     return "\n".join(parts)[:max_total + 300]
 
 
+# Token spec để đo "độ giàu spec" của excerpt → quyết định có cần kéo spec web bù.
+_SPEC_SIGNAL_RE = re.compile(
+    r"(\d+\s*(?:gb|tb|ghz|mhz|hz|inch|mah|wh|nm|bit)\b|"
+    r"\bi[3579]\b|ryzen|\bcore\s*i|rtx|gtx|\brx\s*\d|gddr\d|ddr[345]|"
+    r"\bssd\b|\bhdd\b|nvme|\bvga\b|\bcpu\b|\bram\b|card\s*đồ\s*họa|"
+    r"độ\s*phân\s*giải|refresh|tần\s*số\s*quét|màn\s*hình)",
+    re.I,
+)
+
+
+def _spec_signal_strength(excerpt: str) -> int:
+    """Đếm số token spec PHÂN BIỆT trong excerpt → đo độ giàu spec gốc.
+
+    Dùng để quyết định có kéo spec web bù không (chỉ khi gốc YẾU — vợ chốt 5/6).
+    Không phụ thuộc marker "Thông số kỹ thuật": bắt cả SP cũ liệt kê spec ở cuối.
+    """
+    if not excerpt:
+        return 0
+    return len({m.group(0).lower().strip() for m in _SPEC_SIGNAL_RE.finditer(excerpt)})
+
+
 def _parse_title_meta_json(raw: str) -> dict:
     """Parse output AI → {ok, titles[], metas[]} hoặc {ok:False, error, raw}."""
     text = (raw or "").strip()
@@ -2258,19 +2404,26 @@ def _first_valid(cands: list, lo: int, hi: int):
 def _gen_title_meta_via_codex(product_title: str, url: str,
                               current_title: str = "", current_meta: str = "",
                               body_excerpt: str = "", tags: str = "",
-                              provider: str = None) -> dict:
+                              web_spec_excerpt: str = "", provider: str = None) -> dict:
     """Gen 3 title + 3 meta qua AI fallback chain (Codex→Claude→Gemini).
 
     - Inject `body_excerpt` (spec THẬT từ body_html) + `tags` → AI không bịa cấu hình.
+    - `web_spec_excerpt` (spec cào web qua Serper) — CHỈ BÙ khi mô tả gốc yếu; ưu tiên gốc.
     - Retry 1 LẦN với hint nếu lần đầu KHÔNG có title hợp lệ HOẶC không có meta hợp lệ.
     Return {ok, titles[], metas[], retried, error}.
     """
     import ai_provider
 
     spec_block = (
-        "\n- Trích MÔ TẢ SP (spec THẬT — CHỈ dùng số liệu/cấu hình xuất hiện ở đây, "
+        "\n- Trích MÔ TẢ SP gốc (spec THẬT — CHỈ dùng số liệu/cấu hình xuất hiện ở đây, "
         f"TUYỆT ĐỐI không bịa thêm cấu hình):\n{body_excerpt}"
         if body_excerpt else ""
+    )
+    web_block = (
+        "\n- Spec THAM KHẢO từ web (CHỈ dùng để BÙ khi MÔ TẢ SP gốc ở trên thiếu/không có; "
+        "nếu LỆCH với mô tả gốc thì ƯU TIÊN mô tả gốc; KHÔNG bịa ngoài 2 nguồn này):\n"
+        f"{web_spec_excerpt}"
+        if web_spec_excerpt else ""
     )
     tag_block = f"\n- Tags Haravan: {tags}" if tags else ""
 
@@ -2278,7 +2431,7 @@ def _gen_title_meta_via_codex(product_title: str, url: str,
 - Tên SP / chủ đề: {product_title}
 - URL: {url}
 - Title hiện tại (cần thay): {current_title or '(rỗng)'} [{len(current_title)}c]
-- Meta hiện tại (cần thay): {current_meta or '(rỗng)'} [{len(current_meta)}c]{tag_block}{spec_block}
+- Meta hiện tại (cần thay): {current_meta or '(rỗng)'} [{len(current_meta)}c]{tag_block}{spec_block}{web_block}
 
 Sinh 3 title + 3 meta mới theo rule. Trả JSON thuần."""
 
@@ -2410,9 +2563,23 @@ def preview_title_meta_for_url(url: str) -> dict:
     product = info["product"]
     body_excerpt = _build_spec_excerpt(product.get("body_html") or "")
     tags = product.get("tags") or ""
+
+    # Bước 2 spec-research: spec gốc YẾU → kéo spec web bù (ưu tiên gốc). Chỉ luồng preview.
+    web_spec_excerpt = ""
+    web_spec_source = ""
+    if _spec_signal_strength(body_excerpt) < 4:
+        try:
+            import serper_search
+            ws = serper_search.fetch_product_specs(info["product_name"])
+            if ws.get("ok") and ws.get("specs_text"):
+                web_spec_excerpt = ws["specs_text"][:1200]
+                web_spec_source = ws.get("source_url", "")
+        except Exception:
+            pass  # Serper lỗi/hết quota → bỏ qua, vẫn gen từ spec gốc
+
     gen = _gen_title_meta_via_codex(
         info["product_name"], url, info["old_title"], info["old_meta"],
-        body_excerpt=body_excerpt, tags=tags,
+        body_excerpt=body_excerpt, tags=tags, web_spec_excerpt=web_spec_excerpt,
     )
     if not gen["ok"]:
         return {"ok": False, "error": gen["error"], "raw": gen.get("raw")}
@@ -2430,6 +2597,8 @@ def preview_title_meta_for_url(url: str) -> dict:
         "meta_lens": [len(mt) for mt in metas],
         "meta_ok": [_META_MIN <= len(mt) <= _META_MAX for mt in metas],
         "spec_used": bool(body_excerpt),
+        "web_spec_used": bool(web_spec_excerpt),
+        "web_spec_source": web_spec_source,
         "retried": gen.get("retried", False),
     }
 
@@ -2586,6 +2755,76 @@ _title_meta_fix_state = {
 _title_meta_fix_lock = threading.Lock()
 _title_meta_queue = []     # hàng chờ URL cho chế độ gen lại từng SP
 
+# ─── AUTO-RESUME job khi Flask sập/restart giữa chừng ───
+# Marker file = "có 1 job ĐANG CHẠY chưa kết thúc sạch". Ghi lúc start, XÓA lúc kết
+# thúc (xong/dừng/hết quota). Nếu lúc Flask khởi động marker VẪN còn → job bị sập dở
+# → tự chạy tiếp phần SP CHƯA sync. SP đã sync lưu file backup nên không gen lại.
+_TM_RESUME_FILE = Path(__file__).parent.parent / "data" / "title_meta_job_resume.json"
+
+
+def _write_tm_resume(descriptor: dict) -> None:
+    try:
+        _TM_RESUME_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _TM_RESUME_FILE.write_text(
+            json.dumps(descriptor, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _clear_tm_resume() -> None:
+    try:
+        _TM_RESUME_FILE.unlink()
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+
+
+def resume_interrupted_title_meta_job() -> dict:
+    """Gọi 1 LẦN lúc Flask khởi động. Nếu marker job dở còn → chạy tiếp SP chưa sync.
+
+    Return {resumed: bool, mode, remaining, reason/error}.
+    """
+    try:
+        if not _TM_RESUME_FILE.exists():
+            return {"resumed": False, "reason": "không có job dở"}
+        desc = json.loads(_TM_RESUME_FILE.read_text(encoding="utf-8"))
+    except Exception as e:
+        return {"resumed": False, "error": f"đọc marker lỗi: {e}"}
+
+    with _title_meta_fix_lock:
+        if _title_meta_fix_state["running"]:
+            return {"resumed": False, "reason": "đã có job đang chạy"}
+
+    mode = desc.get("mode")
+    try:
+        if mode == "all":
+            # list_title_meta_pages tự loại SP đã hết lỗi/đã sync theo filter → resume sạch.
+            ok = start_title_meta_fix_all_async(
+                desc.get("url_type"), desc.get("issue_filter"), desc.get("sync_filter"))
+            if not ok:
+                return {"resumed": False, "reason": "không start được (job khác?)"}
+            return {"resumed": True, "mode": "all"}
+
+        synced = synced_title_meta_urls()
+        remaining = [u for u in (desc.get("urls") or []) if u not in synced]
+        if not remaining:
+            _clear_tm_resume()
+            return {"resumed": False, "reason": "đã sync hết, không còn gì để tiếp"}
+
+        if mode == "dual":
+            r = start_title_meta_fix_dual_async(remaining)
+            if not r.get("ok"):  # thiếu 1 provider → fallback single-chain
+                r = start_title_meta_fix_urls_async(remaining)
+            return {"resumed": r.get("ok", False), "mode": "dual",
+                    "remaining": len(remaining), "fallback": "single" not in str(r)}
+        # filtered / mặc định
+        r = start_title_meta_fix_urls_async(remaining)
+        return {"resumed": r.get("ok", False), "mode": mode or "filtered",
+                "remaining": len(remaining)}
+    except Exception as e:
+        return {"resumed": False, "error": str(e)}
+
 
 def title_meta_fix_state() -> dict:
     with _title_meta_fix_lock:
@@ -2628,6 +2867,8 @@ def run_title_meta_fix_all(url_type: str = None, issue_filter: str = None,
             "message": f"Bắt đầu fix {len(fixable)} SP (bỏ {skipped} non-product; skip SP đã gen).",
             "results": {},
         })
+    _write_tm_resume({"mode": "all", "url_type": url_type,
+                      "issue_filter": issue_filter, "sync_filter": sync_filter})
 
     for p in fixable:
         with _title_meta_fix_lock:
@@ -2676,6 +2917,7 @@ def run_title_meta_fix_all(url_type: str = None, issue_filter: str = None,
             f"{prefix} {_title_meta_fix_state['checked']}/{_title_meta_fix_state['total']} bài "
             f"(✅ {_title_meta_fix_state['success']} · ❌ {_title_meta_fix_state['failed']})."
         )
+    _clear_tm_resume()  # job kết thúc sạch → bỏ marker, không auto-resume nữa
 
 
 def start_title_meta_fix_all_async(url_type: str = None, issue_filter: str = None,
@@ -2706,6 +2948,7 @@ def run_title_meta_fix_urls(urls: list):
             "message": f"Bắt đầu gen+sync {len(fixable)} SP (đã lọc theo tầng).",
             "results": {},
         })
+    _write_tm_resume({"mode": "filtered", "urls": fixable})
 
     for u in fixable:
         with _title_meta_fix_lock:
@@ -2762,6 +3005,7 @@ def run_title_meta_fix_urls(urls: list):
             f"(❌ {_title_meta_fix_state['failed']}) / tổng {_title_meta_fix_state['total']}. "
             + ("Đợi quota reset rồi bấm lại để gen tiếp phần còn lại." if quota else "")
         )
+    _clear_tm_resume()  # kết thúc sạch (gồm hết-quota: chủ động dừng) → bỏ marker
 
 
 def start_title_meta_fix_urls_async(urls: list) -> dict:
@@ -2798,6 +3042,7 @@ def run_title_meta_fix_dual(urls: list):
             "message": f"Dual-AI: gen {len(queue)} SP bằng Codex + Claude song song.",
             "results": {},
         })
+    _write_tm_resume({"mode": "dual", "urls": list(queue)})  # list gốc (queue bị pop dần)
 
     def worker(prov: str):
         cur_key = f"current_{prov}"
@@ -2867,6 +3112,7 @@ def run_title_meta_fix_dual(urls: list):
             f"{prefix}{qnote} — gen {st['success']} SP (❌ {st['failed']}) / tổng {st['total']}. "
             + (f"Còn {leftover} SP chưa làm, đợi quota reset bấm lại." if leftover else "")
         )
+    _clear_tm_resume()  # kết thúc sạch → bỏ marker
 
 
 def start_title_meta_fix_dual_async(urls: list) -> dict:

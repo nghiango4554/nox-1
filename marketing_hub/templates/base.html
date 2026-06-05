@@ -77,6 +77,7 @@
       <span class="sb-caret">▾</span>
     </a>
     <div class="sb-sub">
+      <a href="{{ url_for('seo_coverage_page') }}" class="sb-sublink {% if request.endpoint == 'seo_coverage_page' %}active{% endif %}">🩺 Coverage nội dung</a>
       <a href="{{ url_for('seo_title_meta_page') }}" class="sb-sublink {% if request.endpoint == 'seo_title_meta_page' %}active{% endif %}">📝 Title &amp; Meta</a>
       <a href="{{ url_for('seo_h1_in_desc_page') }}" class="sb-sublink {% if request.endpoint == 'seo_h1_in_desc_page' %}active{% endif %}">🔤 H1 trong mô tả</a>
       <a href="{{ url_for('seo_empty_desc_page') }}" class="sb-sublink {% if request.endpoint == 'seo_empty_desc_page' %}active{% endif %}">📭 SP thiếu mô tả</a>
@@ -99,6 +100,7 @@
     <div class="sb-sub">
       <a href="{{ url_for('haravan_products_page') }}" class="sb-sublink {% if request.endpoint == 'haravan_products_page' %}active{% endif %}">📦 Sản phẩm</a>
       <a href="{{ url_for('haravan_blogs') }}" class="sb-sublink {% if request.endpoint == 'haravan_blogs' %}active{% endif %}">📝 Blog &amp; News</a>
+      <a href="{{ url_for('haravan_audit_page') }}" class="sb-sublink {% if request.endpoint == 'haravan_audit_page' %}active{% endif %}">📜 Audit log</a>
     </div>
   </div>
 

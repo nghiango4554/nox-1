@@ -103,6 +103,47 @@ def _check_permission(method: str, path: str):
             )
 
 
+def _summarize_payload(payload) -> str:
+    """Tóm tắt GỌN payload đẩy lên Haravan (không lưu full content) cho audit log."""
+    if not isinstance(payload, dict) or not payload:
+        return ""
+    inner = next(iter(payload.values()), None)
+    if not isinstance(inner, dict):
+        return ""
+    parts = []
+    for k, v in inner.items():
+        if k == "id":
+            continue
+        if k == "body_html":
+            parts.append(f"body_html: {len(v or '')}c")
+        elif "title_tag" in k:
+            parts.append(f"title: {str(v)[:55]}")
+        elif "description_tag" in k:
+            parts.append(f"meta: {str(v)[:55]}")
+        elif k == "images":
+            parts.append("images")
+        elif isinstance(v, str):
+            parts.append(f"{k}: {v[:35]}")
+        else:
+            parts.append(k)
+    return " · ".join(parts)[:500]
+
+
+def _audit(method: str, path: str, payload, ok: bool, status_code, error):
+    """Ghi audit (best-effort) — TUYỆT ĐỐI không làm vỡ luồng sync."""
+    try:
+        import re as _re
+        import db
+        m = _re.search(r"/([a-z_]+)/(\d+)", path)
+        rtype = (m.group(1).rstrip("s") if m else path.strip("/").split(".")[0])
+        rid = m.group(2) if m else None
+        db.haravan_audit_log(method=method, path=path, resource_type=rtype, resource_id=rid,
+                             summary=_summarize_payload(payload), ok=ok,
+                             status_code=status_code, error=(error[:300] if error else None))
+    except Exception:
+        pass
+
+
 def _request(method: str, path: str, params: dict = None, payload: dict = None) -> dict:
     """Low-level request. Path = '/products.json' (relative to /admin).
 
@@ -128,12 +169,17 @@ def _request(method: str, path: str, params: dict = None, payload: dict = None) 
         time.sleep(2)
         r = requests.request(method, url, headers=_auth_headers(),
                               params=params, json=payload, timeout=TIMEOUT, verify=False)
+    is_mut = method.upper() in ("PUT", "POST", "DELETE")
     if r.status_code >= 400:
         try:
             err = r.json()
         except (ValueError, TypeError):
             err = {"error": r.text[:300]}
+        if is_mut:
+            _audit(method, path, payload, False, r.status_code, str(err))
         raise HaravanError(f"HTTP {r.status_code} {method} {path}: {err}")
+    if is_mut:
+        _audit(method, path, payload, True, r.status_code, None)
     if not r.content:
         return {}
     try:
