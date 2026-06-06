@@ -32,7 +32,16 @@ def content_jobs_list_page():
     valid_statuses = ("pending", "drafting", "text_done", "draft", "approved", "synced", "failed")
     if status and status not in valid_statuses:
         status = None
-    jobs = db.content_jobs_list(status=status, cate=cate, limit=500)
+    try:
+        page = max(1, int(request.args.get("page", 1) or 1))
+    except ValueError:
+        page = 1
+    PAGE_SIZE = 75
+    all_jobs = db.content_jobs_list(status=status, cate=cate, limit=100000)
+    total_jobs = len(all_jobs)
+    total_pages = max(1, (total_jobs + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = min(page, total_pages)
+    jobs = all_jobs[(page - 1) * PAGE_SIZE: page * PAGE_SIZE]  # chỉ render 1 trang → nhẹ
     stats = db.content_jobs_stats()
     categories = db.content_jobs_categories()
     for j in jobs:
@@ -44,6 +53,7 @@ def content_jobs_list_page():
         "content_jobs_list.html",
         jobs=jobs, stats=stats, active_status=status,
         categories=categories, active_cate=cate,
+        page=page, total_pages=total_pages, total_jobs=total_jobs,
     ))
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     resp.headers["Pragma"] = "no-cache"

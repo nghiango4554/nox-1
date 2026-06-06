@@ -49,6 +49,93 @@ def _load_psi_key() -> str:
 
 # ─────────────────────── H1 IN DESC (7 route) ────────────────────
 
+_COVERAGE_FILE = Path(__file__).parent.parent / "data" / "collection_coverage.json"
+
+
+def scan_collection_coverage():
+    """Fetch live collection từ Haravan + đo độ dài mô tả → lưu cache JSON.
+    Cross-ref status trong collection_jobs để biết bài nào đã gen sẵn (chỉ cần sync)."""
+    import re as _re
+    import haravan_client as hv
+
+    def fetch_all(fn, kind):
+        out, page = [], 1
+        while True:
+            try:
+                batch = fn(page=page, limit=50)
+            except Exception:
+                break
+            if not batch:
+                break
+            for c in batch:
+                text = _re.sub(r"\s+", " ", _re.sub(r"<[^>]+>", " ", c.get("body_html") or "")).strip()
+                out.append({"handle": c.get("handle"), "title": c.get("title"), "kind": kind, "len": len(text)})
+            if len(batch) < 50:
+                break
+            page += 1
+        return out
+
+    allc = fetch_all(hv.list_custom_collections, "custom") + fetch_all(hv.list_smart_collections, "smart")
+    missing = [c for c in allc if c["len"] < 200]
+    conn = db.get_conn()
+    jobs = {r["handle"]: (r["status"], r["blen"]) for r in conn.execute(
+        "SELECT handle, status, length(COALESCE(edited_body_html,'')) blen FROM collection_jobs")}
+    conn.close()
+    for c in missing:
+        st = jobs.get(c["handle"])
+        c["job_status"] = st[0] if st else None
+        c["gen_len"] = st[1] if st else 0
+    data = {
+        "scanned_at": datetime.now().isoformat(timespec="seconds"),
+        "total": len(allc), "ok": len(allc) - len(missing), "missing": missing,
+    }
+    try:
+        _COVERAGE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _COVERAGE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        print(f"[coverage] write err: {e}")
+    return data
+
+
+def seo_coverage_page():
+    """Coverage tổng sức khỏe nội dung: SP/collection thiếu mô tả + author/schema."""
+    try:
+        sp_empty = db.seo_empty_desc_list(url_type="product", only_empty=True, limit=5000)
+    except Exception:
+        sp_empty = []
+    coll = None
+    try:
+        if _COVERAGE_FILE.exists():
+            coll = json.loads(_COVERAGE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        coll = None
+    conn = db.get_conn()
+
+    def one(sql):
+        r = conn.execute(sql).fetchone()
+        return (r[0] if r else 0) or 0
+    blog_jobs_total = one("SELECT COUNT(*) FROM blog_jobs WHERE edited_body_html IS NOT NULL AND edited_body_html!=''")
+    blog_jobs_author = one("SELECT COUNT(*) FROM blog_jobs WHERE edited_body_html LIKE '%data-author-box%'")
+    blog_audited = one("SELECT COUNT(*) FROM seo_pages WHERE url_type='blog' AND schema_scanned_at IS NOT NULL")
+    blog_faq = one("SELECT COUNT(*) FROM seo_pages WHERE url_type='blog' AND schema_has_faq=1")
+    conn.close()
+    return render_template(
+        "seo_coverage.html",
+        sp_empty_count=len(sp_empty), sp_empty_sample=sp_empty[:12],
+        coll=coll,
+        blog_jobs_total=blog_jobs_total, blog_jobs_author=blog_jobs_author,
+        blog_audited=blog_audited, blog_faq=blog_faq,
+    )
+
+
+def seo_coverage_scan_collections():
+    try:
+        data = scan_collection_coverage()
+        return jsonify({"ok": True, "missing": len(data["missing"]), "total": data["total"]})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 def seo_eeat_page():
     """Bảng audit E-E-A-T — gom tín hiệu sẵn có trong DB thành checklist gap."""
     import author_block
@@ -301,23 +388,44 @@ def seo_title_meta_fix_all_stop():
     return jsonify({"ok": False, "error": "Không có job đang chạy."}), 400
 
 
-# ─── Re-crawl RIÊNG trang title-meta (refresh seo_pages cho nhóm SP title/meta) ───
+# ─── Re-crawl RIÊNG trang title-meta — qua HÀNG ĐỢI JOB (worker process riêng) ───
 def seo_title_meta_recrawl_start():
     payload = request.get_json(silent=True) or request.form
     scope = (payload.get("scope") or "issues").strip()
-    res = seo_mod.start_title_meta_recrawl_async(scope=scope, workers=payload.get("workers"))
-    return jsonify(res), 200 if res.get("ok") else 409
+    if db.job_active("tm_recrawl"):
+        return jsonify({"ok": False, "error": "Đang chạy re-crawl rồi."}), 409
+    jid = db.job_enqueue("tm_recrawl", {"scope": scope, "workers": payload.get("workers")})
+    return jsonify({"ok": True, "job_id": jid, "scope": scope})
 
 
 def seo_title_meta_recrawl_stop():
-    stopped = seo_mod.stop_title_meta_recrawl()
-    if stopped:
-        return jsonify({"ok": True, "message": "Đã gửi yêu cầu dừng."})
-    return jsonify({"ok": False, "error": "Không có re-crawl đang chạy."}), 400
+    job = db.job_active("tm_recrawl")
+    if not job:
+        return jsonify({"ok": False, "error": "Không có re-crawl đang chạy."}), 400
+    db.job_request_stop(job["id"])
+    return jsonify({"ok": True, "message": "Đã gửi yêu cầu dừng."})
 
 
 def seo_title_meta_recrawl_status():
-    return jsonify(seo_mod.tm_recrawl_state())
+    job = db.job_active("tm_recrawl") or db.job_latest("tm_recrawl")
+    if not job:
+        return jsonify({"running": False, "total": 0, "done": 0, "success": 0,
+                        "failed": 0, "scope": "", "workers": 0, "message": ""})
+    try:
+        prog = json.loads(job.get("progress") or "{}")
+    except Exception:
+        prog = {}
+    running = job["status"] in ("queued", "running")
+    msg = prog.get("message", "")
+    if job["status"] == "queued" and not msg:
+        msg = "⏳ Đang chờ worker nhặt job..."
+    return jsonify({
+        "running": running,
+        "total": prog.get("total", 0), "done": prog.get("done", 0),
+        "success": prog.get("success", 0), "failed": prog.get("failed", 0),
+        "scope": prog.get("scope", ""), "workers": prog.get("workers", 0),
+        "message": msg, "job_status": job["status"],
+    })
 
 
 def seo_title_meta_fix_all_status():
@@ -777,6 +885,8 @@ def seo_empty_desc_status():
 def register(app):
     """Đăng ký 33 route SEO Tools."""
     # H1 in desc (7)
+    app.add_url_rule("/seo/coverage", "seo_coverage_page", seo_coverage_page)
+    app.add_url_rule("/seo/coverage/scan-collections", "seo_coverage_scan_collections", seo_coverage_scan_collections, methods=["POST"])
     app.add_url_rule("/seo/eeat", "seo_eeat_page", seo_eeat_page)
     app.add_url_rule("/seo/h1-in-desc", "seo_h1_in_desc_page", seo_h1_in_desc_page)
     app.add_url_rule("/seo/h1-in-desc/scan", "seo_h1_in_desc_scan", seo_h1_in_desc_scan, methods=["POST"])

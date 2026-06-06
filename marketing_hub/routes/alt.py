@@ -29,7 +29,7 @@ def alt_manager_page():
 
     summary = alt_manager.summarize_alt_coverage()
     page_data = alt_manager.list_products_paginated(
-        page=page, page_size=100,
+        page=page, page_size=50,
         only_missing=only_missing,
         filter_type=filter_type, filter_vendor=filter_vendor,
         search=search, sort=sort,

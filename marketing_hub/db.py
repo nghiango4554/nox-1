@@ -1,4 +1,7 @@
+import json
+import os
 import sqlite3
+import time
 from pathlib import Path
 from datetime import datetime
 
@@ -400,6 +403,34 @@ def init_db():
     hv_cols = {r["name"] for r in conn.execute("PRAGMA table_info(haravan_products)").fetchall()}
     if "alt_synced_at" not in hv_cols:
         conn.execute("ALTER TABLE haravan_products ADD COLUMN alt_synced_at TEXT")
+
+    # Audit log mọi thay đổi đẩy lên Haravan (PUT/POST/DELETE) — truy vết + an toàn
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS haravan_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL,
+            method TEXT, path TEXT,
+            resource_type TEXT, resource_id TEXT,
+            summary TEXT,
+            ok INTEGER, status_code INTEGER, error TEXT
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_haravan_audit_id ON haravan_audit(id DESC)")
+
+    # Hàng đợi job nền (worker process riêng chạy — tách khỏi tiến trình web)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            payload TEXT,
+            status TEXT NOT NULL DEFAULT 'queued',
+            stop_requested INTEGER DEFAULT 0,
+            progress TEXT,
+            created_at TEXT, started_at TEXT, finished_at TEXT,
+            error TEXT, worker_pid INTEGER
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, id)")
 
     # ─── Blog Pillar/Cluster (T4) ───
     conn.execute("""
@@ -1033,6 +1064,138 @@ def execute_write(sql: str, params=(), retries: int = 8):
                 _t.sleep(min(0.4 * (attempt + 1), 3.0))
                 continue
             raise
+
+
+def haravan_audit_log(method, path, resource_type=None, resource_id=None,
+                      summary=None, ok=1, status_code=None, error=None):
+    """Ghi 1 dòng audit thay đổi Haravan (best-effort, có retry khi DB lock)."""
+    execute_write(
+        "INSERT INTO haravan_audit (ts, method, path, resource_type, resource_id, summary, ok, status_code, error) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        (datetime.now().isoformat(timespec="seconds"), method, path, resource_type,
+         resource_id, summary, 1 if ok else 0, status_code, error),
+    )
+
+
+def haravan_audit_list(limit: int = 200, offset: int = 0, only_fail: bool = False) -> list:
+    conn = get_conn()
+    sql = "SELECT * FROM haravan_audit"
+    if only_fail:
+        sql += " WHERE ok=0"
+    sql += " ORDER BY id DESC LIMIT ? OFFSET ?"
+    rows = conn.execute(sql, (limit, offset)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def haravan_audit_stats() -> dict:
+    conn = get_conn()
+    total = conn.execute("SELECT COUNT(*) FROM haravan_audit").fetchone()[0]
+    fail = conn.execute("SELECT COUNT(*) FROM haravan_audit WHERE ok=0").fetchone()[0]
+    today = conn.execute("SELECT COUNT(*) FROM haravan_audit WHERE ts >= date('now','localtime')").fetchone()[0]
+    conn.close()
+    return {"total": total, "fail": fail, "today": today}
+
+
+# ─────────────────────── JOB QUEUE (worker nền) ───────────────────────
+
+def job_enqueue(jtype: str, payload: dict = None) -> int:
+    """Thêm 1 job vào hàng đợi. Trả job_id. Worker process riêng sẽ nhặt + chạy."""
+    now = datetime.now().isoformat(timespec="seconds")
+    for attempt in range(8):
+        conn = get_conn()
+        try:
+            cur = conn.execute(
+                "INSERT INTO jobs (type, payload, status, created_at) VALUES (?,?,'queued',?)",
+                (jtype, json.dumps(payload or {}, ensure_ascii=False), now),
+            )
+            jid = cur.lastrowid
+            conn.commit(); conn.close()
+            return jid
+        except sqlite3.OperationalError as e:
+            conn.close()
+            if "locked" in str(e).lower() and attempt < 7:
+                time.sleep(0.4 * (attempt + 1)); continue
+            raise
+
+
+def job_claim_next(types: list = None) -> dict:
+    """Worker gọi: nhặt job 'queued' cũ nhất → set 'running' (atomic). None nếu rỗng."""
+    conn = get_conn()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        sql = "SELECT * FROM jobs WHERE status='queued'"
+        args = []
+        if types:
+            sql += " AND type IN (%s)" % ",".join("?" * len(types)); args += list(types)
+        sql += " ORDER BY id ASC LIMIT 1"
+        row = conn.execute(sql, args).fetchone()
+        if not row:
+            conn.execute("COMMIT"); conn.close(); return None
+        conn.execute("UPDATE jobs SET status='running', started_at=?, worker_pid=? WHERE id=?",
+                     (datetime.now().isoformat(timespec="seconds"), os.getpid(), row["id"]))
+        conn.execute("COMMIT")
+        job = dict(row); job["status"] = "running"
+        conn.close()
+        return job
+    except Exception:
+        try: conn.execute("ROLLBACK")
+        except Exception: pass
+        conn.close(); return None
+
+
+def job_update_progress(job_id: int, progress: dict):
+    execute_write("UPDATE jobs SET progress=? WHERE id=?",
+                  (json.dumps(progress, ensure_ascii=False), job_id))
+
+
+def job_finish(job_id: int, status: str, error: str = None):
+    execute_write("UPDATE jobs SET status=?, finished_at=?, error=? WHERE id=?",
+                  (status, datetime.now().isoformat(timespec="seconds"), error, job_id))
+
+
+def job_request_stop(job_id: int):
+    execute_write("UPDATE jobs SET stop_requested=1 WHERE id=?", (job_id,))
+
+
+def job_stop_requested(job_id: int) -> bool:
+    conn = get_conn()
+    r = conn.execute("SELECT stop_requested FROM jobs WHERE id=?", (job_id,)).fetchone()
+    conn.close()
+    return bool(r and r[0])
+
+
+def job_get(job_id: int) -> dict:
+    conn = get_conn()
+    r = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+    conn.close()
+    return dict(r) if r else None
+
+
+def job_active(jtype: str) -> dict:
+    """Job đang queued/running mới nhất của 1 type (cho UI hiện trạng thái)."""
+    conn = get_conn()
+    r = conn.execute(
+        "SELECT * FROM jobs WHERE type=? AND status IN ('queued','running') ORDER BY id DESC LIMIT 1",
+        (jtype,)).fetchone()
+    conn.close()
+    return dict(r) if r else None
+
+
+def job_latest(jtype: str) -> dict:
+    """Job mới nhất (mọi status) của 1 type — để hiện kết quả lần chạy gần nhất."""
+    conn = get_conn()
+    r = conn.execute("SELECT * FROM jobs WHERE type=? ORDER BY id DESC LIMIT 1", (jtype,)).fetchone()
+    conn.close()
+    return dict(r) if r else None
+
+
+def jobs_requeue_stale_running():
+    """Khi worker khởi động lại: job 'running' mồ côi (worker chết) → đánh 'failed'."""
+    execute_write(
+        "UPDATE jobs SET status='failed', error='worker restart — job mồ côi', "
+        "finished_at=? WHERE status='running'",
+        (datetime.now().isoformat(timespec="seconds"),))
 
 
 def mark_alt_synced(product_id: int, synced_at: str = None):

@@ -323,10 +323,25 @@ def haravan_product_detail(haravan_id):
     )
 
 
+def haravan_audit_page():
+    """Audit log — mọi thay đổi (PUT/POST/DELETE) đẩy lên Haravan."""
+    only_fail = request.args.get("fail") == "1"
+    try:
+        page = max(1, int(request.args.get("page", 1) or 1))
+    except ValueError:
+        page = 1
+    PAGE = 100
+    rows = db.haravan_audit_list(limit=PAGE, offset=(page - 1) * PAGE, only_fail=only_fail)
+    stats = db.haravan_audit_stats()
+    return render_template("haravan_audit.html", rows=rows, stats=stats,
+                           page=page, only_fail=only_fail, page_size=PAGE)
+
+
 # ─────────────────────── REGISTRATION ────────────────────────────
 
 def register(app):
     """Đăng ký 10 route Haravan — giữ nguyên endpoint name."""
+    app.add_url_rule("/haravan/audit", "haravan_audit_page", haravan_audit_page)
     app.add_url_rule("/api/haravan/products/<int:haravan_id>/edit",
                      "api_haravan_product_edit", api_haravan_product_edit, methods=["POST"])
     app.add_url_rule("/haravan/blogs/<int:page_id>/ai-rewrite",

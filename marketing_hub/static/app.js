@@ -305,3 +305,35 @@ if ('serviceWorker' in navigator) {
     }
   });
 })();
+
+// ─── Toast notifications (thay alert() thô — non-blocking, đẹp) ───
+(() => {
+  function wrap() {
+    let w = document.getElementById('toast-wrap');
+    if (!w) { w = document.createElement('div'); w.id = 'toast-wrap'; document.body.appendChild(w); }
+    return w;
+  }
+  function dismiss(el) { clearTimeout(el._t); el.classList.remove('show'); setTimeout(() => el.remove(), 260); }
+  function toast(msg, type) {
+    const m = String(msg == null ? '' : msg);
+    let cls = type || '';
+    if (!cls) {
+      if (/✅|🎉|🚀|đã |xong|thành công/i.test(m)) cls = 'ok';
+      else if (/❌|lỗi|fail|error|thất bại|vượt/i.test(m)) cls = 'err';
+      else if (/⚠️|🚨|cảnh báo|gần|sắp/i.test(m)) cls = 'warn';
+    }
+    const el = document.createElement('div');
+    el.className = 'toast ' + cls;
+    const body = document.createElement('div'); body.textContent = m; body.style.flex = '1';
+    const x = document.createElement('span'); x.className = 'toast-close'; x.textContent = '×';
+    x.onclick = () => dismiss(el);
+    el.appendChild(body); el.appendChild(x);
+    wrap().appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    el._t = setTimeout(() => dismiss(el), Math.min(2600 + m.length * 28, 9000));
+    return el;
+  }
+  window.toast = toast;
+  // Ghi đè alert → toast. GIỮ confirm()/prompt() native (cần blocking để chặn thao tác).
+  window.alert = (msg) => { toast(msg); };
+})();

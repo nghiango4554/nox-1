@@ -5,6 +5,7 @@ Run: python app.py  →  http://127.0.0.1:5055
 
 import json
 import secrets
+import threading
 from datetime import datetime
 from pathlib import Path
 
@@ -77,7 +78,46 @@ def inject_now():
 
 if __name__ == "__main__":
     db.init_db()
+    # Spawn worker nền (hàng đợi job — crawl/gen chạy tách khỏi web).
+    # Worker tự singleton qua cổng 5056 → spawn dư cũng tự thoát, luôn đúng 1 worker.
+    # DETACHED + DEVNULL: worker KHÔNG là con-chặn của Flask → watchdog (cmd) thoát được
+    #   lệnh `python app.py` khi Flask chết → relaunch bình thường (fix bug treo watchdog 2/6).
+    try:
+        import os as _os
+        import subprocess
+        import sys as _sys
+        _flags = 0
+        if _os.name == "nt":
+            _flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        subprocess.Popen(
+            [_sys.executable, str(ROOT / "worker.py")], cwd=str(ROOT),
+            creationflags=_flags,
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            close_fds=True,
+        )
+    except Exception as _e:
+        print("worker spawn err:", _e)
     routes_dashboard.start_job_monitor()
+
+    # Auto-resume job gen title/meta nếu Flask sập/restart giữa chừng (marker file còn).
+    # Chạy nền + delay để server lên hẳn rồi mới gánh job nặng (gen AI per SP).
+    def _resume_tm_job():
+        import time as _t
+        _t.sleep(8)
+        try:
+            r = seo_mod.resume_interrupted_title_meta_job()
+            if r.get("resumed"):
+                print(f"[auto-resume] tiếp job title/meta dở: {r}")
+        except Exception as _e:
+            print("auto-resume title/meta err:", _e)
+        try:
+            rc = seo_mod.resume_interrupted_crawl()
+            if rc.get("resumed"):
+                print(f"[auto-resume] tiếp crawl SEO dở (phase {rc.get('phase')})")
+        except Exception as _e:
+            print("auto-resume crawl err:", _e)
+    threading.Thread(target=_resume_tm_job, daemon=True).start()
+
     sched = BackgroundScheduler()
     routes_posts.register_runtime(app, sched)
     sched.add_job(
