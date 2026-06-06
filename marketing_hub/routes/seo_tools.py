@@ -586,6 +586,25 @@ def seo_cwv_page():
     total_pages = max(1, (total + per_page - 1) // per_page)
     progress = db.cwv_progress(strategy)
 
+    # Overall performance CẢ 2 thiết bị (để header hiện song song Mobile + Desktop)
+    stats_mobile = db.cwv_stats("mobile")
+    stats_desktop = db.cwv_stats("desktop")
+    total_mobile = db.cwv_count("mobile")
+    total_desktop = db.cwv_count("desktop")
+
+    # ── Bảng "Top URL LCP tệ nhất" (P0B) — READ-ONLY, đọc từ seo_cwv_lcp, KHÔNG gọi PSI ──
+    # (schema migration đã chạy lúc startup trong db.init_db → route chỉ đọc)
+    lcp_strategy = request.args.get("lcp_strategy", strategy)
+    if lcp_strategy not in ("mobile", "desktop"):
+        lcp_strategy = "mobile"
+    lcp_pt = request.args.get("lcp_pt") or None
+    lcp_scope = request.args.get("lcp_scope") or None
+    lcp_opp = request.args.get("lcp_opp") or None
+    lcp_rows = db.cwv_lcp_list(strategy=lcp_strategy, page_type=lcp_pt,
+                               field_scope=lcp_scope, opportunity=lcp_opp)
+    lcp_filters = db.cwv_lcp_filters(strategy=lcp_strategy)
+    lcp_summary = db.cwv_lcp_summary(strategy=lcp_strategy)
+
     return render_template(
         "seo_cwv.html",
         rows=rows, stats=stats, state=state,
@@ -593,6 +612,10 @@ def seo_cwv_page():
         page_num=page_num, total_pages=total_pages, total=total,
         psi_key=_load_psi_key(),
         progress=progress,
+        stats_mobile=stats_mobile, stats_desktop=stats_desktop,
+        total_mobile=total_mobile, total_desktop=total_desktop,
+        lcp_rows=lcp_rows, lcp_strategy=lcp_strategy, lcp_filters=lcp_filters,
+        lcp_summary=lcp_summary, lcp_pt=lcp_pt, lcp_scope=lcp_scope, lcp_opp=lcp_opp,
     )
 
 
@@ -615,7 +638,16 @@ def seo_cwv_diff_page():
 
 
 def api_cwv_status():
-    return jsonify(cwv_mod.state_snapshot())
+    st = cwv_mod.state_snapshot()
+    pass_start = cwv_mod.current_pass()
+    stats = db.cwv_pass_stats(pass_start)
+    st["pass"] = {
+        "active": bool(pass_start),                 # có đợt đang dở (đã dừng giữa chừng)
+        "remaining": stats["remaining"],            # số lần quét (url×strategy) còn lại của đợt
+        "total": stats["total"],
+        "scanned": stats["scanned"],
+    }
+    return jsonify(st)
 
 
 def api_cwv_progress():
@@ -646,11 +678,15 @@ def api_cwv_scan_start():
 
 
 def api_cwv_scan_start_all():
-    """Quét All Batch — chain 8 phase: mobile×(product→collection→blog→page) → desktop×(...)."""
+    """Quét toàn bộ 1 đợt: mobile×(product→collection→blog→page) → desktop×(...).
+    Tự resume nếu có đợt dở, hoặc bắt đầu đợt mới (quét lại tất cả) nếu đợt cũ đã xong."""
     body = request.get_json(silent=True) or {}
     api_key = body.get("api_key", "").strip() or _load_psi_key()
-    ok = cwv_mod.start_chain_async(api_key=api_key)
-    return jsonify({"ok": ok, "message": "Đã bắt đầu Quét All Batch" if ok else "Đang có scan chạy rồi"})
+    res = cwv_mod.start_full_scan_async(api_key=api_key)
+    msg = {"new": "Đã bắt đầu quét đợt mới (toàn bộ)",
+           "resume": "Đã quét tiếp đợt đang dở",
+           "running": "Đang quét rồi"}.get(res.get("mode"), "")
+    return jsonify({"ok": res.get("ok", False), "mode": res.get("mode"), "message": msg})
 
 
 def api_cwv_scan_stop():

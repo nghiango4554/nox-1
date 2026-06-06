@@ -472,6 +472,9 @@ def init_db():
     conn.commit()
     conn.close()
 
+    # CWV LCP (P0A/P0B/P0C) — schema additive + idempotent, chạy 1 lần lúc startup
+    cwv_lcp_harden_schema()
+
 
 def next_post_code():
     conn = get_conn()
@@ -2452,10 +2455,22 @@ def cwv_stats(strategy: str = "mobile") -> dict:
     return dict(row) if row else {}
 
 
-def cwv_top_urls(limit: int = 50, url_type: str = "product", skip_scanned: bool = False, strategy: str = "mobile") -> list:
-    """Lấy top URL từ seo_pages theo internal_links (trang quan trọng nhất)."""
+def cwv_top_urls(limit: int = 50, url_type: str = "product", skip_scanned: bool = False,
+                 strategy: str = "mobile", since: str = None) -> list:
+    """Lấy top URL từ seo_pages theo internal_links (trang quan trọng nhất).
+    `since`: chỉ trả URL CHƯA quét TRONG ĐỢT này (không có scan với scanned_at >= since) →
+             dùng cho resume: dừng giữa chừng rồi quét tiếp đúng phần còn lại của đợt."""
     conn = get_conn()
-    if skip_scanned:
+    if since:
+        rows = conn.execute("""
+            SELECT p.url FROM seo_pages p
+            WHERE p.url_type=? AND p.status_code=200 AND p.indexable=1
+            AND NOT EXISTS (SELECT 1 FROM seo_cwv c
+                            WHERE c.url=p.url AND c.strategy=? AND c.scanned_at >= ?)
+            ORDER BY p.internal_links DESC
+            LIMIT ?
+        """, (url_type, strategy, since, limit)).fetchall()
+    elif skip_scanned:
         rows = conn.execute("""
             SELECT p.url FROM seo_pages p
             WHERE p.url_type=? AND p.status_code=200 AND p.indexable=1
@@ -2525,12 +2540,278 @@ def cwv_history_has_week(week_no: int, year: int, strategy: str = None) -> bool:
     return row is not None
 
 
-def cwv_history_snapshot(week_no: int, year: int, snapshot_at: str = None) -> int:
+_CWV_PASS_TYPES = ("product", "collection", "blog", "page")
+
+
+def cwv_pass_stats(since: str = None) -> dict:
+    """Tiến độ 1 ĐỢT quét toàn bộ (mobile + desktop).
+    total = số URL hợp lệ × 2 strategy · scanned = số (url,strategy) đã quét trong đợt
+    (scanned_at >= since) · remaining = total - scanned. Nhẹ (2 COUNT)."""
+    conn = get_conn()
+    ph = ",".join("?" * len(_CWV_PASS_TYPES))
+    eligible = conn.execute(
+        f"SELECT COUNT(*) FROM seo_pages WHERE status_code=200 AND indexable=1 "
+        f"AND url_type IN ({ph})", _CWV_PASS_TYPES).fetchone()[0]
+    total = eligible * 2
+    scanned = 0
+    if since:
+        scanned = conn.execute(
+            f"SELECT COUNT(*) FROM seo_cwv c JOIN seo_pages p ON p.url=c.url "
+            f"WHERE p.status_code=200 AND p.indexable=1 AND p.url_type IN ({ph}) "
+            f"AND c.scanned_at >= ?", (*_CWV_PASS_TYPES, since)).fetchone()[0]
+    conn.close()
+    return {"total": total, "scanned": scanned,
+            "remaining": max(0, total - scanned), "eligible_urls": eligible}
+
+
+# ─── seo_cwv_lcp — bảng phân tích LCP (P0A) + UI read-only (P0B) ───
+_CWV_LCP_CANON = [
+    ("lab_lcp_latest", "INTEGER"), ("lab_lcp_median", "INTEGER"),
+    ("lab_run_count", "INTEGER"), ("lab_scanned_at", "TEXT"),
+    ("field_lcp_p75", "INTEGER"), ("field_scope", "TEXT"),
+    ("field_source", "TEXT"), ("field_category", "TEXT"),
+    ("fcp", "INTEGER"), ("tbt", "INTEGER"), ("ttfb", "INTEGER"),
+    ("primary_opportunity", "TEXT"), ("opportunity_saving_ms", "INTEGER"),
+    ("lcp_asset_url", "TEXT"),
+]
+
+
+def cwv_lcp_harden_schema():
+    """Harden bảng seo_cwv_lcp — ADDITIVE only (CREATE IF NOT EXISTS + ALTER ADD COLUMN).
+    Idempotent, không destructive. Backfill cột canonical từ cột cũ (nếu có)."""
+    conn = get_conn()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS seo_cwv_lcp (
+            url TEXT, strategy TEXT, page_type TEXT, lcp_element TEXT,
+            lab_lcp_latest INTEGER, lab_lcp_median INTEGER, lab_run_count INTEGER, lab_scanned_at TEXT,
+            field_lcp_p75 INTEGER, field_scope TEXT, field_source TEXT, field_category TEXT,
+            fcp INTEGER, tbt INTEGER, ttfb INTEGER,
+            primary_opportunity TEXT, opportunity_saving_ms INTEGER, lcp_asset_url TEXT,
+            PRIMARY KEY (url, strategy)
+        )
+    """)
+    existing = {r[1] for r in conn.execute("PRAGMA table_info(seo_cwv_lcp)").fetchall()}
+    for name, typ in _CWV_LCP_CANON:
+        if name not in existing:
+            conn.execute(f"ALTER TABLE seo_cwv_lcp ADD COLUMN {name} {typ}")
+    # Lịch sử mỗi lần đo lab (P0C) — additive, mỗi enrich ghi thêm 1 dòng
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS seo_cwv_lcp_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT, strategy TEXT, page_type TEXT, scanned_at TEXT,
+            lcp INTEGER, fcp INTEGER, tbt INTEGER, ttfb INTEGER, performance_score INTEGER,
+            primary_opportunity TEXT, opportunity_saving_ms INTEGER,
+            lcp_element TEXT, lcp_asset_url TEXT
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cwv_lcp_runs ON seo_cwv_lcp_runs(url, strategy, id DESC)")
+    conn.commit()
+    conn.close()
+    _cwv_lcp_backfill_canon()
+    _cwv_lcp_seed_legacy_runs()
+
+
+def _cwv_lcp_seed_legacy_runs():
+    """Đưa các lần đo PSI THẬT đã có vào seo_cwv_lcp_runs để lab_run_count = số run lịch sử thật.
+    Nguồn (ghi cột `source`): 'legacy:cwv_scan' (seo_cwv chain) + 'legacy:p0a_enrich' (lần re-đo P0A).
+    KHÔNG tạo dữ liệu giả — chỉ chuyển số đo đã lưu vào bảng lịch sử + ghi rõ nguồn. Idempotent."""
+    import statistics
+    conn = get_conn()
+    runcols = {r[1] for r in conn.execute("PRAGMA table_info(seo_cwv_lcp_runs)").fetchall()}
+    if "source" not in runcols:
+        conn.execute("ALTER TABLE seo_cwv_lcp_runs ADD COLUMN source TEXT")
+    lcpcols = {r[1] for r in conn.execute("PRAGMA table_info(seo_cwv_lcp)").fetchall()}
+    seeded = conn.execute("SELECT COUNT(*) FROM seo_cwv_lcp_runs WHERE source LIKE 'legacy:%'").fetchone()[0]
+    if seeded > 0 or "lcp_lab_stored" not in lcpcols:   # đã seed / bảng fresh → thôi
+        conn.commit(); conn.close(); return
+    cwv = {(r["url"], r["strategy"]): r for r in conn.execute(
+        "SELECT url, strategy, scanned_at, fcp_ms, tbt_ms, performance_score FROM seo_cwv").fetchall()}
+    ins = ("INSERT INTO seo_cwv_lcp_runs (url,strategy,page_type,scanned_at,lcp,fcp,tbt,ttfb,"
+           "performance_score,primary_opportunity,opportunity_saving_ms,lcp_element,lcp_asset_url,source) "
+           "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+    for r in conn.execute("""SELECT url, strategy, page_type, lcp_lab_stored, lcp_lab_fresh,
+                                    fcp, tbt, ttfb, primary_opportunity, opportunity_saving_ms,
+                                    lcp_element, lcp_asset_url, lab_scanned_at FROM seo_cwv_lcp""").fetchall():
+        d = dict(r); c = cwv.get((d["url"], d["strategy"]))
+        if d["lcp_lab_stored"] is not None:   # Run A — đo từ seo_cwv chain
+            conn.execute(ins, (d["url"], d["strategy"], d["page_type"],
+                (c["scanned_at"] if c else None), d["lcp_lab_stored"],
+                (c["fcp_ms"] if c else None), (c["tbt_ms"] if c else None), None,
+                (c["performance_score"] if c else None), None, None, None, None, "legacy:cwv_scan"))
+        if d["lcp_lab_fresh"] is not None:    # Run B — lần re-đo P0A
+            conn.execute(ins, (d["url"], d["strategy"], d["page_type"], d["lab_scanned_at"],
+                d["lcp_lab_fresh"], d["fcp"], d["tbt"], d["ttfb"], None, d["primary_opportunity"],
+                d["opportunity_saving_ms"], d["lcp_element"], d["lcp_asset_url"], "legacy:p0a_enrich"))
+    conn.commit()
+    for k in conn.execute("SELECT DISTINCT url, strategy FROM seo_cwv_lcp_runs").fetchall():
+        lcps = [x[0] for x in conn.execute(
+            "SELECT lcp FROM seo_cwv_lcp_runs WHERE url=? AND strategy=? AND lcp IS NOT NULL "
+            "ORDER BY scanned_at DESC, id DESC", (k["url"], k["strategy"])).fetchall()]
+        if lcps:
+            conn.execute("UPDATE seo_cwv_lcp SET lab_run_count=?, lab_lcp_latest=?, lab_lcp_median=? "
+                         "WHERE url=? AND strategy=?",
+                         (len(lcps), lcps[0], round(statistics.median(lcps[:3])), k["url"], k["strategy"]))
+    conn.commit()
+    conn.close()
+
+
+def cwv_lcp_record_run(d: dict):
+    """Ghi 1 lần đo enrich vào seo_cwv_lcp_runs + cập nhật summary seo_cwv_lcp (canonical).
+    lab_lcp_latest = lần mới nhất · lab_lcp_median = median 3 lần gần nhất · lab_run_count = tổng số lần.
+    Không phụ thuộc backfill — script gọi hàm này cho mỗi URL."""
+    import statistics
+    conn = get_conn()
+    conn.execute("""
+        INSERT INTO seo_cwv_lcp_runs
+            (url, strategy, page_type, scanned_at, lcp, fcp, tbt, ttfb, performance_score,
+             primary_opportunity, opportunity_saving_ms, lcp_element, lcp_asset_url)
+        VALUES (:url,:strategy,:page_type,:scanned_at,:lcp,:fcp,:tbt,:ttfb,:performance_score,
+             :primary_opportunity,:opportunity_saving_ms,:lcp_element,:lcp_asset_url)
+    """, d)
+    # tính lại từ lịch sử (mới nhất theo THỜI GIAN đo, không theo id chèn)
+    runs = conn.execute(
+        "SELECT lcp FROM seo_cwv_lcp_runs WHERE url=? AND strategy=? AND lcp IS NOT NULL "
+        "ORDER BY scanned_at DESC, id DESC",
+        (d["url"], d["strategy"])).fetchall()
+    lcps = [r[0] for r in runs]
+    run_count = len(lcps)
+    latest = lcps[0] if lcps else None
+    median = round(statistics.median(lcps[:3])) if lcps else None   # median 3 lần gần nhất
+    conn.execute("""
+        INSERT INTO seo_cwv_lcp
+            (url, strategy, page_type, lcp_element, lab_lcp_latest, lab_lcp_median, lab_run_count,
+             lab_scanned_at, field_lcp_p75, field_scope, field_source, field_category,
+             fcp, tbt, ttfb, primary_opportunity, opportunity_saving_ms, lcp_asset_url)
+        VALUES (:url,:strategy,:page_type,:lcp_element,:lab_lcp_latest,:lab_lcp_median,:lab_run_count,
+             :scanned_at,:field_lcp_p75,:field_scope,:field_source,:field_category,
+             :fcp,:tbt,:ttfb,:primary_opportunity,:opportunity_saving_ms,:lcp_asset_url)
+        ON CONFLICT(url, strategy) DO UPDATE SET
+            page_type=excluded.page_type, lcp_element=excluded.lcp_element,
+            lab_lcp_latest=excluded.lab_lcp_latest, lab_lcp_median=excluded.lab_lcp_median,
+            lab_run_count=excluded.lab_run_count, lab_scanned_at=excluded.lab_scanned_at,
+            field_lcp_p75=excluded.field_lcp_p75, field_scope=excluded.field_scope,
+            field_source=excluded.field_source, field_category=excluded.field_category,
+            fcp=excluded.fcp, tbt=excluded.tbt, ttfb=excluded.ttfb,
+            primary_opportunity=excluded.primary_opportunity,
+            opportunity_saving_ms=excluded.opportunity_saving_ms, lcp_asset_url=excluded.lcp_asset_url
+    """, {**d, "lab_lcp_latest": latest, "lab_lcp_median": median, "lab_run_count": run_count})
+    conn.commit()
+    conn.close()
+    return {"run_count": run_count, "latest": latest, "median": median}
+
+
+def _cwv_lcp_backfill_canon():
+    """Map cột cũ (P0A) → cột canonical cho các dòng đã có. Chỉ ghi khi canonical còn NULL."""
+    import statistics
+    conn = get_conn()
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(seo_cwv_lcp)").fetchall()}
+    if "lcp_lab_stored" not in cols:   # bảng đã canonical sẵn (fresh) → khỏi backfill
+        conn.close()
+        return
+    pending = conn.execute("SELECT COUNT(*) FROM seo_cwv_lcp "
+                           "WHERE lab_lcp_median IS NULL AND lcp_lab_stored IS NOT NULL").fetchone()[0]
+    if pending == 0:                   # không còn dòng cần backfill → thoát sớm (rẻ khi page load)
+        conn.close()
+        return
+    # overall_category field từ seo_cwv (origin CrUX) để suy field_category
+    catmap = {}
+    for r in conn.execute("SELECT url, strategy, overall_category FROM seo_cwv").fetchall():
+        catmap[(r["url"], r["strategy"])] = r["overall_category"]
+    rows = conn.execute("""SELECT url, strategy, lcp_lab_stored, lcp_lab_fresh, lcp_field_ms,
+                                  fcp_ms, tbt_ms, ttfb_ms, top_opp, top_opp_ms, lcp_asset, captured_at,
+                                  lab_lcp_median
+                           FROM seo_cwv_lcp""").fetchall()
+    for r in rows:
+        d = dict(r)
+        if d.get("lab_lcp_median") is not None:   # đã backfill rồi
+            continue
+        runs = [v for v in (d["lcp_lab_stored"], d["lcp_lab_fresh"]) if v is not None]
+        latest = d["lcp_lab_fresh"] if d["lcp_lab_fresh"] is not None else d["lcp_lab_stored"]
+        median = round(statistics.median(runs)) if runs else None
+        fp75 = d["lcp_field_ms"]
+        if fp75 is not None:
+            scope, source = "origin", "originLoadingExperience"   # đã chứng minh field = origin-level
+        else:
+            scope, source = "none", "none"
+        fcat = catmap.get((d["url"], d["strategy"])) or (
+            "FAST" if (fp75 and fp75 <= 2500) else "AVERAGE" if (fp75 and fp75 <= 4000) else "SLOW" if fp75 else "none")
+        conn.execute("""UPDATE seo_cwv_lcp SET
+            lab_lcp_latest=?, lab_lcp_median=?, lab_run_count=?, lab_scanned_at=?,
+            field_lcp_p75=?, field_scope=?, field_source=?, field_category=?,
+            fcp=?, tbt=?, ttfb=?, primary_opportunity=?, opportunity_saving_ms=?, lcp_asset_url=?
+            WHERE url=? AND strategy=?""",
+            (latest, median, len(runs), d["captured_at"], fp75, scope, source, fcat,
+             d["fcp_ms"], d["tbt_ms"], d["ttfb_ms"], d["top_opp"], d["top_opp_ms"], d["lcp_asset"],
+             d["url"], d["strategy"]))
+    conn.commit()
+    conn.close()
+
+
+def cwv_lcp_list(strategy="mobile", page_type=None, field_scope=None,
+                 opportunity=None, limit=200):
+    """Đọc top URL LCP tệ nhất từ seo_cwv_lcp — sort lab_lcp_median DESC. READ-ONLY."""
+    conn = get_conn()
+    sql = "SELECT * FROM seo_cwv_lcp WHERE strategy=?"
+    args = [strategy]
+    if page_type:
+        sql += " AND page_type=?"; args.append(page_type)
+    if field_scope:
+        sql += " AND field_scope=?"; args.append(field_scope)
+    if opportunity:
+        sql += " AND primary_opportunity=?"; args.append(opportunity)
+    sql += " ORDER BY lab_lcp_median DESC, lab_lcp_latest DESC LIMIT ?"
+    args.append(limit)
+    rows = [dict(r) for r in conn.execute(sql, args).fetchall()]
+    conn.close()
+    return rows
+
+
+def cwv_lcp_filters(strategy="mobile"):
+    """Giá trị cho dropdown filter (page_type, opportunity) theo strategy."""
+    conn = get_conn()
+    pts = [r[0] for r in conn.execute(
+        "SELECT DISTINCT page_type FROM seo_cwv_lcp WHERE strategy=? AND page_type IS NOT NULL ORDER BY page_type",
+        (strategy,)).fetchall()]
+    opps = [r[0] for r in conn.execute(
+        "SELECT DISTINCT primary_opportunity FROM seo_cwv_lcp WHERE strategy=? AND primary_opportunity IS NOT NULL "
+        "AND primary_opportunity<>'' ORDER BY primary_opportunity", (strategy,)).fetchall()]
+    conn.close()
+    return {"page_types": pts, "opportunities": opps}
+
+
+def cwv_lcp_summary(strategy="mobile"):
+    """Summary cho UI: đếm field scope + lab kém theo page type (trong bảng seo_cwv_lcp)."""
+    conn = get_conn()
+    scope = {"url": 0, "origin": 0, "none": 0}
+    for r in conn.execute("SELECT field_scope, COUNT(*) c FROM seo_cwv_lcp WHERE strategy=? GROUP BY field_scope",
+                          (strategy,)).fetchall():
+        scope[(r["field_scope"] or "none")] = r["c"]
+    bad_by_type = {r["page_type"]: r["c"] for r in conn.execute(
+        "SELECT page_type, COUNT(*) c FROM seo_cwv_lcp WHERE strategy=? GROUP BY page_type ORDER BY c DESC",
+        (strategy,)).fetchall()}
+    total = conn.execute("SELECT COUNT(*) FROM seo_cwv_lcp WHERE strategy=?", (strategy,)).fetchone()[0]
+    last = conn.execute("SELECT MAX(lab_scanned_at) FROM seo_cwv_lcp WHERE strategy=?", (strategy,)).fetchone()[0]
+    cwv_total = conn.execute("SELECT COUNT(*) FROM seo_cwv WHERE strategy=?", (strategy,)).fetchone()[0]
+    low_conf = conn.execute("SELECT COUNT(*) FROM seo_cwv_lcp WHERE strategy=? AND COALESCE(lab_run_count,0)<3",
+                            (strategy,)).fetchone()[0]
+    conn.close()
+    return {"field_url": scope.get("url", 0), "field_origin": scope.get("origin", 0),
+            "field_none": scope.get("none", 0), "bad_by_type": bad_by_type,
+            "total": total, "last_scanned": last, "cwv_total": cwv_total, "low_conf": low_conf}
+
+
+def cwv_history_snapshot(week_no: int, year: int, snapshot_at: str = None,
+                         replace: bool = False) -> int:
     """Copy toàn bộ seo_cwv hiện tại vào seo_cwv_history với tag (week_no, year).
-    Return số row đã insert. Idempotent: nếu tuần đó đã có data → return 0 (không insert).
-    """
+    Return số row đã insert. Mặc định idempotent (tuần đã có → return 0).
+    `replace=True`: xoá data tuần đó rồi snapshot lại (đợt quét mới đè điểm tuần cũ)."""
     if cwv_history_has_week(week_no, year):
-        return 0
+        if not replace:
+            return 0
+        _c = get_conn()
+        _c.execute("DELETE FROM seo_cwv_history WHERE week_no=? AND year=?", (week_no, year))
+        _c.commit()
+        _c.close()
     if not snapshot_at:
         snapshot_at = datetime.now().isoformat(timespec="seconds")
     conn = get_conn()
