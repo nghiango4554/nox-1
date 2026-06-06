@@ -251,52 +251,84 @@ details:not([open]) summary::before { content:'▸ ' }
 {% set cov_scanned = progress | sum(attribute='scanned') if progress else 0 %}
 {% set cov_pct = ((cov_scanned / cov_total * 100) | round(1)) if cov_total > 0 else 0 %}
 
+{# Overall grade cho CẢ 2 thiết bị (header hiện song song) #}
+{% set avg_m = stats_mobile.avg_perf if stats_mobile and stats_mobile.avg_perf else 0 %}
+{% if avg_m >= 90 %}{% set grade_m = 'A' %}{% elif avg_m >= 75 %}{% set grade_m = 'B' %}{% elif avg_m >= 60 %}{% set grade_m = 'C' %}{% elif avg_m >= 50 %}{% set grade_m = 'D' %}{% else %}{% set grade_m = 'F' %}{% endif %}
+{% set avg_d = stats_desktop.avg_perf if stats_desktop and stats_desktop.avg_perf else 0 %}
+{% if avg_d >= 90 %}{% set grade_d = 'A' %}{% elif avg_d >= 75 %}{% set grade_d = 'B' %}{% elif avg_d >= 60 %}{% set grade_d = 'C' %}{% elif avg_d >= 50 %}{% set grade_d = 'D' %}{% else %}{% set grade_d = 'F' %}{% endif %}
+
 <!-- ── A. Header ── -->
-<div class="cwv-header">
-  <div class="cwv-grade-badge cwv-grade-{{ grade }}">{{ grade }}</div>
-  <div class="cwv-header-info">
-    <div class="cwv-header-title">
-      Performance tổng thể — {{ strategy | capitalize }}
-      {% if stats and stats.avg_perf %}<span style="color:var(--text-muted); font-weight:400; font-size:14px; margin-left:8px">avg {{ stats.avg_perf }}</span>{% endif %}
-    </div>
-    <div class="cwv-header-meta">
-      {% if stats and stats.total %}
-        {{ stats.total }} trang đã scan · {{ strategy }} strategy ·
-        A≥90 · B≥75 · C≥60 · D≥50 · F&lt;50
-      {% else %}
-        Chưa có dữ liệu — chọn loại trang và nhấn Quét batch bên dưới
-      {% endif %}
-    </div>
-    {% if cov_total > 0 %}
-    <div class="cwv-coverage-bar">
-      <div class="cwv-coverage-fill" style="width:{{ [cov_pct, 100] | min }}%"></div>
-    </div>
-    <div class="cwv-coverage-label">Đã quét {{ cov_scanned }}/{{ cov_total }} URL ({{ cov_pct }}%)</div>
-    {% endif %}
+<div class="cwv-header" style="display:block">
+  <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px">
+    ⚡ Performance tổng thể — Mobile &amp; Desktop
   </div>
+
+  <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:stretch">
+    {# ── Mobile ── #}
+    <a href="/seo/cwv?strategy=mobile"
+       style="flex:1; min-width:240px; display:flex; align-items:center; gap:14px; text-decoration:none;
+              padding:14px 16px; border-radius:12px; border:2px solid {{ '#4f46e5' if strategy=='mobile' else 'rgba(0,0,0,.08)' }};
+              background:{{ 'rgba(79,70,229,.05)' if strategy=='mobile' else '#fff' }}">
+      <div class="cwv-grade-badge cwv-grade-{{ grade_m }}">{{ grade_m }}</div>
+      <div>
+        <div class="cwv-header-title" style="font-size:16px">
+          📱 Mobile
+          {% if avg_m %}<span style="color:var(--text-muted); font-weight:400; font-size:14px; margin-left:6px">avg {{ avg_m }}</span>{% endif %}
+          {% if strategy=='mobile' %}<span style="font-size:10px; color:#4f46e5; font-weight:600; margin-left:6px">● đang xem</span>{% endif %}
+        </div>
+        <div class="cwv-header-meta">
+          {% if total_mobile %}{{ total_mobile }} trang đã scan{% else %}chưa có dữ liệu{% endif %}
+        </div>
+      </div>
+    </a>
+
+    {# ── Desktop ── #}
+    <a href="/seo/cwv?strategy=desktop"
+       style="flex:1; min-width:240px; display:flex; align-items:center; gap:14px; text-decoration:none;
+              padding:14px 16px; border-radius:12px; border:2px solid {{ '#4f46e5' if strategy=='desktop' else 'rgba(0,0,0,.08)' }};
+              background:{{ 'rgba(79,70,229,.05)' if strategy=='desktop' else '#fff' }}">
+      <div class="cwv-grade-badge cwv-grade-{{ grade_d }}">{{ grade_d }}</div>
+      <div>
+        <div class="cwv-header-title" style="font-size:16px">
+          🖥️ Desktop
+          {% if avg_d %}<span style="color:var(--text-muted); font-weight:400; font-size:14px; margin-left:6px">avg {{ avg_d }}</span>{% endif %}
+          {% if strategy=='desktop' %}<span style="font-size:10px; color:#4f46e5; font-weight:600; margin-left:6px">● đang xem</span>{% endif %}
+        </div>
+        <div class="cwv-header-meta">
+          {% if total_desktop %}{{ total_desktop }} trang đã scan{% else %}chưa có dữ liệu{% endif %}
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="cwv-header-meta" style="margin-top:10px">A≥90 · B≥75 · C≥60 · D≥50 · F&lt;50 — bấm 1 thẻ để xem bảng chi tiết thiết bị đó</div>
+
+  {% if cov_total > 0 %}
+  <div class="cwv-coverage-bar" style="margin-top:10px">
+    <div class="cwv-coverage-fill" style="width:{{ [cov_pct, 100] | min }}%"></div>
+  </div>
+  <div class="cwv-coverage-label">Coverage {{ strategy }}: đã quét {{ cov_scanned }}/{{ cov_total }} URL ({{ cov_pct }}%)</div>
+  {% endif %}
 </div>
 
-<!-- ── B. 4 KPI Cards ── -->
-{% if stats and stats.total %}
-{% set tot = stats.total or 1 %}
-<div class="cwv-kpi-row">
-
+<!-- ── B. 4 KPI Cards — CẢ Mobile + Desktop cùng lúc ── -->
+{% macro kpi_cards(st, avgp) %}
   <!-- LCP -->
-  {% set lcp_color = 'good' if (stats.avg_lcp and stats.avg_lcp <= 2500) else ('ok' if (stats.avg_lcp and stats.avg_lcp <= 4000) else 'bad') %}
+  {% set lcp_color = 'good' if (st.avg_lcp and st.avg_lcp <= 2500) else ('ok' if (st.avg_lcp and st.avg_lcp <= 4000) else 'bad') %}
   <div class="cwv-kpi kpi-{{ lcp_color }}">
     <div class="cwv-kpi-num" style="color:var(--{{ lcp_color }})">
-      {% if stats.avg_lcp %}{{ (stats.avg_lcp / 1000) | round(2) }}s{% else %}—{% endif %}
+      {% if st.avg_lcp %}{{ (st.avg_lcp / 1000) | round(2) }}s{% else %}—{% endif %}
     </div>
     <div class="cwv-kpi-label">LCP</div>
     <div class="dist-bar">
-      <div class="dist-good" style="flex:{{ stats.lcp_good or 0 }}"></div>
-      <div class="dist-ok"   style="flex:{{ stats.lcp_ok or 0 }}"></div>
-      <div class="dist-bad"  style="flex:{{ stats.lcp_bad or 0 }}"></div>
+      <div class="dist-good" style="flex:{{ st.lcp_good or 0 }}"></div>
+      <div class="dist-ok"   style="flex:{{ st.lcp_ok or 0 }}"></div>
+      <div class="dist-bad"  style="flex:{{ st.lcp_bad or 0 }}"></div>
     </div>
     <div class="kpi-counts">
-      <span class="c-good">{{ stats.lcp_good or 0 }} tốt</span>
-      <span class="c-ok">{{ stats.lcp_ok or 0 }} cần cải thiện</span>
-      <span class="c-bad">{{ stats.lcp_bad or 0 }} kém</span>
+      <span class="c-good">{{ st.lcp_good or 0 }} tốt</span>
+      <span class="c-ok">{{ st.lcp_ok or 0 }} cần cải thiện</span>
+      <span class="c-bad">{{ st.lcp_bad or 0 }} kém</span>
     </div>
     <details class="kpi-explain">
       <summary>Giải thích</summary>
@@ -306,21 +338,21 @@ details:not([open]) summary::before { content:'▸ ' }
   </div>
 
   <!-- CLS -->
-  {% set cls_color = 'good' if (stats.avg_cls is not none and stats.avg_cls <= 0.1) else ('ok' if (stats.avg_cls is not none and stats.avg_cls <= 0.25) else 'bad') %}
+  {% set cls_color = 'good' if (st.avg_cls is not none and st.avg_cls <= 0.1) else ('ok' if (st.avg_cls is not none and st.avg_cls <= 0.25) else 'bad') %}
   <div class="cwv-kpi kpi-{{ cls_color }}">
     <div class="cwv-kpi-num" style="color:var(--{{ cls_color }})">
-      {{ stats.avg_cls if stats.avg_cls is not none else '—' }}
+      {{ st.avg_cls if st.avg_cls is not none else '—' }}
     </div>
     <div class="cwv-kpi-label">CLS</div>
     <div class="dist-bar">
-      <div class="dist-good" style="flex:{{ stats.cls_good or 0 }}"></div>
-      <div class="dist-ok"   style="flex:{{ stats.cls_ok or 0 }}"></div>
-      <div class="dist-bad"  style="flex:{{ stats.cls_bad or 0 }}"></div>
+      <div class="dist-good" style="flex:{{ st.cls_good or 0 }}"></div>
+      <div class="dist-ok"   style="flex:{{ st.cls_ok or 0 }}"></div>
+      <div class="dist-bad"  style="flex:{{ st.cls_bad or 0 }}"></div>
     </div>
     <div class="kpi-counts">
-      <span class="c-good">{{ stats.cls_good or 0 }} tốt</span>
-      <span class="c-ok">{{ stats.cls_ok or 0 }} cần cải thiện</span>
-      <span class="c-bad">{{ stats.cls_bad or 0 }} kém</span>
+      <span class="c-good">{{ st.cls_good or 0 }} tốt</span>
+      <span class="c-ok">{{ st.cls_ok or 0 }} cần cải thiện</span>
+      <span class="c-bad">{{ st.cls_bad or 0 }} kém</span>
     </div>
     <details class="kpi-explain">
       <summary>Giải thích</summary>
@@ -330,17 +362,17 @@ details:not([open]) summary::before { content:'▸ ' }
   </div>
 
   <!-- TBT -->
-  {% set tbt_color = 'good' if (stats.avg_tbt and stats.avg_tbt <= 200) else ('ok' if (stats.avg_tbt and stats.avg_tbt <= 600) else 'bad') %}
+  {% set tbt_color = 'good' if (st.avg_tbt and st.avg_tbt <= 200) else ('ok' if (st.avg_tbt and st.avg_tbt <= 600) else 'bad') %}
   <div class="cwv-kpi kpi-{{ tbt_color }}">
     <div class="cwv-kpi-num" style="color:var(--{{ tbt_color }})">
-      {% if stats.avg_tbt %}{{ stats.avg_tbt | int }}ms{% else %}—{% endif %}
+      {% if st.avg_tbt %}{{ st.avg_tbt | int }}ms{% else %}—{% endif %}
     </div>
     <div class="cwv-kpi-label">TBT</div>
     <div class="dist-bar" style="margin-bottom:6px">
       {# TBT distribution — approximate from perf bands #}
-      <div class="dist-good" style="flex:{{ stats.perf_good or 0 }}"></div>
-      <div class="dist-ok"   style="flex:{{ stats.perf_ok or 0 }}"></div>
-      <div class="dist-bad"  style="flex:{{ stats.perf_bad or 0 }}"></div>
+      <div class="dist-good" style="flex:{{ st.perf_good or 0 }}"></div>
+      <div class="dist-ok"   style="flex:{{ st.perf_ok or 0 }}"></div>
+      <div class="dist-bad"  style="flex:{{ st.perf_bad or 0 }}"></div>
     </div>
     <div class="kpi-counts">
       <span class="c-good">≤200ms tốt</span>
@@ -354,19 +386,19 @@ details:not([open]) summary::before { content:'▸ ' }
   </div>
 
   <!-- Perf score -->
-  {% set perf_color = 'good' if avg_p >= 90 else ('ok' if avg_p >= 50 else 'bad') %}
+  {% set perf_color = 'good' if avgp >= 90 else ('ok' if avgp >= 50 else 'bad') %}
   <div class="cwv-kpi kpi-{{ perf_color }}">
-    <div class="cwv-kpi-num" style="color:var(--{{ perf_color }})">{{ avg_p or '—' }}</div>
+    <div class="cwv-kpi-num" style="color:var(--{{ perf_color }})">{{ avgp or '—' }}</div>
     <div class="cwv-kpi-label">Perf Score</div>
     <div class="dist-bar">
-      <div class="dist-good" style="flex:{{ stats.perf_good or 0 }}"></div>
-      <div class="dist-ok"   style="flex:{{ stats.perf_ok or 0 }}"></div>
-      <div class="dist-bad"  style="flex:{{ stats.perf_bad or 0 }}"></div>
+      <div class="dist-good" style="flex:{{ st.perf_good or 0 }}"></div>
+      <div class="dist-ok"   style="flex:{{ st.perf_ok or 0 }}"></div>
+      <div class="dist-bad"  style="flex:{{ st.perf_bad or 0 }}"></div>
     </div>
     <div class="kpi-counts">
-      <span class="c-good">{{ stats.perf_good or 0 }} tốt</span>
-      <span class="c-ok">{{ stats.perf_ok or 0 }} cần cải thiện</span>
-      <span class="c-bad">{{ stats.perf_bad or 0 }} kém</span>
+      <span class="c-good">{{ st.perf_good or 0 }} tốt</span>
+      <span class="c-ok">{{ st.perf_ok or 0 }} cần cải thiện</span>
+      <span class="c-bad">{{ st.perf_bad or 0 }} kém</span>
     </div>
     <details class="kpi-explain">
       <summary>Giải thích</summary>
@@ -374,44 +406,128 @@ details:not([open]) summary::before { content:'▸ ' }
       ≥90 = tốt · ≥50 = cần cải thiện · &lt;50 = kém
     </details>
   </div>
+{% endmacro %}
 
-</div>
+{% set _dev_lbl = "font-size:12px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px; margin:6px 0 8px" %}
+{% if (stats_mobile and stats_mobile.total) or (stats_desktop and stats_desktop.total) %}
+  {% if stats_mobile and stats_mobile.total %}
+  <div style="{{ _dev_lbl }}">📱 Mobile · {{ stats_mobile.total }} trang · grade {{ grade_m }}</div>
+  <div class="cwv-kpi-row">{{ kpi_cards(stats_mobile, avg_m) }}</div>
+  {% endif %}
+  {% if stats_desktop and stats_desktop.total %}
+  <div style="{{ _dev_lbl }}; margin-top:18px">🖥️ Desktop · {{ stats_desktop.total }} trang · grade {{ grade_d }}</div>
+  <div class="cwv-kpi-row">{{ kpi_cards(stats_desktop, avg_d) }}</div>
+  {% endif %}
 {% endif %}
+
+<!-- ── B2. Top URL LCP tệ nhất (READ-ONLY, đọc seo_cwv_lcp, KHÔNG gọi PSI) ── -->
+<div class="scanner-card" style="margin-top:18px">
+  <div class="scanner-title">🐌 Top URL LCP tệ nhất <span style="font-weight:400;color:var(--text-muted);font-size:12px">— phân tích P0A (đọc từ DB, không đo lại)</span></div>
+
+  <div style="font-size:11.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:8px 12px;margin:10px 0">
+    ⚠️ <b>Lab data</b> dùng để debug kỹ thuật, <b>có thể dao động</b> giữa các lần đo (xem cột Runs).
+    <b>Field data</b> phản ánh trải nghiệm thực tế nhưng có thể là dữ liệu <b>cấp URL</b> hoặc <b>origin fallback</b>.<br>
+    📌 Dữ liệu phân tích chi tiết hiện có: <b>{{ lcp_summary.total }}</b> URL mẫu trên tổng <b>{{ lcp_summary.cwv_total }}</b> URL CWV ({{ lcp_strategy }}) — <b>không</b> phải toàn site.
+  </div>
+
+  {# Summary #}
+  <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:#475569;margin-bottom:10px">
+    <span>📊 <b>{{ lcp_summary.total }}</b> URL ({{ lcp_strategy }})</span>
+    <span>🟢 Field URL: <b>{{ lcp_summary.field_url }}</b></span>
+    <span>🟡 Origin fallback: <b>{{ lcp_summary.field_origin }}</b></span>
+    <span>⚪ Không đủ field: <b>{{ lcp_summary.field_none }}</b></span>
+    {% if lcp_summary.last_scanned %}<span>🕒 Scan: {{ lcp_summary.last_scanned }}</span>{% endif %}
+  </div>
+
+  {# Filter bar — GET form, auto submit #}
+  <form method="get" action="{{ url_for('seo_cwv_page') }}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    <input type="hidden" name="strategy" value="{{ strategy }}">
+    <div style="display:flex;gap:4px">
+      <button type="submit" name="lcp_strategy" value="mobile"
+        class="btn btn-sm" style="background:{{ '#4f46e5' if lcp_strategy=='mobile' else '#f1f5f9' }};color:{{ '#fff' if lcp_strategy=='mobile' else '#475569' }}">📱 Mobile</button>
+      <button type="submit" name="lcp_strategy" value="desktop"
+        class="btn btn-sm" style="background:{{ '#4f46e5' if lcp_strategy=='desktop' else '#f1f5f9' }};color:{{ '#fff' if lcp_strategy=='desktop' else '#475569' }}">🖥️ Desktop</button>
+    </div>
+    <input type="hidden" name="lcp_strategy" value="{{ lcp_strategy }}">
+    <select name="lcp_pt" class="btn-sm" onchange="this.form.submit()" style="padding:5px 8px">
+      <option value="">— Page type —</option>
+      {% for pt in lcp_filters.page_types %}<option value="{{ pt }}" {% if pt==lcp_pt %}selected{% endif %}>{{ pt }}</option>{% endfor %}
+    </select>
+    <select name="lcp_scope" class="btn-sm" onchange="this.form.submit()" style="padding:5px 8px">
+      <option value="">— Field scope —</option>
+      {% for sc in ['url','origin','none'] %}<option value="{{ sc }}" {% if sc==lcp_scope %}selected{% endif %}>{{ sc }}</option>{% endfor %}
+    </select>
+    <select name="lcp_opp" class="btn-sm" onchange="this.form.submit()" style="padding:5px 8px">
+      <option value="">— Opportunity —</option>
+      {% for op in lcp_filters.opportunities %}<option value="{{ op }}" {% if op==lcp_opp %}selected{% endif %}>{{ op }}</option>{% endfor %}
+    </select>
+    {% if lcp_pt or lcp_scope or lcp_opp %}<a class="btn btn-sm btn-ghost" href="{{ url_for('seo_cwv_page') }}?strategy={{ strategy }}&lcp_strategy={{ lcp_strategy }}">✕ Xoá lọc</a>{% endif %}
+  </form>
+
+  {% if lcp_rows %}
+  <div style="overflow-x:auto">
+  <table class="cwv-table" style="width:100%;font-size:12.5px;border-collapse:collapse">
+    <thead><tr style="text-align:left;border-bottom:2px solid var(--border)">
+      <th style="padding:6px 8px">URL</th><th>Type</th><th>Strat</th>
+      <th style="text-align:right">LCP Lab median</th><th style="text-align:center">Runs</th>
+      <th style="text-align:right">LCP Field P75</th>
+      <th>Field scope</th><th style="text-align:right">FCP</th><th style="text-align:right">TTFB</th>
+      <th>Opp chính</th><th>Scan time</th>
+    </tr></thead>
+    <tbody>
+    {% for r in lcp_rows %}
+      {% set badge = {'url':('#dcfce7','#15803d','Field URL'),'origin':('#fef9c3','#a16207','Origin fallback'),'none':('#f1f5f9','#64748b','Không đủ field')}.get(r.field_scope or 'none') %}
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px 8px;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          <a href="{{ r.url }}" target="_blank" rel="noopener" style="color:#4338ca"
+             title="{% if r.lcp_element %}LCP element: {{ r.lcp_element|striptags }}{% else %}{{ r.url }}{% endif %}">{{ r.url.split('/')[-1] or r.url }}</a>
+          {% if r.lcp_element %}<span style="cursor:help;opacity:.7" title="LCP element: {{ r.lcp_element|striptags }}{% if r.lcp_asset_url %} · {{ r.lcp_asset_url }}{% endif %}">🔍</span>{% else %}<span style="font-size:9px;color:#cbd5e1" title="PSI không trả về LCP element cho URL này">· chưa detect</span>{% endif %}</td>
+        <td><span class="badge-type" style="font-size:10px">{{ r.page_type }}</span></td>
+        <td>{{ r.strategy }}</td>
+        <td style="text-align:right;font-weight:600;color:{{ '#dc2626' if (r.lab_lcp_median or 0) > 4000 else '#475569' }}">
+          {{ (r.lab_lcp_median/1000)|round(2) if r.lab_lcp_median else '—' }}s</td>
+        <td style="text-align:center;white-space:nowrap">{{ r.lab_run_count or '—' }}{% if (r.lab_run_count or 0) < 3 %}<br><span title="Ít lần đo — lab dao động mạnh" style="background:#fee2e2;color:#b91c1c;padding:0 5px;border-radius:8px;font-size:9px;font-weight:600">tin cậy thấp</span>{% endif %}</td>
+        <td style="text-align:right;color:{{ '#16a34a' if (r.field_lcp_p75 and r.field_lcp_p75<=2500) else '#475569' }}">
+          {{ (r.field_lcp_p75/1000)|round(2) ~ 's' if r.field_lcp_p75 else '—' }}</td>
+        <td><span style="background:{{ badge[0] }};color:{{ badge[1] }};padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600">{{ badge[2] }}</span></td>
+        <td style="text-align:right">{{ r.fcp ~ 'ms' if r.fcp else '—' }}</td>
+        <td style="text-align:right">{{ r.ttfb ~ 'ms' if r.ttfb else '—' }}</td>
+        <td style="font-size:11px">{{ r.primary_opportunity or '—' }}{% if r.opportunity_saving_ms %} <span class="muted">({{ r.opportunity_saving_ms }}ms)</span>{% endif %}</td>
+        <td style="font-size:10.5px;color:var(--text-muted)">{{ (r.lab_scanned_at or '')[:16] }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="muted" style="font-size:11px;margin-top:8px">Sắp xếp theo LCP Lab median giảm dần · {{ lcp_rows|length }} dòng · dữ liệu từ bảng <code>seo_cwv_lcp</code> (không gọi PSI khi mở trang).</div>
+  {% else %}
+  <div class="muted" style="font-size:13px;padding:14px">Chưa có dữ liệu LCP cho bộ lọc này. Chạy <code>_scripts/cwv_lcp_analysis.py</code> để nạp top URL LCP tệ nhất.</div>
+  {% endif %}
+</div>
 
 <!-- ── C. Batch Scanner Panel ── -->
 <div class="scanner-card">
-  <div class="scanner-title">🎯 Batch Scanner</div>
+  <div class="scanner-title">⚡ Quét Core Web Vitals</div>
 
-  <div class="scanner-grid">
-    <div>
-      <label>Strategy</label>
-      <div class="strat-btns">
-        <button class="strat-btn {% if strategy=='mobile' %}active{% endif %}"
-          onclick="setStrategy('mobile')" id="stratMobile">📱 Mobile</button>
-        <button class="strat-btn {% if strategy=='desktop' %}active{% endif %}"
-          onclick="setStrategy('desktop')" id="stratDesktop">🖥️ Desktop</button>
-      </div>
+  <div style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; margin-bottom:4px">
+    <div style="flex:1; min-width:240px">
+      <label style="font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px">
+        PSI API Key <span style="opacity:.6">(nên có — không key dễ bị rate limit 429)</span>
+      </label>
+      <input type="text" id="apiKey" value="{{ psi_key }}" placeholder="AIza..." style="width:100%; margin-top:5px">
     </div>
-    <div>
-      <label>Loại trang</label>
-      <select id="urlTypeSelect">
-        <option value="product">🛒 Product</option>
-        <option value="collection">📁 Collection</option>
-        <option value="blog">📝 Blog</option>
-        <option value="page">📄 Page</option>
-      </select>
+    <div style="font-size:11.5px; color:var(--text-muted); padding-bottom:8px">
+      Xem bảng:
+      <a href="/seo/cwv?strategy=mobile"
+         style="font-weight:{{ '700' if strategy=='mobile' else '400' }}; color:{{ '#4f46e5' if strategy=='mobile' else '#64748b' }}; text-decoration:none">📱 Mobile</a>
+      &nbsp;·&nbsp;
+      <a href="/seo/cwv?strategy=desktop"
+         style="font-weight:{{ '700' if strategy=='desktop' else '400' }}; color:{{ '#4f46e5' if strategy=='desktop' else '#64748b' }}; text-decoration:none">🖥️ Desktop</a>
     </div>
-    <div>
-      <label>PSI API Key <span style="opacity:.6">(tuỳ chọn)</span></label>
-      <input type="text" id="apiKey" value="{{ psi_key }}" placeholder="AIza..." style="width:100%">
-    </div>
-    <div></div>
   </div>
 
-  <div style="font-size:11px; color:var(--text-muted); margin-top:12px; margin-bottom:4px; text-transform:uppercase; letter-spacing:.4px">
-    Batch size (URL mỗi lần quét)
-  </div>
-  <div class="batch-pills" id="batchPills"></div>
+  <!-- Trạng thái đợt quét (resume / sẵn sàng đợt mới) -->
+  <div id="passStatus" style="font-size:12.5px; color:#475569; margin:12px 0 6px"></div>
 
   <!-- Per-type progress mini bars -->
   {% if progress %}
@@ -432,45 +548,21 @@ details:not([open]) summary::before { content:'▸ ' }
   </div>
   {% endif %}
 
-  <!-- Auto-scan banner (hiển thị khi đang chạy chain All Batch) -->
+  <!-- Banner khi đang quét -->
   <div id="autoScanBanner" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:12.5px; color:#1e40af">
-    🤖 <b>Đang Quét All Batch (8 phase)</b> — <span id="autoScanPhaseLabel"></span>
-    &nbsp;·&nbsp; Server tự chuyển phase, refresh trang vẫn tiếp tục
-  </div>
-
-  <!-- Resume banner (hiện khi có scan bị dừng giữa chừng) -->
-  <div id="resumeBanner" style="display:none; align-items:center; gap:10px; padding:10px 14px; margin-bottom:10px;
-       background:#fffbeb; border:1px solid #fcd34d; border-radius:8px; font-size:13px; color:#92400e">
-    <span>⏸️ Có lần quét bị dừng:</span>
-    <strong id="resumeLabel"></strong>
-    <button class="btn" onclick="resumeScan()"
-      style="background:#f59e0b; border-color:#d97706; color:#fff; padding:4px 12px; font-size:12px; margin-left:4px">
-      ▶ Tiếp tục
-    </button>
-    <button onclick="clearPauseState(); showResumeBanner()"
-      style="background:none; border:none; cursor:pointer; color:#92400e; font-size:16px; margin-left:auto; padding:0 4px"
-      title="Bỏ qua">✕</button>
+    🤖 <b>Đang quét toàn bộ</b> — <span id="autoScanPhaseLabel"></span>
+    &nbsp;·&nbsp; Server tự chạy mobile→desktop, đóng/refresh trang vẫn tiếp tục
   </div>
 
   <div class="scanner-actions">
-    <button class="btn btn-primary" onclick="startAllBatchAuto()" id="btnAllBatch"
+    <button class="btn btn-primary" onclick="startFullScan()" id="btnScanAll"
       style="background:#4f46e5; border-color:#4338ca; color:#fff; font-weight:600">
-      🚀 Quét All Batch
+      🚀 Quét toàn bộ
     </button>
-    <button class="btn" onclick="startBatch(true)" id="btnSkip"
-      style="background:rgba(79,70,229,.12); border-color:#6d28d9; color:#4f46e5">
-      ⚡ Quét batch tiếp <span id="skipLabel"></span>
-    </button>
-    <button class="btn" onclick="startBatch(false)" id="btnRescan" style="opacity:.8">
-      🔄 Quét lại tất cả
-    </button>
-    <button class="btn" onclick="stopScanAll()" id="btnStop"
+    <button class="btn" onclick="stopScan()" id="btnStop"
       style="background:#fef2f2; border-color:#fca5a5; color:#dc2626; display:none">
-      ⏹ Dừng
+      ⏹ Dừng (lưu tiến độ)
     </button>
-    {% if stats and stats.total %}
-    <button class="btn" onclick="clearData()" style="opacity:.45; font-size:12px; margin-left:auto">🗑️ Xoá data</button>
-    {% endif %}
   </div>
 
   <!-- Running progress bar -->
@@ -637,329 +729,102 @@ details:not([open]) summary::before { content:'▸ ' }
 {% endif %}
 
 <script>
-/* ══════════════════════════════════════════
-   CWV Batch Scanner — v2 (Auto All Batch)
-   ══════════════════════════════════════════ */
-const BATCH_SIZES  = [10, 25, 50, 100, 200, 500, 99999];
-const BATCH_LABELS = ['10', '25', '50', '100', '200', '500', 'TẤT CẢ'];
-const AUTO_KEY = 'cwv_auto_v2';
+/* ══ CWV Scanner — 2 nút: "Quét toàn bộ" (tự resume/đợt mới) + "Dừng" ══
+   Server lo toàn bộ: chain mobile×4 → desktop×4, resume qua mốc đợt (pass),
+   dừng = lưu tiến độ, xong = snapshot vào /seo/history. Browser chỉ poll. */
+let _pollTimer = null, _statsTimer = null;
+const _VIEW_STRATEGY = "{{ strategy }}";
 
-let _currentStrategy = "{{ strategy }}";
-let _pollTimer = null;
-
-/* ── localStorage helpers ── */
-function batchKey(s, t) { return `cwv_batch_idx_${s}_${t}`; }
-function getBatchIdx(s, t) {
-  const n = parseInt(localStorage.getItem(batchKey(s, t)) || '0', 10);
-  return isNaN(n) ? 0 : Math.min(n, BATCH_SIZES.length - 1);
+function _show(id, on){ const e=document.getElementById(id); if(e) e.style.display = on?'':'none'; }
+function setScanning(on){
+  const b=document.getElementById('btnScanAll'); if(b) b.disabled=on;
+  _show('btnStop', on);
+  _show('scanRunning', on);
 }
-function setBatchIdx(s, t, i) {
-  localStorage.setItem(batchKey(s, t), String(Math.min(i, BATCH_SIZES.length - 1)));
-}
-function getAuto()    { try { return JSON.parse(localStorage.getItem(AUTO_KEY) || 'null'); } catch(e) { return null; } }
-function setAuto(v)   { v ? localStorage.setItem(AUTO_KEY, JSON.stringify(v)) : localStorage.removeItem(AUTO_KEY); }
-
-/* ── Batch pills ── */
-function renderBatchPills() {
-  const urlType = document.getElementById('urlTypeSelect').value;
-  const idx = getBatchIdx(_currentStrategy, urlType);
-  const c = document.getElementById('batchPills');
-  c.innerHTML = '';
-  BATCH_SIZES.forEach((sz, i) => {
-    const el = document.createElement('button');
-    el.className = 'batch-pill' + (i === idx ? ' next active' : '');
-    el.textContent = BATCH_LABELS[i];
-    el.onclick = () => { setBatchIdx(_currentStrategy, urlType, i); renderBatchPills(); };
-    c.appendChild(el);
-  });
-  const lbl = document.getElementById('skipLabel');
-  if (lbl) lbl.textContent = `(${BATCH_LABELS[idx]})`;
+function showBanner(html, done){
+  const b=document.getElementById('autoScanBanner');
+  if(!b) return;
+  if(html===null){ b.style.display='none'; return; }
+  b.style.display='block';
+  if(done){ b.style.background='#f0fdf4'; b.style.borderColor='#86efac'; b.style.color='#15803d'; b.innerHTML=html; }
+  else { const l=document.getElementById('autoScanPhaseLabel'); if(l) l.textContent=html; }
 }
 
-/* ── Strategy toggle ── */
-function setStrategy(s) {
-  _currentStrategy = s;
-  document.getElementById('stratMobile').classList.toggle('active', s === 'mobile');
-  document.getElementById('stratDesktop').classList.toggle('active', s === 'desktop');
-  renderBatchPills();
-  if (s !== "{{ strategy }}") window.location.href = `/seo/cwv?strategy=${s}`;
+/* Dòng trạng thái đợt + nhãn nút (resume vs đợt mới) */
+function renderPass(d){
+  const ps=document.getElementById('passStatus');
+  const btn=document.getElementById('btnScanAll');
+  const p=d.pass||{};
+  if(d.running){ if(ps) ps.textContent=''; return; }
+  if(p.active && p.remaining>0){
+    if(ps) ps.innerHTML=`⏸️ <b>Đợt quét đang dở</b> — còn <b>${(p.remaining||0).toLocaleString()}</b> lượt (đã ${(p.scanned||0).toLocaleString()}/${(p.total||0).toLocaleString()}). Bấm để quét tiếp.`;
+    if(btn) btn.innerHTML='▶️ Quét tiếp đợt dở';
+  } else {
+    if(ps) ps.innerHTML='✅ Sẵn sàng quét <b>đợt mới</b> (mobile + desktop toàn bộ). Xong sẽ lưu vào <a href="/seo/history" style="color:#4f46e5">lịch sử</a> để so sánh đợt.';
+    if(btn) btn.innerHTML='🚀 Quét toàn bộ';
+  }
 }
 
-/* ── UI helpers ── */
-function setBtnState(running) {
-  ['btnSkip','btnRescan','btnAllBatch'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.disabled = running;
-  });
-  const stop = document.getElementById('btnStop');
-  if (stop) stop.style.display = running ? 'inline-block' : 'none';
-}
-function showRunning(v) {
-  const el = document.getElementById('scanRunning');
-  if (el) el.style.display = v ? 'block' : 'none';
-}
-function showAutoBanner(label) {
-  const b = document.getElementById('autoScanBanner');
-  const l = document.getElementById('autoScanPhaseLabel');
-  if (b) b.style.display = label ? 'block' : 'none';
-  if (l && label) l.textContent = label;
+function _liveStats(on){
+  clearInterval(_statsTimer);
+  if(!on) return;
+  _statsTimer=setInterval(async()=>{
+    try{
+      const r=await fetch('/api/seo/cwv/progress').then(r=>r.json());
+      (r.progress||[]).forEach(p=>{ const e=document.getElementById('prog_'+p.url_type); if(e) e.textContent=`${p.scanned}/${p.total}`; });
+    }catch(e){}
+  },5000);
 }
 
-/* ── Core: fire 1 scan ── */
-async function _fireScan(strategy, urlType, limit, skipScanned) {
-  const apiKey = document.getElementById('apiKey').value.trim();
-  const r = await fetch('/api/seo/cwv/scan/start', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ strategy, url_type: urlType, limit, api_key: apiKey, mode: 'top', skip_scanned: skipScanned })
-  });
-  return r.json();
-}
-
-/* ── Poll, then run callback when done ── */
-let _liveStatsTimer = null;
-function _startLiveStats() {
-  clearInterval(_liveStatsTimer);
-  _liveStatsTimer = setInterval(async () => {
-    try {
-      const resp = await fetch('/api/seo/cwv/progress').then(r => r.json());
-      (resp.progress || []).forEach(p => {
-        const el = document.getElementById('prog_' + p.url_type);
-        if (el) el.textContent = `${p.scanned}/${p.total}`;
-      });
-    } catch(e) {}
-  }, 5000);
-}
-function _stopLiveStats() { clearInterval(_liveStatsTimer); }
-
-function _poll(onDone) {
+function _poll(){
   clearInterval(_pollTimer);
-  _startLiveStats();
-  _pollTimer = setInterval(async () => {
-    const d = await fetch('/api/seo/cwv/status').then(r => r.json());
-    const pct = d.total > 0 ? Math.round(d.done / d.total * 100) : 0;
-    const pbar = document.getElementById('scanPbar');
-    const msg  = document.getElementById('scanMsg');
-    const ctr  = document.getElementById('scanCounter');
-    if (pbar) pbar.style.width = pct + '%';
-    if (msg)  msg.textContent = d.message || '';
-    if (ctr)  ctr.textContent = `${d.done}/${d.total} URL`;
-    if (!d.running) { clearInterval(_pollTimer); _stopLiveStats(); onDone(d); }
-  }, 2000);
-}
-
-/* ════════════════════════════════
-   MANUAL BATCH (Quét batch tiếp)
-   ════════════════════════════════ */
-async function startBatch(skipScanned) {
-  if (!skipScanned) clearPauseState(); // "Quét lại" → xoá pause state
-  const urlType = document.getElementById('urlTypeSelect').value;
-  const idx = getBatchIdx(_currentStrategy, urlType);
-  setBtnState(true); showRunning(true);
-  const d = await _fireScan(_currentStrategy, urlType, BATCH_SIZES[idx], skipScanned);
-  if (d.ok) {
-    if (skipScanned) setBatchIdx(_currentStrategy, urlType, Math.min(idx + 1, BATCH_SIZES.length - 1));
-    _poll(() => {
-      clearPauseState();
-      setBtnState(false); showRunning(false);
-      window.location.href = `/seo/cwv?strategy=${_currentStrategy}&sort=performance_score&order=asc`;
-    });
-  } else {
-    alert(d.error || d.message || 'Lỗi');
-    setBtnState(false); showRunning(false);
-  }
-}
-
-/* ════════════════════════════════════════
-   QUÉT ALL BATCH (server-side chain)
-   8 phase: mobile/product → mobile/collection → mobile/blog → mobile/page
-            → desktop/product → desktop/collection → desktop/blog → desktop/page
-   Server tự chuyển phase, browser chỉ poll.
-   ════════════════════════════════════════ */
-async function startAllBatchAuto() {
-  clearPauseState();
-  setAuto(null); // bỏ legacy client-side chain
-  const apiKey = document.getElementById('apiKey').value.trim();
-  const r = await fetch('/api/seo/cwv/scan/start-all', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ api_key: apiKey })
-  });
-  const d = await r.json();
-  if (!d.ok) {
-    alert(d.error || d.message || 'Lỗi khởi động chain');
-    return;
-  }
-  setBtnState(true); showRunning(true);
-  showAutoBanner('Đang khởi động phase 1/8...');
-  _pollChain();
-}
-
-let _chainPollTimer = null;
-function _stopChainPoll() { clearInterval(_chainPollTimer); _chainPollTimer = null; }
-
-function _pollChain() {
-  _stopChainPoll();
-  _startLiveStats();
-  _chainPollTimer = setInterval(async () => {
-    const d = await fetch('/api/seo/cwv/status').then(r => r.json());
-    const pbar = document.getElementById('scanPbar');
-    const msg  = document.getElementById('scanMsg');
-    const ctr  = document.getElementById('scanCounter');
-    const pct  = d.total > 0 ? Math.round(d.done / d.total * 100) : 0;
-    if (pbar) pbar.style.width = pct + '%';
-    if (msg)  msg.textContent = d.message || '';
-    if (ctr)  ctr.textContent = `${d.done}/${d.total} URL · phase ${d.phase_idx || 0}/${d.phase_total || 8}`;
-
-    if (d.chain_active && d.phase_label) {
-      showAutoBanner(`Phase ${d.phase_idx}/${d.phase_total} · ${d.phase_label}`);
-    }
-
-    if (!d.running) {
-      _stopChainPoll(); _stopLiveStats();
-      const b = document.getElementById('autoScanBanner');
-      if (b) {
-        b.style.display = 'block';
-        b.style.background = '#f0fdf4';
-        b.style.borderColor = '#86efac';
-        b.style.color = '#15803d';
-        const ok = d.chain_total_ok || 0;
-        const fail = d.chain_total_failed || 0;
-        b.innerHTML = `✅ <b>Hoàn tất Quét All Batch!</b> Tổng ${ok} OK · ${fail} lỗi qua ${d.phase_total || 8} phase.`;
+  _liveStats(true);
+  _pollTimer=setInterval(async()=>{
+    const d=await fetch('/api/seo/cwv/status').then(r=>r.json());
+    const pct=d.total>0?Math.round(d.done/d.total*100):0;
+    const pbar=document.getElementById('scanPbar'), msg=document.getElementById('scanMsg'), ctr=document.getElementById('scanCounter');
+    if(pbar) pbar.style.width=pct+'%';
+    if(msg) msg.textContent=d.message||'';
+    if(ctr) ctr.textContent=`${d.done}/${d.total} URL · phase ${d.phase_idx||0}/${d.phase_total||8}`;
+    if(d.chain_active && d.phase_label) showBanner(`Phase ${d.phase_idx}/${d.phase_total} · ${d.phase_label}`,false);
+    if(!d.running){
+      clearInterval(_pollTimer); _liveStats(false);
+      setScanning(false);
+      const stopped=(d.message||'').includes('Đã dừng');
+      if(stopped){ showBanner(null); }
+      else {
+        const ok=d.chain_total_ok||0, fail=d.chain_total_failed||0;
+        showBanner(`✅ <b>Hoàn tất quét toàn bộ!</b> ${ok} OK · ${fail} lỗi. Đã lưu vào lịch sử.`, true);
       }
-      setBtnState(false); showRunning(false);
-      // Reload sau 2s để hiển thị data mới
-      setTimeout(() => {
-        window.location.href = `/seo/cwv?strategy=${_currentStrategy}&sort=performance_score&order=asc`;
-      }, 2000);
+      setTimeout(()=>{ location.href=`/seo/cwv?strategy=${_VIEW_STRATEGY}&sort=performance_score&order=asc`; }, 2000);
     }
-  }, 2500);
+  },2500);
 }
 
-/* ── Pause / Resume state ── */
-const PAUSE_KEY = 'cwv_paused_v1';
-function savePauseState() {
-  const urlType = document.getElementById('urlTypeSelect').value;
-  localStorage.setItem(PAUSE_KEY, JSON.stringify({ strategy: _currentStrategy, urlType }));
-}
-function clearPauseState() {
-  localStorage.removeItem(PAUSE_KEY);
-}
-function getPauseState() {
-  try { return JSON.parse(localStorage.getItem(PAUSE_KEY)); } catch { return null; }
-}
-function showResumeBanner() {
-  const ps = getPauseState();
-  const el = document.getElementById('resumeBanner');
-  if (!el) return;
-  if (ps) {
-    el.style.display = 'flex';
-    const lbl = document.getElementById('resumeLabel');
-    if (lbl) lbl.textContent = `${ps.strategy.toUpperCase()} · ${ps.urlType}`;
-  } else {
-    el.style.display = 'none';
-  }
-}
-async function resumeScan() {
-  const ps = getPauseState();
-  if (!ps) return;
-  clearPauseState();
-  showResumeBanner();
-  // Navigate to correct strategy if needed
-  if (_currentStrategy !== ps.strategy) {
-    // Save resume intent for after navigation
-    localStorage.setItem('cwv_resume_after_nav', JSON.stringify(ps));
-    window.location.href = `/seo/cwv?strategy=${ps.strategy}`;
-    return;
-  }
-  const urlTypeEl = document.getElementById('urlTypeSelect');
-  if (urlTypeEl) urlTypeEl.value = ps.urlType;
-  setBtnState(true); showRunning(true);
-  const limit = 9999; // quét hết tất cả còn lại
-  const d = await _fireScan(ps.strategy, ps.urlType, limit, true);
-  if (d.ok) {
-    _poll(result => {
-      setBtnState(false); showRunning(false);
-      window.location.href = `/seo/cwv?strategy=${ps.strategy}&sort=performance_score&order=asc`;
-    });
-  } else {
-    alert(d.error || d.message || 'Lỗi tiếp tục scan');
-    setBtnState(false); showRunning(false);
-  }
+async function startFullScan(){
+  const apiKey=document.getElementById('apiKey').value.trim();
+  setScanning(true);
+  showBanner('Đang khởi động...',false);
+  const d=await fetch('/api/seo/cwv/scan/start-all',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:apiKey})}).then(r=>r.json());
+  if(!d.ok){ alert(d.message||d.error||'Không khởi động được'); setScanning(false); showBanner(null); return; }
+  _poll();
 }
 
-/* ── Stop (cả manual + auto) ── */
-async function stopScanAll() {
-  setAuto(null);
-  showAutoBanner(null);
-  savePauseState();
-  await fetch('/api/seo/cwv/scan/stop', {method:'POST'});
-  setBtnState(false); showRunning(false);
-  showResumeBanner();
+async function stopScan(){
+  const b=document.getElementById('btnStop'); if(b){ b.textContent='⏳ Đang dừng...'; b.disabled=true; }
+  await fetch('/api/seo/cwv/scan/stop',{method:'POST'});
 }
 
-async function clearData() {
-  if (!confirm('Xoá toàn bộ data CWV của thiết bị ' + _currentStrategy + '?')) return;
-  setAuto(null);
-  await fetch('/api/seo/cwv/clear', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({strategy: _currentStrategy})});
-  location.reload();
-}
-
-/* ════════════════
-   PAGE INIT
-   ════════════════ */
-(async () => {
-  // 1. Check server-side chain đang chạy → resume poll
-  const status = await fetch('/api/seo/cwv/status').then(r => r.json());
-  if (status.running && status.chain_active) {
-    setBtnState(true); showRunning(true);
-    showAutoBanner(`Phase ${status.phase_idx}/${status.phase_total} · ${status.phase_label || ''}`);
-    _pollChain();
-    return;
-  }
-
-  // 2. Legacy client-side auto chain (deprecated, vẫn xử nếu có)
-  const autoState = getAuto();
-  if (autoState && autoState.active) {
-    setAuto(null); // clear legacy state
-  }
-
-  // 3. Nếu có scan đang chạy (manual resume)
-  if (status.running) {
-    setBtnState(true); showRunning(true);
-    _poll(() => {
-      setBtnState(false); showRunning(false);
-      window.location.href = `/seo/cwv?strategy=${_currentStrategy}&sort=performance_score&order=asc`;
-    });
+/* INIT — khôi phục trạng thái khi mở/refresh trang */
+(async()=>{
+  const d=await fetch('/api/seo/cwv/status').then(r=>r.json());
+  renderPass(d);
+  if(d.running){
+    setScanning(true);
+    if(d.chain_active && d.phase_label) showBanner(`Phase ${d.phase_idx}/${d.phase_total} · ${d.phase_label}`,false);
+    _poll();
   }
 })();
-
-document.addEventListener('DOMContentLoaded', () => {
-  renderBatchPills();
-  document.getElementById('urlTypeSelect').addEventListener('change', renderBatchPills);
-
-  // Resume after strategy navigation
-  const navResume = localStorage.getItem('cwv_resume_after_nav');
-  if (navResume) {
-    localStorage.removeItem('cwv_resume_after_nav');
-    try {
-      const ps = JSON.parse(navResume);
-      if (ps.strategy === _currentStrategy) {
-        // Re-save as paused so resumeScan() picks it up
-        localStorage.setItem(PAUSE_KEY, JSON.stringify(ps));
-        showResumeBanner();
-        // Auto-trigger resume
-        setTimeout(resumeScan, 500);
-        return;
-      }
-    } catch {}
-  }
-
-  // Show banner if there's a paused session
-  showResumeBanner();
-});
-renderBatchPills();
 </script>
 
 {% endblock %}
