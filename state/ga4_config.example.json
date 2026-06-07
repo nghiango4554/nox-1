@@ -8,5 +8,6 @@
   "sync_lookback_days": 3,
   "initial_backfill_days": 90,
   "compare_period_enabled": true,
-  "gsc_join_stale_days": 7
+  "gsc_join_stale_days": 7,
+  "gsc_join_data_stale_days": 7
 }

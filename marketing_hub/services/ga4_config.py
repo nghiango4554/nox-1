@@ -22,7 +22,8 @@ DEFAULTS = {
     "sync_lookback_days": 3,
     "initial_backfill_days": 90,
     "compare_period_enabled": True,
-    "gsc_join_stale_days": 7,
+    "gsc_join_stale_days": 7,        # cache: bao lâu chưa re-fetch thì coi cache cũ
+    "gsc_join_data_stale_days": 7,   # data: GSC date_to cách hôm nay bao lâu thì coi data cũ
 }
 
 # env override (optional, không thêm dotenv loader)
