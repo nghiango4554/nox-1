@@ -29,6 +29,8 @@ DEFAULTS = {
     "initial_backfill_days": 90, "incremental_lookback_days": 7,
     "row_limit": 25000, "max_rows_per_day_per_type": 50000,
     "sync_timeout_seconds": 300, "fallback_to_sheet": True,
+    "seo_join_channel_groups": ["Organic Search"], "seo_join_initial_backfill_days": 90,
+    "seo_join_incremental_lookback_days": 7, "seo_join_version": "daily-organic-v1",
 }
 
 
