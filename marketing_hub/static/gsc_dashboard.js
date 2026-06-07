@@ -78,24 +78,24 @@
     // ── KPI health ──
     var ls=st.last_sync||{};
     html+='<div class="gh-kpis">'
-      +kpi("API status",st.api_status)
+      +kpi("Trạng thái API",st.api_status)
       +kpi("OAuth",st.oauth_status)
-      +kpi("Latest available",st.latest_available_date)
-      +kpi("Data age",st.data_age_days!=null?st.data_age_days+" ngày":"—")
-      +kpi("Cache age",st.cache_age_days!=null?st.cache_age_days+" ngày":"—")
-      +kpi("Last success",st.last_success_at||"—")
-      +kpi("Last failure",st.last_failure_at||"—")
-      +kpi("Rows written",st.rows_written!=null?Number(st.rows_written).toLocaleString("vi-VN"):"—")
+      +kpi("Dữ liệu mới nhất",st.latest_available_date)
+      +kpi("Độ trễ dữ liệu",st.data_age_days!=null?st.data_age_days+" ngày":"—")
+      +kpi("Tuổi cache",st.cache_age_days!=null?st.cache_age_days+" ngày":"—")
+      +kpi("Sync gần nhất OK",st.last_success_at||"—")
+      +kpi("Sync gần nhất lỗi",st.last_failure_at||"—")
+      +kpi("Số dòng đã ghi",st.rows_written!=null?Number(st.rows_written).toLocaleString("vi-VN"):"—")
       +kpi("Coverage mode",st.coverage_mode)
       +'</div>';
 
     // ── coverage ──
     html+='<div class="gh-cov"><div>'
-      +covBar("Page clicks coverage",st.page_click_coverage_percent)
-      +covBar("Page impressions coverage",st.page_impression_coverage_percent)+'</div><div>'
-      +covBar("Query clicks coverage",st.query_click_coverage_percent)
-      +covBar("Query impressions coverage",st.query_impression_coverage_percent)+'</div></div>'
-      +'<div class="gh-note">Detail page/query được tính từ top rows Search Analytics API. Một phần long-tail có thể chưa xuất hiện. Summary property-level đáng tin hơn detail.</div>';
+      +covBar("Coverage clicks (page)",st.page_click_coverage_percent)
+      +covBar("Coverage impressions (page)",st.page_impression_coverage_percent)+'</div><div>'
+      +covBar("Coverage clicks (query)",st.query_click_coverage_percent)
+      +covBar("Coverage impressions (query)",st.query_impression_coverage_percent)+'</div></div>'
+      +'<div class="gh-note">Chi tiết page/query lấy từ top rows của Search Analytics API. Một phần long-tail có thể chưa xuất hiện. Summary cấp property đáng tin hơn chi tiết.</div>';
 
     // ── timezone note ──
     html+='<div class="gh-note">🕒 Search Console dùng ngày theo PT. GA4 hệ thống dùng Asia/Ho_Chi_Minh. Khi ghép theo ngày, số liệu có thể lệch nhẹ ở ranh giới ngày. (Chưa ghép daily trong batch này.)</div>';

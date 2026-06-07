@@ -405,7 +405,7 @@
     needs_review: "Cần review",
   };
   function confBadge(c) { var m = { high: "b-ok", medium: "b-warn", low: "b-gray" }; return '<span class="g4-pill ' + (m[c] || "b-gray") + '">' + esc(c) + "</span>"; }
-  function jsBadge(s) { var m = { matched: "b-ok", gsc_only: "b-info", ga4_only: "b-gray" }; return '<span class="g4-pill ' + (m[s] || "b-gray") + '">' + esc(s) + "</span>"; }
+  function jsBadge(s) { var m = { matched: ["b-ok", "Khớp"], gsc_only: ["b-info", "Chỉ GSC"], ga4_only: ["b-gray", "Chỉ GA4"] }[s] || ["b-gray", s]; return '<span class="g4-pill ' + m[0] + '">' + esc(m[1]) + "</span>"; }
   function covBar(label, pct) {
     var raw = (pct == null) ? "—" : pct + "%";
     var capped = Math.min(100, Math.max(0, pct || 0));
@@ -449,7 +449,7 @@
     ga4_only: "Có GA4 Organic Search session nhưng chưa thấy GSC page row tương ứng. Có thể do API top rows, canonical URL hoặc khác biệt cách đo.",
   };
   function djsBadge(s) {
-    var m = { matched: ["b-ok", "Matched"], gsc_only: ["b-warn", "GSC only — cần kiểm tra"], ga4_only: ["b-info", "GA4 Organic only — cần kiểm tra"] }[s] || ["b-gray", s];
+    var m = { matched: ["b-ok", "Khớp"], gsc_only: ["b-warn", "Chỉ GSC — cần kiểm tra"], ga4_only: ["b-info", "Chỉ GA4 Organic — cần kiểm tra"] }[s] || ["b-gray", s];
     return '<span class="g4-pill ' + m[0] + '" title="' + esc(DJS_TIP[s] || "") + '">' + m[1] + "</span>";
   }
   function sjQueryApi() {
@@ -480,35 +480,35 @@
         + '<div class="g4-pill b-info" style="display:block;margin:3px 0;text-align:left">ℹ GA4 Organic Search = metric chính; all-channel chỉ tham khảo</div>'
         + '<div class="g4-pill b-info" style="display:block;margin:3px 0;text-align:left">ℹ Clicks và sessions không phải cùng metric — chỉ so sánh định hướng</div>';
       var status = '<div class="g4-card"><div class="ga4-row" style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px">'
-        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Mode</div><div style="font-size:12px">Search Console API — daily-aligned partial coverage</div></div>'
-        + '<div class="g4-kpi" style="flex:0"><div class="lbl">GA4 channel</div><div style="font-size:13px">' + esc(st.channel_group || "Organic Search") + "</div></div>"
-        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Overlap</div><div style="font-size:13px">' + (st.overlap_date_from || "—") + " → " + (st.overlap_date_to || "—") + " (" + (st.overlap_days || 0) + "d)</div></div>"
-        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Latest GSC / GA4</div><div style="font-size:13px">' + (st.latest_gsc_date || "—") + " / " + (st.latest_ga4_date || "—") + "</div></div>"
-        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Coverage complete</div><div style="font-size:13px">Không (API top rows)</div></div>'
-        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Max confidence</div><div style="font-size:13px">Medium</div></div>'
-        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Timezone</div><div style="font-size:12px">GSC PT · GA4 Asia/HCM (khác ranh giới ngày)</div></div>'
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Chế độ</div><div style="font-size:12px">Search Console API — daily-aligned partial coverage</div></div>'
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Kênh GA4</div><div style="font-size:13px">' + esc(st.channel_group || "Organic Search") + "</div></div>"
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Khoảng trùng ngày</div><div style="font-size:13px">' + (st.overlap_date_from || "—") + " → " + (st.overlap_date_to || "—") + " (" + (st.overlap_days || 0) + " ngày)</div></div>"
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">GSC / GA4 mới nhất</div><div style="font-size:13px">' + (st.latest_gsc_date || "—") + " / " + (st.latest_ga4_date || "—") + "</div></div>"
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Coverage đầy đủ</div><div style="font-size:13px">Không (API top rows)</div></div>'
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Độ tin tối đa</div><div style="font-size:13px">Medium</div></div>'
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Múi giờ</div><div style="font-size:12px">GSC PT · GA4 Asia/HCM (khác ranh giới ngày)</div></div>'
         + "</div><div style='margin-top:10px'>" + warns + "</div></div>";
       var kpis = '<div class="g4-kpis">'
-        + kpi("Daily rows", lst.total_rows != null ? lst.total_rows : st.matched_count, "n")
-        + kpi("Matched", st.matched_count, "n") + kpi("GSC only", st.gsc_only_count, "n")
-        + kpi("GA4 Organic only", st.ga4_only_count, "n")
-        + kpi("Medium confidence", cd.medium || 0, "n") + kpi("Low confidence", cd.low || 0, "n")
-        + kpi("Overlap days", st.overlap_days, "n") + kpi("Latest GSC", st.latest_gsc_date, "raw")
+        + kpi("Số dòng (ngày)", lst.total_rows != null ? lst.total_rows : st.matched_count, "n")
+        + kpi("Khớp cả 2", st.matched_count, "n") + kpi("Chỉ có GSC", st.gsc_only_count, "n")
+        + kpi("Chỉ có GA4 Organic", st.ga4_only_count, "n")
+        + kpi("Độ tin Medium", cd.medium || 0, "n") + kpi("Độ tin Low", cd.low || 0, "n")
+        + kpi("Số ngày trùng", st.overlap_days, "n") + kpi("GSC mới nhất", st.latest_gsc_date, "raw")
         + "</div>";
       var tb = '<div class="g4-quick" style="margin:10px 0">'
         + _sjSel("sj-pt", "Mọi loại trang", ["product", "collection", "blog", "build_pc", "homepage", "page", "other"], SJ.page_type)
-        + _sjSel("sj-js", "Mọi join status", ["matched", "gsc_only", "ga4_only"], SJ.join_status)
-        + _sjSel("sj-opp", "Mọi opportunity", Object.keys(DOPP_LABEL), SJ.opportunity)
-        + _sjSel("sj-conf", "Mọi confidence", ["medium", "low"], SJ.confidence)
+        + _sjSel("sj-js", "Mọi trạng thái khớp", ["matched", "gsc_only", "ga4_only"], SJ.join_status)
+        + _sjSel("sj-opp", "Mọi cơ hội", Object.keys(DOPP_LABEL), SJ.opportunity)
+        + _sjSel("sj-conf", "Mọi độ tin", ["medium", "low"], SJ.confidence)
         + '<input type="search" id="sj-search" placeholder="Tìm URL…" value="' + esc(SJ.search) + '" style="background:var(--surface,#111);color:inherit;border:1px solid var(--border,rgba(255,255,255,.12));border-radius:8px;padding:5px 10px;font-size:12px;width:150px">'
         + '<button class="btn btn-primary" id="sj-api-refresh" type="button" style="padding:5px 12px;font-size:12px">🔄 Làm mới daily API join</button></div>';
-      var cols = [{ label: "Date", key: null }, { label: "URL" }, { label: "Type" }, { label: "Join" },
+      var cols = [{ label: "Ngày", key: null }, { label: "URL" }, { label: "Loại", }, { label: "Khớp" },
         { label: "GSC clicks", num: 1, key: "gsc_clicks" }, { label: "Impr", num: 1, key: "gsc_impressions" },
         { label: "CTR", num: 1, key: "gsc_ctr" }, { label: "Pos", num: 1, key: "gsc_position" },
         { label: "Organic sess", num: 1, key: "ga4_organic_sessions" }, { label: "All sess*", num: 1, key: "ga4_all_sessions" },
         { label: "Org engage", num: 1, key: "ga4_organic_engagement_rate" }, { label: "Key ev", num: 1, key: "ga4_organic_key_events" },
-        { label: "Purch", num: 1, key: "ga4_organic_ecommerce_purchases" }, { label: "Revenue", num: 1, key: "ga4_organic_purchase_revenue" },
-        { label: "Opportunity" }, { label: "Confidence" }];
+        { label: "Mua", num: 1, key: "ga4_organic_ecommerce_purchases" }, { label: "Doanh thu", num: 1, key: "ga4_organic_purchase_revenue" },
+        { label: "Cơ hội" }, { label: "Độ tin" }];
       var rows = lst.data || [];
       var body = rows.map(function (r) {
         return '<tr><td>' + esc(r.date) + '</td><td class="g4-key" title="' + esc(r.full_url || r.normalized_path) + '">' + esc(r.normalized_path)
@@ -583,18 +583,18 @@
       // ── toolbar filters ──
       var tb = '<div class="g4-quick" style="margin:10px 0">'
         + _sjSel("sj-pt", "Mọi loại trang", ["product", "collection", "blog", "build_pc", "homepage", "page", "other"], SJ.page_type)
-        + _sjSel("sj-js", "Mọi join status", ["matched", "gsc_only", "ga4_only"], SJ.join_status)
-        + _sjSel("sj-opp", "Mọi opportunity", Object.keys(OPP_LABEL), SJ.opportunity)
-        + _sjSel("sj-conf", "Mọi confidence", ["high", "medium", "low"], SJ.confidence)
+        + _sjSel("sj-js", "Mọi trạng thái khớp", ["matched", "gsc_only", "ga4_only"], SJ.join_status)
+        + _sjSel("sj-opp", "Mọi cơ hội", Object.keys(OPP_LABEL), SJ.opportunity)
+        + _sjSel("sj-conf", "Mọi độ tin", ["high", "medium", "low"], SJ.confidence)
         + '<input type="search" id="sj-search" placeholder="Tìm URL…" value="' + esc(SJ.search) + '" style="background:var(--surface,#111);color:inherit;border:1px solid var(--border,rgba(255,255,255,.12));border-radius:8px;padding:5px 10px;font-size:12px;width:160px">'
-        + '<button class="btn btn-primary" id="sj-refresh" type="button" style="padding:5px 12px;font-size:12px">🔄 Refresh join</button></div>';
+        + '<button class="btn btn-primary" id="sj-refresh" type="button" style="padding:5px 12px;font-size:12px">🔄 Làm mới join</button></div>';
       // ── table ──
-      var cols = [{ label: "URL" }, { label: "Type" }, { label: "Join" },
+      var cols = [{ label: "URL" }, { label: "Loại" }, { label: "Khớp" },
         { label: "GSC clicks", num: 1, key: "gsc_clicks" }, { label: "Impr", num: 1, key: "gsc_impressions" },
         { label: "CTR", num: 1, key: "gsc_ctr" }, { label: "Pos", num: 1, key: "gsc_position" },
         { label: "GA4 sess", num: 1, key: "ga4_sessions" }, { label: "Engage", num: 1, key: "ga4_engagement_rate" },
-        { label: "Key ev", num: 1, key: "ga4_key_events" }, { label: "Revenue", num: 1, key: "ga4_purchase_revenue" },
-        { label: "Opportunity" }, { label: "Confidence" }];
+        { label: "Key ev", num: 1, key: "ga4_key_events" }, { label: "Doanh thu", num: 1, key: "ga4_purchase_revenue" },
+        { label: "Cơ hội" }, { label: "Độ tin" }];
       var rows = lst.data || [];
       var body = rows.length ? rows.map(function (r) {
         return '<tr><td class="g4-key" title="' + esc(r.full_url || r.normalized_path) + '">' + esc(r.normalized_path)
@@ -613,7 +613,7 @@
       }
       var table = rows.length
         ? '<div class="g4-card g4-tblwrap"><table class="g4-tbl"><thead><tr>' + sortableHead2(cols) + "</tr></thead><tbody>" + body + "</tbody></table>" + pag + "</div>"
-        : '<div class="g4-card">' + emptyBox("Chưa có dữ liệu join — bấm Refresh join để tạo (period-level theo kỳ GSC cache).") + "</div>";
+        : '<div class="g4-card">' + emptyBox("Chưa có dữ liệu join — bấm Làm mới join để tạo (period-level theo kỳ GSC cache).") + "</div>";
 
       var fbBadge = '<div class="g4-pill b-warn" style="display:block;margin-bottom:10px;text-align:left">📁 Fallback mode: Google Sheet snapshot · Period-level, KHÔNG phải daily join</div>';
       panel("seojoin").innerHTML = modeToggle() + fbBadge + statusHtml + kpis + tb + table;
@@ -651,14 +651,14 @@
     if (rb) rb.addEventListener("click", function () {
       rb.disabled = true; rb.textContent = "⏳ Đang join…";
       fetch("/api/ga4/seo-join/refresh", { method: "POST" }).then(function (r) { return r.json().then(function (j) { j._http = r.status; return j; }); })
-        .then(function () { sjPoll(rb); }).catch(function () { rb.disabled = false; rb.textContent = "🔄 Refresh join"; });
+        .then(function () { sjPoll(rb); }).catch(function () { rb.disabled = false; rb.textContent = "🔄 Làm mới join"; });
     });
   }
   function sjPoll(rb) {
     var n = 0, iv = setInterval(function () {
       n++;
       get("/api/ga4/seo-join/status").then(function (st) {
-        if (!st.is_running || n > 40) { clearInterval(iv); if (rb) { rb.disabled = false; rb.textContent = "🔄 Refresh join"; } loadSeoJoin(); }
+        if (!st.is_running || n > 40) { clearInterval(iv); if (rb) { rb.disabled = false; rb.textContent = "🔄 Làm mới join"; } loadSeoJoin(); }
       });
     }, 3000);
   }
