@@ -25,17 +25,19 @@
   function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
+  // qs() CHỈ chứa filter GLOBAL thật: khoảng ngày + so sánh kỳ trước.
+  // Filter tab-specific (channel/page_type/search) do từng tab tự append.
   function qs(extra) {
     var p = ["compare_previous=" + (S.compare ? "true" : "false")];
     if (S.range === "custom" && S.from && S.to) { p.push("date_from=" + S.from, "date_to=" + S.to); }
     else { p.push("range=" + S.range); }
-    if (S.channel) p.push("channel=" + encodeURIComponent(S.channel));
-    if (S.device) p.push("device=" + encodeURIComponent(S.device));
-    if (S.ptype) p.push("page_type=" + encodeURIComponent(S.ptype));
-    if (S.search) p.push("search=" + encodeURIComponent(S.search));
     if (extra) p.push(extra);
     return "?" + p.join("&");
   }
+  function appliedLine(txt) {
+    return '<div class="g4-muted" style="margin:2px 0 8px;font-size:11.5px">🔎 Bộ lọc đang áp dụng: ' + esc(txt) + "</div>";
+  }
+  var TOTAL_NOTE = "Tab này đang hiển thị tổng dữ liệu theo khoảng ngày.";
   function get(url) { return fetch(url).then(function (r) { return r.json().then(function (j) { j._http = r.status; return j; }); }); }
 
   /* ---------- delta + kpi ---------- */
@@ -136,7 +138,7 @@
       panel("overview").innerHTML =
         '<p class="g4-muted" style="margin:2px 0 10px">Kỳ ' + ov.period.date_from + " → " + ov.period.date_to
         + (ov.previous_period ? " (so với " + ov.previous_period.date_from + " → " + ov.previous_period.date_to + ")" : "")
-        + staleBadge(ov) + "</p>"
+        + staleBadge(ov) + "</p>" + appliedLine(TOTAL_NOTE)
         + '<div class="g4-kpis">' + cards + "</div>"
         + '<div class="g4-charts">' + charts + "</div>";
     }).catch(function () { panel("overview").innerHTML = errBox(); });
@@ -188,10 +190,14 @@
   function tableTab(tab, url, cols, rowFn, opts) {
     opts = opts || {};
     skel(tab);
+    var head = (opts.toolbar || "") + (opts.applied ? appliedLine(opts.applied) : "");
     get(url).then(function (env) {
-      if (!env.ok) { panel(tab).innerHTML = errBox(env); return; }
+      if (!env.ok) { panel(tab).innerHTML = head + errBox(env); if (opts.afterRender) opts.afterRender(panel(tab)); return; }
       var rows = env.data || [];
-      if (!rows.length) { panel(tab).innerHTML = (opts.quick || "") + '<div class="g4-card">' + emptyBox("Không có dữ liệu trong kỳ.") + "</div>"; return; }
+      if (!rows.length) {
+        panel(tab).innerHTML = head + '<div class="g4-card">' + emptyBox("Không có dữ liệu trong kỳ.") + "</div>";
+        if (opts.afterRender) opts.afterRender(panel(tab)); return;
+      }
       var body = rows.map(rowFn).join("");
       var note = opts.note ? '<p class="g4-muted" style="margin:4px 0 8px">' + opts.note + staleBadge(env) + "</p>" : "";
       var pag = "";
@@ -201,7 +207,7 @@
           + '<button data-pg="prev"' + (off <= 0 ? " disabled" : "") + ">←</button>"
           + '<button data-pg="next"' + (to >= env.total_rows ? " disabled" : "") + ">→</button></div>";
       }
-      panel(tab).innerHTML = (opts.quick || "") + note + '<div class="g4-card g4-tblwrap"><table class="g4-tbl"><thead><tr>'
+      panel(tab).innerHTML = head + note + '<div class="g4-card g4-tblwrap"><table class="g4-tbl"><thead><tr>'
         + sortableHead(cols, S["sort_" + tab]) + "</tr></thead><tbody>" + body + "</tbody></table>" + pag + "</div>";
       $all("th[data-sort]", panel(tab)).forEach(function (th) {
         th.addEventListener("click", function () {
@@ -215,7 +221,8 @@
           PG[tab] = Math.max(0, (PG[tab] || 0) + (b.getAttribute("data-pg") === "next" ? 1 : -1)); reloadTab(tab);
         });
       });
-    }).catch(function () { panel(tab).innerHTML = errBox(); });
+      if (opts.afterRender) opts.afterRender(panel(tab));
+    }).catch(function () { panel(tab).innerHTML = head + errBox(); if (opts.afterRender) opts.afterRender(panel(tab)); });
   }
   function pageExtra(tab, perPage) {
     var off = (PG[tab] || 0) * perPage;
@@ -224,19 +231,35 @@
     return e;
   }
 
+  var CHANNEL_LIST = [];
   function loadChannels() {
     var cols = [{ label: "Channel" }, { label: "Source/medium" }, { label: "Active*", num: 1, key: "active_users" },
       { label: "Sessions", num: 1, key: "sessions" }, { label: "Engaged", num: 1, key: "engaged_sessions" },
       { label: "Eng.rate", num: 1, key: "engagement_rate" }, { label: "Key ev", num: 1, key: "key_events" },
       { label: "Purchases", num: 1, key: "ecommerce_purchases" }, { label: "Revenue", num: 1, key: "purchase_revenue" },
       { label: "Δ sessions", num: 1 }, { label: "Δ revenue", num: 1 }];
-    tableTab("channels", "/api/ga4/channels" + qs(pageExtra("channels", 50)), cols, function (r) {
+    var optHtml = CHANNEL_LIST.map(function (c) {
+      return '<option value="' + esc(c) + '"' + (S.channel === c ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("");
+    var toolbar = '<div class="g4-quick"><span style="font-size:12px;color:var(--text-muted,#94a3b8)">Kênh:&nbsp;</span>'
+      + '<select id="g4-ch-sel" style="background:var(--surface,#111);color:inherit;border:1px solid var(--border,rgba(255,255,255,.12));border-radius:8px;padding:5px 9px;font-size:12px">'
+      + '<option value="">Tất cả kênh</option>' + optHtml + "</select></div>";
+    var extra = pageExtra("channels", 50);
+    if (S.channel) extra += "&channel=" + encodeURIComponent(S.channel);
+    tableTab("channels", "/api/ga4/channels" + qs(extra), cols, function (r) {
       return "<tr><td>" + chBadge(r.channel) + '</td><td class="g4-key">' + esc(r.source_medium) + '</td><td class="num">' + nf(r.active_users)
         + '</td><td class="num">' + nf(r.sessions) + '</td><td class="num">' + nf(r.engaged_sessions) + '</td><td class="num">' + pctv(r.engagement_rate)
         + '</td><td class="num">' + nf(r.key_events) + '</td><td class="num">' + nf(r.ecommerce_purchases) + '</td><td class="num">' + money(r.purchase_revenue)
         + '</td><td class="num ' + (r.delta_sessions >= 0 ? "up" : "down") + '">' + (r.delta_sessions >= 0 ? "+" : "") + nf(r.delta_sessions)
         + '</td><td class="num ' + (r.delta_revenue >= 0 ? "up" : "down") + '">' + (r.delta_revenue >= 0 ? "+" : "") + money(r.delta_revenue) + "</td></tr>";
-    }, { note: "* Active users theo kênh là ước tính (cộng daily). Sessions & revenue exact additive." });
+    }, {
+      toolbar: toolbar,
+      applied: S.channel ? ("Kênh = " + S.channel) : "Tất cả kênh (theo khoảng ngày)",
+      note: "* Active users theo kênh là ước tính (cộng daily). Sessions & revenue exact additive.",
+      afterRender: function (p) {
+        var sel = $("#g4-ch-sel", p);
+        if (sel) sel.addEventListener("change", function (e) { S.channel = e.target.value; PG.channels = 0; loadChannels(); });
+      }
+    });
   }
   function chBadge(c) {
     var m = { "Organic Search": "b-ok", "Direct": "b-gray", "Organic Social": "b-info", "Paid Social": "b-warn",
@@ -246,22 +269,24 @@
 
   var LP_QUICK = [["", "Tất cả"], ["traffic", "Traffic cao"], ["lowering", "Engagement thấp"], ["keyev", "Có key event"],
     ["rev", "Có revenue"], ["product", "Product"], ["collection", "Collection"], ["blog", "Blog"], ["build_pc", "Build PC"], ["homepage", "Homepage"], ["other", "Other"]];
+  var LP_TYPES = ["product", "collection", "blog", "build_pc", "homepage", "other"];
   var lpQuick = "";
   function loadLanding() {
-    var typeFilters = ["product", "collection", "blog", "build_pc", "homepage", "other"];
     var q = LP_QUICK.map(function (x) {
       return '<button data-q="' + x[0] + '"' + (lpQuick === x[0] ? ' class="on"' : "") + ">" + x[1] + "</button>"; }).join("");
-    var quickHtml = '<div class="g4-quick" id="g4-lpq">' + q + "</div>";
-    // page_type quick → set S.ptype
-    var ptypeExtra = typeFilters.indexOf(lpQuick) >= 0 ? "" : "";
+    var toolbar = '<div class="g4-quick" style="margin-bottom:6px"><input type="search" id="g4-lp-search" placeholder="Tìm landing path…" '
+      + 'value="' + esc(S.search) + '" style="background:var(--surface,#111);color:inherit;border:1px solid var(--border,rgba(255,255,255,.12));border-radius:8px;padding:5px 10px;font-size:12px;width:190px"></div>'
+      + '<div class="g4-quick" id="g4-lpq">' + q + "</div>";
     var cols = [{ label: "Landing page" }, { label: "Type" }, { label: "Active*", num: 1, key: "active_users" },
       { label: "New*", num: 1, key: "new_users" }, { label: "Sessions", num: 1, key: "sessions" },
       { label: "Eng.rate", num: 1, key: "engagement_rate" }, { label: "Views", num: 1, key: "screen_page_views" },
       { label: "Key ev", num: 1, key: "key_events" }, { label: "Purch", num: 1, key: "ecommerce_purchases" },
       { label: "Revenue", num: 1, key: "purchase_revenue" }, { label: "Δ sess", num: 1 }, { label: "Track" }];
-    // map quick to filter via extra query
     var extra = pageExtra("landing", 50);
-    if (typeFilters.indexOf(lpQuick) >= 0) extra += "&page_type=" + lpQuick;
+    if (LP_TYPES.indexOf(lpQuick) >= 0) extra += "&page_type=" + lpQuick;
+    if (S.search) extra += "&search=" + encodeURIComponent(S.search);
+    var qlabel = (function () { for (var i = 0; i < LP_QUICK.length; i++) if (LP_QUICK[i][0] === lpQuick) return LP_QUICK[i][1]; return "Tất cả"; })();
+    var applied = "Quick: " + qlabel + (S.search ? (" · Tìm: “" + S.search + "”") : "");
     tableTab("landing", "/api/ga4/landing-pages" + qs(extra), cols, function (r) {
       return '<tr><td class="g4-key" title="' + esc(r.landing_page_raw || r.normalized_path) + '">' + esc(r.normalized_path)
         + "</td><td>" + ptypeBadge(r.page_type) + '</td><td class="num">' + nf(r.active_users) + '</td><td class="num">' + nf(r.new_users)
@@ -269,19 +294,26 @@
         + '</td><td class="num">' + nf(r.key_events) + '</td><td class="num">' + nf(r.ecommerce_purchases) + '</td><td class="num">' + money(r.purchase_revenue)
         + '</td><td class="num ' + (r.delta_sessions >= 0 ? "up" : "down") + '">' + (r.delta_sessions >= 0 ? "+" : "") + nf(r.delta_sessions)
         + '</td><td>' + pill("b-ok", r.tracking_state) + "</td></tr>";
-    }, { quick: quickHtml, note: "normalized_path dùng cho join SEO sau. * Active/New users theo landing là ước tính (cộng daily)." });
-    setTimeout(function () {
-      $all("#g4-lpq button").forEach(function (b) {
-        b.addEventListener("click", function () {
-          lpQuick = b.getAttribute("data-q");
-          if (lpQuick === "traffic") { S.sort_landing = "sessions"; S.order_landing = "desc"; }
-          else if (lpQuick === "lowering") { S.sort_landing = "engagement_rate"; S.order_landing = "asc"; }
-          else if (lpQuick === "keyev") { S.sort_landing = "key_events"; S.order_landing = "desc"; }
-          else if (lpQuick === "rev") { S.sort_landing = "purchase_revenue"; S.order_landing = "desc"; }
-          PG.landing = 0; loadLanding();
+    }, {
+      toolbar: toolbar, applied: applied,
+      note: "normalized_path dùng cho join SEO sau. * Active/New users theo landing là ước tính (cộng daily).",
+      afterRender: function (p) {
+        $all("#g4-lpq button", p).forEach(function (b) {
+          b.addEventListener("click", function () {
+            lpQuick = b.getAttribute("data-q");
+            if (lpQuick === "traffic") { S.sort_landing = "sessions"; S.order_landing = "desc"; }
+            else if (lpQuick === "lowering") { S.sort_landing = "engagement_rate"; S.order_landing = "asc"; }
+            else if (lpQuick === "keyev") { S.sort_landing = "key_events"; S.order_landing = "desc"; }
+            else if (lpQuick === "rev") { S.sort_landing = "purchase_revenue"; S.order_landing = "desc"; }
+            PG.landing = 0; loadLanding();
+          });
         });
-      });
-    }, 0);
+        var si = $("#g4-lp-search", p), t;
+        if (si) si.addEventListener("input", function (e) {
+          clearTimeout(t); t = setTimeout(function () { S.search = e.target.value.trim(); PG.landing = 0; loadLanding(); }, 400);
+        });
+      }
+    });
   }
   function ptypeBadge(t) {
     var m = { product: "b-info", collection: "b-info", blog: "b-ok", build_pc: "b-warn", homepage: "b-gray", page: "b-gray", other: "b-gray" };
@@ -296,7 +328,8 @@
       return "<tr><td>" + esc(r.device_category) + '</td><td class="num">' + nf(r.active_users) + '</td><td class="num">' + nf(r.sessions)
         + '</td><td class="num">' + nf(r.engaged_sessions) + '</td><td class="num">' + pctv(r.engagement_rate) + '</td><td class="num">' + nf(r.key_events)
         + '</td><td class="num">' + money(r.purchase_revenue) + "</td></tr>";
-    }, { note: "* Active users theo thiết bị là ước tính (cộng daily)." });
+    }, { applied: "Tất cả thiết bị theo khoảng ngày (chưa hỗ trợ lọc chéo theo thiết bị)",
+         note: "* Active users theo thiết bị là ước tính (cộng daily)." });
   }
 
   function loadEvents() {
@@ -305,7 +338,8 @@
     tableTab("events", "/api/ga4/events" + qs(pageExtra("events", 100)), cols, function (r) {
       return "<tr><td>" + esc(r.event_name) + '</td><td class="num">' + nf(r.event_count) + '</td><td class="num">' + nf(r.total_users)
         + '</td><td class="num">' + nf(r.key_events) + '</td><td class="num">' + nf(r.event_value) + "</td><td>" + esc(r.last_seen_date) + "</td></tr>";
-    }, { note: "Chỉ render event đã ghi nhận. Event không có trong bảng = chưa thấy / chưa cấu hình." });
+    }, { applied: TOTAL_NOTE,
+         note: "Chỉ render event đã ghi nhận. Event không có trong bảng = chưa thấy / chưa cấu hình." });
   }
 
   function loadEcommerce() {
@@ -324,7 +358,7 @@
         return '<div style="margin-bottom:6px"><div class="g4-muted" style="font-size:11px">' + x[0] + ": <b>" + nf(x[1]) + '</b></div>'
           + '<div style="height:14px;background:rgba(59,130,246,.18);border-radius:4px;overflow:hidden"><div style="height:100%;width:'
           + ((x[1] || 0) / fmax * 100) + '%;background:#3b82f6"></div></div></div>'; }).join("");
-      panel("ecommerce").innerHTML = '<div class="g4-kpis">'
+      panel("ecommerce").innerHTML = appliedLine(TOTAL_NOTE) + '<div class="g4-kpis">'
         + kpi("Checkouts", d.checkouts, "n") + kpi("Ecommerce purchases", d.ecommerce_purchases, "n")
         + kpi("Purchase revenue", d.purchase_revenue, "money") + kpi("Total revenue", d.total_revenue, "money")
         + "</div><div class=\"g4-card\" style=\"margin-top:12px\"><h4 style=\"margin:0 0 10px;font-size:12px\">Funnel theo số lượng item</h4>"
@@ -391,13 +425,7 @@
     $("#g4-from").addEventListener("change", function (e) { S.from = e.target.value; if (S.to) reloadAll(); });
     $("#g4-to").addEventListener("change", function (e) { S.to = e.target.value; if (S.from) reloadAll(); });
     $("#g4-compare").addEventListener("change", function (e) { S.compare = e.target.checked; reloadAll(); });
-    $("#g4-channel").addEventListener("change", function (e) { S.channel = e.target.value; reloadAll(); });
-    $("#g4-device").addEventListener("change", function (e) { S.device = e.target.value; reloadAll(); });
-    $("#g4-ptype").addEventListener("change", function (e) { S.ptype = e.target.value; reloadAll(); });
-    var st;
-    $("#g4-search").addEventListener("input", function (e) {
-      clearTimeout(st); st = setTimeout(function () { S.search = e.target.value.trim(); reloadAll(); }, 400);
-    });
+    // channel/page_type/search là tab-specific → bind trong loadChannels/loadLanding (không ở global bar)
     $("#g4-refresh").addEventListener("click", doRefresh);
     $all("#g4-tabnav button").forEach(function (b) {
       b.addEventListener("click", function () { showTab(b.getAttribute("data-t")); });
@@ -429,24 +457,18 @@
     }, 3000);
   }
 
-  /* ---------- populate channel/device selects ---------- */
-  function populateSelects() {
+  /* ---------- channel list cho select trong tab Channels ---------- */
+  function loadChannelList() {
     get("/api/ga4/channels?range=90&limit=500").then(function (env) {
       if (!env.ok) return; var seen = {};
-      (env.data || []).forEach(function (r) { if (r.channel && !seen[r.channel]) { seen[r.channel] = 1;
-        var o = document.createElement("option"); o.value = r.channel; o.textContent = r.channel; $("#g4-channel").appendChild(o); } });
-    });
-    get("/api/ga4/devices?range=90").then(function (env) {
-      if (!env.ok) return;
-      (env.data || []).forEach(function (r) { if (r.device_category) {
-        var o = document.createElement("option"); o.value = r.device_category; o.textContent = r.device_category; $("#g4-device").appendChild(o); } });
+      (env.data || []).forEach(function (r) { if (r.channel && !seen[r.channel]) { seen[r.channel] = 1; CHANNEL_LIST.push(r.channel); } });
     });
   }
 
   /* ---------- init ---------- */
   bindFilters();
   loadStatus();
-  populateSelects();
+  loadChannelList();
   S.loaded.overview = true;
   loadOverview();
 })();
