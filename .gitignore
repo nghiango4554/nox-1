@@ -3,6 +3,7 @@
 /state/*
 !/state/ga4_config.example.json
 !/state/gsc_api_config.example.json
+!/state/analytics_daily_config.example.json
 marketing_hub/state/
 marketing_hub/config.local.json
 marketing_hub/data/insights_live.json

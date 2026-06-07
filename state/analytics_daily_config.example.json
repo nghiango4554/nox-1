@@ -1,0 +1,10 @@
+{
+  "enabled": false,
+  "hour": 6,
+  "minute": 30,
+  "timezone": "Asia/Ho_Chi_Minh",
+  "retry": 1,
+  "timeout_seconds": 1200,
+  "telegram_alert_enabled": true,
+  "weekly_digest_enabled": false
+}

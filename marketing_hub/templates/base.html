@@ -40,6 +40,9 @@
   <a href="{{ url_for('tasks_page') }}" class="sb-link {% if request.endpoint == 'tasks_page' %}active{% endif %}">
     <span class="sb-icon">✅</span><span>Task Center</span>
   </a>
+  <a href="{{ url_for('ops_page') }}" class="sb-link {% if request.endpoint == 'ops_page' %}active{% endif %}">
+    <span class="sb-icon">🛠️</span><span>Analytics Ops</span>
+  </a>
 
   {# ───── FACEBOOK ───── #}
   <div class="sb-section">Facebook</div>

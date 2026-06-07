@@ -27,6 +27,7 @@ from routes import ga4 as routes_ga4
 from routes import gsc_api as routes_gsc_api
 from routes import tracking as routes_tracking
 from routes import tasks as routes_tasks
+from routes import ops as routes_ops
 from routes import content_product as routes_content_product
 from routes import content_collection as routes_content_collection
 from routes import content_blog as routes_content_blog
@@ -61,6 +62,7 @@ routes_ga4.register(app)
 routes_gsc_api.register(app)
 routes_tracking.register(app)
 routes_tasks.register(app)
+routes_ops.register(app)
 routes_content_product.register(app)
 routes_content_collection.register(app)
 routes_content_blog.register(app)
@@ -138,6 +140,14 @@ if __name__ == "__main__":
         "cron", day_of_week="sun", hour=4, minute=0,
         id="seo_weekly_history_capture",
     )
+    # Analytics daily orchestration — chỉ chạy khi config enabled (kiểm tại fire time)
+    def _analytics_daily_job():
+        from services import analytics_daily_service as _ops
+        if _ops.load_config().get("enabled"):
+            _ops.run_orchestration(trigger="scheduler")
+    _adc = __import__("services.analytics_daily_service", fromlist=["load_config"]).load_config()
+    sched.add_job(_analytics_daily_job, "cron", hour=_adc.get("hour", 6), minute=_adc.get("minute", 30),
+                  id="analytics_daily_orchestration")
     sched.start()
     try:
         app.run(host="127.0.0.1", port=5055, debug=False, threaded=True)
