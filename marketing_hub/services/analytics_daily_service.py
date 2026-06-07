@@ -40,8 +40,10 @@ def is_running():
 
 
 def _open_pp_counts(conn):
-    p0 = conn.execute("SELECT COUNT(*) FROM ga4_tasks WHERE status='open' AND implementation_priority='P0'").fetchone()[0]
-    p1 = conn.execute("SELECT COUNT(*) FROM ga4_tasks WHERE status='open' AND implementation_priority='P1'").fetchone()[0]
+    """Đếm theo INCIDENT SEVERITY (KHÔNG phải implementation_priority) — Telegram alert chỉ cho
+    incident severity P0/P1. implementation_priority P0 (vd contact gap) KHÔNG tự gửi cảnh báo khẩn."""
+    p0 = conn.execute("SELECT COUNT(*) FROM ga4_tasks WHERE status='open' AND severity='P0'").fetchone()[0]
+    p1 = conn.execute("SELECT COUNT(*) FROM ga4_tasks WHERE status='open' AND severity='P1'").fetchone()[0]
     return p0, p1
 
 
@@ -130,10 +132,10 @@ def _send_alert(overall, steps, new_p0, new_p1, p0_total, p1_total):
     if fails:
         lines.append("Step lỗi: " + ", ".join(fails))
     if new_p0:
-        lines.append("🔴 P0 mới: %d" % new_p0)
+        lines.append("🔴 Incident severity P0 mới: %d" % new_p0)
     if new_p1:
-        lines.append("🟠 P1 mới: %d" % new_p1)
-    lines.append("Open tasks: P0=%d · P1=%d" % (p0_total, p1_total))
+        lines.append("🟠 Incident severity P1 mới: %d" % new_p1)
+    lines.append("Open incident severity: P0=%d · P1=%d" % (p0_total, p1_total))
     lines.append("Dashboard: /tasks · /seo/tracking")
     return notifier.send_telegram("\n".join(lines))
 
@@ -143,9 +145,9 @@ def alert_preview(mock=True):
     conn = db.get_conn()
     p0, p1 = _open_pp_counts(conn)
     conn.close()
-    fails = []
     lines = ["[Marketing Hub] Analytics Daily Alert", "Status: %s" % ("OK" if not (p0 or p1) else "⚠️ có sự cố"),
-             "Open tasks: P0=%d · P1=%d" % (p0, p1), "Dashboard: /tasks · /seo/tracking"]
+             "Open incident severity: P0=%d · P1=%d" % (p0, p1), "Dashboard: /tasks · /seo/tracking",
+             "(eligibility theo incident severity — implementation_priority P0 như contact gap KHÔNG gửi khẩn)"]
     return {"ok": True, "would_send": bool(p0 or p1), "mock": mock, "text": "\n".join(lines)}
 
 
