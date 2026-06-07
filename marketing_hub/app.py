@@ -25,6 +25,7 @@ from routes import seo_quality as routes_seo_quality
 from routes import seo_tools as routes_seo_tools
 from routes import ga4 as routes_ga4
 from routes import gsc_api as routes_gsc_api
+from routes import tracking as routes_tracking
 from routes import content_product as routes_content_product
 from routes import content_collection as routes_content_collection
 from routes import content_blog as routes_content_blog
@@ -57,6 +58,7 @@ routes_seo_quality.register(app)
 routes_seo_tools.register(app)
 routes_ga4.register(app)
 routes_gsc_api.register(app)
+routes_tracking.register(app)
 routes_content_product.register(app)
 routes_content_collection.register(app)
 routes_content_blog.register(app)

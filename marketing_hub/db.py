@@ -478,8 +478,48 @@ def init_db():
     # ─── SEO × GA4 daily-aligned organic join (additive, idempotent) ───
     _init_gsc_ga4_join_tables(conn)
 
+    # ─── Tracking audit (event catalog + findings, additive, idempotent) ───
+    _init_tracking_tables(conn)
+
     conn.commit()
     conn.close()
+
+
+def _init_tracking_tables(conn):
+    """Tracking event catalog + audit findings — additive, idempotent. Dùng data live từ
+    ga4_events_daily/ga4_ecommerce_daily. ga4_tracking_audit/ga4_tasks (reserved) giữ nguyên."""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS tracking_audit_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date_from TEXT, date_to TEXT, status TEXT,
+            events_checked INTEGER, findings_count INTEGER,
+            started_at TEXT, finished_at TEXT, error_type TEXT, error_message_safe TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_tar_started ON tracking_audit_runs(started_at DESC);
+
+        CREATE TABLE IF NOT EXISTS tracking_event_catalog (
+            event_name TEXT PRIMARY KEY,
+            category TEXT, expected INTEGER, source_type TEXT, source_status TEXT,
+            business_value TEXT, implementation_priority TEXT, key_event_recommended INTEGER,
+            noise_risk TEXT, implementation_status TEXT,
+            count_28d INTEGER, users_28d INTEGER, key_28d INTEGER, last_seen TEXT,
+            note TEXT, updated_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_tec_cat ON tracking_event_catalog(category);
+        CREATE INDEX IF NOT EXISTS idx_tec_status ON tracking_event_catalog(source_status);
+
+        CREATE TABLE IF NOT EXISTS tracking_findings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            finding_key TEXT UNIQUE, severity TEXT, implementation_priority TEXT,
+            category TEXT, title TEXT, description TEXT, metric_snapshot_json TEXT,
+            status TEXT DEFAULT 'open', first_seen_at TEXT, last_seen_at TEXT,
+            resolved_at TEXT, cooldown_until TEXT, updated_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_tf_status ON tracking_findings(status);
+        CREATE INDEX IF NOT EXISTS idx_tf_sev ON tracking_findings(severity);
+        CREATE INDEX IF NOT EXISTS idx_tf_prio ON tracking_findings(implementation_priority);
+        CREATE INDEX IF NOT EXISTS idx_tf_cat ON tracking_findings(category);
+    """)
 
 
 def _init_gsc_ga4_join_tables(conn):
