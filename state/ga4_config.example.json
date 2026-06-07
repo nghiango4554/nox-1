@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "property_id": "451866979",
+  "auth_mode": "oauth_user",
+  "timezone": "Asia/Ho_Chi_Minh",
+  "cache_ttl_minutes": 30,
+  "realtime_cache_ttl_seconds": 60,
+  "sync_lookback_days": 3,
+  "initial_backfill_days": 90,
+  "compare_period_enabled": true
+}
