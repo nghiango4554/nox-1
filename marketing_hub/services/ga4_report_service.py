@@ -244,8 +244,7 @@ def channels(args):
     if args.get("channel"):
         where.append("session_default_channel_group=?")
         params.append(args["channel"])
-    if args.get("device"):
-        pass  # channels không có device dim
+    # device KHÔNG áp dụng ở channels (schema channels_daily không có dim device) — đã bỏ khỏi UI
 
     base = ("SELECT session_default_channel_group AS channel, session_source_medium AS source_medium, "
             "SUM(active_users) active_users, SUM(sessions) sessions, SUM(engaged_sessions) engaged_sessions, "
