@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "site_url": "sc-domain:sintech.vn",
+  "search_types": ["web"],
+  "initial_backfill_days": 90,
+  "incremental_lookback_days": 7,
+  "row_limit": 25000,
+  "max_rows_per_day_per_type": 50000,
+  "sync_timeout_seconds": 300,
+  "fallback_to_sheet": true
+}

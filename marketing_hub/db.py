@@ -472,8 +472,77 @@ def init_db():
     # ─── GA4 Analytics (additive, idempotent) ───
     _init_ga4_tables(conn)
 
+    # ─── GSC direct API daily sync (additive, idempotent) ───
+    _init_gsc_api_tables(conn)
+
     conn.commit()
     conn.close()
+
+
+def _init_gsc_api_tables(conn):
+    """GSC Search Console API daily sync — 7 bảng additive. CREATE IF NOT EXISTS, idempotent.
+    Giữ search_type ngay từ đầu (phase đầu chỉ sync 'web'). Sheet cache (gsc_cache.json) là fallback."""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS gsc_sync_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sync_type TEXT, source_mode TEXT,
+            date_from TEXT, date_to TEXT, search_types_json TEXT,
+            status TEXT, rows_written INTEGER DEFAULT 0,
+            latest_available_date TEXT,
+            error_type TEXT, error_message TEXT,
+            started_at TEXT, finished_at TEXT, created_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_gsc_sync_started ON gsc_sync_runs(started_at DESC);
+
+        CREATE TABLE IF NOT EXISTS gsc_daily_summary (
+            date TEXT, search_type TEXT,
+            clicks INTEGER, impressions INTEGER, ctr REAL, position REAL,
+            fetched_at TEXT,
+            PRIMARY KEY (date, search_type)
+        );
+
+        CREATE TABLE IF NOT EXISTS gsc_pages_daily (
+            date TEXT, normalized_path TEXT, search_type TEXT,
+            full_url TEXT, clicks INTEGER, impressions INTEGER, ctr REAL, position REAL,
+            fetched_at TEXT,
+            PRIMARY KEY (date, normalized_path, search_type)
+        );
+        CREATE INDEX IF NOT EXISTS idx_gsc_pages_date ON gsc_pages_daily(date);
+        CREATE INDEX IF NOT EXISTS idx_gsc_pages_path ON gsc_pages_daily(normalized_path);
+
+        CREATE TABLE IF NOT EXISTS gsc_queries_daily (
+            date TEXT, query TEXT, search_type TEXT,
+            clicks INTEGER, impressions INTEGER, ctr REAL, position REAL,
+            fetched_at TEXT,
+            PRIMARY KEY (date, query, search_type)
+        );
+        CREATE INDEX IF NOT EXISTS idx_gsc_queries_date ON gsc_queries_daily(date);
+
+        CREATE TABLE IF NOT EXISTS gsc_devices_daily (
+            date TEXT, device TEXT, search_type TEXT,
+            clicks INTEGER, impressions INTEGER, ctr REAL, position REAL,
+            fetched_at TEXT,
+            PRIMARY KEY (date, device, search_type)
+        );
+
+        CREATE TABLE IF NOT EXISTS gsc_countries_daily (
+            date TEXT, country TEXT, search_type TEXT,
+            clicks INTEGER, impressions INTEGER, ctr REAL, position REAL,
+            fetched_at TEXT,
+            PRIMARY KEY (date, country, search_type)
+        );
+        CREATE INDEX IF NOT EXISTS idx_gsc_countries_date ON gsc_countries_daily(date);
+
+        CREATE TABLE IF NOT EXISTS gsc_cache_status (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            source_mode TEXT, coverage_mode TEXT, coverage_complete INTEGER,
+            latest_available_date TEXT, fetched_at TEXT,
+            cache_age_days INTEGER, data_age_days INTEGER,
+            last_success_at TEXT, last_failure_at TEXT,
+            last_error_type TEXT, last_error_message TEXT,
+            sheet_fallback_available INTEGER, updated_at TEXT
+        );
+    """)
 
 
 def _init_ga4_tables(conn):
