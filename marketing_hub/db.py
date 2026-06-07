@@ -601,6 +601,28 @@ def _init_ga4_tables(conn):
             fetched_at TEXT, expires_at TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_ga4_period_type ON ga4_period_report_cache(report_type);
+
+        -- SEO × GA4 PERIOD-LEVEL join (Mode B): GSC pages tổng kỳ × GA4 landing theo kỳ, theo normalized_path.
+        -- ga4_seo_landing_join_daily (date PK) GIỮ NGUYÊN — reserved for future GSC page-level daily data.
+        CREATE TABLE IF NOT EXISTS ga4_seo_landing_join_period (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            cache_key TEXT NOT NULL,
+            gsc_date_from TEXT NOT NULL, gsc_date_to TEXT NOT NULL, gsc_fetched_at TEXT,
+            ga4_date_from TEXT NOT NULL, ga4_date_to TEXT NOT NULL,
+            normalized_path TEXT NOT NULL, full_url TEXT, page_type TEXT, join_status TEXT,
+            gsc_clicks REAL, gsc_impressions REAL, gsc_ctr REAL, gsc_position REAL,
+            ga4_sessions REAL, ga4_active_users REAL, ga4_new_users REAL,
+            ga4_engaged_sessions REAL, ga4_engagement_rate REAL, ga4_screen_page_views REAL,
+            ga4_key_events REAL, ga4_ecommerce_purchases REAL, ga4_purchase_revenue REAL,
+            opportunity_type TEXT, priority TEXT, tracking_confidence TEXT,
+            fetched_at TEXT NOT NULL,
+            UNIQUE(cache_key, normalized_path)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ga4_join_period_key ON ga4_seo_landing_join_period(cache_key);
+        CREATE INDEX IF NOT EXISTS idx_ga4_join_period_path ON ga4_seo_landing_join_period(normalized_path);
+        CREATE INDEX IF NOT EXISTS idx_ga4_join_period_ptype ON ga4_seo_landing_join_period(page_type);
+        CREATE INDEX IF NOT EXISTS idx_ga4_join_period_status ON ga4_seo_landing_join_period(join_status);
+        CREATE INDEX IF NOT EXISTS idx_ga4_join_period_prio ON ga4_seo_landing_join_period(priority);
     """)
 
     # CWV LCP (P0A/P0B/P0C) — schema additive + idempotent, chạy 1 lần lúc startup
