@@ -16,6 +16,7 @@ Dep:
 """
 
 import json
+import sys
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -553,19 +554,24 @@ def seo_gsc_task_page(task_id):
 
 
 def seo_gsc_refresh():
-    """Re-fetch data từ 2 Google Sheet GSC export."""
-    script = ROOT / "_fetch_gsc_cache.py"
+    """Re-fetch data từ 2 Google Sheet GSC export.
+    Dùng sys.executable (interpreter Flask đang chạy = Python312 có lib google),
+    KHÔNG bare 'python' (resolve sang Python314 thiếu lib)."""
+    script = ROOT / "_fetch_gsc_cache.py"   # ROOT absolute → không phụ thuộc cwd
     try:
         r = subprocess.run(
-            ["python", str(script)],
+            [sys.executable, str(script)],
             capture_output=True, text=True, timeout=120, encoding="utf-8",
         )
         if r.returncode == 0:
             flash("✅ Refresh cache GSC xong.", "success")
         else:
-            flash(f"❌ Refresh fail: {r.stderr[:300]}", "error")
+            # Log đầy đủ ra server (debug nội bộ), CHỈ flash thông báo ngắn (không lộ stderr/credential)
+            print(f"[gsc_refresh] FAIL rc={r.returncode}\n{r.stderr}", file=sys.stderr)
+            flash("❌ Refresh GSC fail — xem server log để debug.", "error")
     except Exception as e:
-        flash(f"❌ Refresh error: {e}", "error")
+        print(f"[gsc_refresh] ERROR: {e}", file=sys.stderr)
+        flash("❌ Refresh GSC error — xem server log.", "error")
     return redirect(url_for("seo_gsc_page"))
 
 

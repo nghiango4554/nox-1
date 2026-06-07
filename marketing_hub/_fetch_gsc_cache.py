@@ -10,7 +10,8 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-TOKEN = r"C:\Users\NGHIANGO\.openclaw\workspace\.secrets\google_token.json"
+# Derive từ vị trí file → nox-1/.secrets/ (không hard-code, không phụ thuộc cwd).
+TOKEN = str(Path(__file__).resolve().parent.parent / ".secrets" / "google_token.json")
 CACHE_PATH = Path(__file__).parent / "data" / "gsc_cache.json"
 
 # Mapping issue Vietnamese label → english key
