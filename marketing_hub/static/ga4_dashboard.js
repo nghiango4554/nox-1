@@ -53,7 +53,7 @@
   }
   function kpi(label, d, fmt, accCode, tip) {
     var val = d && typeof d === "object" ? d.current : d;
-    var shown = fmt === "money" ? money(val) : fmt === "pct" ? pctv(val) : nf(val);
+    var shown = fmt === "money" ? money(val) : fmt === "pct" ? pctv(val) : fmt === "raw" ? String(val) : nf(val);
     return '<div class="g4-kpi"><div class="num">' + shown + "</div>"
       + '<div class="lbl">' + esc(label) + (accCode ? " " + accBadge(accCode) : "")
       + (tip ? ' <span class="g4-help" title="' + esc(tip) + '">ⓘ</span>' : "") + "</div>"
@@ -390,13 +390,150 @@
     }).catch(function () { panel("health").innerHTML = errBox(); });
   }
 
+  /* ---------- SEO × GA4 (period-level join, Mode B) ---------- */
+  var SJ = { page_type: "", join_status: "", opportunity: "", confidence: "", search: "", sort: "gsc_clicks", order: "desc", page: 0 };
+  var OPP_LABEL = {
+    traffic_high_engagement_low: "Traffic cao · engagement thấp",
+    impressions_high_ctr_low: "Hiển thị cao · CTR thấp",
+    build_pc_traffic_no_key_event: "Build PC có traffic · chưa có key event",
+    maintain_good_page: "Giữ vững trang tốt",
+    gsc_clicks_but_no_ga4_sessions: "Có GSC clicks · chưa thấy GA4 sessions",
+    ga4_only_needs_review: "Chỉ có GA4 · cần review (chưa có trong export GSC)",
+    ga4_sessions_without_gsc_clicks: "Có GA4 sessions · không GSC clicks",
+    needs_review: "Cần review",
+  };
+  function confBadge(c) { var m = { high: "b-ok", medium: "b-warn", low: "b-gray" }; return '<span class="g4-pill ' + (m[c] || "b-gray") + '">' + esc(c) + "</span>"; }
+  function jsBadge(s) { var m = { matched: "b-ok", gsc_only: "b-info", ga4_only: "b-gray" }; return '<span class="g4-pill ' + (m[s] || "b-gray") + '">' + esc(s) + "</span>"; }
+  function covBar(label, pct) {
+    var raw = (pct == null) ? "—" : pct + "%";
+    var capped = Math.min(100, Math.max(0, pct || 0));
+    return '<div style="margin-bottom:8px"><div class="g4-muted" style="font-size:11px">' + label + ': <b>' + raw + '</b></div>'
+      + '<div title="raw ' + raw + '" style="height:12px;background:rgba(59,130,246,.18);border-radius:5px;overflow:hidden">'
+      + '<div style="height:100%;width:' + capped + '%;background:#3b82f6"></div></div></div>';
+  }
+  function _sjSel(id, label, opts, cur) {
+    var o = '<option value="">' + label + '</option>' + opts.map(function (v) {
+      return '<option value="' + v + '"' + (cur === v ? " selected" : "") + ">" + esc(v) + "</option>"; }).join("");
+    return '<select id="' + id + '" style="background:var(--surface,#111);color:inherit;border:1px solid var(--border,rgba(255,255,255,.12));border-radius:8px;padding:5px 9px;font-size:12px">' + o + "</select>";
+  }
+  function loadSeoJoin() {
+    skel("seojoin");
+    Promise.all([get("/api/ga4/seo-join/status"), get("/api/ga4/seo-join" + sjQuery())]).then(function (res) {
+      var st = res[0], lst = res[1];
+      // ── status block ──
+      var warns = (st.warning || []).map(function (w) {
+        var icon = /cũ|chưa bao phủ/.test(w) ? "⚠" : "ℹ";
+        var cls = icon === "⚠" ? "b-warn" : "b-info";
+        return '<div class="g4-pill ' + cls + '" style="display:block;margin:3px 0;text-align:left">' + icon + " " + esc(w) + "</div>";
+      }).join("");
+      var conf = st.confidence_distribution || {};
+      var statusHtml = '<div class="g4-card"><div class="ga4-row" style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px">'
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Kỳ GSC</div><div style="font-size:13px">' + (st.gsc_date_from || "—") + " → " + (st.gsc_date_to || "—") + "</div></div>"
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Kỳ GA4 (aligned)</div><div style="font-size:13px">' + (st.ga4_date_from || "—") + " → " + (st.ga4_date_to || "—") + "</div></div>"
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Cache GSC lấy lúc</div><div style="font-size:13px">' + (st.gsc_fetched_at || "—") + "</div></div>"
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Tuổi cache</div><div style="font-size:13px">' + (st.gsc_cache_age_days != null ? st.gsc_cache_age_days + " ngày" : "—") + "</div></div>"
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Loại join</div><div style="font-size:13px">period-level (tổng kỳ)</div></div>'
+        + "</div>"
+        + '<div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:14px">'
+        + "<div>" + covBar("Impression coverage", st.gsc_impression_coverage_percent) + covBar("Click coverage", st.gsc_click_coverage_percent) + "</div>"
+        + '<div>' + warns + "</div></div></div>";
+      // ── KPI ──
+      var kpis = '<div class="g4-kpis">'
+        + kpi("Matched", st.matched_count, "n") + kpi("GSC only", st.gsc_only_count, "n")
+        + kpi("GA4 only", st.ga4_only_count, "n") + kpi("Medium confidence", conf.medium || 0, "n")
+        + kpi("GSC pages exported", st.gsc_pages_export_count, "n", null, "Sheet " + (st.gsc_sheet_range || "") + " · cap " + (st.gsc_sheet_row_capacity || "?") + " · upstream " + (st.gsc_upstream_limit == null ? "không rõ" : st.gsc_upstream_limit))
+        + kpi("Impression coverage", (st.gsc_impression_coverage_percent != null ? st.gsc_impression_coverage_percent + "%" : "—"), "raw")
+        + "</div>";
+      // ── toolbar filters ──
+      var tb = '<div class="g4-quick" style="margin:10px 0">'
+        + _sjSel("sj-pt", "Mọi loại trang", ["product", "collection", "blog", "build_pc", "homepage", "page", "other"], SJ.page_type)
+        + _sjSel("sj-js", "Mọi join status", ["matched", "gsc_only", "ga4_only"], SJ.join_status)
+        + _sjSel("sj-opp", "Mọi opportunity", Object.keys(OPP_LABEL), SJ.opportunity)
+        + _sjSel("sj-conf", "Mọi confidence", ["high", "medium", "low"], SJ.confidence)
+        + '<input type="search" id="sj-search" placeholder="Tìm URL…" value="' + esc(SJ.search) + '" style="background:var(--surface,#111);color:inherit;border:1px solid var(--border,rgba(255,255,255,.12));border-radius:8px;padding:5px 10px;font-size:12px;width:160px">'
+        + '<button class="btn btn-primary" id="sj-refresh" type="button" style="padding:5px 12px;font-size:12px">🔄 Refresh join</button></div>';
+      // ── table ──
+      var cols = [{ label: "URL" }, { label: "Type" }, { label: "Join" },
+        { label: "GSC clicks", num: 1, key: "gsc_clicks" }, { label: "Impr", num: 1, key: "gsc_impressions" },
+        { label: "CTR", num: 1, key: "gsc_ctr" }, { label: "Pos", num: 1, key: "gsc_position" },
+        { label: "GA4 sess", num: 1, key: "ga4_sessions" }, { label: "Engage", num: 1, key: "ga4_engagement_rate" },
+        { label: "Key ev", num: 1, key: "ga4_key_events" }, { label: "Revenue", num: 1, key: "ga4_purchase_revenue" },
+        { label: "Opportunity" }, { label: "Confidence" }];
+      var rows = lst.data || [];
+      var body = rows.length ? rows.map(function (r) {
+        return '<tr><td class="g4-key" title="' + esc(r.full_url || r.normalized_path) + '">' + esc(r.normalized_path)
+          + "</td><td>" + ptypeBadge(r.page_type) + "</td><td>" + jsBadge(r.join_status)
+          + '</td><td class="num">' + nf(r.gsc_clicks) + '</td><td class="num">' + nf(r.gsc_impressions) + '</td><td class="num">' + (r.gsc_ctr != null ? r.gsc_ctr + "%" : "—")
+          + '</td><td class="num">' + (r.gsc_position != null ? r.gsc_position : "—") + '</td><td class="num">' + nf(r.ga4_sessions)
+          + '</td><td class="num">' + (r.ga4_engagement_rate != null ? (r.ga4_engagement_rate * 100).toFixed(1) + "%" : "—")
+          + '</td><td class="num">' + nf(r.ga4_key_events) + '</td><td class="num">' + money(r.ga4_purchase_revenue)
+          + '</td><td><span class="g4-muted" style="font-size:11px" title="' + esc(r.opportunity_type) + '">' + esc(OPP_LABEL[r.opportunity_type] || r.opportunity_type) + "</span></td><td>" + confBadge(r.tracking_confidence) + "</td></tr>";
+      }).join("") : "";
+      var pag = "";
+      if (lst.total_rows != null) {
+        var off = lst.offset || 0, to = Math.min(off + (lst.limit || rows.length), lst.total_rows);
+        pag = '<div class="g4-paginate"><span class="g4-muted">' + (rows.length ? off + 1 : 0) + "–" + to + " / " + lst.total_rows + "</span>"
+          + '<button data-sjpg="prev"' + (off <= 0 ? " disabled" : "") + '>←</button><button data-sjpg="next"' + (to >= lst.total_rows ? " disabled" : "") + ">→</button></div>";
+      }
+      var table = rows.length
+        ? '<div class="g4-card g4-tblwrap"><table class="g4-tbl"><thead><tr>' + sortableHead2(cols) + "</tr></thead><tbody>" + body + "</tbody></table>" + pag + "</div>"
+        : '<div class="g4-card">' + emptyBox("Chưa có dữ liệu join — bấm Refresh join để tạo (period-level theo kỳ GSC cache).") + "</div>";
+
+      panel("seojoin").innerHTML = statusHtml + kpis + tb + table;
+      bindSeoJoin();
+    }).catch(function () { panel("seojoin").innerHTML = errBox(); });
+  }
+  function sjQuery() {
+    var p = ["limit=50", "offset=" + SJ.page * 50, "sort=" + SJ.sort, "order=" + SJ.order];
+    ["page_type", "join_status", "opportunity", "confidence", "search"].forEach(function (k) {
+      if (SJ[k]) p.push(k + "=" + encodeURIComponent(SJ[k])); });
+    return "?" + p.join("&");
+  }
+  function sortableHead2(cols) {
+    return cols.map(function (c) {
+      var cls = c.num ? "num" : "", arrow = (SJ.sort === c.key) ? (SJ.order === "asc" ? " ▴" : " ▾") : "";
+      return '<th class="' + cls + '"' + (c.key ? ' data-sjsort="' + c.key + '"' : "") + ">" + esc(c.label) + arrow + "</th>";
+    }).join("");
+  }
+  function bindSeoJoin() {
+    var p = panel("seojoin");
+    function on(id, key) { var e = $("#" + id, p); if (e) e.addEventListener("change", function (ev) { SJ[key] = ev.target.value; SJ.page = 0; loadSeoJoin(); }); }
+    on("sj-pt", "page_type"); on("sj-js", "join_status"); on("sj-opp", "opportunity"); on("sj-conf", "confidence");
+    var si = $("#sj-search", p), t;
+    if (si) si.addEventListener("input", function (e) { clearTimeout(t); t = setTimeout(function () { SJ.search = e.target.value.trim(); SJ.page = 0; loadSeoJoin(); }, 400); });
+    $all("th[data-sjsort]", p).forEach(function (th) {
+      th.addEventListener("click", function () {
+        var k = th.getAttribute("data-sjsort");
+        SJ.order = (SJ.sort === k && SJ.order === "desc") ? "asc" : "desc"; SJ.sort = k; SJ.page = 0; loadSeoJoin();
+      });
+    });
+    $all("[data-sjpg]", p).forEach(function (b) {
+      b.addEventListener("click", function () { SJ.page = Math.max(0, SJ.page + (b.getAttribute("data-sjpg") === "next" ? 1 : -1)); loadSeoJoin(); });
+    });
+    var rb = $("#sj-refresh", p);
+    if (rb) rb.addEventListener("click", function () {
+      rb.disabled = true; rb.textContent = "⏳ Đang join…";
+      fetch("/api/ga4/seo-join/refresh", { method: "POST" }).then(function (r) { return r.json().then(function (j) { j._http = r.status; return j; }); })
+        .then(function () { sjPoll(rb); }).catch(function () { rb.disabled = false; rb.textContent = "🔄 Refresh join"; });
+    });
+  }
+  function sjPoll(rb) {
+    var n = 0, iv = setInterval(function () {
+      n++;
+      get("/api/ga4/seo-join/status").then(function (st) {
+        if (!st.is_running || n > 40) { clearInterval(iv); if (rb) { rb.disabled = false; rb.textContent = "🔄 Refresh join"; } loadSeoJoin(); }
+      });
+    }, 3000);
+  }
+
   var LOADERS = { overview: loadOverview, realtime: loadRealtime, channels: loadChannels, landing: loadLanding,
-    devices: loadDevices, events: loadEvents, ecommerce: loadEcommerce, health: loadHealth };
+    devices: loadDevices, events: loadEvents, ecommerce: loadEcommerce, seojoin: loadSeoJoin, health: loadHealth };
   function reloadTab(t) { if (LOADERS[t]) LOADERS[t](); }
 
   /* ---------- tab nav ---------- */
   function showTab(t) {
     S.tab = t;
+    if (history.replaceState) { try { history.replaceState(null, "", "#" + t); } catch (e) {} }
     $all("#g4-tabnav button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-t") === t); });
     $all(".g4-panel").forEach(function (p) { p.hidden = p.getAttribute("data-tab") !== t; });
     if (!S.loaded[t]) { S.loaded[t] = true; reloadTab(t); }
@@ -469,6 +606,11 @@
   bindFilters();
   loadStatus();
   loadChannelList();
-  S.loaded.overview = true;
-  loadOverview();
+  var _hash = (location.hash || "").replace(/^#/, "");
+  if (_hash && document.querySelector('#g4-tabnav button[data-t="' + _hash + '"]')) {
+    showTab(_hash);
+  } else {
+    S.loaded.overview = true;
+    loadOverview();
+  }
 })();
