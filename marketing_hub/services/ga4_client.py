@@ -183,6 +183,23 @@ def check_compatibility(dimensions, metrics, prop) -> set:
     return ok
 
 
+def run_realtime_report(dimensions, metrics, limit=10, minute_ranges=None, cfg=None):
+    """runRealtimeReport. Mặc định 30 phút gần nhất; truyền minute_ranges để giới hạn cửa sổ.
+    minute_ranges ví dụ: [{"name":"m5","startMinutesAgo":5,"endMinutesAgo":0}]. Trả rows (raw)."""
+    client = get_client()
+    prop = _property_path(cfg)
+    body = {
+        "dimensions": [{"name": d} for d in dimensions],
+        "metrics": [{"name": m} for m in metrics],
+    }
+    if limit:
+        body["limit"] = limit
+    if minute_ranges:
+        body["minuteRanges"] = minute_ranges
+    resp = client.properties().runRealtimeReport(property=prop, body=body).execute()
+    return resp.get("rows", [])
+
+
 def check_metadata(cfg=None) -> dict:
     """Validate property + token bằng getMetadata (Data API, không phải Admin API)."""
     client = get_client()

@@ -166,6 +166,8 @@ def _sync_landing(conn, spec, start, end, fetched_at, cfg):
         for c in _LANDING_SUM:
             slot[c] = (slot[c] or 0) + (vals.get(c) or 0)
         for c in _LANDING_MAX:
+            # active_users/new_users fallback MAX is approximate only when normalized
+            # collisions remain after landingPage report grouping.
             slot[c] = max(slot[c] or 0, vals.get(c) or 0)
         s = vals.get("sessions") or 0
         if s > slot["_top_sessions"]:                 # giữ raw của variant nhiều session nhất
@@ -186,6 +188,50 @@ def _sync_landing(conn, spec, start, end, fetched_at, cfg):
         _upsert(conn, spec["table"], spec["pk"], data)
         n += 1
     return n, raw_count, collisions
+
+
+# Period-level overview EXACT (query GA4 KHÔNG dimension date → unique users chính xác theo kỳ)
+_OVERVIEW_METRICS = ["activeUsers", "newUsers", "sessions", "engagedSessions", "screenPageViews",
+                     "keyEvents", "ecommercePurchases", "purchaseRevenue", "totalRevenue",
+                     "userEngagementDuration", "averageSessionDuration", "engagementRate"]
+PERIOD_RANGES = [7, 28, 90]
+
+
+def period_overview_exact(start, end, cfg):
+    """Query GA4 period-level (no date dim) → dict exact cho 1 kỳ. Chunk ≤10 metric."""
+    merged = {}
+    for chunk in _chunks(_OVERVIEW_METRICS, _MAX_METRICS):
+        rows, used, _d = ga4_client.run_report([], chunk, start, end, cfg=cfg)
+        if not rows:
+            continue
+        mv = rows[0].get("metricValues", [])
+        for i, m in enumerate(used):
+            col = CAMEL2SNAKE.get(m, m)
+            merged[col] = _num(col, mv[i]["value"]) if i < len(mv) else None
+    return merged
+
+
+def _precompute_period_cache(conn, end_date, cfg):
+    """Precompute overview exact cho 7/28/90 ngày (hiện tại + kỳ trước) → ga4_period_report_cache."""
+    fetched = _now_iso()
+    n = 0
+    for r in PERIOD_RANGES:
+        cur_end = end_date
+        cur_start = cur_end - timedelta(days=r - 1)
+        prev_end = cur_start - timedelta(days=1)
+        prev_start = prev_end - timedelta(days=r - 1)
+        for (a, b) in ((cur_start, cur_end), (prev_start, prev_end)):
+            sa, sb = a.isoformat(), b.isoformat()
+            payload = period_overview_exact(sa, sb, cfg)
+            key = "overview:%s:%s" % (sa, sb)
+            _upsert(conn, "ga4_period_report_cache", ["cache_key"], {
+                "cache_key": key, "report_type": "overview",
+                "date_from": sa, "date_to": sb, "filters_json": None,
+                "payload_json": json.dumps(payload, ensure_ascii=False),
+                "fetched_at": fetched, "expires_at": None,
+            })
+            n += 1
+    return n
 
 
 def run_sync(sync_type="incremental"):
@@ -230,6 +276,11 @@ def run_sync(sync_type="incremental"):
                 partial[spec["table"]] = e.code            # per-report degrade, ghi log, chạy tiếp
             except Exception as e:
                 partial[spec["table"]] = ga4_client.classify_exception(e).code
+        if fatal is None:
+            try:
+                _precompute_period_cache(conn, end, cfg)
+            except Exception as e:
+                partial["period_cache"] = ga4_client.classify_exception(e).code
         conn.commit()
     finally:
         latest = conn.execute(
