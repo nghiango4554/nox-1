@@ -63,13 +63,27 @@ def load_gsc_cache_meta():
     df = min(dates) if dates else None
     dt = max(dates) if dates else None
     fetched = c.get("fetched_at")
-    age = None
+    cfg = ga4_config.load_config()
+    cache_stale_days = int(cfg.get("gsc_join_stale_days", 7))
+    data_stale_days = int(cfg.get("gsc_join_data_stale_days", 7))
+
+    # CACHE freshness — từ fetched_at (lần re-fetch gần nhất)
+    cache_age = None
     try:
-        fd = datetime.fromisoformat(fetched).date()
-        age = (date.today() - fd).days
+        cache_age = (date.today() - datetime.fromisoformat(fetched).date()).days
     except Exception:
         pass
-    stale_days = int(ga4_config.load_config().get("gsc_join_stale_days", 7))
+    cache_stale = (cache_age is None) or (cache_age > cache_stale_days)
+
+    # DATA freshness — từ gsc_date_to (ngày data GSC mới nhất). KHÔNG đánh đồng với cache.
+    data_age = None
+    try:
+        data_age = (date.today() - datetime.fromisoformat(dt).date()).days
+    except Exception:
+        pass
+    data_stale = (data_age is None) or (data_age > data_stale_days)
+
+    gsc_stale = cache_stale or data_stale
 
     # Export coverage — KHÔNG đánh đồng: sheet range cap ≠ observed rows ≠ upstream GSC top-N.
     pcount = len(pages)
@@ -97,8 +111,10 @@ def load_gsc_cache_meta():
     note = "Cache GSC hiện chỉ bao phủ một phần landing page. Các URL long-tail có thể chưa xuất hiện trong export."
 
     return {"ok": bool(df and dt), "gsc_date_from": df, "gsc_date_to": dt,
-            "gsc_fetched_at": fetched, "gsc_cache_age_days": age,
-            "gsc_stale": (age is None) or (age > stale_days),
+            "gsc_fetched_at": fetched,
+            "gsc_cache_age_days": cache_age, "gsc_cache_stale": cache_stale,
+            "gsc_data_age_days": data_age, "gsc_data_stale": data_stale,
+            "gsc_stale": gsc_stale,   # = cache_stale OR data_stale
             "pages_count": pcount,
             "gsc_sheet_range": GSC_PAGES_SHEET_RANGE,
             "gsc_sheet_row_capacity": row_capacity,
@@ -433,8 +449,10 @@ def get_join_status():
     total = sum(counts.values())
 
     warnings = []
-    if meta.get("gsc_stale"):
-        warnings.append("GSC cache đang cũ")
+    if meta.get("gsc_cache_stale"):
+        warnings.append("Cache GSC chưa được tải lại gần đây")
+    if meta.get("gsc_data_stale"):
+        warnings.append("Dữ liệu GSC mới nhất hiện dừng tại %s" % meta.get("gsc_date_to"))
     if meta.get("gsc_export_complete") is not True:
         warnings.append("GSC page export chưa bao phủ toàn bộ URL")
     warnings.append("GA4-only không đồng nghĩa URL không có organic traffic")
@@ -443,7 +461,9 @@ def get_join_status():
     return {
         "join_mode": "period_level", "normalize_version": NORMALIZE_VERSION,
         "gsc_date_from": meta.get("gsc_date_from"), "gsc_date_to": meta.get("gsc_date_to"),
-        "gsc_fetched_at": meta.get("gsc_fetched_at"), "gsc_cache_age_days": meta.get("gsc_cache_age_days"),
+        "gsc_fetched_at": meta.get("gsc_fetched_at"),
+        "gsc_cache_age_days": meta.get("gsc_cache_age_days"), "gsc_cache_stale": meta.get("gsc_cache_stale"),
+        "gsc_data_age_days": meta.get("gsc_data_age_days"), "gsc_data_stale": meta.get("gsc_data_stale"),
         "gsc_stale": meta.get("gsc_stale"),
         "gsc_sheet_range": meta.get("gsc_sheet_range"),
         "gsc_sheet_row_capacity": meta.get("gsc_sheet_row_capacity"),

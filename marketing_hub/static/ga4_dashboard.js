@@ -422,16 +422,17 @@
       var st = res[0], lst = res[1];
       // ── status block ──
       var warns = (st.warning || []).map(function (w) {
-        var icon = /cũ|chưa bao phủ/.test(w) ? "⚠" : "ℹ";
-        var cls = icon === "⚠" ? "b-warn" : "b-info";
+        var warn = /chưa được tải lại|dừng tại|chưa bao phủ/.test(w);
+        var icon = warn ? "⚠" : "ℹ", cls = warn ? "b-warn" : "b-info";
         return '<div class="g4-pill ' + cls + '" style="display:block;margin:3px 0;text-align:left">' + icon + " " + esc(w) + "</div>";
       }).join("");
       var conf = st.confidence_distribution || {};
+      function frBadge(stale) { return '<span class="g4-pill ' + (stale ? "b-warn" : "b-ok") + '" style="font-size:10px">' + (stale ? "stale" : "fresh") + "</span>"; }
       var statusHtml = '<div class="g4-card"><div class="ga4-row" style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px">'
-        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Kỳ GSC</div><div style="font-size:13px">' + (st.gsc_date_from || "—") + " → " + (st.gsc_date_to || "—") + "</div></div>"
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Kỳ GSC (data)</div><div style="font-size:13px">' + (st.gsc_date_from || "—") + " → " + (st.gsc_date_to || "—") + "</div></div>"
         + '<div class="g4-kpi" style="flex:0"><div class="lbl">Kỳ GA4 (aligned)</div><div style="font-size:13px">' + (st.ga4_date_from || "—") + " → " + (st.ga4_date_to || "—") + "</div></div>"
-        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Cache GSC lấy lúc</div><div style="font-size:13px">' + (st.gsc_fetched_at || "—") + "</div></div>"
-        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Tuổi cache</div><div style="font-size:13px">' + (st.gsc_cache_age_days != null ? st.gsc_cache_age_days + " ngày" : "—") + "</div></div>"
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Cache tải lại ' + frBadge(st.gsc_cache_stale) + '</div><div style="font-size:13px">' + (st.gsc_cache_age_days != null ? st.gsc_cache_age_days + " ngày trước" : "—") + "</div></div>"
+        + '<div class="g4-kpi" style="flex:0"><div class="lbl">Dữ liệu GSC mới nhất ' + frBadge(st.gsc_data_stale) + '</div><div style="font-size:13px">' + (st.gsc_date_to || "—") + (st.gsc_data_age_days != null ? " (" + st.gsc_data_age_days + "d)" : "") + "</div></div>"
         + '<div class="g4-kpi" style="flex:0"><div class="lbl">Loại join</div><div style="font-size:13px">period-level (tổng kỳ)</div></div>'
         + "</div>"
         + '<div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:14px">'
