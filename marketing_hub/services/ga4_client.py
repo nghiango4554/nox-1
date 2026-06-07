@@ -113,10 +113,15 @@ def last_quota():
     return _LAST_QUOTA
 
 
+def dimension_filter_eq(field, value):
+    """Helper build dimensionFilter EXACT cho run_report (vd channel group = Organic Search)."""
+    return {"filter": {"fieldName": field, "stringFilter": {"matchType": "EXACT", "value": value}}}
+
+
 def run_report(dimensions, metrics, start_date, end_date,
-               limit=None, order_bys=None, keep_empty=False, cfg=None):
+               limit=None, order_bys=None, keep_empty=False, dimension_filter=None, cfg=None):
     """Chạy runReport (returnPropertyQuota=True). Degrade CHỈ khi metric_incompatible.
-    Trả (rows, used_metrics, degraded)."""
+    dimension_filter: dict GA4 FilterExpression (optional). Trả (rows, used_metrics, degraded)."""
     global _LAST_QUOTA
     client = get_client()
     prop = _property_path(cfg)
@@ -130,6 +135,8 @@ def run_report(dimensions, metrics, start_date, end_date,
             "keepEmptyRows": keep_empty,
             "returnPropertyQuota": True,
         }
+        if dimension_filter:
+            body["dimensionFilter"] = dimension_filter
         if limit:
             body["limit"] = limit
         if order_bys:

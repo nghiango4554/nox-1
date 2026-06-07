@@ -475,8 +475,79 @@ def init_db():
     # ─── GSC direct API daily sync (additive, idempotent) ───
     _init_gsc_api_tables(conn)
 
+    # ─── SEO × GA4 daily-aligned organic join (additive, idempotent) ───
+    _init_gsc_ga4_join_tables(conn)
+
     conn.commit()
     conn.close()
+
+
+def _init_gsc_ga4_join_tables(conn):
+    """SEO × GA4 daily-aligned partial-coverage join (organic v1) — 4 bảng additive.
+    LƯU Ý: ga4_seo_landing_join_daily & ga4_seo_landing_join_period là LEGACY/RESERVED —
+    do NOT use for organic daily-aligned v1 (giữ nguyên, không drop). Metric chính = GA4 Organic Search;
+    all-channel (ga4_landing_pages_daily) chỉ là tham khảo."""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS ga4_landing_pages_channel_daily (
+            date TEXT, normalized_path TEXT, session_default_channel_group TEXT,
+            landing_page_raw TEXT,
+            active_users INTEGER, new_users INTEGER, sessions INTEGER,
+            engaged_sessions INTEGER, engagement_rate REAL, screen_page_views INTEGER,
+            key_events INTEGER, ecommerce_purchases INTEGER, purchase_revenue REAL,
+            fetched_at TEXT,
+            PRIMARY KEY (date, normalized_path, session_default_channel_group)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ga4lc_date ON ga4_landing_pages_channel_daily(date);
+        CREATE INDEX IF NOT EXISTS idx_ga4lc_path ON ga4_landing_pages_channel_daily(normalized_path);
+        CREATE INDEX IF NOT EXISTS idx_ga4lc_chan ON ga4_landing_pages_channel_daily(session_default_channel_group);
+        CREATE INDEX IF NOT EXISTS idx_ga4lc_date_chan ON ga4_landing_pages_channel_daily(date, session_default_channel_group);
+
+        CREATE TABLE IF NOT EXISTS gsc_ga4_join_daily (
+            date TEXT, normalized_path TEXT, search_type TEXT, join_version TEXT,
+            full_url TEXT, page_type TEXT, join_status TEXT,
+            gsc_clicks INTEGER, gsc_impressions INTEGER, gsc_ctr REAL, gsc_position REAL,
+            ga4_organic_sessions INTEGER, ga4_organic_active_users INTEGER, ga4_organic_new_users INTEGER,
+            ga4_organic_engaged_sessions INTEGER, ga4_organic_engagement_rate REAL,
+            ga4_organic_screen_page_views INTEGER, ga4_organic_key_events INTEGER,
+            ga4_organic_ecommerce_purchases INTEGER, ga4_organic_purchase_revenue REAL,
+            ga4_all_sessions INTEGER,
+            opportunity_type TEXT, priority TEXT, tracking_confidence TEXT,
+            gsc_source_mode TEXT, gsc_coverage_mode TEXT, gsc_coverage_complete INTEGER,
+            gsc_timezone TEXT, ga4_timezone TEXT, timezone_alignment TEXT, clicks_sessions_comparable TEXT,
+            fetched_at TEXT,
+            PRIMARY KEY (date, normalized_path, search_type, join_version)
+        );
+        CREATE INDEX IF NOT EXISTS idx_jd_date ON gsc_ga4_join_daily(date);
+        CREATE INDEX IF NOT EXISTS idx_jd_path ON gsc_ga4_join_daily(normalized_path);
+        CREATE INDEX IF NOT EXISTS idx_jd_ptype ON gsc_ga4_join_daily(page_type);
+        CREATE INDEX IF NOT EXISTS idx_jd_status ON gsc_ga4_join_daily(join_status);
+        CREATE INDEX IF NOT EXISTS idx_jd_conf ON gsc_ga4_join_daily(tracking_confidence);
+        CREATE INDEX IF NOT EXISTS idx_jd_opp ON gsc_ga4_join_daily(opportunity_type);
+        CREATE INDEX IF NOT EXISTS idx_jd_date_st ON gsc_ga4_join_daily(date, search_type);
+        CREATE INDEX IF NOT EXISTS idx_jd_date_pt ON gsc_ga4_join_daily(date, page_type);
+
+        CREATE TABLE IF NOT EXISTS gsc_ga4_join_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            join_version TEXT, sync_type TEXT, date_from TEXT, date_to TEXT,
+            search_type TEXT, channel_group TEXT, status TEXT, rows_written INTEGER DEFAULT 0,
+            matched_count INTEGER, gsc_only_count INTEGER, ga4_only_count INTEGER,
+            latest_gsc_date TEXT, latest_ga4_date TEXT, overlap_date_from TEXT, overlap_date_to TEXT,
+            warning_json TEXT, error_type TEXT, error_message TEXT,
+            started_at TEXT, finished_at TEXT, created_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_jr_started ON gsc_ga4_join_runs(started_at DESC);
+
+        CREATE TABLE IF NOT EXISTS gsc_ga4_join_status (
+            status_key TEXT PRIMARY KEY,
+            join_version TEXT, join_mode TEXT, source_mode TEXT, fallback_available INTEGER,
+            search_type TEXT, channel_group TEXT,
+            latest_gsc_date TEXT, latest_ga4_date TEXT, overlap_date_from TEXT, overlap_date_to TEXT,
+            overlap_days INTEGER, matched_count INTEGER, gsc_only_count INTEGER, ga4_only_count INTEGER,
+            confidence_distribution_json TEXT, warning_json TEXT,
+            last_success_at TEXT, last_failure_at TEXT, last_error_type TEXT, last_error_message_safe TEXT,
+            sync_running INTEGER, sync_started_at TEXT, updated_at TEXT
+        );
+    """)
 
 
 def _init_gsc_api_tables(conn):
