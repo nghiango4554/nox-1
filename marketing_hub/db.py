@@ -481,8 +481,23 @@ def init_db():
     # ─── Tracking audit (event catalog + findings, additive, idempotent) ───
     _init_tracking_tables(conn)
 
+    # ─── Task Center (reuse ga4_tasks, additive ALTER) ───
+    _init_task_center(conn)
+
     conn.commit()
     conn.close()
+
+
+def _init_task_center(conn):
+    """Task Center reuse ga4_tasks (reserved). Thêm cột additive nếu thiếu (ALTER ADD COLUMN, KHÔNG drop).
+    Tách implementation_priority (ưu tiên triển khai) khỏi severity (mức incident)."""
+    have = {r[1] for r in conn.execute("PRAGMA table_info(ga4_tasks)")}
+    if "implementation_priority" not in have:
+        conn.execute("ALTER TABLE ga4_tasks ADD COLUMN implementation_priority TEXT")
+    if "source" not in have:
+        conn.execute("ALTER TABLE ga4_tasks ADD COLUMN source TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ga4_tasks_prio ON ga4_tasks(implementation_priority)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ga4_tasks_type ON ga4_tasks(task_type)")
 
 
 def _init_tracking_tables(conn):
