@@ -205,6 +205,29 @@ def overview(args):
                      tracking_state=("ok" if has_data else "not_configured"))
 
 
+# ─────────────── 3b. TIMESERIES (chart, đọc SQLite) ───────────────
+def timeseries(args):
+    conn = db.get_conn()
+    cfg = ga4_config.load_config()
+    df, dt = resolve_period(args, conn)
+    rows = conn.execute(
+        "SELECT date, sessions, engaged_sessions, key_events, purchase_revenue "
+        "FROM ga4_daily_summary WHERE date BETWEEN ? AND ? ORDER BY date", (df, dt)).fetchall()
+    org = {r["date"]: (r["s"] or 0) for r in conn.execute(
+        "SELECT date, SUM(sessions) s FROM ga4_channels_daily WHERE date BETWEEN ? AND ? "
+        "AND session_default_channel_group='Organic Search' GROUP BY date", (df, dt)).fetchall()}
+    series = []
+    for r in rows:
+        s = r["sessions"] or 0
+        eng = r["engaged_sessions"] or 0
+        series.append({"date": r["date"], "sessions": s, "organic_search_sessions": org.get(r["date"], 0),
+                       "engagement_rate": _er(eng, s), "key_events": r["key_events"] or 0,
+                       "purchase_revenue": r["purchase_revenue"] or 0})
+    meta = _cache_meta(conn, cfg)
+    conn.close()
+    return _envelope(series, {"range": args.get("range")}, (df, dt), None, meta)
+
+
 # ─────────────── 4. CHANNELS ───────────────
 _CH_SORT = {"sessions", "active_users", "engaged_sessions", "engagement_rate",
             "key_events", "ecommerce_purchases", "purchase_revenue"}
