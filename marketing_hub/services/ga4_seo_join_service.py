@@ -17,11 +17,22 @@ from services import ga4_config, ga4_client
 from services.url_normalize import normalize_landing_path
 from services.ga4_report_service import classify_page_type
 
+import re
+
 ROOT = Path(__file__).resolve().parent.parent
 GSC_CACHE_PATH = ROOT / "data" / "gsc_cache.json"
 NORMALIZE_VERSION = "v1"
-# _fetch_gsc_cache.py đọc 'Trang'!A2:E2000 → trần sheet 2000 dòng. GSC UI tự cap ~top-1000.
-GSC_EXPORT_RANGE_LIMIT = 2000
+# Range Google Sheet mà _fetch_gsc_cache.py đọc cho pages (không phải upstream GSC top-N cap).
+GSC_PAGES_SHEET_RANGE = "'Trang'!A2:E2000"
+
+
+def _sheet_row_capacity(range_str):
+    """Số data-row tối đa range Sheet cho phép (header ở row 1). A2:E2000 → 1999."""
+    m = re.findall(r"[A-Z]+(\d+)", range_str or "")
+    if len(m) >= 2:
+        start, end = int(m[0]), int(m[1])
+        return max(0, end - start + 1)
+    return None
 
 GA4_METRICS = ["activeUsers", "newUsers", "sessions", "engagedSessions", "engagementRate",
                "screenPageViews", "keyEvents", "ecommercePurchases", "purchaseRevenue"]
@@ -60,26 +71,42 @@ def load_gsc_cache_meta():
         pass
     stale_days = int(ga4_config.load_config().get("gsc_join_stale_days", 7))
 
-    # Export coverage: KHÔNG suy diễn complete nếu không chứng minh được.
+    # Export coverage — KHÔNG đánh đồng: sheet range cap ≠ observed rows ≠ upstream GSC top-N.
     pcount = len(pages)
-    pages_imp = sum(r.get("imp", 0) for r in pages)
-    daily_imp = sum(r.get("imp", 0) for r in daily)
-    imp_cover = (pages_imp / daily_imp) if daily_imp else None
-    if pcount >= 1000:                              # chạm cap GSC top-N → chắc chắn bị giới hạn
-        scope, complete = "top_pages_limited", False
-    elif imp_cover is not None and imp_cover >= 0.99:
+    row_capacity = _sheet_row_capacity(GSC_PAGES_SHEET_RANGE)   # A2:E2000 → 1999 (header row 1)
+
+    def _cover(metric):
+        pv = sum(r.get(metric, 0) for r in pages)
+        dv = sum(r.get(metric, 0) for r in daily)
+        return round(pv / dv * 100, 1) if dv else None
+    click_cov = _cover("click")
+    imp_cov = _cover("imp")
+
+    # Upstream GSC top-N cap: KHÔNG có constant/query trong code chứng minh → not_proven.
+    upstream_limit = None
+    upstream_source = "not_proven"
+
+    # complete chỉ khi coverage chứng minh đủ; false nếu coverage < 100%; null nếu thiếu dữ liệu.
+    incomplete = (imp_cov is not None and imp_cov < 100) or (click_cov is not None and click_cov < 100)
+    if imp_cov is not None and imp_cov >= 100 and (click_cov is None or click_cov >= 100):
         scope, complete = "complete", True
+    elif incomplete:
+        scope, complete = "limited_or_unknown", False
     else:
         scope, complete = "unknown", None
-    note = ("pages=%d (cap GSC top-N); impression coverage ~%s%% so true total — long-tail URL có thể thiếu"
-            % (pcount, round(imp_cover * 100, 1) if imp_cover is not None else "?"))
+    note = "Cache GSC hiện chỉ bao phủ một phần landing page. Các URL long-tail có thể chưa xuất hiện trong export."
 
     return {"ok": bool(df and dt), "gsc_date_from": df, "gsc_date_to": dt,
             "gsc_fetched_at": fetched, "gsc_cache_age_days": age,
             "gsc_stale": (age is None) or (age > stale_days),
             "pages_count": pcount,
+            "gsc_sheet_range": GSC_PAGES_SHEET_RANGE,
+            "gsc_sheet_row_capacity": row_capacity,
             "gsc_pages_export_count": pcount,
-            "gsc_pages_export_limit": GSC_EXPORT_RANGE_LIMIT,
+            "gsc_upstream_limit": upstream_limit,
+            "gsc_upstream_limit_source": upstream_source,
+            "gsc_click_coverage_percent": click_cov,
+            "gsc_impression_coverage_percent": imp_cov,
             "gsc_export_scope": scope,
             "gsc_export_complete": complete,
             "gsc_export_note": note,
@@ -402,19 +429,24 @@ def get_join_status():
 
     warnings = []
     if meta.get("gsc_stale"):
-        warnings.append("GSC cache đang cũ (%s ngày)" % meta.get("gsc_cache_age_days"))
+        warnings.append("GSC cache đang cũ")
     if meta.get("gsc_export_complete") is not True:
-        warnings.append("GSC page export có thể không bao phủ toàn bộ URL (%s)" % meta.get("gsc_export_scope"))
+        warnings.append("GSC page export chưa bao phủ toàn bộ URL")
     warnings.append("GA4-only không đồng nghĩa URL không có organic traffic")
-    warnings.append("Insight là period-level, không phải daily join")
+    warnings.append("Insight SEO × GA4 hiện là period-level, không phải daily join")
 
     return {
         "join_mode": "period_level", "normalize_version": NORMALIZE_VERSION,
         "gsc_date_from": meta.get("gsc_date_from"), "gsc_date_to": meta.get("gsc_date_to"),
         "gsc_fetched_at": meta.get("gsc_fetched_at"), "gsc_cache_age_days": meta.get("gsc_cache_age_days"),
         "gsc_stale": meta.get("gsc_stale"),
+        "gsc_sheet_range": meta.get("gsc_sheet_range"),
+        "gsc_sheet_row_capacity": meta.get("gsc_sheet_row_capacity"),
         "gsc_pages_export_count": meta.get("gsc_pages_export_count"),
-        "gsc_pages_export_limit": meta.get("gsc_pages_export_limit"),
+        "gsc_upstream_limit": meta.get("gsc_upstream_limit"),
+        "gsc_upstream_limit_source": meta.get("gsc_upstream_limit_source"),
+        "gsc_click_coverage_percent": meta.get("gsc_click_coverage_percent"),
+        "gsc_impression_coverage_percent": meta.get("gsc_impression_coverage_percent"),
         "gsc_export_scope": meta.get("gsc_export_scope"),
         "gsc_export_complete": meta.get("gsc_export_complete"),
         "gsc_export_note": meta.get("gsc_export_note"),
