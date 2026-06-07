@@ -60,6 +60,10 @@ def api_ga4_overview():
     return jsonify(rpt.overview(request.args))
 
 
+def api_ga4_timeseries():
+    return jsonify(rpt.timeseries(request.args))
+
+
 def api_ga4_channels():
     return jsonify(rpt.channels(request.args))
 
@@ -91,6 +95,7 @@ def register(app):
     app.add_url_rule("/api/ga4/refresh", "api_ga4_refresh", api_ga4_refresh, methods=["POST"])
     # report (GET, read-only SQLite)
     app.add_url_rule("/api/ga4/overview", "api_ga4_overview", api_ga4_overview)
+    app.add_url_rule("/api/ga4/timeseries", "api_ga4_timeseries", api_ga4_timeseries)
     app.add_url_rule("/api/ga4/channels", "api_ga4_channels", api_ga4_channels)
     app.add_url_rule("/api/ga4/landing-pages", "api_ga4_landing_pages", api_ga4_landing_pages)
     app.add_url_rule("/api/ga4/devices", "api_ga4_devices", api_ga4_devices)
