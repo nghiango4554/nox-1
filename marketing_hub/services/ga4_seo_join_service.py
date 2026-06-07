@@ -381,6 +381,10 @@ def list_period_join(args):
         where.append("join_status=?"); params.append(args["join_status"])
     if args.get("priority"):
         where.append("priority=?"); params.append(args["priority"])
+    if args.get("opportunity"):
+        where.append("opportunity_type=?"); params.append(args["opportunity"])
+    if args.get("confidence"):
+        where.append("tracking_confidence=?"); params.append(args["confidence"])
     if args.get("search"):
         where.append("(normalized_path LIKE ? OR full_url LIKE ?)")
         kw = "%" + args["search"] + "%"; params += [kw, kw]
@@ -403,7 +407,8 @@ def list_period_join(args):
     return {"ok": True, "data": [dict(r) for r in rows], "total_rows": total,
             "limit": limit, "offset": offset, "status": get_join_status(),
             "filters": {"page_type": args.get("page_type"), "join_status": args.get("join_status"),
-                        "priority": args.get("priority"), "search": args.get("search")}}
+                        "priority": args.get("priority"), "opportunity": args.get("opportunity"),
+                        "confidence": args.get("confidence"), "search": args.get("search")}}
 
 
 def get_join_status():
