@@ -7,6 +7,7 @@ Full dashboard report UI, SEO join, task center: batch sau.
 from flask import render_template, jsonify, request
 
 from services import ga4_config, ga4_client, ga4_sync_service
+from services import ga4_report_service as rpt
 
 
 def ga4_page():
@@ -54,7 +55,45 @@ def api_ga4_refresh():
     return jsonify({"ok": True, **result})
 
 
+# ─────────────── Report endpoints (Batch 3 — đọc SQLite, KHÔNG gọi GA4 API) ───────────────
+def api_ga4_overview():
+    return jsonify(rpt.overview(request.args))
+
+
+def api_ga4_channels():
+    return jsonify(rpt.channels(request.args))
+
+
+def api_ga4_landing_pages():
+    return jsonify(rpt.landing_pages(request.args))
+
+
+def api_ga4_devices():
+    return jsonify(rpt.devices(request.args))
+
+
+def api_ga4_events():
+    return jsonify(rpt.events(request.args))
+
+
+def api_ga4_ecommerce():
+    return jsonify(rpt.ecommerce(request.args))
+
+
+def api_ga4_realtime():
+    force = request.args.get("force") in ("1", "true", "yes")
+    return jsonify(rpt.realtime(request.args, force=force))
+
+
 def register(app):
     app.add_url_rule("/seo/ga4", "ga4_page", ga4_page)
     app.add_url_rule("/api/ga4/status", "api_ga4_status", api_ga4_status)
     app.add_url_rule("/api/ga4/refresh", "api_ga4_refresh", api_ga4_refresh, methods=["POST"])
+    # report (GET, read-only SQLite)
+    app.add_url_rule("/api/ga4/overview", "api_ga4_overview", api_ga4_overview)
+    app.add_url_rule("/api/ga4/channels", "api_ga4_channels", api_ga4_channels)
+    app.add_url_rule("/api/ga4/landing-pages", "api_ga4_landing_pages", api_ga4_landing_pages)
+    app.add_url_rule("/api/ga4/devices", "api_ga4_devices", api_ga4_devices)
+    app.add_url_rule("/api/ga4/events", "api_ga4_events", api_ga4_events)
+    app.add_url_rule("/api/ga4/ecommerce", "api_ga4_ecommerce", api_ga4_ecommerce)
+    app.add_url_rule("/api/ga4/realtime", "api_ga4_realtime", api_ga4_realtime)

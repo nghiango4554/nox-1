@@ -591,6 +591,16 @@ def _init_ga4_tables(conn):
         );
         CREATE INDEX IF NOT EXISTS idx_ga4_tasks_status ON ga4_tasks(status);
         CREATE INDEX IF NOT EXISTS idx_ga4_tasks_severity ON ga4_tasks(severity);
+
+        CREATE TABLE IF NOT EXISTS ga4_period_report_cache (
+            cache_key TEXT PRIMARY KEY,
+            report_type TEXT,
+            date_from TEXT, date_to TEXT,
+            filters_json TEXT,
+            payload_json TEXT,
+            fetched_at TEXT, expires_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_ga4_period_type ON ga4_period_report_cache(report_type);
     """)
 
     # CWV LCP (P0A/P0B/P0C) — schema additive + idempotent, chạy 1 lần lúc startup
