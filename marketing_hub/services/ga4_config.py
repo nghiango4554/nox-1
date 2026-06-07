@@ -22,6 +22,7 @@ DEFAULTS = {
     "sync_lookback_days": 3,
     "initial_backfill_days": 90,
     "compare_period_enabled": True,
+    "gsc_join_stale_days": 7,
 }
 
 # env override (optional, không thêm dotenv loader)

@@ -8,6 +8,7 @@ from flask import render_template, jsonify, request
 
 from services import ga4_config, ga4_client, ga4_sync_service
 from services import ga4_report_service as rpt
+from services import ga4_seo_join_service as seojoin
 
 
 def ga4_page():
@@ -89,6 +90,27 @@ def api_ga4_realtime():
     return jsonify(rpt.realtime(request.args, force=force))
 
 
+# ─────────────── SEO × GA4 period join (Mode B) ───────────────
+def api_ga4_seojoin_status():
+    return jsonify(seojoin.get_join_status())
+
+
+def api_ga4_seojoin():
+    return jsonify(seojoin.list_period_join(request.args))
+
+
+def api_ga4_seojoin_refresh():
+    st = ga4_config.config_state()
+    if not st["configured"]:
+        return jsonify({"ok": False, "error": "not_configured"}), 400
+    if not ga4_client.token_present():
+        return jsonify({"ok": False, "error": "token_missing"}), 400
+    res = seojoin.start_refresh_async()
+    if not res.get("started"):
+        return jsonify({"ok": False, "status": "already_running", "started_at": res.get("started_at")}), 409
+    return jsonify({"ok": True, **res})
+
+
 def register(app):
     app.add_url_rule("/seo/ga4", "ga4_page", ga4_page)
     app.add_url_rule("/api/ga4/status", "api_ga4_status", api_ga4_status)
@@ -102,3 +124,7 @@ def register(app):
     app.add_url_rule("/api/ga4/events", "api_ga4_events", api_ga4_events)
     app.add_url_rule("/api/ga4/ecommerce", "api_ga4_ecommerce", api_ga4_ecommerce)
     app.add_url_rule("/api/ga4/realtime", "api_ga4_realtime", api_ga4_realtime)
+    # SEO × GA4 period join
+    app.add_url_rule("/api/ga4/seo-join/status", "api_ga4_seojoin_status", api_ga4_seojoin_status)
+    app.add_url_rule("/api/ga4/seo-join", "api_ga4_seojoin", api_ga4_seojoin)
+    app.add_url_rule("/api/ga4/seo-join/refresh", "api_ga4_seojoin_refresh", api_ga4_seojoin_refresh, methods=["POST"])
