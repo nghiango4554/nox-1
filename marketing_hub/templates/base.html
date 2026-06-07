@@ -37,6 +37,18 @@
   <a href="{{ url_for('jobs_center_page') }}" class="sb-link {% if request.endpoint == 'jobs_center_page' %}active{% endif %}">
     <span class="sb-icon">⚙️</span><span>Job Center</span>
   </a>
+
+  {# ───── PHÂN TÍCH & ĐO LƯỜNG (gom analytics lại 1 chỗ) ───── #}
+  <div class="sb-section">Phân tích &amp; Đo lường</div>
+  <a href="{{ url_for('ga4_page') }}" class="sb-link {% if request.endpoint == 'ga4_page' %}active{% endif %}">
+    <span class="sb-icon">📈</span><span>GA4 Analytics</span>
+  </a>
+  <a href="{{ url_for('seo_gsc_page') }}" class="sb-link {% if request.endpoint in ('seo_gsc_page', 'seo_gsc_task_page') %}active{% endif %}">
+    <span class="sb-icon">🔵</span><span>Search Console</span>
+  </a>
+  <a href="{{ url_for('tracking_page') }}" class="sb-link {% if request.endpoint == 'tracking_page' %}active{% endif %}">
+    <span class="sb-icon">📡</span><span>Tracking Audit</span>
+  </a>
   <a href="{{ url_for('tasks_page') }}" class="sb-link {% if request.endpoint == 'tasks_page' %}active{% endif %}">
     <span class="sb-icon">✅</span><span>Task Center</span>
   </a>
@@ -59,7 +71,7 @@
   {# ───── NỘI DUNG (sản xuất) ───── #}
   <div class="sb-section">Nội dung</div>
   <a href="{{ url_for('content_jobs_list_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('content_jobs') %}active{% endif %}">
-    <span class="sb-icon">🛠️</span><span>Content Jobs</span>
+    <span class="sb-icon">🧰</span><span>Content Jobs</span>
   </a>
   <a href="{{ url_for('collection_content_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('collection_content') %}active{% endif %}">
     <span class="sb-icon">🗂️</span><span>Collection Content</span>
@@ -74,9 +86,9 @@
     <span class="sb-icon">🖼️</span><span>ALT ảnh</span>
   </a>
 
-  {# ───── SEO (gập) ───── #}
+  {# ───── SEO (gập) — chỉ audit tools, analytics đã lên nhóm Phân tích ───── #}
   <div class="sb-section">Tối ưu &amp; Kho</div>
-  {% set seo_active = request.endpoint and request.endpoint.startswith('seo') %}
+  {% set seo_active = request.endpoint and request.endpoint.startswith('seo') and request.endpoint not in ('seo_gsc_page', 'seo_gsc_task_page') %}
   <div class="sb-group {% if seo_active %}sb-group-active{% endif %}" data-group="seo">
     <a href="{{ url_for('seo_dashboard') }}" class="sb-link {% if request.endpoint == 'seo_dashboard' %}active{% endif %}">
       <span class="sb-icon">🔍</span><span>SEO</span>
@@ -91,9 +103,6 @@
       <a href="{{ url_for('seo_broken_links_page') }}" class="sb-sublink {% if request.endpoint == 'seo_broken_links_page' %}active{% endif %}">🔗 Link gãy</a>
       <a href="{{ url_for('seo_indexability_page') }}" class="sb-sublink {% if request.endpoint == 'seo_indexability_page' %}active{% endif %}">🚫 Indexability</a>
       <a href="{{ url_for('seo_inlinks_page') }}" class="sb-sublink {% if request.endpoint == 'seo_inlinks_page' %}active{% endif %}">🕸️ Internal links</a>
-      <a href="{{ url_for('seo_gsc_page') }}" class="sb-sublink {% if request.endpoint in ('seo_gsc_page', 'seo_gsc_task_page') %}active{% endif %}">🔵 Search Console</a>
-      <a href="{{ url_for('ga4_page') }}" class="sb-sublink {% if request.endpoint == 'ga4_page' %}active{% endif %}">📊 GA4 Analytics</a>
-      <a href="{{ url_for('tracking_page') }}" class="sb-sublink {% if request.endpoint == 'tracking_page' %}active{% endif %}">📡 Tracking Audit</a>
       <a href="{{ url_for('seo_history_page') }}" class="sb-sublink {% if request.endpoint == 'seo_history_page' %}active{% endif %}">📈 Lịch sử</a>
     </div>
   </div>
