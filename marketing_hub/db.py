@@ -469,8 +469,129 @@ def init_db():
         if col not in bj_cols:
             conn.execute(f"ALTER TABLE blog_jobs ADD COLUMN {col} {col_type}")
 
+    # ─── GA4 Analytics (additive, idempotent) ───
+    _init_ga4_tables(conn)
+
     conn.commit()
     conn.close()
+
+
+def _init_ga4_tables(conn):
+    """GA4 Analytics schema — 11 bảng additive. CREATE TABLE/INDEX IF NOT EXISTS,
+    idempotent, không destructive, tách hẳn schema cũ. Xem services/ga4_sync_service.py."""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS ga4_sync_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sync_type TEXT,                 -- backfill | incremental | realtime
+            date_from TEXT, date_to TEXT,
+            status TEXT,                    -- running | success | error
+            rows_written INTEGER DEFAULT 0,
+            started_at TEXT, finished_at TEXT,
+            error_message TEXT,
+            quota_snapshot_json TEXT,
+            latest_data_date TEXT,
+            created_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_ga4_sync_started ON ga4_sync_runs(started_at DESC);
+
+        CREATE TABLE IF NOT EXISTS ga4_daily_summary (
+            date TEXT PRIMARY KEY,
+            active_users INTEGER, new_users INTEGER, sessions INTEGER,
+            engaged_sessions INTEGER, engagement_rate REAL, screen_page_views INTEGER,
+            key_events INTEGER, ecommerce_purchases INTEGER,
+            purchase_revenue REAL, total_revenue REAL,
+            average_session_duration REAL, user_engagement_duration REAL,
+            fetched_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS ga4_channels_daily (
+            date TEXT, session_default_channel_group TEXT, session_source_medium TEXT,
+            active_users INTEGER, sessions INTEGER, engaged_sessions INTEGER,
+            engagement_rate REAL, key_events INTEGER, ecommerce_purchases INTEGER,
+            purchase_revenue REAL, fetched_at TEXT,
+            PRIMARY KEY (date, session_default_channel_group, session_source_medium)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ga4_channels_date ON ga4_channels_daily(date);
+
+        CREATE TABLE IF NOT EXISTS ga4_landing_pages_daily (
+            date TEXT, normalized_path TEXT,
+            landing_page_raw TEXT, landing_page_plus_query_string_raw TEXT,
+            active_users INTEGER, new_users INTEGER, sessions INTEGER,
+            engaged_sessions INTEGER, engagement_rate REAL, screen_page_views INTEGER,
+            key_events INTEGER, ecommerce_purchases INTEGER, purchase_revenue REAL,
+            fetched_at TEXT,
+            PRIMARY KEY (date, normalized_path)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ga4_landing_date ON ga4_landing_pages_daily(date);
+        CREATE INDEX IF NOT EXISTS idx_ga4_landing_path ON ga4_landing_pages_daily(normalized_path);
+
+        CREATE TABLE IF NOT EXISTS ga4_devices_daily (
+            date TEXT, device_category TEXT,
+            active_users INTEGER, sessions INTEGER, engaged_sessions INTEGER,
+            engagement_rate REAL, key_events INTEGER, purchase_revenue REAL,
+            fetched_at TEXT,
+            PRIMARY KEY (date, device_category)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ga4_devices_date ON ga4_devices_daily(date);
+
+        CREATE TABLE IF NOT EXISTS ga4_events_daily (
+            date TEXT, event_name TEXT,
+            event_count INTEGER, total_users INTEGER, key_events INTEGER,
+            event_value REAL, fetched_at TEXT,
+            PRIMARY KEY (date, event_name)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ga4_events_date ON ga4_events_daily(date);
+
+        CREATE TABLE IF NOT EXISTS ga4_ecommerce_daily (
+            date TEXT PRIMARY KEY,
+            items_viewed INTEGER, items_added_to_cart INTEGER,
+            items_checked_out INTEGER, items_purchased INTEGER, checkouts INTEGER,
+            ecommerce_purchases INTEGER, purchase_revenue REAL, total_revenue REAL,
+            fetched_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS ga4_realtime_cache (
+            cache_key TEXT PRIMARY KEY,
+            payload_json TEXT, fetched_at TEXT, expires_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS ga4_seo_landing_join_daily (
+            date TEXT, normalized_path TEXT, full_url TEXT, page_type TEXT,
+            gsc_clicks INTEGER, gsc_impressions INTEGER, gsc_ctr REAL, gsc_position REAL,
+            ga4_sessions INTEGER, ga4_active_users INTEGER, ga4_engaged_sessions INTEGER,
+            ga4_engagement_rate REAL, ga4_key_events INTEGER,
+            ga4_ecommerce_purchases INTEGER, ga4_purchase_revenue REAL,
+            opportunity_type TEXT, priority TEXT, tracking_confidence TEXT,
+            fetched_at TEXT,
+            PRIMARY KEY (date, normalized_path)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ga4_join_date ON ga4_seo_landing_join_daily(date);
+        CREATE INDEX IF NOT EXISTS idx_ga4_join_path ON ga4_seo_landing_join_daily(normalized_path);
+
+        CREATE TABLE IF NOT EXISTS ga4_tracking_audit (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_name TEXT UNIQUE,
+            event_group TEXT,               -- automatic | ecommerce | custom
+            expected INTEGER DEFAULT 0, detected INTEGER DEFAULT 0,
+            last_seen_at TEXT, event_count INTEGER DEFAULT 0,
+            key_event_status TEXT, business_value TEXT, recommended_setup TEXT,
+            status TEXT, note TEXT, updated_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS ga4_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_type TEXT, severity TEXT,  -- P0 | P1 | P2 | P3
+            title TEXT, description TEXT,
+            affected_url TEXT, affected_query TEXT,
+            metric_snapshot_json TEXT,
+            status TEXT DEFAULT 'open',
+            dedup_key TEXT UNIQUE, cooldown_until TEXT,
+            created_at TEXT, updated_at TEXT, resolved_at TEXT,
+            note TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_ga4_tasks_status ON ga4_tasks(status);
+        CREATE INDEX IF NOT EXISTS idx_ga4_tasks_severity ON ga4_tasks(severity);
+    """)
 
     # CWV LCP (P0A/P0B/P0C) — schema additive + idempotent, chạy 1 lần lúc startup
     cwv_lcp_harden_schema()

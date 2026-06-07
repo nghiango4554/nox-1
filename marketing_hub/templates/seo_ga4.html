@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}GA4 Analytics · SEO · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
+<span class="crumb"></span>
+<span style="font-weight:600">📊 GA4 Analytics</span>
+{% endblock %}
+
+{% block page_actions %}
+{% if state.configured and token_present %}
+<button class="btn btn-primary" id="ga4-refresh" type="button" title="Đồng bộ GA4 → cache (chạy nền)">🔄 Refresh cache</button>
+{% endif %}
+<a class="btn" href="{{ url_for('seo_dashboard') }}">← SEO dashboard</a>
+{% endblock %}
+
+{% block content %}
+<style>
+  .ga4-card { background:var(--surface,#1a1a1a); border:1px solid var(--border,rgba(255,255,255,.1)); border-radius:12px; padding:18px 20px; margin-bottom:16px }
+  .ga4-row { display:flex; gap:10px; flex-wrap:wrap; font-size:13px }
+  .ga4-kv { background:rgba(255,255,255,.03); border:1px solid var(--border,rgba(255,255,255,.08)); border-radius:8px; padding:8px 12px }
+  .ga4-kv b { display:block; font-size:11px; color:var(--text-muted,#94a3b8); text-transform:uppercase; letter-spacing:.4px; margin-bottom:3px }
+  .ga4-badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600 }
+  .b-ok { background:rgba(34,197,94,.15); color:#4ade80 } .b-warn { background:rgba(245,158,11,.15); color:#fbbf24 }
+  .b-err { background:rgba(239,68,68,.15); color:#f87171 } .b-gray { background:rgba(148,163,184,.15); color:#94a3b8 }
+  .ga4-step { font-size:13px; color:var(--text-muted,#cbd5e1); line-height:1.7 }
+  .ga4-step code { background:rgba(255,255,255,.06); padding:2px 6px; border-radius:5px; font-size:12px }
+  .ga4-muted { color:var(--text-muted,#94a3b8); font-size:12px }
+</style>
+
+{# ─── Setup state: chưa cấu hình ─── #}
+{% if not state.configured %}
+<div class="ga4-card" style="border-color:rgba(245,158,11,.35)">
+  <h3 style="margin:0 0 6px">⚙️ Chưa cấu hình GA4</h3>
+  <p class="ga4-muted" style="margin:0 0 14px">Tab GA4 đã sẵn sàng về mặt code. Cần tạo file cấu hình để bật.</p>
+  <div class="ga4-step">
+    1. Copy <code>state/ga4_config.example.json</code> → <code>state/ga4_config.json</code><br>
+    2. Đặt <code>"enabled": true</code> và <code>"property_id": "451866979"</code><br>
+    3. Đảm bảo có token <code>.secrets/ga4_token.json</code> (OAuth scope <code>analytics.readonly</code>)<br>
+    4. Bấm <b>Refresh cache</b> để đồng bộ lần đầu
+  </div>
+  <div class="ga4-row" style="margin-top:14px">
+    <div class="ga4-kv"><b>config file</b>{{ '✅ có' if state.config_exists else '❌ thiếu' }}</div>
+    <div class="ga4-kv"><b>enabled</b>{{ '✅' if state.enabled else '❌' }}</div>
+    <div class="ga4-kv"><b>property_id</b>{{ state.property_id or '— thiếu' }}</div>
+    <div class="ga4-kv"><b>token GA4</b>{{ '✅ có' if token_present else '❌ thiếu' }}</div>
+  </div>
+</div>
+
+{# ─── Configured nhưng thiếu token ─── #}
+{% elif not token_present %}
+<div class="ga4-card" style="border-color:rgba(239,68,68,.35)">
+  <h3 style="margin:0 0 6px">🔑 Thiếu token GA4</h3>
+  <p class="ga4-muted">Đã cấu hình property <b>{{ state.property_id }}</b> nhưng chưa có <code>.secrets/ga4_token.json</code>.
+  Cần OAuth reconnect (scope <code>analytics.readonly</code>).</p>
+</div>
+
+{# ─── Ready ─── #}
+{% else %}
+<div class="ga4-card">
+  <div class="ga4-row">
+    <div class="ga4-kv"><b>Property ID</b>{{ state.property_id }}</div>
+    <div class="ga4-kv"><b>Auth mode</b>{{ state.auth_mode }}</div>
+    <div class="ga4-kv"><b>Timezone</b>{{ state.timezone }}</div>
+    <div class="ga4-kv"><b>API status</b><span id="ga4-api-badge" class="ga4-badge b-gray">đang kiểm tra…</span></div>
+  </div>
+</div>
+
+<div class="ga4-card">
+  <h4 style="margin:0 0 10px">🔄 Lần đồng bộ gần nhất</h4>
+  {% if last_sync %}
+  <div class="ga4-row">
+    <div class="ga4-kv"><b>Trạng thái</b>
+      {% set s = last_sync.status %}
+      <span class="ga4-badge {{ 'b-ok' if s=='success' else 'b-warn' if s in ('partial','running') else 'b-err' }}">{{ s }}</span>
+    </div>
+    <div class="ga4-kv"><b>Khoảng ngày</b>{{ last_sync.date_from }} → {{ last_sync.date_to }}</div>
+    <div class="ga4-kv"><b>Rows</b>{{ last_sync.rows_written }}</div>
+    <div class="ga4-kv"><b>Latest data</b>{{ last_sync.latest_data_date or '—' }}</div>
+    <div class="ga4-kv"><b>Finished</b>{{ last_sync.finished_at or '—' }}</div>
+  </div>
+  {% if last_sync.error_message %}<p class="ga4-muted" style="margin-top:10px">⚠️ {{ last_sync.error_message }}</p>{% endif %}
+  {% else %}
+  <p class="ga4-muted">Chưa đồng bộ lần nào. Bấm <b>Refresh cache</b> để bắt đầu (backfill 90 ngày lần đầu).</p>
+  {% endif %}
+</div>
+
+<p class="ga4-muted">📊 Dashboard chi tiết (biểu đồ, kênh, landing, funnel, SEO×GA4) sẽ thêm ở các batch sau. Batch 2 chỉ dựng backend + trạng thái.</p>
+{% endif %}
+
+<script>
+(function () {
+  var badge = document.getElementById('ga4-api-badge');
+  if (badge) {
+    fetch('/api/ga4/status?probe=1').then(function (r) { return r.json(); }).then(function (d) {
+      var map = { ok: ['b-ok', '✅ OK'], error: ['b-err', '❌ ' + (d.error_code || 'lỗi')],
+                  token_missing: ['b-err', '🔑 thiếu token'], not_configured: ['b-gray', 'chưa cấu hình'],
+                  ready: ['b-warn', 'sẵn sàng'] };
+      var m = map[d.api_status] || ['b-gray', d.api_status];
+      badge.className = 'ga4-badge ' + m[0]; badge.textContent = m[1];
+      if (d.error_message) badge.title = d.error_message;
+    }).catch(function () { badge.className = 'ga4-badge b-err'; badge.textContent = 'lỗi mạng'; });
+  }
+  var btn = document.getElementById('ga4-refresh');
+  if (btn) btn.addEventListener('click', function () {
+    btn.disabled = true; btn.textContent = '⏳ Đang đồng bộ…';
+    fetch('/api/ga4/refresh', { method: 'POST' }).then(function (r) { return r.json(); }).then(function (d) {
+      btn.textContent = d.ok ? '✅ Đã chạy nền — tải lại sau' : '❌ ' + (d.error || 'lỗi');
+      if (d.ok) setTimeout(function () { location.reload(); }, 6000);
+      else btn.disabled = false;
+    }).catch(function () { btn.textContent = '❌ lỗi mạng'; btn.disabled = false; });
+  });
+})();
+</script>
+{% endblock %}

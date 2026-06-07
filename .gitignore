@@ -1,7 +1,10 @@
 # ─── Secrets / tokens / env ───
 .secrets/
-state/
+/state/*
+!/state/ga4_config.example.json
+marketing_hub/state/
 marketing_hub/config.local.json
+marketing_hub/data/insights_live.json
 .env
 .env/
 *.env
