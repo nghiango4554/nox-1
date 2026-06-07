@@ -2348,28 +2348,28 @@ select, textarea        { font-size: 14px !important; }
 .toast-close:hover { opacity: 1; }
 @media (max-width: 560px) { #toast-wrap { left: 12px; right: 12px; max-width: none; } }
 
-/* ═══════════════════ SIDEBAR — LIGHT THEME (sáng · dễ nhìn · mượt) ═══════════════════ */
+/* ═══════════════════ SIDEBAR — SOFT SLATE THEME (xám dịu · dễ nhìn · mượt) ═══════════════════ */
 :root {
-  --sb-bg: #ffffff;
-  --sb-bg-soft: #f5f6f8;
-  --sb-bg-hover: #eef0f4;
-  --sb-border: #e8eaee;
-  --sb-text: #41454f;
-  --sb-text-strong: #1d1f27;
-  --sb-muted: #9aa0ac;
-  --sb-accent: #7c3aed;
-  --sb-accent-2: #ec4899;
-  --sb-accent-soft: rgba(124, 58, 237, 0.10);
+  --sb-bg: #e8eaf1;
+  --sb-bg-soft: #dfe2ec;
+  --sb-bg-hover: rgba(255, 255, 255, 0.62);
+  --sb-border: #d4d8e2;
+  --sb-text: #3c4150;
+  --sb-text-strong: #1b1e29;
+  --sb-muted: #848a99;
+  --sb-accent: #6d28d9;
+  --sb-accent-2: #db2777;
+  --sb-accent-soft: rgba(109, 40, 217, 0.10);
 }
 .sidebar {
-  background: var(--sb-bg) !important;
+  background: linear-gradient(180deg, #edeef4 0%, #e7e9f0 100%) !important;
   border-right: 1px solid var(--sb-border) !important;
-  box-shadow: 1px 0 0 var(--sb-border), 8px 0 32px rgba(30, 30, 60, 0.05) !important;
+  box-shadow: 1px 0 0 var(--sb-border), 8px 0 32px rgba(30, 30, 60, 0.06) !important;
   color: var(--sb-text) !important;
-  scrollbar-color: #d3d6dd transparent !important;
+  scrollbar-color: #c9cdd8 transparent !important;
 }
-.sidebar::-webkit-scrollbar-thumb { background: #d8dbe2 !important; }
-.sidebar::-webkit-scrollbar-thumb:hover { background: #c2c6d0 !important; }
+.sidebar::-webkit-scrollbar-thumb { background: #cdd1dc !important; }
+.sidebar::-webkit-scrollbar-thumb:hover { background: #b6bbc8 !important; }
 
 /* Brand + user */
 .sidebar .sb-brand { border-bottom: 1px solid var(--sb-border) !important; }
@@ -2394,18 +2394,18 @@ select, textarea        { font-size: 14px !important; }
 }
 .sidebar .sb-icon { filter: none !important; }
 
-/* Active — gradient nhẹ + thanh accent, chữ tím đậm dễ thấy trên nền sáng */
+/* Active — pill TRẮNG nổi trên nền xám + thanh accent, chữ tím đậm dễ thấy */
 .sidebar .sb-link.active, .sidebar .sb-sublink.active {
-  background: linear-gradient(90deg, var(--sb-accent-soft) 0%, rgba(236, 72, 153, 0.06) 100%) !important;
+  background: #ffffff !important;
   color: var(--sb-accent) !important;
   font-weight: 600 !important;
-  box-shadow: inset 3px 0 0 var(--sb-accent-2) !important;
+  box-shadow: inset 3px 0 0 var(--sb-accent-2), 0 1px 5px rgba(30, 30, 60, 0.07) !important;
 }
 .sidebar .sb-link.active .sb-icon { filter: none !important; }
 
 /* Group (SEO / Haravan) */
 .sidebar .sb-group-active > .sb-link {
-  background: var(--sb-bg-soft) !important;
+  background: rgba(255, 255, 255, 0.5) !important;
   color: var(--sb-text-strong) !important;
 }
 .sidebar .sb-caret { color: var(--sb-muted) !important; }
@@ -2415,7 +2415,7 @@ select, textarea        { font-size: 14px !important; }
 
 /* Search box */
 .sidebar .sb-search-input {
-  background: var(--sb-bg-soft) !important;
+  background: #ffffff !important;
   border: 1px solid var(--sb-border) !important;
   color: var(--sb-text) !important;
 }
@@ -2440,4 +2440,25 @@ select, textarea        { font-size: 14px !important; }
 @media (max-width: 880px) {
   .sidebar { box-shadow: 8px 0 40px rgba(20, 20, 50, 0.18) !important; }
 }
+
+/* ═══════════════════ HEADER BAR — LIGHT (đổi từ đen sang sáng, đồng bộ) ═══════════════════ */
+.page-header {
+  background: rgba(252, 252, 254, 0.86) !important;
+  backdrop-filter: blur(16px) saturate(1.1) !important;
+  border-bottom: 1px solid #e4e6ec !important;
+  box-shadow: 0 1px 12px rgba(30, 30, 60, 0.04) !important;
+}
+.page-header .ph-title,
+.page-header .ph-title span { color: #1b1e29 !important; }
+.page-header .muted,
+.page-header .ph-title .crumb { color: #868a96 !important; }
+.page-header .ph-title .crumb::after { color: #c2c5cf !important; }
+.page-header .ph-mobile-menu { color: #41454f !important; }
+/* viền dưới header có chút sắc tím-hồng cho mềm */
+.page-header::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: linear-gradient(90deg, rgba(109, 40, 217, 0.25), rgba(219, 39, 119, 0.18) 60%, transparent);
+  opacity: .5; pointer-events: none;
+}
+.page-header { position: sticky; }
 
