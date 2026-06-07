@@ -7,11 +7,13 @@
   function get(u){return fetch(u).then(function(r){return r.json();});}
   function pill(c,t){return '<span class="tc-pill '+c+'">'+esc(t)+"</span>";}
   function prio(p){var c={P0:"b-err",P1:"b-warn",P2:"b-info",P3:"b-gray"}[p]||"b-gray";return pill(c,p||"—");}
-  function sev(p){var c={P0:"b-err",P1:"b-warn",P2:"b-info",P3:"b-gray"}[p]||"b-gray";return pill(c,"sev "+(p||"—"));}
+  function sev(p){var c={P0:"b-err",P1:"b-warn",P2:"b-info",P3:"b-gray"}[p]||"b-gray";return pill(c,"mức "+(p||"—"));}
+  var TST = {open:["b-warn","Đang mở"],resolved:["b-ok","Đã xử lý"],snoozed:["b-gray","Tạm hoãn"]};
+  function tStatus(s){var m=TST[s]||["b-gray",s];return pill(m[0],m[1]);}
 
   var FILTER = {status:"open"};
-  var TABS = [["open","Open"],["all","All"],["snoozed","Snoozed"],["resolved","Resolved"],
-    ["P0","P0"],["P1","P1"],["P2","P2"],["P3","P3"],["tracking","Tracking"],["sync","Sync"]];
+  var TABS = [["open","Đang mở"],["all","Tất cả"],["snoozed","Tạm hoãn"],["resolved","Đã xử lý"],
+    ["P0","P0"],["P1","P1"],["P2","P2"],["P3","P3"],["tracking","Tracking"],["sync","Đồng bộ"]];
 
   function qstr() {
     var p = [];
@@ -43,14 +45,14 @@
         + prio(t.implementation_priority) + sev(t.severity)
         + pill("b-gray", t.task_type || t.source || "—")
         + '<b style="font-size:13px">'+esc(t.title)+"</b>"
-        + '<span style="margin-left:auto">'+pill(t.status==="open"?"b-warn":(t.status==="resolved"?"b-ok":"b-gray"), t.status)+"</span></div>"
+        + '<span style="margin-left:auto">'+tStatus(t.status)+"</span></div>"
         + '<div style="font-size:12px;color:var(--text-muted,#94a3b8);margin:6px 0">'+esc(t.description||"")+"</div>"
         + '<div style="display:flex;gap:6px">'
         + (t.status==="open"
-            ? '<button class="tc-btn" data-res="'+t.id+'">Resolve</button><button class="tc-btn" data-snz="'+t.id+'">Snooze</button>'
-            : '<button class="tc-btn" data-rop="'+t.id+'">Reopen</button>')
+            ? '<button class="tc-btn" data-res="'+t.id+'">Xử lý xong</button><button class="tc-btn" data-snz="'+t.id+'">Tạm hoãn</button>'
+            : '<button class="tc-btn" data-rop="'+t.id+'">Mở lại</button>')
         + '<span style="margin-left:auto;font-size:10.5px;color:var(--text-muted,#94a3b8)">'+esc(t.updated_at||"")+"</span></div></div>";
-    }).join("") : '<div class="tc-card" style="color:var(--text-muted,#94a3b8);font-size:12px">Không có task — bấm Generate tasks.</div>';
+    }).join("") : '<div class="tc-card" style="color:var(--text-muted,#94a3b8);font-size:12px">Chưa có việc nào — bấm Tạo task.</div>';
     app.innerHTML = tabs + '<div class="tc-card">' + body + "</div>";
     Array.prototype.forEach.call(app.querySelectorAll("[data-tab]"), function(b){ b.addEventListener("click", function(){ setTab(b.getAttribute("data-tab")); }); });
     [["data-res","/resolve"],["data-rop","/reopen"],["data-snz","/snooze"]].forEach(function(p){
@@ -65,11 +67,11 @@
   var POLL=null;
   var gb=document.getElementById("tc-gen");
   if(gb) gb.addEventListener("click", function(){
-    gb.disabled=true; gb.textContent="⏳ Generate…";
+    gb.disabled=true; gb.textContent="⏳ Đang tạo…";
     fetch("/api/tasks/generate",{method:"POST"}).then(function(r){return r.json();}).then(function(){
       if(POLL) return;
-      POLL=setInterval(function(){ if(document.hidden)return; get("/api/tasks?status=open").then(function(s){ if(!s.is_running){clearInterval(POLL);POLL=null;gb.disabled=false;gb.textContent="⚙️ Generate tasks";load();} }); },3000);
-    }).catch(function(){ gb.disabled=false; gb.textContent="⚙️ Generate tasks"; });
+      POLL=setInterval(function(){ if(document.hidden)return; get("/api/tasks?status=open").then(function(s){ if(!s.is_running){clearInterval(POLL);POLL=null;gb.disabled=false;gb.textContent="⚙️ Tạo task";load();} }); },3000);
+    }).catch(function(){ gb.disabled=false; gb.textContent="⚙️ Tạo task"; });
   });
   load();
 })();

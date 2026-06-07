@@ -6,13 +6,13 @@
   function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
   function get(u){return fetch(u).then(function(r){return r.json();});}
   function pill(c,t){return '<span class="ops-pill '+c+'">'+esc(t)+"</span>";}
-  function stStep(s){return {ok:["b-ok","✓ ok"],error:["b-err","✗ lỗi"],skipped:["b-gray","— skip"]}[s]||["b-gray",s];}
+  function stStep(s){return {ok:["b-ok","✓ xong"],error:["b-err","✗ lỗi"],skipped:["b-gray","— bỏ qua"]}[s]||["b-gray",s];}
 
   function render(st) {
     var last = st.last_run || {};
     var steps = last.steps || [];
-    var pmap = {ga4_incremental_sync:"GA4 incremental sync",gsc_api_incremental_sync:"GSC API incremental sync",
-      gsc_ga4_daily_join:"GSC × GA4 daily join",tracking_audit:"Tracking audit",task_generate:"Task generate",alert:"Telegram alert"};
+    var pmap = {ga4_incremental_sync:"GA4 sync (incremental)",gsc_api_incremental_sync:"GSC API sync (incremental)",
+      gsc_ga4_daily_join:"Ghép GSC × GA4 (daily)",tracking_audit:"Tracking audit",task_generate:"Tạo task",alert:"Telegram alert"};
     var html = '<div class="ops-card"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">'
       + pill(st.enabled?"b-ok":"b-gray", st.enabled?"Scheduler bật":"Scheduler tắt")
       + pill("b-info", "Lịch: "+esc(st.schedule))
