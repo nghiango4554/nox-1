@@ -2348,3 +2348,96 @@ select, textarea        { font-size: 14px !important; }
 .toast-close:hover { opacity: 1; }
 @media (max-width: 560px) { #toast-wrap { left: 12px; right: 12px; max-width: none; } }
 
+/* ═══════════════════ SIDEBAR — LIGHT THEME (sáng · dễ nhìn · mượt) ═══════════════════ */
+:root {
+  --sb-bg: #ffffff;
+  --sb-bg-soft: #f5f6f8;
+  --sb-bg-hover: #eef0f4;
+  --sb-border: #e8eaee;
+  --sb-text: #41454f;
+  --sb-text-strong: #1d1f27;
+  --sb-muted: #9aa0ac;
+  --sb-accent: #7c3aed;
+  --sb-accent-2: #ec4899;
+  --sb-accent-soft: rgba(124, 58, 237, 0.10);
+}
+.sidebar {
+  background: var(--sb-bg) !important;
+  border-right: 1px solid var(--sb-border) !important;
+  box-shadow: 1px 0 0 var(--sb-border), 8px 0 32px rgba(30, 30, 60, 0.05) !important;
+  color: var(--sb-text) !important;
+  scrollbar-color: #d3d6dd transparent !important;
+}
+.sidebar::-webkit-scrollbar-thumb { background: #d8dbe2 !important; }
+.sidebar::-webkit-scrollbar-thumb:hover { background: #c2c6d0 !important; }
+
+/* Brand + user */
+.sidebar .sb-brand { border-bottom: 1px solid var(--sb-border) !important; }
+.sidebar .sb-name { color: var(--sb-text-strong) !important; }
+.sidebar .sb-tag, .sidebar .sb-user-role { color: var(--sb-muted) !important; }
+.sidebar .sb-user-name { color: var(--sb-text-strong) !important; }
+.sidebar .sb-bottom { border-top: 1px solid var(--sb-border) !important; }
+.sidebar .sb-user:hover { background: var(--sb-bg-soft) !important; }
+
+/* Section headers — rõ, có khoảng thở */
+.sidebar .sb-section {
+  color: var(--sb-muted) !important;
+  opacity: 1 !important;
+  font-weight: 700 !important;
+}
+
+/* Links */
+.sidebar .sb-link, .sidebar .sb-sublink { color: var(--sb-text) !important; }
+.sidebar .sb-link:hover, .sidebar .sb-sublink:hover {
+  background: var(--sb-bg-hover) !important;
+  color: var(--sb-text-strong) !important;
+}
+.sidebar .sb-icon { filter: none !important; }
+
+/* Active — gradient nhẹ + thanh accent, chữ tím đậm dễ thấy trên nền sáng */
+.sidebar .sb-link.active, .sidebar .sb-sublink.active {
+  background: linear-gradient(90deg, var(--sb-accent-soft) 0%, rgba(236, 72, 153, 0.06) 100%) !important;
+  color: var(--sb-accent) !important;
+  font-weight: 600 !important;
+  box-shadow: inset 3px 0 0 var(--sb-accent-2) !important;
+}
+.sidebar .sb-link.active .sb-icon { filter: none !important; }
+
+/* Group (SEO / Haravan) */
+.sidebar .sb-group-active > .sb-link {
+  background: var(--sb-bg-soft) !important;
+  color: var(--sb-text-strong) !important;
+}
+.sidebar .sb-caret { color: var(--sb-muted) !important; }
+.sidebar .sb-group-active .sb-caret { color: var(--sb-accent) !important; }
+.sidebar .sb-sublink { border-left-color: var(--sb-border) !important; }
+.sidebar .sb-sublink:hover, .sidebar .sb-sublink.active { border-left-color: var(--sb-accent) !important; }
+
+/* Search box */
+.sidebar .sb-search-input {
+  background: var(--sb-bg-soft) !important;
+  border: 1px solid var(--sb-border) !important;
+  color: var(--sb-text) !important;
+}
+.sidebar .sb-search-input::placeholder { color: var(--sb-muted) !important; }
+.sidebar .sb-search-input:focus {
+  background: #fff !important;
+  border-color: var(--sb-accent) !important;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12) !important;
+}
+.sidebar .sb-search-hint { color: var(--sb-muted) !important; border-color: var(--sb-border) !important; }
+.sidebar .sb-search-results {
+  background: #fff !important;
+  border: 1px solid var(--sb-border) !important;
+  box-shadow: 0 12px 32px rgba(30, 30, 60, 0.12) !important;
+}
+.sidebar .sb-search-item { border-bottom-color: var(--sb-border) !important; }
+.sidebar .sb-search-item:hover, .sidebar .sb-search-item.focused { background: var(--sb-bg-hover) !important; }
+.sidebar .sb-search-title { color: var(--sb-text-strong) !important; }
+.sidebar .sb-search-snippet, .sidebar .sb-search-empty, .sidebar .sb-search-loading { color: var(--sb-muted) !important; }
+
+/* Mobile drawer giữ nền sáng + đổ bóng rõ */
+@media (max-width: 880px) {
+  .sidebar { box-shadow: 8px 0 40px rgba(20, 20, 50, 0.18) !important; }
+}
+
