@@ -484,8 +484,26 @@ def init_db():
     # ─── Task Center (reuse ga4_tasks, additive ALTER) ───
     _init_task_center(conn)
 
+    # ─── Analytics daily orchestration (additive) ───
+    _init_analytics_ops(conn)
+
     conn.commit()
     conn.close()
+
+
+def _init_analytics_ops(conn):
+    """Analytics daily orchestration run log — additive, idempotent."""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS analytics_daily_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trigger TEXT, status TEXT,
+            steps_json TEXT, alert_sent INTEGER DEFAULT 0,
+            new_p0 INTEGER, new_p1 INTEGER, failed_steps INTEGER,
+            duration_seconds REAL, error_type TEXT, error_message_safe TEXT,
+            started_at TEXT, finished_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_adr_started ON analytics_daily_runs(started_at DESC);
+    """)
 
 
 def _init_task_center(conn):
