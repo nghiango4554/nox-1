@@ -16,6 +16,10 @@
 
 {% block content %}
 
+{# ── GSC API source & data health (LIVE-1B) — render bởi gsc_dashboard.js, đọc /api/gsc/status ── #}
+<div id="gsc-health"><div class="gsc-skel" style="height:90px;border-radius:12px;background:linear-gradient(90deg,rgba(255,255,255,.04),rgba(255,255,255,.09),rgba(255,255,255,.04));background-size:200% 100%;animation:gscsh 1.2s infinite;margin-bottom:16px"></div></div>
+<style>@keyframes gscsh{0%{background-position:200% 0}100%{background-position:-200% 0}}</style>
+
 <style>
   .gsc-kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:20px }
   .gsc-kpi { background:var(--surface,#1a1a1a); border:1px solid var(--border,rgba(255,255,255,.1)); border-radius:10px; padding:14px 16px; }
@@ -163,4 +167,8 @@
 
 {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='gsc_dashboard.js') }}?v={{ now.timestamp()|int }}"></script>
 {% endblock %}

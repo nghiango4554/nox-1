@@ -283,24 +283,50 @@ def get_status(probe=False):
     cs = dict(cs) if cs else {}
     latest = cs.get("latest_available_date")
     data_age = cs.get("data_age_days")
+    api_status = api["api_status"]
+    err_code = api.get("error_code")
     warnings = []
     if data_age is not None and data_age > 3:
         warnings.append("Dữ liệu Search Console mới nhất hiện dừng tại %s" % latest)
     warnings.append("Chi tiết page/query là top rows API (partial), summary đáng tin hơn detail")
     warnings.append("coverage_complete = false trong chế độ API")
+
+    # oauth_status (an toàn, không lộ token)
+    oa_map = {"ok": "connected", "ready": "connected", "not_configured": "not_configured",
+              "token_missing": "missing"}
+    oauth_status = oa_map.get(api_status)
+    if oauth_status is None:
+        oauth_status = {"token_expired": "expired", "reconnect_required": "expired",
+                        "permission_denied": "no_permission", "wrong_property": "wrong_property",
+                        "quota_exceeded": "quota_exceeded"}.get(err_code, "error")
+
+    ls = latest_sync() or {}
+    cfg = gsc.load_config()
     return {
+        "ok": err_code is None,
         "source_mode": SOURCE_MODE, "coverage_mode": COVERAGE_MODE, "coverage_complete": False,
-        "api_status": api["api_status"], "permission_level": api.get("permission_level"),
-        "error_code": api.get("error_code"), "error_message": api.get("error_message"),
+        "api_status": api_status, "oauth_status": oauth_status,
+        "permission_level": api.get("permission_level"),
+        "error_code": err_code, "error_message": api.get("error_message"),
+        "last_error_message_safe": cs.get("last_error_message") or api.get("error_message"),
         "site_url": api.get("site_url"), "token_present": api.get("token_present"),
         "configured": api.get("configured"),
         "latest_available_date": latest, "data_age_days": data_age,
+        "cache_age_days": cs.get("cache_age_days"),
         "fetched_at": cs.get("fetched_at"), "last_success_at": cs.get("last_success_at"),
         "last_failure_at": cs.get("last_failure_at"), "last_error_type": cs.get("last_error_type"),
+        "fallback_available": bool(cs.get("sheet_fallback_available")) or SHEET_CACHE.exists(),
         "sheet_fallback_available": bool(cs.get("sheet_fallback_available")) or SHEET_CACHE.exists(),
-        "rows_in_db": have_rows, "coverage": cov,
+        "rows_in_db": have_rows, "rows_written": ls.get("rows_written"),
+        "search_types": cfg.get("search_types"),
+        "coverage": cov,
+        "page_click_coverage_percent": cov.get("page_click_coverage_percent"),
+        "page_impression_coverage_percent": cov.get("page_impression_coverage_percent"),
+        "query_click_coverage_percent": cov.get("query_click_coverage_percent"),
+        "query_impression_coverage_percent": cov.get("query_impression_coverage_percent"),
         "join_readiness": "daily_aligned_partial_coverage",
         "gsc_timezone": "PT", "ga4_timezone": "Asia/Ho_Chi_Minh",
         "daily_join_timezone_note": "calendar_day_boundaries_differ",
-        "last_sync": latest_sync(), "is_running": is_running(), "warning": warnings,
+        "last_sync": ls or None, "sync_running": is_running(), "is_running": is_running(),
+        "sync_started_at": _run.get("started_at"), "warning": warnings,
     }
