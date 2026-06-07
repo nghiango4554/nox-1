@@ -87,6 +87,7 @@
       <a href="{{ url_for('seo_inlinks_page') }}" class="sb-sublink {% if request.endpoint == 'seo_inlinks_page' %}active{% endif %}">🕸️ Internal links</a>
       <a href="{{ url_for('seo_gsc_page') }}" class="sb-sublink {% if request.endpoint in ('seo_gsc_page', 'seo_gsc_task_page') %}active{% endif %}">🔵 Search Console</a>
       <a href="{{ url_for('ga4_page') }}" class="sb-sublink {% if request.endpoint == 'ga4_page' %}active{% endif %}">📊 GA4 Analytics</a>
+      <a href="{{ url_for('tracking_page') }}" class="sb-sublink {% if request.endpoint == 'tracking_page' %}active{% endif %}">📡 Tracking Audit</a>
       <a href="{{ url_for('seo_history_page') }}" class="sb-sublink {% if request.endpoint == 'seo_history_page' %}active{% endif %}">📈 Lịch sử</a>
     </div>
   </div>
