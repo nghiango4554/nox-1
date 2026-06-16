@@ -9,6 +9,9 @@
 <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ now.timestamp()|int }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing-hub-theme.css') }}?v={{ now.timestamp()|int }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing-hub-components.css') }}?v={{ now.timestamp()|int }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing-hub-responsive.css') }}?v={{ now.timestamp()|int }}">
 </head>
 <body>
 
@@ -79,6 +82,9 @@
   <a href="{{ url_for('blog_content_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('blog_content') %}active{% endif %}">
     <span class="sb-icon">📰</span><span>Blog Content</span>
   </a>
+  <a href="{{ url_for('seo_blog_rewrite_page') }}" class="sb-link {% if request.endpoint == 'seo_blog_rewrite_page' %}active{% endif %}">
+    <span class="sb-icon">✍️</span><span>AI Viết Lại Blog</span>
+  </a>
   <a href="{{ url_for('products_new_form') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('products_new') %}active{% endif %}">
     <span class="sb-icon">🛍️</span><span>SP mới (Haravan)</span>
   </a>
@@ -104,6 +110,7 @@
       <a href="{{ url_for('seo_indexability_page') }}" class="sb-sublink {% if request.endpoint == 'seo_indexability_page' %}active{% endif %}">🚫 Indexability</a>
       <a href="{{ url_for('seo_inlinks_page') }}" class="sb-sublink {% if request.endpoint == 'seo_inlinks_page' %}active{% endif %}">🕸️ Internal links</a>
       <a href="{{ url_for('seo_history_page') }}" class="sb-sublink {% if request.endpoint == 'seo_history_page' %}active{% endif %}">📈 Lịch sử</a>
+      <a href="{{ url_for('seo_blog_rewrite_page') }}" class="sb-sublink {% if request.endpoint == 'seo_blog_rewrite_page' %}active{% endif %}">✍️ AI Viết Lại Blog</a>
     </div>
   </div>
 

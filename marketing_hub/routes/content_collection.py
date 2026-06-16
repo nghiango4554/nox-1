@@ -265,18 +265,114 @@ def _enqueue_collection_gen(ids):
     return snapshot
 
 
+# ─────────────── COVERAGE LIVE (content/ảnh trên Haravan) ───────────────
+import re as _re
+from pathlib import Path as _Path
+
+_COVERAGE_CACHE = _Path(__file__).parent.parent / "data" / "collection_live_coverage.json"
+_SERVICE_KW = ("dich-vu", "sua-chua", "ve-sinh", "cai-dat", "nang-cap", "bao-hanh")
+
+
+def _classify_collection(col):
+    body = col.get("body_html") or ""
+    handle = col.get("handle") or ""
+    text_len = len(_re.sub(r"<[^>]+>", "", body).strip())
+    h2 = len(_re.findall(r"<h2", body, _re.I))
+    is_service = any(k in handle for k in _SERVICE_KW)
+    has_img = "<img" in body
+    if is_service:
+        cat = "service"
+    elif text_len < 80:
+        cat = "miss_content"          # trống hẳn
+    elif h2 < 2:
+        cat = "thin_content"          # lấp liếm: chỉ vài đoạn intro, không section/FAQ thật
+    elif not has_img:
+        cat = "miss_image"            # content thật nhưng thiếu ảnh
+    else:
+        cat = "ok"
+    return {"handle": handle, "title": col.get("title") or handle, "id": col.get("id"),
+            "text_len": text_len, "h2": h2, "has_img": has_img, "cat": cat}
+
+
+def audit_live_collections():
+    """Fetch toàn bộ collection LIVE Haravan (custom+smart) → phân loại content/ảnh."""
+    import haravan_client as hc
+    raw = []
+    for fn in (hc.list_custom_collections, hc.list_smart_collections):
+        p = 1
+        while True:
+            try:
+                batch = fn(page=p, limit=50)
+            except Exception:
+                break
+            if not batch:
+                break
+            raw += batch
+            if len(batch) < 50:
+                break
+            p += 1
+    items = sorted((_classify_collection(c) for c in raw), key=lambda x: (x["cat"], x["title"].lower()))
+    from collections import Counter
+    cnt = Counter(i["cat"] for i in items)
+    return {
+        "total": len(items), "updated_at": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "counts": {"ok": cnt.get("ok", 0), "miss_content": cnt.get("miss_content", 0),
+                   "thin_content": cnt.get("thin_content", 0),
+                   "miss_image": cnt.get("miss_image", 0), "service": cnt.get("service", 0)},
+        "miss_content": [i for i in items if i["cat"] == "miss_content"],
+        "thin_content": [i for i in items if i["cat"] == "thin_content"],
+        "miss_image": [i for i in items if i["cat"] == "miss_image"],
+    }
+
+
+def _load_coverage_cache():
+    try:
+        return json.loads(_COVERAGE_CACHE.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+def collection_coverage_api():
+    """GET: trả cache (không fetch live, nhanh). refresh=1 → quét live lại."""
+    if request.args.get("refresh") == "1":
+        return collection_coverage_refresh()
+    data = _load_coverage_cache()
+    return jsonify({"ok": True, "cached": True, "data": data})
+
+
+def collection_coverage_refresh():
+    """POST: quét live Haravan + lưu cache."""
+    try:
+        data = audit_live_collections()
+        _COVERAGE_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        _COVERAGE_CACHE.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        return jsonify({"ok": True, "cached": False, "data": data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)[:200]}), 500
+
+
 # ─────────────────────── ROUTES ──────────────────────────────────
 
 def collection_content_page():
     status_filter = request.args.get("status") or None
     view = request.args.get("view") or ("tier" if not status_filter else "flat")
     jobs = _collection_jobs_list(status=status_filter)
+    # tag coverage live (content/ảnh) theo handle từ cache
+    _cov = _load_coverage_cache() or {}
+    _cov_map = {}
+    for c in _cov.get("miss_content", []):
+        _cov_map[c["handle"]] = "miss_content"
+    for c in _cov.get("thin_content", []):
+        _cov_map[c["handle"]] = "thin_content"
+    for c in _cov.get("miss_image", []):
+        _cov_map[c["handle"]] = "miss_image"
     for j in jobs:  # cột "Ngày sync" — format ISO synced_at → DD/MM HH:MM
         sa = j.get("synced_at")
         try:
             j["synced_at_disp"] = datetime.fromisoformat(sa).strftime("%d/%m %H:%M") if sa else ""
         except Exception:
             j["synced_at_disp"] = (sa or "")[:16]
+        j["cov"] = _cov_map.get(j.get("handle"))  # None nếu đủ/dịch vụ/không trong cache
     conn = db.get_conn()
     stats = {}
     for s in ("pending", "draft", "synced", "failed", "existing"):
@@ -439,6 +535,9 @@ def collection_content_sync_all():
 def register(app):
     """Đăng ký 10 route Collection Content."""
     app.add_url_rule("/collection-content", "collection_content_page", collection_content_page)
+    app.add_url_rule("/collection-content/coverage", "collection_coverage_api", collection_coverage_api)
+    app.add_url_rule("/collection-content/coverage/refresh", "collection_coverage_refresh",
+                     collection_coverage_refresh, methods=["POST"])
     app.add_url_rule("/collection-content/<int:job_id>",
                      "collection_content_detail_page", collection_content_detail_page)
     app.add_url_rule("/collection-content/gen-bg",

@@ -1,11 +1,29 @@
-{% extends "base.html" %}
+{% extends "redesign_base.html" %}
 {% block title %}Content Jobs · Sintech Hub{% endblock %}
-
-{% block page_title %}
-<span style="font-weight:600">📝 Content Jobs</span>
-<span class="crumb"></span>
-<span class="muted" style="font-weight:400">Quản lý bài viết AI cho SP</span>
-{% endblock %}
+{% block page_title %}<i class="ic" data-icon="package" style="color:var(--accent-ink)"></i><span>Nội dung</span><i class="ic" data-icon="chevron-right"></i><b>Content Jobs</b>{% endblock %}
+{% block head_extra %}<style>
+:root{--border:rgba(28,34,48,.10);--text-muted:#98a0b3}
+.card{background:var(--card-bg);border:var(--card-border);border-radius:var(--r);box-shadow:var(--card-shadow);padding:var(--pad);margin-bottom:0}
+.muted{color:var(--ink-3)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;transition:.14s;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-primary{background:linear-gradient(120deg,var(--accent-from),var(--accent-to));color:#fff;border-color:transparent}
+.btn-ghost{background:transparent}
+select,input[type=text],input[type=number]{padding:7px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px;background:#fff;color:var(--ink)}
+.data-table{width:100%;border-collapse:collapse}
+.data-table thead th{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+.data-table tbody td{padding:11px 12px;border-bottom:1px solid var(--line-2);vertical-align:middle}
+.data-table tbody tr:hover{background:var(--surface-2)}
+.pill,.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--surface-2);color:var(--ink-2)}
+.seo-issue-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2);font-size:12px;font-weight:700;text-decoration:none;transition:.14s}
+.seo-issue-chip:hover{border-color:var(--accent-from);color:var(--ink)}
+.seo-issue-error{background:linear-gradient(120deg,var(--accent-from),var(--accent-to));color:#fff;border-color:transparent}
+.seo-issue-count{background:rgba(0,0,0,.06);padding:0 7px;border-radius:999px;font-size:11px;font-weight:800}
+.seo-issue-error .seo-issue-count{background:rgba(255,255,255,.28)}
+.chipf{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2);font-size:12px;font-weight:700;text-decoration:none}
+.chipf.on{background:linear-gradient(120deg,var(--accent-from),var(--accent-to));color:#fff;border-color:transparent}
+</style>{% endblock %}
 
 {% block page_actions %}
 <form action="{{ url_for('content_jobs_push_from_empty_desc') }}" method="post" style="display:inline">
@@ -23,22 +41,18 @@
 {% block content %}
 
 {# ───── KPI ───── #}
-<div class="kpi-grid">
+<div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
   {% set status_meta = [
-    ('pending', '⏳', 'Chờ AI', '#94a3b8'),
-    ('drafting', '🤖', 'Đang gen', '#60a5fa'),
-    ('text_done', '📝', 'Text xong', '#a78bfa'),
-    ('draft', '📋', 'Draft full', '#facc15'),
-    ('approved', '✅', 'Đã duyệt', '#4ade80'),
-    ('synced', '🚀', 'Đã sync', '#a3a3a3'),
-    ('failed', '❌', 'Lỗi', '#f87171'),
+    ('pending', '⏳', 'Chờ AI', 'slate', 'amber'),
+    ('drafting', '🤖', 'Đang gen', 'sky', 'blue'),
+    ('text_done', '📝', 'Text xong', 'violet', 'violet'),
+    ('draft', '📋', 'Draft full', 'amber', 'amber'),
+    ('approved', '✅', 'Đã duyệt', 'teal', 'teal'),
+    ('synced', '🚀', 'Đã sync', 'indigo', 'blue'),
+    ('failed', '❌', 'Lỗi', 'rose', 'red'),
   ] %}
-  {% for s, ic, label, color in status_meta %}
-  <a class="kpi" href="?status={{ s }}" style="text-decoration:none">
-    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(148,163,184,0.15);color:{{ color }}">{{ ic }}</div></div>
-    <div class="kpi-num" style="color:{{ color }}">{{ stats.by_status.get(s, 0) }}</div>
-    <div class="kpi-label">{{ label }}</div>
-  </a>
+  {% for s, ic, label, tone, grad in status_meta %}
+  <a class="stat is-grad" data-tone="{{ tone }}" data-grad="{{ grad }}" href="?status={{ s }}" style="text-decoration:none"><div class="stat-top"><div class="stat-ico" data-tone="{{ tone }}">{{ ic }}</div></div><div><div class="stat-val">{{ stats.by_status.get(s, 0) }}</div><div class="stat-title" style="margin-top:7px">{{ label }}</div></div></a>
   {% endfor %}
 </div>
 
@@ -227,10 +241,10 @@
        href="{{ url_for('content_jobs_list_page', cate=active_cate) }}">
       Tất cả <span class="seo-issue-count">{{ stats.total }}</span>
     </a>
-    {% for s, ic, label, color in status_meta %}
-      <a class="seo-issue-chip {% if active_status == s %}seo-issue-error{% else %}seo-issue-warn{% endif %}"
+    {% for s, ic, label, tone, grad in status_meta %}
+      <a class="chipf {% if active_status == s %}on{% endif %}"
          href="?status={{ s }}{% if active_cate %}&cate={{ active_cate }}{% endif %}">
-        {{ ic }} {{ label }} <span class="seo-issue-count">{{ stats.by_status.get(s, 0) }}</span>
+        {{ ic }} {{ label }} · {{ stats.by_status.get(s, 0) }}
       </a>
     {% endfor %}
   </div>

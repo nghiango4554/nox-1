@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}AI Viết Lại Blog · SEO · Sintech Hub{% endblock %}
+{% block page_title %}<span>✍️ AI Viết Lại Blog</span>{% endblock %}
+
+{% block content %}
+<style>
+  .br-wrap{padding:4px 2px 40px}
+  .br-intro{color:#555;margin:0 0 16px;font-size:14px}
+  .br-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
+  .br-kpi{background:#fff;border:1px solid #e6e6ef;border-radius:12px;padding:12px 14px}
+  .br-kpi .n{font-size:24px;font-weight:800;line-height:1}
+  .br-kpi .l{font-size:12px;color:#777;margin-top:4px}
+  .br-kpi.high .n{color:#dc2626}.br-kpi.med .n{color:#d97706}.br-kpi.rev .n{color:#2563eb}.br-kpi.unk .n{color:#64748b}
+  .br-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .br-btn{border:1px solid #d4d4e0;background:#fff;border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer;font-weight:600}
+  .br-btn.primary{background:#4f46e5;color:#fff;border-color:#4f46e5}
+  .br-btn:disabled{opacity:.45;cursor:not-allowed}
+  .br-phase{font-size:11px;color:#9333ea;border:1px dashed #c4b5fd;border-radius:6px;padding:2px 6px;margin-left:4px}
+  .br-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center}
+  .br-filters select,.br-filters input{border:1px solid #d4d4e0;border-radius:8px;padding:6px 10px;font-size:13px}
+  table.br-tbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e6e6ef;border-radius:12px;overflow:hidden;font-size:13px}
+  table.br-tbl th{background:#f6f6fb;text-align:left;padding:9px 10px;font-size:11px;text-transform:uppercase;color:#666;position:sticky;top:0}
+  table.br-tbl td{padding:8px 10px;border-top:1px solid #f0f0f5;vertical-align:top}
+  .risk{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
+  .risk.high{background:#fee2e2;color:#b91c1c}.risk.medium{background:#fef3c7;color:#b45309}
+  .risk.review{background:#dbeafe;color:#1d4ed8}.risk.unknown{background:#f1f5f9;color:#475569}
+  .badge-notraffic{font-size:10px;color:#94a3b8;border:1px solid #e2e8f0;border-radius:5px;padding:1px 5px}
+  .br-title-cell a{color:#1f2937;text-decoration:none;font-weight:600}
+  .br-title-cell a:hover{color:#4f46e5}
+  .br-pager{display:flex;gap:6px;align-items:center;margin-top:12px;font-size:13px}
+  #br-detail{position:fixed;top:0;right:0;width:min(520px,92vw);height:100vh;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.12);transform:translateX(100%);transition:.25s;overflow:auto;z-index:50;padding:20px}
+  #br-detail.open{transform:translateX(0)}
+  #br-detail h3{margin-top:0}
+  #br-detail pre{background:#f6f6fb;padding:10px;border-radius:8px;font-size:12px;white-space:pre-wrap;word-break:break-word}
+  .br-x{float:right;cursor:pointer;font-size:20px;color:#888}
+</style>
+
+<div class="br-wrap">
+  <p class="br-intro">Tạo hàng đợi biên tập cho các bài blog cần viết lại. <b>Chỉ cập nhật Haravan sau khi duyệt</b> — P1 mới import scan + xếp ưu tiên, chưa gọi AI.</p>
+
+  <div class="br-kpis" id="br-kpis"></div>
+
+  <div class="br-actions">
+    <button class="br-btn" id="btn-dry">🔎 Dry-run import</button>
+    <button class="br-btn primary" id="btn-import">⬇️ Import scan (ghi DB)</button>
+    <button class="br-btn" id="btn-export">📤 Export CSV</button>
+    <button class="br-btn" id="btn-refresh">🔄 Refresh</button>
+    <button class="br-btn" disabled>⚡ Generate selected <span class="br-phase">P3</span></button>
+    <button class="br-btn" disabled>✅ Approve <span class="br-phase">P4</span></button>
+    <button class="br-btn" disabled>🚀 Apply <span class="br-phase">P5</span></button>
+    <button class="br-btn" disabled>↩️ Rollback <span class="br-phase">P5</span></button>
+  </div>
+  <div id="br-msg" style="font-size:13px;color:#4f46e5;margin-bottom:10px"></div>
+
+  <div class="br-filters">
+    <select id="f-risk"><option value="">Risk: tất cả</option><option value="high">high</option><option value="medium">medium</option><option value="review">review</option><option value="unknown">unknown</option></select>
+    <select id="f-traffic"><option value="">Traffic: tất cả</option><option value="has_data">Có traffic</option><option value="no_traffic_data">Chưa có</option></select>
+    <select id="f-sort"><option value="priority_score">Sort: Priority</option><option value="gsc_clicks_28d">GSC clicks</option><option value="gsc_impressions_28d">Impressions</option><option value="ga4_organic_sessions_28d">GA4 sessions</option><option value="updated_at">Updated</option></select>
+    <input id="f-q" placeholder="🔍 tìm tiêu đề / URL" style="min-width:200px">
+    <label style="font-size:13px"><input type="checkbox" id="f-sel"> chỉ selected</label>
+  </div>
+
+  <div style="max-height:64vh;overflow:auto;border-radius:12px">
+  <table class="br-tbl">
+    <thead><tr>
+      <th>Sel</th><th>Prio</th><th>Risk</th><th>Tiêu đề</th><th>Nhóm</th>
+      <th>GSC click</th><th>Impr</th><th>GA4 ss</th><th>Người viết</th><th>Năm</th><th></th>
+    </tr></thead>
+    <tbody id="br-rows"><tr><td colspan="11" style="padding:20px;color:#999">Chưa có candidate — bấm <b>Import scan</b>.</td></tr></tbody>
+  </table>
+  </div>
+  <div class="br-pager">
+    <button class="br-btn" id="pg-prev">‹</button>
+    <span id="pg-info">0</span>
+    <button class="br-btn" id="pg-next">›</button>
+  </div>
+</div>
+
+<div id="br-detail"><span class="br-x" onclick="document.getElementById('br-detail').classList.remove('open')">✕</span><div id="br-detail-body"></div></div>
+
+<script>
+const S={limit:50,offset:0,total:0};
+function kpi(s){
+  document.getElementById('br-kpis').innerHTML=[
+    ['total','Tổng candidate',''],['high','High risk','high'],['medium','Medium','med'],
+    ['review','Review','rev'],['unknown','Unknown','unk'],['selected','Selected',''],
+    ['has_traffic','Có traffic',''],['no_traffic','Chưa có traffic','']
+  ].map(([k,l,c])=>`<div class="br-kpi ${c}"><div class="n">${s[k]??0}</div><div class="l">${l}</div></div>`).join('');
+}
+async function loadStatus(){const r=await fetch('/api/blog-rewrite/status');kpi(await r.json());}
+async function loadRows(){
+  const p=new URLSearchParams({risk:f_risk.value,traffic:f_traffic.value,sort:f_sort.value,
+    q:f_q.value,only_selected:f_sel.checked?'1':'',limit:S.limit,offset:S.offset});
+  const r=await fetch('/api/blog-rewrite/candidates?'+p);const d=await r.json();
+  S.total=d.total;
+  document.getElementById('pg-info').textContent=`${d.total} bài · ${S.offset+1}-${Math.min(S.offset+S.limit,d.total)}`;
+  const tb=document.getElementById('br-rows');
+  if(!d.items.length){tb.innerHTML='<tr><td colspan="11" style="padding:20px;color:#999">Không có kết quả.</td></tr>';return;}
+  tb.innerHTML=d.items.map(c=>`<tr>
+    <td>${c.selected?'✅':'⬜'}</td>
+    <td><b>${c.priority_score}</b></td>
+    <td><span class="risk ${c.risk_level}">${c.risk_level}</span></td>
+    <td class="br-title-cell"><a href="${c.article_url}" target="_blank">${esc(c.title)}</a></td>
+    <td style="font-size:11px;color:#777">${c.source_group_primary}</td>
+    <td>${c.gsc_clicks_28d||0}</td><td>${c.gsc_impressions_28d||0}</td><td>${c.ga4_organic_sessions_28d||0}</td>
+    <td>${esc(c.author||'')}</td><td>${c.published_year||''}</td>
+    <td><button class="br-btn" style="padding:3px 8px" onclick="detail(${c.id})">👁</button></td>
+  </tr>`).join('');
+}
+function esc(s){return (s||'').replace(/[<>&]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]));}
+async function detail(id){
+  const r=await fetch('/api/blog-rewrite/candidates/'+id);const d=(await r.json()).candidate;
+  document.getElementById('br-detail-body').innerHTML=`<h3>${esc(d.title)}</h3>
+    <p><a href="${d.article_url}" target="_blank">${d.article_url}</a></p>
+    <p><span class="risk ${d.risk_level}">${d.risk_level}</span> · nhóm <b>${d.source_group_primary}</b> · priority <b>${d.priority_score}</b></p>
+    <p>Người viết: <b>${esc(d.author||'-')}</b> · Năm: ${d.published_year||'-'} · Status: <b>${d.status}</b> · ${d.traffic_data_status==='has_data'?'có traffic':'<span class="badge-notraffic">chưa có traffic data</span>'}</p>
+    <p>GSC: ${d.gsc_clicks_28d} clicks · ${d.gsc_impressions_28d} impr · pos ${d.gsc_position_28d??'-'} · GA4 organic ${d.ga4_organic_sessions_28d} ss</p>
+    <h4>Nhóm nguồn</h4><pre>${esc(d.source_groups_json||'')}</pre>
+    <h4>Host ảnh ngoài (evidence)</h4><pre>${esc(d.source_hosts_json||'[]')}</pre>
+    <h4>Priority breakdown</h4><pre>risk_weight(${d.risk_level}) + log(clicks/impr/sessions)</pre>
+    <p style="color:#9333ea;font-size:12px">▸ Draft / AI generate / diff / apply: làm ở P3-P5.</p>`;
+  document.getElementById('br-detail').classList.add('open');
+}
+async function imp(apply){
+  document.getElementById('br-msg').textContent=apply?'Đang import vào DB...':'Đang dry-run...';
+  const r=await fetch('/api/blog-rewrite/import-scan'+(apply?'?apply=1':''),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apply})});
+  const d=await r.json();
+  if(!d.ok){document.getElementById('br-msg').textContent='Lỗi: '+(d.error||'');return;}
+  const s=d.summary;
+  document.getElementById('br-msg').textContent=`${apply?'✅ Import xong':'🔎 Dry-run'}: ${s.dedup_candidates} candidate · high ${s.by_risk.high||0} / medium ${s.by_risk.medium||0} / review ${s.by_risk.review||0} / unknown ${s.by_risk.unknown||0} · GSC match ${s.gsc_matched} · GA4 ${s.ga4_matched}`;
+  if(apply){await loadStatus();S.offset=0;await loadRows();}
+}
+btn_dry.onclick=()=>imp(false);
+btn_import.onclick=()=>imp(true);
+btn_export.onclick=()=>location.href='/api/blog-rewrite/export';
+btn_refresh.onclick=()=>{loadStatus();loadRows();};
+[f_risk,f_traffic,f_sort,f_sel].forEach(e=>e.onchange=()=>{S.offset=0;loadRows();});
+let qt;f_q.oninput=()=>{clearTimeout(qt);qt=setTimeout(()=>{S.offset=0;loadRows();},350);};
+pg_prev.onclick=()=>{if(S.offset>0){S.offset-=S.limit;loadRows();}};
+pg_next.onclick=()=>{if(S.offset+S.limit<S.total){S.offset+=S.limit;loadRows();}};
+loadStatus();loadRows();
+</script>
+{% endblock %}

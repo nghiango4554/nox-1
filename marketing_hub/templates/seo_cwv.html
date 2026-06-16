@@ -1,15 +1,13 @@
-{% extends "base.html" %}
-{% block title %}Core Web Vitals · SEO · Sintech Hub{% endblock %}
-
-{% block page_title %}
-<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
-<span class="crumb"></span>
-<span style="font-weight:600">⚡ Core Web Vitals</span>
-{% endblock %}
-
-{% block page_actions %}
-<a class="btn" href="{{ url_for('seo_dashboard') }}">← SEO dashboard</a>
-{% endblock %}
+{% extends "redesign_base.html" %}
+{% block title %}Core Web Vitals · Sintech Hub{% endblock %}
+{% block page_title %}<i class="ic" data-icon="gauge" style="color:var(--accent-ink)"></i><span>Phân tích</span><i class="ic" data-icon="chevron-right"></i><b>Core Web Vitals</b>{% endblock %}
+{% block page_actions %}<button class="btn-primary" onclick="recrawlAll()"><i class="ic" data-icon="refresh-cw"></i>Crawl lại toàn dữ liệu</button> <a class="btn" href="{{ url_for('seo_dashboard') }}"><i class="ic" data-icon="shield-check"></i>SEO dashboard</a>{% endblock %}
+{% block head_extra %}<style>
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;transition:.14s;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-primary{background:linear-gradient(120deg,var(--accent-from),var(--accent-to));color:#fff;border-color:transparent}
+</style>{% endblock %}
 
 {% block content %}
 <style>
@@ -256,6 +254,19 @@ details:not([open]) summary::before { content:'▸ ' }
 {% if avg_m >= 90 %}{% set grade_m = 'A' %}{% elif avg_m >= 75 %}{% set grade_m = 'B' %}{% elif avg_m >= 60 %}{% set grade_m = 'C' %}{% elif avg_m >= 50 %}{% set grade_m = 'D' %}{% else %}{% set grade_m = 'F' %}{% endif %}
 {% set avg_d = stats_desktop.avg_perf if stats_desktop and stats_desktop.avg_perf else 0 %}
 {% if avg_d >= 90 %}{% set grade_d = 'A' %}{% elif avg_d >= 75 %}{% set grade_d = 'B' %}{% elif avg_d >= 60 %}{% set grade_d = 'C' %}{% elif avg_d >= 50 %}{% set grade_d = 'D' %}{% else %}{% set grade_d = 'F' %}{% endif %}
+
+<!-- ── Realtime progress (ĐẦU trang, sticky) ── -->
+<div class="scan-running-bar" id="scanRunning" style="position:sticky; top:8px; z-index:60; margin-bottom:16px; box-shadow:0 4px 14px rgba(0,0,0,.10); border:1px solid #c7d2fe; background:#eef2ff">
+  <div style="display:flex; justify-content:space-between; align-items:center; font-size:13px; margin-bottom:7px">
+    <span id="scanLabel" style="font-weight:800; color:#4338ca">⚡ Đang quét realtime...</span>
+    <span style="display:flex; gap:12px; align-items:center">
+      <span id="scanCounter" style="color:#475569; font-weight:600"></span>
+      <button class="btn btn-sm" onclick="stopScan()" style="background:#fef2f2; border-color:#fca5a5; color:#dc2626">⏹ Dừng (lưu tiến độ)</button>
+    </span>
+  </div>
+  <div class="scan-pbar-wrap"><div class="scan-pbar-fill" id="scanPbar" style="width:0%"></div></div>
+  <div class="scan-msg" id="scanMsg" style="margin-top:6px; font-size:12px; color:#475569"></div>
+</div>
 
 <!-- ── A. Header ── -->
 <div class="cwv-header" style="display:block">
@@ -565,15 +576,7 @@ details:not([open]) summary::before { content:'▸ ' }
     </button>
   </div>
 
-  <!-- Running progress bar -->
-  <div class="scan-running-bar" id="scanRunning">
-    <div style="display:flex; justify-content:space-between; align-items:center; font-size:12.5px; margin-bottom:6px">
-      <span id="scanLabel" style="font-weight:600">⚡ Đang scan...</span>
-      <span id="scanCounter" style="color:var(--text-muted)"></span>
-    </div>
-    <div class="scan-pbar-wrap"><div class="scan-pbar-fill" id="scanPbar" style="width:0%"></div></div>
-    <div class="scan-msg" id="scanMsg"></div>
-  </div>
+  <!-- thanh tiến độ realtime đã chuyển lên ĐẦU trang (#scanRunning) -->
 </div>
 
 <!-- ── API Key tip ── -->
@@ -776,30 +779,31 @@ function _liveStats(on){
   },5000);
 }
 
-function _poll(){
-  clearInterval(_pollTimer);
-  _liveStats(true);
-  _pollTimer=setInterval(async()=>{
-    const d=await fetch('/api/seo/cwv/status').then(r=>r.json());
+let _wasRunning=false;
+// 1 watcher LUÔN chạy — tự cập nhật % realtime, KHÔNG cần refresh trang
+async function _statusTick(){
+  let d; try{ d=await fetch('/api/seo/cwv/status').then(r=>r.json()); }catch(e){ return; }
+  renderPass(d);
+  const pbar=document.getElementById('scanPbar'), msg=document.getElementById('scanMsg'), ctr=document.getElementById('scanCounter');
+  if(d.running){
+    _wasRunning=true; setScanning(true); _liveStats(true);
     const pct=d.total>0?Math.round(d.done/d.total*100):0;
-    const pbar=document.getElementById('scanPbar'), msg=document.getElementById('scanMsg'), ctr=document.getElementById('scanCounter');
     if(pbar) pbar.style.width=pct+'%';
+    if(ctr) ctr.textContent=`${d.done}/${d.total} URL · ${pct}% · phase ${d.phase_idx||0}/${d.phase_total||8}`;
     if(msg) msg.textContent=d.message||'';
-    if(ctr) ctr.textContent=`${d.done}/${d.total} URL · phase ${d.phase_idx||0}/${d.phase_total||8}`;
     if(d.chain_active && d.phase_label) showBanner(`Phase ${d.phase_idx}/${d.phase_total} · ${d.phase_label}`,false);
-    if(!d.running){
-      clearInterval(_pollTimer); _liveStats(false);
-      setScanning(false);
-      const stopped=(d.message||'').includes('Đã dừng');
-      if(stopped){ showBanner(null); }
-      else {
-        const ok=d.chain_total_ok||0, fail=d.chain_total_failed||0;
-        showBanner(`✅ <b>Hoàn tất quét toàn bộ!</b> ${ok} OK · ${fail} lỗi. Đã lưu vào lịch sử.`, true);
-      }
-      setTimeout(()=>{ location.href=`/seo/cwv?strategy=${_VIEW_STRATEGY}&sort=performance_score&order=asc`; }, 2000);
+  } else if(_wasRunning){
+    _wasRunning=false; setScanning(false); _liveStats(false);
+    if((d.message||'').includes('Đã dừng')){ showBanner(null); }
+    else {
+      showBanner(`✅ <b>Hoàn tất quét toàn bộ!</b> ${d.chain_total_ok||0} OK · ${d.chain_total_failed||0} lỗi. Đã lưu vào lịch sử.`, true);
+      setTimeout(()=>{ location.href=`/seo/cwv?strategy=${_VIEW_STRATEGY}&sort=performance_score&order=asc`; }, 3000);
     }
-  },2500);
+  }
 }
+function _poll(){ _statusTick(); }                 // bấm nút → cập nhật ngay (không đợi 2.5s)
+setInterval(_statusTick, 2500);                    // watcher luôn chạy nền
+_statusTick();                                     // cập nhật ngay khi load
 
 async function startFullScan(){
   const apiKey=document.getElementById('apiKey').value.trim();
@@ -810,21 +814,23 @@ async function startFullScan(){
   _poll();
 }
 
+// Nút đầu trang: crawl LẠI toàn bộ từ đầu (force đợt mới, bỏ qua resume)
+async function recrawlAll(){
+  if(!confirm('Crawl LẠI TOÀN BỘ dữ liệu CWV từ đầu?\n\n• Đợt đang dở (nếu có) sẽ được lưu vào lịch sử.\n• Bắt đầu đợt mới quét lại TẤT CẢ URL (mobile + desktop).\n• Quá trình này lâu — có thể bấm Dừng để lưu tiến độ.'))return;
+  const apiKey=(document.getElementById('apiKey')?.value||'').trim();
+  setScanning(true);
+  showBanner('Đang khởi động crawl lại toàn bộ...',false);
+  const d=await fetch('/api/seo/cwv/scan/start-all',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:apiKey,force_new:true})}).then(r=>r.json());
+  if(!d.ok){ alert(d.message||d.error||'Không khởi động được'); setScanning(false); showBanner(null); return; }
+  _poll();
+}
+
 async function stopScan(){
   const b=document.getElementById('btnStop'); if(b){ b.textContent='⏳ Đang dừng...'; b.disabled=true; }
   await fetch('/api/seo/cwv/scan/stop',{method:'POST'});
 }
 
-/* INIT — khôi phục trạng thái khi mở/refresh trang */
-(async()=>{
-  const d=await fetch('/api/seo/cwv/status').then(r=>r.json());
-  renderPass(d);
-  if(d.running){
-    setScanning(true);
-    if(d.chain_active && d.phase_label) showBanner(`Phase ${d.phase_idx}/${d.phase_total} · ${d.phase_label}`,false);
-    _poll();
-  }
-})();
+/* INIT cũ đã thay bằng watcher _statusTick() luôn chạy nền ở trên */
 </script>
 
 {% endblock %}

@@ -1,0 +1,14 @@
+url,type,perf_before,lcp_before,cls_before,tbt_before,perf_after,lcp_after,cls_after,tbt_after,after_status,predicted
+https://sintech.vn/blogs/huong-dan/cach-tai-va-su-dung-chat-gpt-cho-may-tinh-windows-macos-cap-nhat-20,blog,43,11824,0.4563,252,,,,,PENDING_LIVE (patch chưa publish),"CLS↓ (reserved space 16:9), LCP/TBT ~same"
+https://sintech.vn/blogs/huong-dan/pc-bi-giat-dien-co-sao-khong-nguyen-nhan-cach-khac-phuc-tai-nha,blog,45,13361,0.3906,208,,,,,PENDING_LIVE (patch chưa publish),"CLS↓ (reserved space 16:9), LCP/TBT ~same"
+https://sintech.vn/blogs/news/trung-tam-sua-pc-uy-tin-lay-ngay-o-quan-7,blog,48,9681,0.348,192,,,,,PENDING_LIVE (patch chưa publish),"CLS↓ (reserved space 16:9), LCP/TBT ~same"
+https://sintech.vn/blogs/news/thu-mua-may-tinh-cu-gia-cao-tan-noi-tai-tphcm,blog,42,4935,0.4675,476,,,,,PENDING_LIVE (patch chưa publish),"CLS↓ (reserved space 16:9), LCP/TBT ~same"
+https://sintech.vn/blogs/huong-dan/top-phan-mem-test-vga-card-man-hinh-hieu-qua-2025-giup-kiem-tra-hi,blog,35,8952,0.9109,367,,,,,PENDING_LIVE (patch chưa publish),"CLS↓ (reserved space 16:9), LCP/TBT ~same"
+https://sintech.vn/blogs/news/tim-hieu-ve-ep-xung-phuong-phap-tang-toc-do-va-suc-manh-cua-pc-co-tha,blog,see deep_audit,,,,,,,,PENDING_LIVE,CLS↓ kỳ vọng
+https://sintech.vn/blogs/news/lich-phat-phim-chieu-rap-thang-6-2026-dang-chu-y,blog,see deep_audit,,,,,,,,PENDING_LIVE,CLS↓ kỳ vọng
+https://sintech.vn/blogs/news/ifa-2024-co-gi-tai-gian-trung-bay-cua-samsung-do-gi-cung-tich-hop-a,blog,see deep_audit,,,,,,,,PENDING_LIVE,CLS↓ kỳ vọng
+https://sintech.vn/blogs/news/cau-hinh-choi-cs2-counter-strike-2-tren-pc-laptop,blog,see deep_audit,,,,,,,,PENDING_LIVE,CLS↓ kỳ vọng
+https://sintech.vn/blogs/news/top-10-thuong-hieu-linh-kien-may-tinh-duoc-yeu-thich-nhat-tai-viet-nam,blog,see deep_audit,,,,,,,,PENDING_LIVE,CLS↓ kỳ vọng
+https://sintech.vn/products/laptop-lenovo-v15-g5-irl-83hf00brva-15-6-inch-fhd-8-512gb,product,n/a,,,,,,,,PENDING_LIVE,KHÔNG đổi (patch không target)
+https://sintech.vn/collections/macbook-air,collection,n/a,,,,,,,,PENDING_LIVE,KHÔNG đổi (patch không target)
+https://sintech.vn,homepage,n/a,,,,,,,,PENDING_LIVE,KHÔNG đổi (patch không target)

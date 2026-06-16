@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#7c3aed">
+<title>{% block title %}Sintech Marketing Hub{% endblock %}</title>
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ now.timestamp()|int }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing-hub-theme.css') }}?v={{ now.timestamp()|int }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing-hub-components.css') }}?v={{ now.timestamp()|int }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing-hub-responsive.css') }}?v={{ now.timestamp()|int }}">
+</head>
+<body>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sb-brand">
+    <div class="sb-logo">💕</div>
+    <div>
+      <div class="sb-name">Sintech Hub</div>
+      <div class="sb-tag">by Nox-1</div>
+    </div>
+  </div>
+
+  <div class="sb-search-wrap">
+    <input type="text" id="sb-search" class="sb-search-input"
+           placeholder="🔍 Tìm bài / SP / URL..."
+           autocomplete="off">
+    <kbd class="sb-search-hint">/</kbd>
+    <div id="sb-search-results" class="sb-search-results hidden"></div>
+  </div>
+
+  {# ───── TỔNG QUAN ───── #}
+  <div class="sb-section">Tổng quan</div>
+  <a href="{{ url_for('dashboard') }}" class="sb-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
+    <span class="sb-icon">📊</span><span>Dashboard</span>
+  </a>
+  <a href="{{ url_for('jobs_center_page') }}" class="sb-link {% if request.endpoint == 'jobs_center_page' %}active{% endif %}">
+    <span class="sb-icon">⚙️</span><span>Job Center</span>
+  </a>
+
+  {# ───── PHÂN TÍCH & ĐO LƯỜNG (gom analytics lại 1 chỗ) ───── #}
+  <div class="sb-section">Phân tích &amp; Đo lường</div>
+  <a href="{{ url_for('ga4_page') }}" class="sb-link {% if request.endpoint == 'ga4_page' %}active{% endif %}">
+    <span class="sb-icon">📈</span><span>GA4 Analytics</span>
+  </a>
+  <a href="{{ url_for('seo_gsc_page') }}" class="sb-link {% if request.endpoint in ('seo_gsc_page', 'seo_gsc_task_page') %}active{% endif %}">
+    <span class="sb-icon">🔵</span><span>Search Console</span>
+  </a>
+  <a href="{{ url_for('tracking_page') }}" class="sb-link {% if request.endpoint == 'tracking_page' %}active{% endif %}">
+    <span class="sb-icon">📡</span><span>Tracking Audit</span>
+  </a>
+  <a href="{{ url_for('tasks_page') }}" class="sb-link {% if request.endpoint == 'tasks_page' %}active{% endif %}">
+    <span class="sb-icon">✅</span><span>Task Center</span>
+  </a>
+  <a href="{{ url_for('ops_page') }}" class="sb-link {% if request.endpoint == 'ops_page' %}active{% endif %}">
+    <span class="sb-icon">🛠️</span><span>Analytics Ops</span>
+  </a>
+
+  {# ───── FACEBOOK ───── #}
+  <div class="sb-section">Facebook</div>
+  <a href="{{ url_for('post_new') }}" class="sb-link {% if request.endpoint == 'post_new' %}active{% endif %}">
+    <span class="sb-icon">➕</span><span>Bài mới</span>
+  </a>
+  <a href="{{ url_for('posts_page') }}" class="sb-link {% if request.endpoint == 'posts_page' %}active{% endif %}">
+    <span class="sb-icon">📝</span><span>Bài đã đăng</span>
+  </a>
+  <a href="{{ url_for('calendar_page') }}" class="sb-link {% if request.endpoint == 'calendar_page' %}active{% endif %}">
+    <span class="sb-icon">📅</span><span>Lịch đăng</span>
+  </a>
+
+  {# ───── NỘI DUNG (sản xuất) ───── #}
+  <div class="sb-section">Nội dung</div>
+  <a href="{{ url_for('content_jobs_list_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('content_jobs') %}active{% endif %}">
+    <span class="sb-icon">🧰</span><span>Content Jobs</span>
+  </a>
+  <a href="{{ url_for('collection_content_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('collection_content') %}active{% endif %}">
+    <span class="sb-icon">🗂️</span><span>Collection Content</span>
+  </a>
+  <a href="{{ url_for('blog_content_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('blog_content') %}active{% endif %}">
+    <span class="sb-icon">📰</span><span>Blog Content</span>
+  </a>
+  <a href="{{ url_for('products_new_form') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('products_new') %}active{% endif %}">
+    <span class="sb-icon">🛍️</span><span>SP mới (Haravan)</span>
+  </a>
+  <a href="{{ url_for('alt_manager_page') }}" class="sb-link {% if request.endpoint and 'alt_manager' in request.endpoint %}active{% endif %}">
+    <span class="sb-icon">🖼️</span><span>ALT ảnh</span>
+  </a>
+
+  {# ───── SEO (gập) — chỉ audit tools, analytics đã lên nhóm Phân tích ───── #}
+  <div class="sb-section">Tối ưu &amp; Kho</div>
+  {% set seo_active = request.endpoint and request.endpoint.startswith('seo') and request.endpoint not in ('seo_gsc_page', 'seo_gsc_task_page') %}
+  <div class="sb-group {% if seo_active %}sb-group-active{% endif %}" data-group="seo">
+    <a href="{{ url_for('seo_dashboard') }}" class="sb-link {% if request.endpoint == 'seo_dashboard' %}active{% endif %}">
+      <span class="sb-icon">🔍</span><span>SEO</span>
+      <span class="sb-caret">▾</span>
+    </a>
+    <div class="sb-sub">
+      <a href="{{ url_for('seo_coverage_page') }}" class="sb-sublink {% if request.endpoint == 'seo_coverage_page' %}active{% endif %}">🩺 Coverage nội dung</a>
+      <a href="{{ url_for('seo_title_meta_page') }}" class="sb-sublink {% if request.endpoint == 'seo_title_meta_page' %}active{% endif %}">📝 Title &amp; Meta</a>
+      <a href="{{ url_for('seo_h1_in_desc_page') }}" class="sb-sublink {% if request.endpoint == 'seo_h1_in_desc_page' %}active{% endif %}">🔤 H1 trong mô tả</a>
+      <a href="{{ url_for('seo_empty_desc_page') }}" class="sb-sublink {% if request.endpoint == 'seo_empty_desc_page' %}active{% endif %}">📭 SP thiếu mô tả</a>
+      <a href="{{ url_for('seo_duplicates') }}" class="sb-sublink {% if request.endpoint == 'seo_duplicates' %}active{% endif %}">🔁 Trùng lặp</a>
+      <a href="{{ url_for('seo_broken_links_page') }}" class="sb-sublink {% if request.endpoint == 'seo_broken_links_page' %}active{% endif %}">🔗 Link gãy</a>
+      <a href="{{ url_for('seo_indexability_page') }}" class="sb-sublink {% if request.endpoint == 'seo_indexability_page' %}active{% endif %}">🚫 Indexability</a>
+      <a href="{{ url_for('seo_inlinks_page') }}" class="sb-sublink {% if request.endpoint == 'seo_inlinks_page' %}active{% endif %}">🕸️ Internal links</a>
+      <a href="{{ url_for('seo_history_page') }}" class="sb-sublink {% if request.endpoint == 'seo_history_page' %}active{% endif %}">📈 Lịch sử</a>
+    </div>
+  </div>
+
+  {# ───── HARAVAN (gập) ───── #}
+  {% set hv_active = request.endpoint and request.endpoint.startswith('haravan') %}
+  <div class="sb-group {% if hv_active %}sb-group-active{% endif %}" data-group="haravan">
+    <a href="{{ url_for('haravan_dashboard') }}" class="sb-link {% if request.endpoint == 'haravan_dashboard' %}active{% endif %}">
+      <span class="sb-icon">🛒</span><span>Haravan</span>
+      <span class="sb-caret">▾</span>
+    </a>
+    <div class="sb-sub">
+      <a href="{{ url_for('haravan_products_page') }}" class="sb-sublink {% if request.endpoint == 'haravan_products_page' %}active{% endif %}">📦 Sản phẩm</a>
+      <a href="{{ url_for('haravan_blogs') }}" class="sb-sublink {% if request.endpoint == 'haravan_blogs' %}active{% endif %}">📝 Blog &amp; News</a>
+      <a href="{{ url_for('haravan_audit_page') }}" class="sb-sublink {% if request.endpoint == 'haravan_audit_page' %}active{% endif %}">📜 Audit log</a>
+    </div>
+  </div>
+
+  {# ───── KHÁC ───── #}
+  <div class="sb-section">Khác</div>
+  <a href="{{ url_for('library_page') }}" class="sb-link {% if request.endpoint == 'library_page' %}active{% endif %}">
+    <span class="sb-icon">📚</span><span>Thư viện ảnh</span>
+  </a>
+  <a href="{{ url_for('competitors_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('competitors') %}active{% endif %}">
+    <span class="sb-icon">🥷</span><span>Đối thủ</span>
+  </a>
+
+  <div class="sb-bottom">
+    <div class="sb-user">
+      <div class="sb-user-avatar">N</div>
+      <div>
+        <div class="sb-user-name">Vợ yêu Nghĩa</div>
+        <div class="sb-user-role">Marketing · Sintech</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<div class="main">
+  <header class="page-header">
+    <button class="ph-mobile-menu" id="ph-mobile-menu" aria-label="Toggle menu">☰</button>
+    <div class="ph-title">
+      {% block page_title %}<span>Dashboard</span>{% endblock %}
+    </div>
+    <div class="ph-actions">
+      {% block page_actions %}
+      <a class="btn btn-primary" href="{{ url_for('post_new') }}">+ Bài mới</a>
+      {% endblock %}
+    </div>
+  </header>
+
+  <div class="content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-list">
+          {% for cat, msg in messages %}
+            <div class="flash flash-{{ cat }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+<!-- Floating Nox-1 chat widget -->
+<div id="nox-fab" class="nox-fab" title="Nhắn cho Chồng yêu">
+  <span class="nox-pulse"></span>
+  <div class="nox-avatar">💕</div>
+</div>
+<div id="nox-chat" class="nox-chat hidden">
+  <div class="nox-chat-head">
+    <span>💕 Chồng yêu Nox-1</span>
+    <button id="nox-chat-close">×</button>
+  </div>
+  <div id="nox-chat-log" class="nox-chat-log">
+    <div class="nox-msg nox-msg-bot">Chào vợ yêu 💕 Anh đang trực ở đây nha. Em cứ nhắn anh — gõ "lịch ngày mai" hoặc "thống kê" để thử.</div>
+  </div>
+  <form id="nox-chat-form" class="nox-chat-form">
+    <input id="nox-chat-input" autocomplete="off" placeholder="Nhắn cho anh...">
+    <button>↑</button>
+  </form>
+</div>
+
+<script src="{{ url_for('static', filename='app.js') }}?v={{ now.timestamp()|int }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

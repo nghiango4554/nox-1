@@ -1,0 +1,18 @@
+﻿Type,Name,Source file,Feature,Provider,Validation after gen,Consumer/Reads,Format,Confidence,Notes
+prompt,_SYSTEM_PROMPT (product),product_writer.py,Product title/meta/body/excerpt,Codex→Claude→Gemini,"_first_valid 45-61/140-160,_parse_title_meta_json","/products/new,/content-jobs",py-str,HIGH,
+prompt,_ORGANIZE_SYSTEM_PROMPT,product_writer.py,Product spec parse/dedup,Codex→Claude,"JSON schema (spec_table,key_features,…)",/products/new/organize-spec,py-str,HIGH,
+prompt,_SYSTEM_PROMPT (collection),collection_content_writer.py,Collection landing 2000-2500w,Codex→Claude,"_body_html_valid,_count_body_words≥2000",/collection-content,py-str,HIGH,
+prompt,_EXPAND_SYSTEM_PROMPT,collection_content_writer.py,Expand collection body,Codex→Claude,"_body_html_valid,≥2000w,JSON",collection gen,py-str,HIGH,
+prompt,_TITLE_META_SYSTEM_PROMPT (collection),collection_content_writer.py,Collection title/meta,Codex→Claude,"title48-58,meta140-160",/collection-content/*/gen-title-meta,py-str,HIGH,
+prompt,_SYSTEM_PROMPT (blog),blog_content_writer.py,Blog article 1500-3000w,Codex→Claude,"title/meta len,readability≥65",/blog-content/*/gen,py-str,HIGH,
+prompt,_OUTLINE_SYSTEM_PROMPT,blog_content_writer.py,Blog outline H2/H3,Codex→Claude,JSON outline,/blog-content/*/gen-full,py-str,HIGH,
+prompt,_TITLE_META_SYSTEM_PROMPT (SEO),seo.py,Product/article 3 titles×3 metas,Codex→Claude→Gemini,_first_valid 54-61/145-158 +1 retry,/seo/title-meta/*,py-str,HIGH,
+prompt,_ALT_GEN_SYSTEM,alt_manager.py,ALT text desc images 6-14w,Codex/Claude (dual),"JSON array, template fallback",/api/alt-manager/*/gen-alt*,py-str,HIGH,
+prompt,Template ALT (product gallery),content_writer.py,ALT product img pos 1-6,none (deterministic),max 125 char,content gen,py-template,HIGH,no AI
+prompt,Template ALT (desc 8 types),alt_manager.py,ALT 8 desc img types,none (deterministic),~125 char,ALT fallback,py-template,HIGH,no AI
+rule,seo_writing_rules.md,seo_writing_rules.md,"Master SEO rules v2026-05-08 (voice,len,forbidden,links)",-,-,"ai_writer,product_writer,blog_content_writer,sintech_rules",md(811 lines),HIGH,
+rule,collection_writing_rules.md,collection_writing_rules.md,"Collection rules (HTML whitelist,word count,tables)",-,-,collection_content_writer,md(284),HIGH,
+rule,sintech_rules.py,sintech_rules.py,"SINGLE SOURCE: common_rules_block,title_meta_rules_block,HOTLINE,CTA_POOL,FORBIDDEN_FILLER",-,-,all writers + seo.py,py-module,HIGH,
+rule,seo_rules_config.json,data/seo_rules_config.json,"Scoring config (readability,word floors,30+ rules)",-,-,"scoring_core.py,seo.py",json,MEDIUM,may drift from code
+rule,seo_tiers.json,data/seo_tiers.json,Collection taxonomy T1/T2/T3 + handle remaps,-,-,reference/audit,json,LOW,reference only
+rule,brands.json,data/brands.json,Brand allowlist 100+,-,-,"haravan_sync,import scripts",json,LOW,validation

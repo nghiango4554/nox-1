@@ -54,6 +54,7 @@ def content_jobs_list_page():
         jobs=jobs, stats=stats, active_status=status,
         categories=categories, active_cate=cate,
         page=page, total_pages=total_pages, total_jobs=total_jobs,
+        active="content_jobs",
     ))
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     resp.headers["Pragma"] = "no-cache"
@@ -161,7 +162,7 @@ def content_jobs_detail_page(job_id):
         internal_link_list=internal_link_list,
         outline=outline,
         ai_stats=ai_stats,
-        spec_conflicts=spec_conflicts,
+        spec_conflicts=spec_conflicts, active="content_jobs",
     )
 
 

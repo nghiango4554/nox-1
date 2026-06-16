@@ -29,6 +29,17 @@ LOG = Path(__file__).parent / "data" / "cc_img_sync.log"
 SKIP_HANDLES = {"wifi-mesh"}  # đã làm thử rồi
 
 
+def load_done_handles():
+    """Đọc log -> set handle đã ✅ để 'sync tiếp' không upload lại."""
+    done = set()
+    if LOG.exists():
+        for line in LOG.read_text(encoding="utf-8").splitlines():
+            m = re.search(r"✅ ([a-z0-9\-]+):", line)
+            if m:
+                done.add(m.group(1))
+    return done
+
+
 def log(msg):
     line = f"[{time.strftime('%H:%M:%S')}] {msg}"
     print(line, flush=True)
@@ -42,10 +53,28 @@ def norm(s):
     return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]", " ", s)).strip()
 
 
-def resize_bytes(p: Path, w: int = TARGET_W) -> bytes:
+TARGET_H = 338  # 600×338 = 16:9 (nửa 1200×675), chuẩn ảnh web Sintech
+
+
+def resize_bytes(p: Path, w: int = TARGET_W, h: int = TARGET_H) -> bytes:
+    """Resize ĐÚNG 600×338: ngang dài (ratio≥1.4) → cover lấp đầy crop giữa;
+    vuông/đứng → contain căn giữa nền TRẮNG. KHÔNG méo, KHÔNG xóa nền."""
     im = Image.open(p).convert("RGB")
-    if im.width > w:
-        im = im.resize((w, round(im.height * w / im.width)), Image.LANCZOS)
+    sw, sh = im.size
+    ratio = (sw / sh) if sh else 1.0
+    if ratio >= 1.4:  # cover
+        scale = max(w / sw, h / sh)
+        nw, nh = max(round(sw * scale), w), max(round(sh * scale), h)
+        im = im.resize((nw, nh), Image.LANCZOS)
+        left, top = (nw - w) // 2, (nh - h) // 2
+        im = im.crop((left, top, left + w, top + h))
+    else:  # contain nền trắng
+        scale = min(w / sw, h / sh)
+        nw, nh = max(round(sw * scale), 1), max(round(sh * scale), 1)
+        im = im.resize((nw, nh), Image.LANCZOS)
+        canvas = Image.new("RGB", (w, h), (255, 255, 255))
+        canvas.paste(im, ((w - nw) // 2, (h - nh) // 2))
+        im = canvas
     buf = io.BytesIO()
     im.save(buf, "JPEG", quality=85, optimize=True)
     return buf.getvalue()
@@ -162,15 +191,16 @@ def main():
     by_norm_ns = {norm(j["collection_title"]).replace(" ", ""): j for j in jobs}  # fallback bỏ space
 
     folders = sorted([p for p in RESIZED_ROOT.iterdir() if p.is_dir()])
-    log(f"=== BẮT ĐẦU batch: {len(folders)} folder ảnh · {len(jobs)} cate có content ===")
+    done = load_done_handles() | SKIP_HANDLES
+    log(f"=== BẮT ĐẦU batch: {len(folders)} folder ảnh · {len(jobs)} cate có content · {len(done)} đã xong (skip) ===")
     ok = fail = skip = 0
     for f in folders:
         base = re.sub(r"\s*\(\d+\)\s*$", "", f.name).strip()
         job = by_norm.get(norm(base)) or by_norm_ns.get(norm(base).replace(" ", ""))
         if not job:
             log(f"⏭  {f.name}: không khớp cate có content"); skip += 1; continue
-        if job["handle"] in SKIP_HANDLES:
-            log(f"⏭  {f.name}: skip (đã làm)"); skip += 1; continue
+        if job["handle"] in done:
+            skip += 1; continue
         short = job["collection_title"]
         try:
             status, detail = process_cate(f, job, short)

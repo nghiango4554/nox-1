@@ -1,0 +1,13 @@
+P10 BLOG IMAGE PERF PATCH — CHANGED FILES (local-only, CHƯA publish)
+
+THEME (Haravan theme id 1001489132 — KHÔNG PUT, chỉ patch local):
+  assets/blog_article_style.scss.liquid   [SỬA: +50 dòng patch CSS có flag]
+
+Local artifacts:
+  theme_patch_p10/backup/blog_article_style.scss.liquid   (bản GỐC tải về)
+  theme_patch_p10/backup/article.liquid                   (gốc, tham chiếu, KHÔNG sửa)
+  theme_patch_p10/patched/blog_article_style.scss.liquid  (bản ĐÃ PATCH)
+  theme_patch_p10/patch_block.scss.liquid                 (chỉ khối thêm)
+
+Số file theme đổi: 1 (chỉ CSS blog). article.liquid/blog.liquid/theme.liquid KHÔNG đụng.
+Settings cần thêm để BẬT: blog_image_perf_patch_enabled = true (mặc định không có = OFF an toàn).

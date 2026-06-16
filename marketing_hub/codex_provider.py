@@ -90,6 +90,7 @@ def call_codex(system_prompt: str, user_prompt: str,
             text=True,
             encoding="utf-8",
             timeout=timeout,
+            creationflags=(subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0),
         )
 
         # Detect rate limit từ stdout/stderr — Codex CLI in "ERROR: You've hit your..."

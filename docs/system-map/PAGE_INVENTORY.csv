@@ -1,0 +1,41 @@
+﻿Module,Page name,Route,HTTP,Template,Primary workflow,# action buttons (approx),# filters/forms,# AJAX/poll endpoints,Status,Confidence,Notes
+dashboard,Dashboard,/,GET,dashboard.html,Overview/health,6,1,2,production,HIGH,drag-drop reschedule
+dashboard,Job Center,/jobs,GET,jobs_center.html,Job monitor,1,2,1,production,HIGH,client filters
+posts,Bài đã đăng,/posts,GET,posts.html,FB posts list/bulk,4,3,1,production,HIGH,bulk status/delete
+posts,Bài mới/Detail,"/posts/new,/posts/<id>",GET/POST,post_form.html,FB post create/edit/publish,6,1,4,production,HIGH,"publish/schedule FB, library modal"
+posts,Lịch đăng,/calendar,GET,calendar.html,Calendar view,0,1,0,production,HIGH,nav only
+posts,Thư viện ảnh,/library,GET,library.html,Image library,4,1,3,production,HIGH,copy url/use
+content_product,Content Jobs,/content-jobs,GET,content_jobs_list.html,Product content pipeline,3,2,2,production,HIGH,push/start worker/sync
+content_product,Content Job Detail,/content-jobs/<id>,GET,content_jobs_detail.html,Edit/gen/approve/sync,6,0,1,production,HIGH,WYSIWYG 15 fmt btns
+content_collection,Collection Content,/collection-content,GET,collection_content.html,Collection content pipeline,3,2,1,production,HIGH,gen-bg/sync-all
+content_collection,Collection Detail,/collection-content/<id>,GET,collection_content_detail.html,Edit/gen/sync,5,0,1,production,HIGH,WYSIWYG
+content_blog,Blog Content,/blog-content,GET,blog_content.html,Blog content pipeline,3,3,4,production,HIGH,batch-gen SSE
+content_blog,Blog Detail,/blog-content/<id>,GET,blog_content_detail.html,Gen/title/meta/author/images/sync,9,0,2,production,MEDIUM,image upload Cloudinary
+products,SP mới,/products/new,GET,products_new.html,New product 5-phase,4,1,3,production,HIGH,Haravan create (gate)
+alt,ALT Manager,/alt-manager,GET,alt_manager.html,ALT audit/gen,4,5,4,production,HIGH,fetch/gen/dual/stop
+alt,ALT Product,/alt-manager/<id>,GET,alt_manager_product.html,Per-SP ALT gen/save,3,0,2,production,HIGH,gen-save-all Haravan
+seo_core,SEO Dashboard,/seo,GET,seo.html,SEO crawl + scores,5,1,1,production,HIGH,crawl/fresh/stop
+seo_core,SEO URL Detail,/seo/url/<id>,GET,seo_detail.html,Per-URL audit,1,0,0,production,HIGH,recrawl
+seo_core,SEO Rules,/seo/rules,GET,seo_rules.html,Edit scoring rules,1,1,0,production,HIGH,rules/save
+seo_core,SEO History,/seo/history,GET,seo_history.html,Trend + capture,2,0,0,production,HIGH,compare/capture
+seo_core,History Compare,/seo/history/compare,GET,seo_history_compare.html,Compare 2 snapshots,0,1,0,production,HIGH,
+seo_quality,Trùng lặp,/seo/duplicates,GET,seo_duplicates.html,Duplicate title/meta,1,1,0,production,HIGH,recompute-dup
+seo_quality,Internal links,/seo/inlinks,GET,seo_inlinks.html,Inlinks/orphans,0,1,0,production,HIGH,
+seo_quality,Indexability,/seo/indexability,GET,seo_indexability.html,Index status,0,1,0,production,HIGH,
+seo_quality,Link gãy,/seo/broken-links,GET,seo_broken_links.html,Broken link check,2,2,1,production,HIGH,check/recheck
+seo_tools,Coverage,/seo/coverage,GET,seo_coverage.html,Content coverage,1,1,0,production,HIGH,scan-collections
+seo_tools,E-E-A-T,/seo/eeat,GET,seo_eeat.html,E-E-A-T audit,0,1,0,production,MEDIUM,
+seo_tools,Title & Meta,/seo/title-meta,GET,seo_title_meta.html,Title/meta gen+sync,8,4,4,production,HIGH,auto-fix/dual/recrawl/tier
+seo_tools,H1 trong mô tả,/seo/h1-in-desc,GET,seo_h1_in_desc.html,H1→H2 fix,4,1,2,production,HIGH,scan/fix-all
+seo_tools,Thiếu mô tả,/seo/empty-desc,GET,seo_empty_desc.html,Empty desc scan,2,1,1,production,MEDIUM,scan/status
+seo_tools,Search Console,/seo/gsc,GET,seo_gsc.html,GSC tasks,2,1,0,production,HIGH,refresh cache
+seo_tools,CWV,/seo/cwv,GET,seo_cwv.html,Core Web Vitals + LCP,2,4,3,production,HIGH,quét toàn bộ/dừng; LCP table
+seo_tools,CWV Diff,/seo/cwv/diff,GET,seo_cwv_diff.html,Weekly CWV diff,0,0,0,partial,MEDIUM,NEEDS_REVIEW
+seo_tools,Schema,/seo/schema,GET,seo_schema.html,JSON-LD coverage,1,1,0,production,MEDIUM,rescan
+haravan,Haravan Dashboard,/haravan,GET,haravan.html,Sync/audit,3,2,2,production,HIGH,sync/incremental/prune
+haravan,Haravan Products,/haravan/products,GET,haravan_products.html,Product list/edit,1,3,1,production,MEDIUM,edit (gate)
+haravan,Haravan Blogs,/haravan/blogs,GET,haravan_blogs.html,Blog list/rewrite,1,1,0,production,MEDIUM,ai-rewrite
+haravan,Haravan Audit,/haravan/audit,GET,haravan_audit.html,Change audit log,0,1,0,production,HIGH,
+system,Đối thủ,/competitors,GET,competitors.html,Competitor crawl,1,2,1,production,HIGH,crawl
+system,Canva,/canva,GET,(canva status),Canva connect,2,0,0,partial,MEDIUM,OAuth
+content_pillar,Blog Pillars,/blog-pillars,GET,(pillar page),Pillar plan gen,2,1,1,production,HIGH,generate/stop

@@ -182,11 +182,59 @@ SITEMAP_TIMEOUT = 60  # sitemap.xml chậm thật → giữ timeout cao
 CRAWL_RETRY = 0  # Aggressive: KHÔNG retry, fail thì fail (~5-10% URL slow) — tăng tốc 2-3x
 
 # Link check params (tuned 2026-05-12 — 5-8x faster)
-LINK_CHECK_WORKERS = 60
-LINK_CHECK_TIMEOUT = 3  # HEAD timeout — 3s đủ, quá 3s coi như broken
-LINK_CHECK_TIMEOUT_GET = 3  # GET fallback timeout
-LINK_CHECK_BATCH_SIZE = 50  # DB write batch
-HOST_FAIL_THRESHOLD = 3  # Sau N link cùng host fail → skip remaining cùng host
+LINK_CHECK_WORKERS = 48  # global concurrency (đã benchmark 32/48/64 — xem report Phase 9)
+LINK_CHECK_PER_HOST = 4  # tối đa request đồng thời / 1 hostname → tránh tự flood 1 site (false timeout)
+# Host-specific override (Phase 4, 10/6/2026): CDN asset Haravan (hstatic) gom phần lớn URL external
+# (cdn.hstatic.net + product.hstatic.net = ~65% external unique, 100% ảnh jpg/png), nên per-host=4
+# biến nó thành nút thắt. Benchmark fixed-sample 400 URL (mức 4/8/12/16) chứng minh per-host=8:
+# rate 45→111/s (2.5×), 0 timeout giả, 0 đổi confirmed_broken, Flask KHÔNG nghẽn (xem
+# docs/BROKEN_LINK_PHASE2_AUDIT_AND_FIX.md mục HSTATIC). CHỈ áp dụng EXACT host (không wildcard),
+# default 4 giữ nguyên để chống flood site ngoài. Muốn nhanh hơn nữa: 12/16 đã benchmark an toàn.
+HOST_CONCURRENCY_OVERRIDES = {
+    "cdn.hstatic.net": 8,
+    "product.hstatic.net": 8,
+}
+# pool_maxsize phải ≥ per-host lớn nhất, nếu không pool_block=True sẽ serialize lại về pool size.
+_LINK_POOL_MAXSIZE = max([LINK_CHECK_PER_HOST] + list(HOST_CONCURRENCY_OVERRIDES.values()))
+LINK_CHECK_TIMEOUT = 2  # PASS 1 (nhanh): HEAD timeout — link sống đáp <1s; timeout KHÔNG = broken (→ uncertain, retry pass 2)
+LINK_CHECK_TIMEOUT_GET = 3  # GET fallback (server chặn HEAD 405/403 = SỐNG)
+LINK_CHECK_TIMEOUT_RETRY = 6  # PASS 2 (retry uncertain): timeout rộng hơn
+LINK_CHECK_BATCH_SIZE = 50  # DB write batch (single writer)
+LINK_CHECK_FETCH_SIZE = 500  # số link UNIQUE lấy/ vòng (đã dedup GROUP BY target_url)
+HOST_FAIL_THRESHOLD = 3  # Sau N link cùng host fail → skip remaining cùng host (circuit breaker)
+_LINK_POOL_PER_HOST = LINK_CHECK_PER_HOST  # pool_maxsize/host = per-host limit (đủ, không phí connection)
+
+# Thread-local Session — MỖI worker thread tự có Session riêng (an toàn hơn 1 Session global,
+# không share mutable cookie/connection state giữa thread). pool_block=True để chờ slot thay vì lỗi.
+from requests.adapters import HTTPAdapter as _HTTPAdapter
+_link_tls = threading.local()
+
+def _link_session():
+    s = getattr(_link_tls, "session", None)
+    if s is None:
+        s = requests.Session()
+        ad = _HTTPAdapter(pool_connections=8, pool_maxsize=_LINK_POOL_MAXSIZE,
+                          max_retries=0, pool_block=True)
+        s.mount("http://", ad)
+        s.mount("https://", ad)
+        _link_tls.session = s
+    return s
+
+# Per-host semaphore — giới hạn request đồng thời / hostname (tránh flood 1 site ngoài → false timeout).
+_host_sema = {}
+_host_sema_lock = threading.Lock()
+
+def _host_semaphore(host):
+    if not host:
+        return None
+    with _host_sema_lock:
+        sem = _host_sema.get(host)
+        if sem is None:
+            # exact-host override (vd hstatic CDN) → default LINK_CHECK_PER_HOST cho host ngoài
+            limit = HOST_CONCURRENCY_OVERRIDES.get(host, LINK_CHECK_PER_HOST)
+            sem = threading.Semaphore(limit)
+            _host_sema[host] = sem
+        return sem
 
 # In-memory state cho run đang chạy (1 lần / process)
 _state_lock = threading.Lock()
@@ -843,12 +891,23 @@ def analyze_html(url: str, html: bytes, status_code: int, load_ms: int,
     }
 
 
-def _count_h1_in_desc(soup) -> tuple:
-    """Tìm tất cả container `.rte` (Haravan RTE) → đếm H1 bên trong + lấy text.
+# Selector mô tả ĐÚNG theo loại trang — chỉ khớp khối nội dung admin tự sửa (body_html),
+# KHÔNG bắt nhầm .rte của theme/khối liên quan (gây false-positive: flag nhưng fix báo "không có H1").
+_DESC_SEL_BY_TYPE = {
+    "product": ".product_getcontent",   # = body_html SP (cái fix_h1_in_desc đổi H1→H2)
+    "blog": ".rte",                      # body bài viết
+    "collection": ".rte",
+}
 
+
+def _count_h1_in_desc(soup, url_type: str = "product") -> tuple:
+    """Đếm H1 bên trong ĐÚNG container mô tả (theo loại trang) + lấy text.
+
+    product → `.product_getcontent` (khớp body_html admin); blog/collection → `.rte`.
     Trả: (count, [text1, text2, ...]).
     """
-    rte_blocks = soup.select(DESC_SELECTOR)
+    sel = _DESC_SEL_BY_TYPE.get(url_type, ".rte")
+    rte_blocks = soup.select(sel)
     count = 0
     texts = []
     for block in rte_blocks:
@@ -1048,28 +1107,49 @@ def link_check_state():
         return dict(_link_state)
 
 
-def _check_link(target: str) -> tuple:
-    """HEAD-only by default, fallback GET CHỈ khi 405/403 (method/auth issue, không phải broken).
+def _check_link(target: str, timeout: float = None) -> tuple:
+    """HEAD-only, fallback GET CHỈ khi 405/403 (method/auth issue, không phải broken).
 
-    Trả (target, status_code, error_kind).
-    error_kind = None nếu OK, hoặc 1 trong các key của LINK_ERROR_LABELS nếu fail.
+    Thread-local Session (mỗi thread 1 Session) + per-host semaphore (≤ LINK_CHECK_PER_HOST
+    request đồng thời/1 hostname → tránh tự flood site ngoài gây false timeout).
+    Response LUÔN close (HEAD + GET). timeout: None = pass-1 (nhanh); truyền số = pass-2 retry.
+
+    Trả (target, status_code, error_kind). error_kind=None nếu OK; timeout KHÔNG bị coi là broken
+    ở đây — phân loại confirmed/uncertain để ở tầng summary (Phase 5).
     """
+    timeout = timeout if timeout else LINK_CHECK_TIMEOUT
     # Pre-skip social share buttons — đỡ tốn HTTP + đỡ false positive 429
     tlow = target.lower()
     for pat in LINK_PRESKIP_PATTERNS:
         if pat in tlow:
             return target, 0, "social_share_skip"
     headers = {"User-Agent": USER_AGENT}
+    sem = _host_semaphore(_host_of(target))
+    if sem:
+        sem.acquire()
     try:
-        r = requests.head(target, headers=headers, timeout=LINK_CHECK_TIMEOUT, allow_redirects=True)
-        # CHỈ retry GET cho method-not-allowed (405) hoặc auth-blocked HEAD (403)
-        # KHÔNG retry cho 500+ (server fail thật sự, đỡ tốn 2x time)
-        if r.status_code in (405, 403):
-            r = requests.get(target, headers=headers, timeout=LINK_CHECK_TIMEOUT_GET,
-                             allow_redirects=True, stream=True)
-        return target, r.status_code, None
+        sess = _link_session()
+        r = sess.head(target, headers=headers, timeout=timeout, allow_redirects=True)
+        sc = r.status_code
+        try:
+            r.close()
+        except Exception:
+            pass
+        # CHỈ retry GET cho 405/403 (method/auth blocked HEAD = server SỐNG). KHÔNG retry 5xx.
+        if sc in (405, 403):
+            r2 = sess.get(target, headers=headers, timeout=LINK_CHECK_TIMEOUT_GET,
+                          allow_redirects=True, stream=True)
+            sc = r2.status_code
+            try:
+                r2.close()
+            except Exception:
+                pass
+        return target, sc, None
     except Exception as exc:
         return target, 0, _classify_link_error(exc)
+    finally:
+        if sem:
+            sem.release()
 
 
 def _host_of(url: str) -> str:
@@ -1108,7 +1188,7 @@ def run_link_check_streaming(stop_when_crawl_done: bool = True, poll_interval: i
     try:
         while True:
             # Lấy batch links chưa check
-            targets = db.seo_links_to_check(limit=200)
+            targets = db.seo_links_to_check(limit=LINK_CHECK_FETCH_SIZE)
             if not targets:
                 # Hết unchecked links
                 if not stop_when_crawl_done or _current_run.get("status") in ("done", "stopped", "idle"):
@@ -1355,7 +1435,7 @@ def _scan_one_desc_h1(url: str) -> dict:
         if r.status_code >= 400:
             return {"url": url, "url_type": url_type, "count": 0, "texts": [], "ok": False}
         soup = BeautifulSoup(r.content, "lxml")
-        count, texts = _count_h1_in_desc(soup)
+        count, texts = _count_h1_in_desc(soup, url_type)
         return {"url": url, "url_type": url_type, "count": count, "texts": texts, "ok": True}
     except Exception:
         return {"url": url, "url_type": url_type, "count": 0, "texts": [], "ok": False}
@@ -1503,13 +1583,19 @@ def fix_h1_in_desc_for_url(url: str) -> dict:
         }
 
     if url_type == "product":
-        haravan_id = _find_product_by_url(url)
-        if not haravan_id:
-            return {"ok": False, "error": "Không tìm thấy SP trong DB local. Vào trang Haravan sync trước."}
-        try:
-            item = haravan_client.get_product(haravan_id)
-        except Exception as e:
-            return {"ok": False, "error": f"Fetch product lỗi: {e}"}
+        # Fetch LIVE theo handle (tránh cache haravan_id stale → 404 / sửa nhầm SP cũ).
+        m = re.search(r"/products/([^/]+)", urlparse(url).path)
+        handle = m.group(1) if m else None
+        item = None
+        if handle:
+            try:
+                data = haravan_client._request("GET", "/products.json", params={"handle": handle})
+                item = next((p for p in (data.get("products") or []) if p.get("handle") == handle), None)
+            except Exception as e:
+                return {"ok": False, "error": f"Fetch product lỗi: {e}"}
+        if not item:
+            return {"ok": False, "error": "Không tìm thấy SP trên Haravan live (handle đã đổi/xóa/ẩn)."}
+        haravan_id = item["id"]
         resource_label = f"product#{haravan_id}"
     else:
         blog_id, article_id = _find_article_by_url(url)
@@ -2524,6 +2610,22 @@ def tm_error_map() -> dict:
     return _load_tm_errors()
 
 
+def _lazy_cache_product_by_handle(handle: str):
+    """SP thiếu trong cache local → fetch từ Haravan theo handle + upsert vào DB, trả row mới.
+    Trả None nếu Haravan cũng không có handle (SP đã xóa/ẩn trên web live).
+    Vá race: gen chạy đúng lúc sync products dở → trước đây fail 'không tìm thấy SP'."""
+    try:
+        import haravan_sync
+        data = haravan_client._request("GET", "/products.json", params={"handle": handle})
+        for p in (data.get("products") or []):
+            if p.get("handle") == handle:
+                haravan_sync.upsert_with_audit(p)
+                return db.hv_get_product_by_handle(handle)
+    except Exception:
+        pass
+    return None
+
+
 def _resolve_product_for_url(url: str) -> dict:
     """URL → {ok, haravan_id, product, product_name, old_title, old_meta} hoặc {ok:False, error}."""
     url_type = classify_url(url)
@@ -2536,7 +2638,13 @@ def _resolve_product_for_url(url: str) -> dict:
     handle = m.group(1)
     row = db.hv_get_product_by_handle(handle)
     if not row:
-        return {"ok": False, "error": "Không tìm thấy SP trong DB local. Sync Haravan products trước."}
+        # SP chưa có trong cache local (vd cache đang sync dở đúng lúc gen chạy) →
+        # fetch THẲNG từ Haravan theo handle rồi upsert, thay vì fail luôn.
+        row = _lazy_cache_product_by_handle(handle)
+    if not row:
+        return {"ok": False,
+                "error": "Không tìm thấy SP — cả cache local lẫn Haravan live đều không có "
+                         "handle này (SP có thể đã xóa/ẩn trên Haravan)."}
     haravan_id = row["haravan_id"]
     try:
         product = haravan_client.get_product(haravan_id)

@@ -1,0 +1,3 @@
+﻿blog_rewrite.py
+routes\blog_rewrite.py
+templates\blog_rewrite_ai.html

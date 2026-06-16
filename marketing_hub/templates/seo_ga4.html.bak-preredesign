@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}GA4 Analytics · SEO · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
+<span class="crumb"></span>
+<span style="font-weight:600">📊 GA4 Analytics</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('seo_dashboard') }}">← SEO dashboard</a>
+{% endblock %}
+
+{% block content %}
+<style>
+  .g4-card{background:var(--surface,#1a1a1a);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:12px;padding:16px 18px;margin-bottom:14px}
+  .g4-muted{color:var(--text-muted,#94a3b8);font-size:12px}
+  .g4-step{font-size:13px;color:var(--text-muted,#cbd5e1);line-height:1.8}
+  .g4-step code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:5px;font-size:12px}
+
+  /* filter bar */
+  .g4-filter{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px}
+  .g4-seg{display:inline-flex;border:1px solid var(--border,rgba(255,255,255,.12));border-radius:8px;overflow:hidden}
+  .g4-seg button{background:transparent;color:var(--text-muted,#94a3b8);border:0;padding:6px 12px;font-size:12px;cursor:pointer}
+  .g4-seg button.on{background:var(--accent,#7c3aed);color:#fff}
+  .g4-filter select,.g4-filter input{background:var(--surface,#111);color:inherit;border:1px solid var(--border,rgba(255,255,255,.12));border-radius:8px;padding:6px 10px;font-size:12px}
+  .g4-chk{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-muted,#94a3b8)}
+  .g4-metaline{display:flex;flex-wrap:wrap;gap:8px;font-size:11.5px;color:var(--text-muted,#94a3b8);margin-bottom:12px;align-items:center}
+  .g4-pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+  .b-ok{background:rgba(34,197,94,.15);color:#4ade80}.b-warn{background:rgba(245,158,11,.15);color:#fbbf24}
+  .b-err{background:rgba(239,68,68,.15);color:#f87171}.b-gray{background:rgba(148,163,184,.15);color:#94a3b8}
+  .b-info{background:rgba(59,130,246,.15);color:#60a5fa}
+
+  /* tabs */
+  .g4-tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--border,rgba(255,255,255,.1));margin-bottom:14px;scrollbar-width:thin}
+  .g4-tabs button{background:transparent;border:0;border-bottom:2px solid transparent;color:var(--text-muted,#94a3b8);padding:9px 13px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer}
+  .g4-tabs button.on{color:var(--text,#fff);border-bottom-color:var(--accent,#7c3aed)}
+
+  /* kpi */
+  .g4-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px}
+  .g4-kpi{background:var(--surface,#1a1a1a);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:10px;padding:12px 14px;position:relative}
+  .g4-kpi .num{font-size:23px;font-weight:700;line-height:1.1;letter-spacing:-.5px}
+  .g4-kpi .lbl{font-size:11px;color:var(--text-muted,#94a3b8);text-transform:uppercase;letter-spacing:.3px;margin-top:5px;display:flex;align-items:center;gap:4px}
+  .g4-kpi .dl{font-size:12px;font-weight:600;margin-top:4px}
+  .up{color:#22c55e}.down{color:#ef4444}
+  .g4-acc{font-size:9px;border:1px solid currentColor;border-radius:4px;padding:0 4px;opacity:.7;cursor:help}
+  .g4-help{cursor:help;opacity:.6}
+
+  /* tables */
+  .g4-tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .g4-tbl{width:100%;border-collapse:collapse;font-size:12.5px;min-width:540px}
+  .g4-tbl th{text-align:left;color:var(--text-muted,#94a3b8);font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;padding:7px 9px;border-bottom:1px solid var(--border,rgba(255,255,255,.12));white-space:nowrap;cursor:pointer}
+  .g4-tbl td{padding:7px 9px;border-bottom:1px solid rgba(255,255,255,.05);white-space:nowrap}
+  .g4-tbl td.num,.g4-tbl th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .g4-tbl tr:hover td{background:rgba(255,255,255,.03)}
+  .g4-key{max-width:280px;overflow:hidden;text-overflow:ellipsis}
+
+  /* charts */
+  .g4-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:14px}
+  .g4-chart{background:var(--surface,#1a1a1a);border:1px solid var(--border,rgba(255,255,255,.1));border-radius:10px;padding:12px 14px}
+  .g4-chart h4{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--text-muted,#cbd5e1)}
+  .g4-bars{display:flex;align-items:flex-end;gap:2px;height:64px}
+  .g4-bar{flex:1;background:#3b82f6;border-radius:2px 2px 0 0;min-height:2px;opacity:.8}
+  .g4-bar:hover{opacity:1}
+
+  /* states */
+  .g4-skel{height:72px;border-radius:10px;background:linear-gradient(90deg,rgba(255,255,255,.04),rgba(255,255,255,.09),rgba(255,255,255,.04));background-size:200% 100%;animation:g4sh 1.2s infinite}
+  @keyframes g4sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  .g4-empty{text-align:center;padding:34px 16px;color:var(--text-muted,#94a3b8);font-size:13px}
+  .g4-paginate{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:10px;font-size:12px}
+  .g4-paginate button{background:var(--surface,#111);border:1px solid var(--border,rgba(255,255,255,.12));color:inherit;border-radius:7px;padding:4px 10px;cursor:pointer}
+  .g4-paginate button:disabled{opacity:.4;cursor:default}
+  .g4-quick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .g4-quick button{background:var(--surface,#111);border:1px solid var(--border,rgba(255,255,255,.12));color:var(--text-muted,#94a3b8);border-radius:20px;padding:4px 11px;font-size:11.5px;cursor:pointer}
+  .g4-quick button.on{background:var(--accent,#7c3aed);color:#fff;border-color:transparent}
+  @media(max-width:640px){.g4-kpi .num{font-size:20px}.g4-filter{gap:6px}}
+</style>
+
+{% if not state.configured %}
+<div class="g4-card" style="border-color:rgba(245,158,11,.35)">
+  <h3 style="margin:0 0 6px">⚙️ Chưa cấu hình GA4</h3>
+  <p class="g4-muted" style="margin:0 0 12px">Tab GA4 đã sẵn sàng code. Cần file cấu hình để bật.</p>
+  <div class="g4-step">
+    1. Copy <code>state/ga4_config.example.json</code> → <code>state/ga4_config.json</code><br>
+    2. Đặt <code>"enabled": true</code>, <code>"property_id"</code><br>
+    3. Có token <code>.secrets/ga4_token.json</code> (scope <code>analytics.readonly</code>)<br>
+    4. Bấm Refresh để đồng bộ
+  </div>
+</div>
+{% elif not token_present %}
+<div class="g4-card" style="border-color:rgba(239,68,68,.35)">
+  <h3 style="margin:0 0 6px">🔑 Thiếu token GA4</h3>
+  <p class="g4-muted">Đã cấu hình property <b>***{{ state.property_id[-4:] }}</b> nhưng chưa có <code>.secrets/ga4_token.json</code> (OAuth reconnect).</p>
+</div>
+{% else %}
+<div id="ga4-app">
+  <div class="g4-filter">
+    <div class="g4-seg" id="g4-range">
+      <button data-r="7">7 ngày</button><button data-r="28" class="on">28 ngày</button>
+      <button data-r="90">90 ngày</button><button data-r="custom">Custom</button>
+    </div>
+    <span id="g4-custom" style="display:none">
+      <input type="date" id="g4-from"> <input type="date" id="g4-to">
+    </span>
+    <label class="g4-chk"><input type="checkbox" id="g4-compare" checked> So sánh kỳ trước</label>
+    <span class="g4-muted" style="font-size:11px">· Lọc chung: khoảng ngày + so sánh (filter theo kênh/loại trang nằm trong từng tab)</span>
+    <button class="btn btn-primary" id="g4-refresh" type="button" style="margin-left:auto">🔄 Refresh cache</button>
+  </div>
+  <div class="g4-metaline" id="g4-meta"><span class="g4-pill b-gray">đang tải trạng thái…</span></div>
+
+  <div class="g4-tabs" id="g4-tabnav">
+    <button data-t="overview" class="on">Tổng quan</button>
+    <button data-t="realtime">Realtime</button>
+    <button data-t="channels">Nguồn truy cập</button>
+    <button data-t="landing">Landing pages</button>
+    <button data-t="devices">Thiết bị</button>
+    <button data-t="events">Events</button>
+    <button data-t="ecommerce">Ecommerce</button>
+    <button data-t="seojoin">SEO × GA4</button>
+    <button data-t="health">Data Health</button>
+  </div>
+
+  <div id="g4-panels">
+    <div class="g4-panel" data-tab="overview"><div class="g4-skel"></div></div>
+    <div class="g4-panel" data-tab="realtime" hidden></div>
+    <div class="g4-panel" data-tab="channels" hidden></div>
+    <div class="g4-panel" data-tab="landing" hidden></div>
+    <div class="g4-panel" data-tab="devices" hidden></div>
+    <div class="g4-panel" data-tab="events" hidden></div>
+    <div class="g4-panel" data-tab="ecommerce" hidden></div>
+    <div class="g4-panel" data-tab="seojoin" hidden></div>
+    <div class="g4-panel" data-tab="health" hidden></div>
+  </div>
+</div>
+<script>
+  window.GA4_CFG = {
+    propertyMasked: "***{{ state.property_id[-4:] }}",
+    authMode: "{{ state.auth_mode }}"
+  };
+</script>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if state.configured and token_present %}
+<script src="{{ url_for('static', filename='ga4_dashboard.js') }}?v={{ now.timestamp()|int }}"></script>
+{% endif %}
+{% endblock %}

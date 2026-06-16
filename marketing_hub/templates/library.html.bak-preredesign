@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}Thư viện ảnh · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span>📚 Thư viện ảnh</span>
+<span class="crumb"></span>
+<span class="muted" style="font-weight:400">FB-Library</span>
+{% endblock %}
+
+{% block page_actions %}
+<input type="text" id="lib-search" placeholder="🔍 Tìm category..." class="seo-filter-input" style="min-width:240px">
+{% endblock %}
+
+{% block content %}
+
+<div class="lib-layout">
+  <aside class="lib-sidebar">
+    <div class="muted" style="font-size:12px;padding:0 4px 8px"><strong id="lib-cat-count">0</strong> category</div>
+    <div id="lib-cats" class="lib-cats">
+      <div class="muted" style="padding:20px;text-align:center;font-size:13px">⏳ Đang tải...</div>
+    </div>
+  </aside>
+
+  <main class="lib-main">
+    <div class="lib-main-head">
+      <h3 id="lib-cat-label" style="margin:0;font-size:15px">Chọn 1 category bên trái</h3>
+      <small class="muted" id="lib-img-count"></small>
+    </div>
+    <div id="lib-grid" class="lib-grid">
+      <div class="muted" style="grid-column:1/-1;padding:60px 20px;text-align:center;font-size:13px">
+        Click 1 category bên trái để xem ảnh
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="lib-preview" class="lib-preview hidden" onclick="this.classList.add('hidden')">
+  <div class="lib-preview-inner" onclick="event.stopPropagation()">
+    <button class="lib-preview-close" onclick="document.getElementById('lib-preview').classList.add('hidden')">×</button>
+    <img id="lib-preview-img" src="" alt="">
+    <div class="lib-preview-meta">
+      <div id="lib-preview-name" style="font-weight:600"></div>
+      <div class="muted" id="lib-preview-path" style="font-size:11px;word-break:break-all"></div>
+      <div style="margin-top:8px;display:flex;gap:6px">
+        <button class="btn btn-sm" id="lib-copy-url">📋 Copy URL</button>
+        <button class="btn btn-sm" id="lib-copy-name">📋 Copy filename</button>
+        <a class="btn btn-sm" id="lib-open-new" target="_blank">↗ Mở tab mới</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+.lib-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 14px;
+  height: calc(100vh - 130px);
+  min-height: 500px;
+}
+.lib-sidebar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  overflow-y: auto;
+}
+.lib-cats { display: flex; flex-direction: column; gap: 2px; }
+.lib-cat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-align: left;
+  font-size: 12.5px;
+  background: transparent;
+  color: var(--text);
+  width: 100%;
+}
+.lib-cat-item:hover { background: rgba(255,255,255,0.04); }
+.lib-cat-item.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.lib-cat-item b { font-size: 11px; background: rgba(255,255,255,0.08); padding: 1px 7px; border-radius: 10px; }
+.lib-cat-item.active b { background: var(--accent); color: white; }
+
+.lib-main {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  overflow-y: auto;
+}
+.lib-main-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; flex-wrap: wrap; }
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+.lib-img-card {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform .12s, border-color .12s;
+}
+.lib-img-card:hover { transform: scale(1.03); border-color: var(--accent); }
+.lib-img-card img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  display: block;
+}
+.lib-img-name {
+  padding: 4px 6px;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lib-preview {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.lib-preview.hidden { display: none; }
+.lib-preview-inner {
+  position: relative;
+  background: var(--surface);
+  border-radius: 10px;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.lib-preview-inner img { max-width: 80vw; max-height: 70vh; display: block; }
+.lib-preview-meta {
+  padding: 12px 16px;
+  background: var(--surface-2, var(--surface));
+  border-top: 1px solid var(--border);
+}
+.lib-preview-close {
+  position: absolute;
+  top: 8px; right: 8px;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.6);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 22px;
+  z-index: 5;
+}
+@media (max-width: 760px) {
+  .lib-layout { grid-template-columns: 1fr; height: auto; }
+}
+</style>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  let allCats = [];
+  let activeCategory = null;
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+
+  async function loadCategories() {
+    const r = await fetch('/api/library/categories');
+    const j = await r.json();
+    allCats = j.categories || [];
+    $("lib-cat-count").textContent = allCats.length;
+    renderCats(allCats);
+  }
+
+  function renderCats(list) {
+    const root = $("lib-cats");
+    if (!list.length) {
+      root.innerHTML = '<div class="muted" style="padding:14px;text-align:center;font-size:12px">Không khớp</div>';
+      return;
+    }
+    root.innerHTML = list.map(c => `
+      <button type="button" class="lib-cat-item ${activeCategory === c.name ? 'active' : ''}" data-cat="${escapeHtml(c.name)}">
+        <span>${escapeHtml(c.name)}</span>
+        <b>${c.count}</b>
+      </button>
+    `).join('');
+    root.querySelectorAll('[data-cat]').forEach(b => {
+      b.addEventListener('click', () => loadCategoryImages(b.dataset.cat));
+    });
+  }
+
+  async function loadCategoryImages(cat) {
+    activeCategory = cat;
+    $("lib-cat-label").textContent = cat;
+    document.querySelectorAll('.lib-cat-item').forEach(b => {
+      b.classList.toggle('active', b.dataset.cat === cat);
+    });
+    $("lib-grid").innerHTML = '<div class="muted" style="grid-column:1/-1;padding:40px;text-align:center">⏳ Đang tải ảnh...</div>';
+    const r = await fetch('/api/library/images?cat=' + encodeURIComponent(cat));
+    const j = await r.json();
+    const imgs = j.images || [];
+    $("lib-img-count").textContent = imgs.length + ' ảnh';
+    if (!imgs.length) {
+      $("lib-grid").innerHTML = '<div class="muted" style="grid-column:1/-1;padding:40px;text-align:center">Category trống</div>';
+      return;
+    }
+    $("lib-grid").innerHTML = imgs.map(img => `
+      <div class="lib-img-card" data-url="${img.url}" data-fn="${escapeHtml(img.filename)}" data-cat="${escapeHtml(cat)}">
+        <img src="${img.url}" loading="lazy" alt="${escapeHtml(img.filename)}">
+        <div class="lib-img-name" title="${escapeHtml(img.filename)}">${escapeHtml(img.filename)}</div>
+      </div>
+    `).join('');
+    $("lib-grid").querySelectorAll('.lib-img-card').forEach(card => {
+      card.addEventListener('click', () => openPreview(card.dataset.url, card.dataset.fn, card.dataset.cat));
+    });
+  }
+
+  function openPreview(url, fn, cat) {
+    $("lib-preview-img").src = url;
+    $("lib-preview-name").textContent = fn;
+    $("lib-preview-path").textContent = cat + " / " + fn;
+    $("lib-open-new").href = url;
+    $("lib-copy-url").onclick = () => copyText(url, $("lib-copy-url"));
+    $("lib-copy-name").onclick = () => copyText(fn, $("lib-copy-name"));
+    $("lib-preview").classList.remove("hidden");
+  }
+
+  async function copyText(text, btn) {
+    try {
+      await navigator.clipboard.writeText(text);
+      const orig = btn.innerHTML;
+      btn.innerHTML = '✅ Đã copy';
+      setTimeout(() => btn.innerHTML = orig, 1200);
+    } catch (e) { btn.innerHTML = '❌ Lỗi'; }
+  }
+
+  $("lib-search")?.addEventListener('input', e => {
+    const q = e.target.value.toLowerCase();
+    renderCats(allCats.filter(c => c.name.toLowerCase().includes(q)));
+  });
+
+  loadCategories();
+})();
+</script>
+{% endblock %}

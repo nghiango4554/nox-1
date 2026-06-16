@@ -1,226 +1,61 @@
-{% extends "base.html" %}
+{% extends "redesign_base.html" %}
 {% block title %}SP Haravan · Sintech Hub{% endblock %}
-
-{% block page_title %}
-<a href="{{ url_for('haravan_dashboard') }}" class="muted" style="font-weight:500">🛒 Haravan</a>
-<span class="crumb"></span>
-<span style="font-weight:600">Danh sách sản phẩm</span>
-{% endblock %}
-
-{% block page_actions %}
-<a class="btn" href="{{ url_for('haravan_dashboard') }}">← Dashboard</a>
-<form action="{{ url_for('haravan_sync_start') }}" method="post" style="display:inline">
-  <button class="btn btn-primary" type="submit">🔄 Sync lại</button>
-</form>
-{% endblock %}
+{% block page_title %}<i class="ic" data-icon="shopping-bag" style="color:var(--accent-ink)"></i><span>Haravan</span><i class="ic" data-icon="chevron-right"></i><b>Sản phẩm</b>{% endblock %}
+{% block page_actions %}<form action="{{ url_for('haravan_sync_start') }}" method="post" style="display:inline"><button class="btn-primary" type="submit"><i class="ic" data-icon="refresh-cw"></i>Sync lại</button></form>{% endblock %}
 
 {% block content %}
-
-{# ───── KPI ───── #}
-<div class="kpi-grid">
-  <div class="kpi">
-    <div class="kpi-label">Tổng SP trong DB</div>
-    <div class="kpi-num" style="font-size:28px">{{ stats.total }}</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-label">Điểm trung bình</div>
-    <div class="kpi-num" style="font-size:28px">{{ stats.avg_score }}</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-label">SP tốt (≥80)</div>
-    <div class="kpi-num" style="font-size:28px;color:#4ade80">{{ stats.good }}</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-label">Cần sửa (&lt;60)</div>
-    <div class="kpi-num" style="font-size:28px;color:#f87171">{{ stats.bad }}</div>
-  </div>
+<div class="stat-grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+  <div class="stat is-grad" data-tone="indigo" data-grad="blue"><div class="stat-top"><div class="stat-ico" data-tone="indigo"><i class="ic" data-icon="package"></i></div></div><div><div class="stat-val">{{ stats.total }}</div><div class="stat-title" style="margin-top:7px">Tổng SP trong DB</div></div></div>
+  <div class="stat is-grad" data-tone="amber" data-grad="amber"><div class="stat-top"><div class="stat-ico" data-tone="amber"><i class="ic" data-icon="gauge"></i></div></div><div><div class="stat-val">{{ stats.avg_score }}</div><div class="stat-title" style="margin-top:7px">Điểm trung bình</div></div></div>
+  <div class="stat is-grad" data-tone="teal" data-grad="teal"><div class="stat-top"><div class="stat-ico" data-tone="teal"><i class="ic" data-icon="square-check-big"></i></div></div><div><div class="stat-val">{{ stats.good }}</div><div class="stat-title" style="margin-top:7px">SP tốt (≥80)</div></div></div>
+  <div class="stat is-grad" data-tone="rose" data-grad="red"><div class="stat-top"><div class="stat-ico" data-tone="rose"><i class="ic" data-icon="triangle-alert"></i></div></div><div><div class="stat-val">{{ stats.bad }}</div><div class="stat-title" style="margin-top:7px">Cần sửa (&lt;60)</div></div></div>
 </div>
 
-{# ───── TOP ISSUES ───── #}
 {% if top_issues %}
-<section class="card" style="margin-top:16px">
-  <h3 style="margin-top:0">Top vấn đề (click để filter)</h3>
-  <div class="seo-issue-chips">
-    {% for it in top_issues %}
-      <a href="?issue={{ it.code }}"
-         class="seo-issue-chip seo-issue-{{ it.level }} {% if filters.issue_code == it.code %}active{% endif %}">
-        <span>{{ it.icon }}</span>
-        <span>{{ it.label }}</span>
-        <span class="seo-issue-count">{{ it.count }}</span>
-      </a>
-    {% endfor %}
-  </div>
+<section class="panel" style="margin-top:var(--gap)"><div class="panel-head"><i class="ic lead" data-icon="triangle-alert"></i><h3>Top vấn đề (click để filter)</h3></div>
+  <div class="tbl-filter" style="margin-left:0;flex-wrap:wrap">{% for it in top_issues %}<a class="chipf {{ 'on' if filters.issue_code == it.code }}" href="?issue={{ it.code }}">{{ it.icon }} {{ it.label }} · {{ it.count }}</a>{% endfor %}</div>
 </section>
 {% endif %}
 
-{# ───── FILTER BAR ───── #}
-<section class="card seo-filter-bar" style="margin-top:16px">
-  <form method="get" class="seo-filter-form">
-    <input type="text" name="q" value="{{ filters.search or '' }}"
-           placeholder="🔍 Tìm theo title hoặc handle..." class="seo-filter-input">
-
-    <select name="vendor" class="seo-filter-select">
-      <option value="">Tất cả vendor</option>
-      {% for v in stats.by_vendor.keys() %}
-        <option value="{{ v }}" {% if filters.vendor == v %}selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-
-    <select name="type" class="seo-filter-select">
-      <option value="">Tất cả loại</option>
-      {% for t in stats.by_type.keys() %}
-        <option value="{{ t }}" {% if filters.product_type == t %}selected{% endif %}>{{ t }}</option>
-      {% endfor %}
-    </select>
-
-    <select name="status" class="seo-filter-select">
-      <option value="">Tất cả status</option>
-      <option value="active" {% if filters.status == 'active' %}selected{% endif %}>active</option>
-      <option value="draft"  {% if filters.status == 'draft'  %}selected{% endif %}>draft</option>
-    </select>
-
-    <select name="band" class="seo-filter-select">
-      <option value="">Tất cả điểm</option>
-      <option value="bad"  {% if band == 'bad'  %}selected{% endif %}>🔴 Cần sửa (&lt;60)</option>
-      <option value="ok"   {% if band == 'ok'   %}selected{% endif %}>🟡 OK (60-79)</option>
-      <option value="good" {% if band == 'good' %}selected{% endif %}>🟢 Tốt (≥80)</option>
-    </select>
-
-    <select name="sort" class="seo-filter-select">
-      <option value="score_asc"  {% if filters.sort == 'score_asc'  %}selected{% endif %}>Điểm tăng dần (sửa trước)</option>
-      <option value="score_desc" {% if filters.sort == 'score_desc' %}selected{% endif %}>Điểm giảm dần</option>
-      <option value="title"      {% if filters.sort == 'title'      %}selected{% endif %}>Title A→Z</option>
-      <option value="recent"     {% if filters.sort == 'recent'     %}selected{% endif %}>Update gần nhất</option>
-      <option value="synced"     {% if filters.sort == 'synced'     %}selected{% endif %}>Sync gần nhất</option>
-    </select>
-
-    {% if filters.issue_code %}
-      <input type="hidden" name="issue" value="{{ filters.issue_code }}">
-      <a href="?" class="btn btn-sm">✕ Bỏ filter "{{ filters.issue_code }}"</a>
-    {% endif %}
-
-    <button class="btn btn-primary" type="submit">Lọc</button>
-    <a href="{{ url_for('haravan_products_page') }}" class="btn">Reset</a>
+<section class="tbl-wrap" style="margin-top:var(--gap)">
+  <div class="tbl-top"><h3><i class="ic" data-icon="package"></i>Danh sách</h3><div class="sec-meta" style="margin-left:auto">{{ total }} kết quả{% if total_pages > 1 %} · trang {{ page_num }}/{{ total_pages }}{% endif %}</div></div>
+  <form method="get" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line)">
+    <input type="text" name="q" value="{{ filters.search or '' }}" placeholder="🔍 Tìm title/handle..." style="flex:1;min-width:160px;padding:7px 11px;border:1px solid var(--line);border-radius:8px">
+    <select name="vendor" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"><option value="">Tất cả vendor</option>{% for v in stats.by_vendor.keys() %}<option value="{{ v }}" {% if filters.vendor == v %}selected{% endif %}>{{ v }}</option>{% endfor %}</select>
+    <select name="type" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"><option value="">Tất cả loại</option>{% for t in stats.by_type.keys() %}<option value="{{ t }}" {% if filters.product_type == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+    <select name="status" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"><option value="">Status</option><option value="active" {% if filters.status == 'active' %}selected{% endif %}>active</option><option value="draft" {% if filters.status == 'draft' %}selected{% endif %}>draft</option></select>
+    <select name="band" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"><option value="">Điểm</option><option value="bad" {% if band == 'bad' %}selected{% endif %}>🔴 &lt;60</option><option value="ok" {% if band == 'ok' %}selected{% endif %}>🟡 60-79</option><option value="good" {% if band == 'good' %}selected{% endif %}>🟢 ≥80</option></select>
+    <select name="sort" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"><option value="score_asc" {% if filters.sort == 'score_asc' %}selected{% endif %}>Điểm ↑ (sửa trước)</option><option value="score_desc" {% if filters.sort == 'score_desc' %}selected{% endif %}>Điểm ↓</option><option value="title" {% if filters.sort == 'title' %}selected{% endif %}>Title A→Z</option><option value="recent" {% if filters.sort == 'recent' %}selected{% endif %}>Update gần nhất</option><option value="synced" {% if filters.sort == 'synced' %}selected{% endif %}>Sync gần nhất</option></select>
+    {% if filters.issue_code %}<input type="hidden" name="issue" value="{{ filters.issue_code }}">{% endif %}
+    <button class="btn-primary" type="submit"><i class="ic" data-icon="filter"></i>Lọc</button>
+    <a href="{{ url_for('haravan_products_page') }}" class="chipf">Reset</a>
   </form>
-</section>
-
-{# ───── PRODUCT LIST ───── #}
-<section class="card" style="margin-top:16px">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-    <h3 style="margin:0">
-      Danh sách
-      <span class="muted" style="font-weight:400;font-size:14px">
-        — {{ total }} kết quả
-        {% if total_pages > 1 %} · trang {{ page_num }}/{{ total_pages }}{% endif %}
-      </span>
-    </h3>
-  </div>
-
   {% if products %}
-    <div class="table-wrap">
-    <table class="table seo-table">
-      <thead>
-        <tr>
-          <th class="col-stt">STT</th>
-          <th>Sản phẩm</th>
-          <th>Vendor</th>
-          <th>Loại</th>
-          <th>Status</th>
-          <th>Giá (₫)</th>
-          <th>Tồn</th>
-          <th>Điểm</th>
-          <th>Vấn đề</th>
-          <th>Hành động</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in products %}
-        {% set issue_list = (p.audit_issues|from_json) if p.audit_issues else [] %}
-        <tr>
-          <td class="col-stt">{{ (page_num - 1) * 50 + loop.index }}</td>
-          <td class="seo-url-cell">
-            <div class="seo-url-title" style="font-weight:500;color:var(--text)">{{ p.title or '(không title)' }}</div>
-            {% if p.handle %}
-              <a href="https://sintech.vn/products/{{ p.handle }}" target="_blank" rel="noopener" class="seo-url-link">
-                /{{ p.handle }}
-              </a>
-            {% endif %}
-          </td>
-          <td><small>{{ p.vendor or '—' }}</small></td>
-          <td><small>{{ p.product_type or '—' }}</small></td>
-          <td>
-            {% if p.status == 'active' %}
-              <span class="pill" style="background:rgba(34,197,94,0.15);color:#86efac">active</span>
-            {% else %}
-              <span class="pill" style="background:rgba(234,179,8,0.15);color:#fde68a">{{ p.status or '—' }}</span>
-            {% endif %}
-          </td>
-          <td>
-            <small>
-              {% if p.price_min %}
-                {{ "{:,.0f}".format(p.price_min) }}
-                {% if p.price_max and p.price_max != p.price_min %}
-                  – {{ "{:,.0f}".format(p.price_max) }}
-                {% endif %}
-              {% else %}—{% endif %}
-            </small>
-          </td>
-          <td><small>{{ p.inventory_total or 0 }}</small></td>
-          <td>
-            {% if p.audit_score is not none %}
-              {% if p.audit_score >= 80 %}
-                <span class="seo-score seo-score-good">{{ p.audit_score }}</span>
-              {% elif p.audit_score >= 60 %}
-                <span class="seo-score seo-score-ok">{{ p.audit_score }}</span>
-              {% else %}
-                <span class="seo-score seo-score-bad">{{ p.audit_score }}</span>
-              {% endif %}
-            {% else %}
-              <span class="muted">—</span>
-            {% endif %}
-          </td>
-          <td>
-            {% set errors = issue_list | selectattr('level', 'equalto', 'error') | list %}
-            {% set warns  = issue_list | selectattr('level', 'equalto', 'warn')  | list %}
-            {% if errors %}<span class="pill pill-error">{{ errors|length }} lỗi</span>{% endif %}
-            {% if warns %}<span class="pill pill-warn">{{ warns|length }} cảnh báo</span>{% endif %}
-            {% if not errors and not warns %}
-              <span class="pill" style="background:rgba(34,197,94,0.15);color:#4ade80">tốt</span>
-            {% endif %}
-          </td>
-          <td>
-            <a href="{{ url_for('haravan_product_detail', haravan_id=p.haravan_id) }}" class="btn btn-sm">Chi tiết →</a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    </div>
-
-    {% if total_pages > 1 %}
-      {% set qs = request.args.to_dict() %}
-      <div class="seo-pagination">
-        {% if page_num > 1 %}
-          {% set _ = qs.update({'page': page_num - 1}) %}
-          <a class="btn btn-sm" href="?{{ qs|urlencode }}">← Trước</a>
-        {% endif %}
-        <span class="muted">Trang {{ page_num }}/{{ total_pages }}</span>
-        {% if page_num < total_pages %}
-          {% set _ = qs.update({'page': page_num + 1}) %}
-          <a class="btn btn-sm" href="?{{ qs|urlencode }}">Sau →</a>
-        {% endif %}
-      </div>
-    {% endif %}
+  <table>
+    <thead><tr><th style="width:44px">STT</th><th>Sản phẩm</th><th>Vendor</th><th>Loại</th><th>Status</th><th>Giá (₫)</th><th>Tồn</th><th>Điểm</th><th>Vấn đề</th><th></th></tr></thead>
+    <tbody>
+    {% for p in products %}
+      {% set issue_list = (p.audit_issues|from_json) if p.audit_issues else [] %}
+      {% set errors = issue_list | selectattr('level', 'equalto', 'error') | list %}
+      {% set warns = issue_list | selectattr('level', 'equalto', 'warn') | list %}
+      <tr>
+        <td style="color:var(--ink-3)">{{ (page_num - 1) * 50 + loop.index }}</td>
+        <td><div class="td-title">{{ p.title or '(không title)' }}</div>{% if p.handle %}<a href="https://sintech.vn/products/{{ p.handle }}" target="_blank" rel="noopener" class="td-sub" style="color:var(--accent-ink)">/{{ p.handle }}</a>{% endif %}</td>
+        <td><small>{{ p.vendor or '—' }}</small></td>
+        <td><small>{{ p.product_type or '—' }}</small></td>
+        <td>{% if p.status == 'active' %}<span class="pill" data-tone="emerald">active</span>{% else %}<span class="pill" data-tone="amber">{{ p.status or '—' }}</span>{% endif %}</td>
+        <td><small>{% if p.price_min %}{{ "{:,.0f}".format(p.price_min) }}{% if p.price_max and p.price_max != p.price_min %} – {{ "{:,.0f}".format(p.price_max) }}{% endif %}{% else %}—{% endif %}</small></td>
+        <td><small>{{ p.inventory_total or 0 }}</small></td>
+        <td>{% if p.audit_score is not none %}<span class="pill dotty" data-tone="{{ 'emerald' if p.audit_score>=80 else 'amber' if p.audit_score>=60 else 'rose' }}">{{ p.audit_score }}</span>{% else %}<span style="color:var(--ink-3)">—</span>{% endif %}</td>
+        <td>{% if errors %}<span class="pill" data-tone="rose">{{ errors|length }} lỗi</span>{% endif %}{% if warns %}<span class="pill" data-tone="amber">{{ warns|length }} cảnh báo</span>{% endif %}{% if not errors and not warns %}<span class="pill" data-tone="emerald">tốt</span>{% endif %}</td>
+        <td><a class="row-act" href="{{ url_for('haravan_product_detail', haravan_id=p.haravan_id) }}" aria-label="Chi tiết"><i class="ic" data-icon="arrow-up-right"></i></a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if total_pages > 1 %}{% set qs = request.args.to_dict() %}<div style="display:flex;justify-content:center;gap:10px;padding:14px">{% if page_num > 1 %}{% set _ = qs.update({'page': page_num - 1}) %}<a class="chipf" href="?{{ qs|urlencode }}">‹ Trước</a>{% endif %}<span style="color:var(--ink-3);font-size:12.5px;align-self:center">Trang {{ page_num }}/{{ total_pages }}</span>{% if page_num < total_pages %}{% set _ = qs.update({'page': page_num + 1}) %}<a class="chipf" href="?{{ qs|urlencode }}">Sau ›</a>{% endif %}</div>{% endif %}
   {% else %}
-    <p class="muted">
-      Không có sản phẩm khớp filter.
-      {% if stats.total == 0 %}
-        Quay lại <a href="{{ url_for('haravan_dashboard') }}">Dashboard</a> bấm <strong>Sync</strong> để load SP.
-      {% else %}
-        Thử <a href="{{ url_for('haravan_products_page') }}">reset filter</a>.
-      {% endif %}
-    </p>
+  <div style="text-align:center;color:var(--ink-3);padding:30px">Không có SP khớp filter.{% if stats.total == 0 %} Quay lại <a href="{{ url_for('haravan_dashboard') }}" style="color:var(--accent-ink)">Dashboard</a> bấm Sync.{% else %} <a href="{{ url_for('haravan_products_page') }}" style="color:var(--accent-ink)">Reset filter</a>.{% endif %}</div>
   {% endif %}
 </section>
-
 {% endblock %}

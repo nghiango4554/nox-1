@@ -1,0 +1,32 @@
+/* ============================================================
+   Sintech Hub — Self-hosted fonts
+   ------------------------------------------------------------
+   ĐỂ CHẠY OFFLINE HOÀN TOÀN, đặt 4 file .woff2 vào thư mục này:
+     fonts/PlusJakartaSans-Regular.woff2   (400)
+     fonts/PlusJakartaSans-SemiBold.woff2  (600)
+     fonts/PlusJakartaSans-Bold.woff2      (700)
+     fonts/PlusJakartaSans-ExtraBold.woff2 (800)
+     fonts/SpaceGrotesk-Medium.woff2       (500)
+     fonts/SpaceGrotesk-Bold.woff2         (700)
+
+   TẢI NHANH (1 lệnh) — google-webfonts-helper:
+     https://gwfh.mranftl.com/fonts/plus-jakarta-sans?subsets=latin,vietnamese
+     https://gwfh.mranftl.com/fonts/space-grotesk?subsets=latin,vietnamese
+   Chọn weight ở trên, tải zip, copy .woff2 vào /fonts, đổi tên cho khớp.
+
+   Nếu CHƯA có .woff2: trang vẫn đẹp — tự fallback sang
+   system-ui / Segoe UI / sans-serif (đã set trong --ff).
+   Để giữ bản online nhanh: thay file này bằng <link> Google Fonts.
+   ============================================================ */
+@font-face{font-family:"Plus Jakarta Sans";font-style:normal;font-weight:400;font-display:swap;
+  src:url("fonts/PlusJakartaSans-Regular.woff2") format("woff2")}
+@font-face{font-family:"Plus Jakarta Sans";font-style:normal;font-weight:600;font-display:swap;
+  src:url("fonts/PlusJakartaSans-SemiBold.woff2") format("woff2")}
+@font-face{font-family:"Plus Jakarta Sans";font-style:normal;font-weight:700;font-display:swap;
+  src:url("fonts/PlusJakartaSans-Bold.woff2") format("woff2")}
+@font-face{font-family:"Plus Jakarta Sans";font-style:normal;font-weight:800;font-display:swap;
+  src:url("fonts/PlusJakartaSans-ExtraBold.woff2") format("woff2")}
+@font-face{font-family:"Space Grotesk";font-style:normal;font-weight:500;font-display:swap;
+  src:url("fonts/SpaceGrotesk-Medium.woff2") format("woff2")}
+@font-face{font-family:"Space Grotesk";font-style:normal;font-weight:700;font-display:swap;
+  src:url("fonts/SpaceGrotesk-Bold.woff2") format("woff2")}

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}SEO Rules{% endblock %}
+
+{% block content %}
+<div style="max-width:1400px;margin:0 auto">
+
+  <section class="card" style="margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <h2 style="margin:0">⚙️ SEO Rules Config</h2>
+        <p class="muted" style="margin:6px 0 0 0;font-size:13px">
+          Tick để bật/tắt rule. Sửa threshold, score weight, label, message. Crawl sau sẽ apply ngay.
+        </p>
+      </div>
+      <div>
+        <a href="{{ url_for('seo_dashboard') }}" class="btn">← Về /seo</a>
+      </div>
+    </div>
+    <p class="muted" style="margin:8px 0 0 0;font-size:11px">
+      Version: <strong>{{ config.version }}</strong>
+      {% if config.last_edited %}· Last edit: {{ config.last_edited }}{% endif %}
+    </p>
+  </section>
+
+  <form method="POST" action="{{ url_for('seo_rules_save') }}">
+
+    <section class="card" style="margin-bottom:14px">
+      <h3 style="margin:0 0 10px 0">🎯 Score thresholds</h3>
+      <div style="display:flex;gap:24px;align-items:center">
+        <label style="display:flex;flex-direction:column;font-size:13px">
+          <strong>Good ≥</strong>
+          <input type="number" name="threshold_good" value="{{ config.thresholds.good }}"
+                 style="width:80px;padding:4px;margin-top:4px">
+        </label>
+        <label style="display:flex;flex-direction:column;font-size:13px">
+          <strong>OK ≥</strong>
+          <input type="number" name="threshold_ok" value="{{ config.thresholds.ok }}"
+                 style="width:80px;padding:4px;margin-top:4px">
+        </label>
+        <p class="muted" style="margin:0;font-size:12px">
+          Default Sintech-on-Haravan: good ≥65, ok ≥50 (vì Haravan platform trừ ~25 điểm/page)
+        </p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3 style="margin:0 0 10px 0">📋 Rules ({{ config.rules|length }})</h3>
+      <table class="data-table" style="font-size:12px">
+        <thead>
+          <tr style="background:#f8f9fa">
+            <th style="width:40px">ON</th>
+            <th style="width:120px">Code</th>
+            <th style="width:200px">Tên hiển thị</th>
+            <th style="width:80px">Level</th>
+            <th style="width:60px">Score</th>
+            <th style="width:80px">Threshold</th>
+            <th>Message template</th>
+            <th style="width:80px">Áp dụng</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for rule in config.rules %}
+          <tr style="border-bottom:1px solid #eee;{% if not rule.enabled %}opacity:0.5{% endif %}">
+            <td style="text-align:center">
+              <input type="checkbox" name="rule_{{ rule.code }}_enabled" value="1"
+                     {% if rule.enabled %}checked{% endif %}>
+            </td>
+            <td>
+              <code style="font-size:11px">{{ rule.code }}</code>
+              {% if rule.hidden_pass %}
+                <br><span class="muted" style="font-size:10px">(bonus khi pass)</span>
+              {% endif %}
+            </td>
+            <td>
+              <input type="text" name="rule_{{ rule.code }}_name" value="{{ rule.name }}"
+                     style="width:100%;padding:3px;font-size:12px">
+            </td>
+            <td>
+              <select name="rule_{{ rule.code }}_level" style="width:75px;padding:3px;font-size:12px">
+                <option value="error" {% if rule.level == 'error' %}selected{% endif %}>error</option>
+                <option value="warn" {% if rule.level == 'warn' %}selected{% endif %}>warn</option>
+                <option value="info" {% if rule.level == 'info' %}selected{% endif %}>info</option>
+              </select>
+            </td>
+            <td>
+              <input type="number" name="rule_{{ rule.code }}_score" value="{{ rule.score }}"
+                     style="width:50px;padding:3px;font-size:12px;text-align:center">
+            </td>
+            <td>
+              {% if rule.threshold is defined %}
+                <input type="text" name="rule_{{ rule.code }}_threshold" value="{{ rule.threshold }}"
+                       style="width:65px;padding:3px;font-size:12px;text-align:center">
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <input type="text" name="rule_{{ rule.code }}_msg" value="{{ rule.msg }}"
+                     style="width:100%;padding:3px;font-size:11px">
+            </td>
+            <td>
+              <span class="muted" style="font-size:11px">{{ rule.applies_to|default('all') }}</span>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card" style="margin-top:14px;text-align:center">
+      <button type="submit" class="btn btn-primary" style="padding:10px 32px;font-size:14px">
+        💾 Lưu rules
+      </button>
+      <span class="muted" style="margin-left:12px;font-size:12px">
+        Lưu xong → Crawl/Audit sau sẽ áp dụng config mới ngay (auto-reload).
+      </span>
+    </section>
+
+  </form>
+
+  <section class="card" style="margin-top:14px;font-size:12px">
+    <h4 style="margin:0 0 8px 0">💡 Lưu ý</h4>
+    <ul style="margin:0;padding-left:20px">
+      <li><strong>Score weight</strong>: Mỗi rule cộng/trừ N điểm khi page fail check đó. Rule "hidden_pass" cộng điểm khi page PASS check (bonus).</li>
+      <li><strong>Threshold</strong>: Ngưỡng số. Vd <code>title_long</code> threshold=61 → title >61 ký tự = fail.</li>
+      <li><strong>Message template</strong>: <code>{len}</code>, <code>{count}</code>, <code>{threshold}</code>, <code>{load_ms}</code>... được thay tự động khi gen issue text.</li>
+      <li><strong>Áp dụng</strong>: <code>all</code> = mọi page, <code>product</code> = chỉ trang sản phẩm, <code>article</code> = bài blog.</li>
+      <li>⚠️ KHÔNG xóa cột "Code" — đó là ID rule trong code crawl, đổi sẽ break logic.</li>
+      <li>Phase 1 refactor đã wrap config cho 8 rule chính (title/meta/h1). Các rule khác đang còn hardcoded — enabled flag vẫn skip được khi disabled, nhưng score/threshold sẽ apply dần ở phase sau.</li>
+    </ul>
+  </section>
+
+</div>
+{% endblock %}

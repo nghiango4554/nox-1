@@ -1,74 +1,48 @@
-{% extends "base.html" %}
+{% extends "redesign_base.html" %}
 {% block title %}Audit Haravan · Sintech Hub{% endblock %}
+{% block page_title %}<i class="ic" data-icon="shopping-bag" style="color:var(--accent-ink)"></i><span>Haravan</span><i class="ic" data-icon="chevron-right"></i><b>Audit log</b>{% endblock %}
+{% block page_actions %}<a class="btn-primary" href="{{ url_for('haravan_dashboard') }}"><i class="ic" data-icon="shopping-bag"></i>Haravan</a>{% endblock %}
+
 {% block content %}
-<style>
-  .au-kpis { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
-  .au-kpi { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 16px; min-width:120px; }
-  .au-kpi .n { font-size:24px; font-weight:800; }
-  .au-kpi .l { font-size:11.5px; color:var(--text-muted,#94a3b8); }
-  .au-table { width:100%; border-collapse:collapse; font-size:12.5px; }
-  .au-table th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-muted,#94a3b8); padding:8px; border-bottom:1px solid var(--border); }
-  .au-table td { padding:8px; border-bottom:1px solid rgba(255,255,255,.05); vertical-align:top; }
-  .au-m { font-family:monospace; font-weight:700; font-size:11px; padding:1px 6px; border-radius:5px; }
-  .au-PUT { background:rgba(14,165,233,.18); color:#38bdf8; }
-  .au-POST{ background:rgba(52,211,153,.18); color:#34d399; }
-  .au-DELETE{ background:rgba(248,113,113,.18); color:#f87171; }
-  .au-sum { color:var(--text-secondary,#cbd5e1); word-break:break-word; max-width:420px; }
-  .au-err { color:#f87171; font-size:11.5px; }
-</style>
+<div class="sec-head"><h2><i class="ic" data-icon="database-backup"></i>Audit log Haravan</h2><div class="sec-meta">Mọi thay đổi PUT/POST/DELETE đẩy lên Haravan — bài nào, lúc nào, đổi gì, thành công hay lỗi</div></div>
 
-<h1 style="font-size:20px;margin:0 0 4px">📜 Audit log Haravan</h1>
-<p class="au-kpi" style="background:none;border:none;padding:0;margin:0 0 14px;color:var(--text-muted,#94a3b8);font-size:12px">Ghi lại mọi thay đổi (PUT/POST/DELETE) đẩy lên Haravan — bài nào, lúc nào, đổi gì, thành công hay lỗi.</p>
-
-<div class="au-kpis">
-  <div class="au-kpi"><div class="n">{{ stats.total }}</div><div class="l">Tổng thay đổi</div></div>
-  <div class="au-kpi"><div class="n" style="color:#34d399">{{ stats.today }}</div><div class="l">Hôm nay</div></div>
-  <div class="au-kpi"><div class="n" style="color:{{ '#f87171' if stats.fail else '#94a3b8' }}">{{ stats.fail }}</div><div class="l">Lỗi</div></div>
+<div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+  <div class="stat is-grad" data-tone="indigo" data-grad="blue"><div class="stat-top"><div class="stat-ico" data-tone="indigo"><i class="ic" data-icon="layers"></i></div></div><div><div class="stat-val">{{ stats.total }}</div><div class="stat-title" style="margin-top:7px">Tổng thay đổi</div></div></div>
+  <div class="stat is-grad" data-tone="teal" data-grad="teal"><div class="stat-top"><div class="stat-ico" data-tone="teal"><i class="ic" data-icon="calendar-days"></i></div></div><div><div class="stat-val">{{ stats.today }}</div><div class="stat-title" style="margin-top:7px">Hôm nay</div></div></div>
+  <div class="stat is-grad" data-tone="rose" data-grad="red"><div class="stat-top"><div class="stat-ico" data-tone="rose"><i class="ic" data-icon="triangle-alert"></i></div></div><div><div class="stat-val">{{ stats.fail }}</div><div class="stat-title" style="margin-top:7px">Lỗi</div></div></div>
 </div>
 
-<div style="margin-bottom:10px;display:flex;gap:8px;align-items:center">
-  <a class="btn btn-sm {% if not only_fail %}btn-primary{% endif %}" href="{{ url_for('haravan_audit_page') }}">Tất cả</a>
-  <a class="btn btn-sm {% if only_fail %}btn-primary{% endif %}" href="{{ url_for('haravan_audit_page', fail=1) }}">❌ Chỉ lỗi</a>
-</div>
-
-<section class="card" style="padding:0;overflow-x:auto">
-  {% if rows %}
-  <table class="au-table">
-    <thead><tr>
-      <th style="width:140px">Thời gian</th><th style="width:64px">Method</th>
-      <th style="width:160px">Tài nguyên</th><th>Thay đổi</th>
-      <th style="width:90px">Kết quả</th>
-    </tr></thead>
+<section class="tbl-wrap" style="margin-top:var(--gap)">
+  <div class="tbl-top"><h3><i class="ic" data-icon="list-checks"></i>Lịch sử thay đổi</h3>
+    <div class="tbl-filter">
+      <a class="chipf {{ 'on' if not only_fail }}" href="{{ url_for('haravan_audit_page') }}">Tất cả</a>
+      <a class="chipf {{ 'on' if only_fail }}" href="{{ url_for('haravan_audit_page', fail=1) }}">Chỉ lỗi</a>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th style="width:150px">Thời gian</th><th style="width:80px">Method</th><th style="width:170px">Tài nguyên</th><th>Thay đổi</th><th style="width:90px">Kết quả</th></tr></thead>
     <tbody>
-      {% for r in rows %}
+    {% for r in rows %}
       <tr>
-        <td class="muted" style="white-space:nowrap">{{ (r.ts or '')[:19]|replace('T',' ') }}</td>
-        <td><span class="au-m au-{{ r.method }}">{{ r.method }}</span></td>
-        <td>
-          {{ r.resource_type or '—' }}{% if r.resource_id %} <strong>#{{ r.resource_id }}</strong>{% endif %}
-          {% if r.resource_type == 'product' and r.resource_id %}
-          <a href="https://sintech.myharavan.com/admin/products/{{ r.resource_id }}" target="_blank" rel="noopener" style="font-size:11px;color:#60a5fa"> ↗</a>{% endif %}
-        </td>
-        <td class="au-sum">
-          {{ r.summary or '—' }}
-          {% if r.error %}<div class="au-err">⚠️ {{ r.error[:200] }}</div>{% endif %}
-        </td>
-        <td>{% if r.ok %}<span style="color:#34d399">✅ {{ r.status_code }}</span>{% else %}<span style="color:#f87171">❌ {{ r.status_code }}</span>{% endif %}</td>
+        <td style="color:var(--ink-3);font-weight:600;white-space:nowrap">{{ (r.ts or '')[:19]|replace('T',' ') }}</td>
+        <td><span class="pill" data-tone="{{ 'sky' if r.method=='PUT' else 'teal' if r.method=='POST' else 'rose' if r.method=='DELETE' else 'slate' }}">{{ r.method }}</span></td>
+        <td>{{ r.resource_type or '—' }}{% if r.resource_id %} <strong>#{{ r.resource_id }}</strong>{% endif %}{% if r.resource_type=='product' and r.resource_id %} <a href="https://sintech.myharavan.com/admin/products/{{ r.resource_id }}" target="_blank" rel="noopener" style="color:var(--accent-ink)">↗</a>{% endif %}</td>
+        <td style="max-width:420px;word-break:break-word">{{ r.summary or '—' }}{% if r.error %}<div style="color:#be123c;font-size:11.5px;margin-top:2px">⚠️ {{ r.error[:200] }}</div>{% endif %}</td>
+        <td>{% if r.ok %}<span class="pill dotty" data-tone="emerald">{{ r.status_code }}</span>{% else %}<span class="pill dotty" data-tone="rose">{{ r.status_code }}</span>{% endif %}</td>
       </tr>
-      {% endfor %}
+    {% else %}
+      <tr><td colspan="5" style="text-align:center;color:var(--ink-3);padding:24px">Chưa có thay đổi nào được ghi{% if only_fail %} (lỗi){% endif %}. Mọi PUT/POST/DELETE lên Haravan từ giờ sẽ hiện ở đây.</td></tr>
+    {% endfor %}
     </tbody>
   </table>
-  {% else %}
-  <p class="muted" style="padding:24px;text-align:center;margin:0">Chưa có thay đổi nào được ghi{% if only_fail %} (lỗi){% endif %}. Mọi PUT/POST/DELETE lên Haravan từ giờ sẽ hiện ở đây.</p>
-  {% endif %}
 </section>
 
 {% if rows|length >= page_size or page > 1 %}
-<div style="display:flex;justify-content:center;gap:10px;padding:14px 0">
+<div style="display:flex;justify-content:center;gap:10px;padding:16px 0">
   {% set fq = '&fail=1' if only_fail else '' %}
-  {% if page > 1 %}<a class="btn btn-sm" href="?page={{ page-1 }}{{ fq }}">‹ Trước</a>{% endif %}
-  <span class="muted" style="font-size:12.5px;align-self:center">Trang {{ page }}</span>
-  {% if rows|length >= page_size %}<a class="btn btn-sm" href="?page={{ page+1 }}{{ fq }}">Sau ›</a>{% endif %}
+  {% if page > 1 %}<a class="chipf" href="?page={{ page-1 }}{{ fq }}">‹ Trước</a>{% endif %}
+  <span style="color:var(--ink-3);font-size:12.5px;align-self:center">Trang {{ page }}</span>
+  {% if rows|length >= page_size %}<a class="chipf" href="?page={{ page+1 }}{{ fq }}">Sau ›</a>{% endif %}
 </div>
 {% endif %}
 {% endblock %}

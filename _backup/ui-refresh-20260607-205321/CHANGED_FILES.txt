@@ -1,0 +1,10 @@
+﻿UI Refresh AdminPro+Nalika — backup 20260607-205321
+BACKED UP (nguyên trạng trước khi sửa):
+- marketing_hub/templates/base.html
+WILL MODIFY:
+- marketing_hub/templates/base.html  (thêm 3 <link> CSS mới)
+WILL CREATE (file mới, additive — rollback = xóa file):
+- marketing_hub/static/css/marketing-hub-theme.css
+- marketing_hub/static/css/marketing-hub-components.css
+- marketing_hub/static/css/marketing-hub-responsive.css
+KHÔNG đụng: JS dashboard, DB, token, route, API.

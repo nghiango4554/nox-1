@@ -1,0 +1,16 @@
+﻿candidate_id,article_id,title,queue,tier,decision,label,http,verify,verify_source,reason
+149,1002420321,"Hướng dẫn 2 cách xóa chữ, logo, watermark trên ảnh bằng Photoshop cực nhanh chóng và đơn giản",VISUAL_IMAGE_REMEDIATION,LOW,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau
+169,1002430893,Cách khôi phục file đã xóa trên Windows 11 trong tích tắc,VISUAL_IMAGE_REMEDIATION,LOW,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau
+151,1002420376,"Bật mí cách gắn quạt tản nhiệt cho PC trong 5 bước đơn giản, nhanh chóng",VISUAL_IMAGE_REMEDIATION,LOW,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau
+58,1002398522,"Trung tâm sửa laptop - máy tính uy tín, lấy ngay ở Quận 7",VISUAL_IMAGE_REMEDIATION,LOW,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau
+165,1002423407,Tìm hiểu về ép xung: Phương pháp tăng tốc độ và sức mạnh của PC có thật sự an toàn và hiệu quả?,VISUAL_IMAGE_REMEDIATION,NO_TRAFFIC,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau
+183,1002434529,Google Takeout là gì? Hướng dẫn chi tiết cách sao lưu dữ liệu Google,VISUAL_IMAGE_REMEDIATION,NO_TRAFFIC,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau
+185,1002434664,5 Phần Mềm Test Bàn Phím Laptop Miễn Phí Bạn Nên Thử,VISUAL_IMAGE_REMEDIATION,NO_TRAFFIC,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau
+89,1002408539,VRAM là gì? Bao nhiêu GB VRAM là đủ dùng? Phân biệt giữa VRAM và RAM bạn nên biết,VISUAL_IMAGE_REMEDIATION,NO_TRAFFIC,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau
+129,1002414143,4 cách khắc phục lỗi màn hình đen trong Windows 11,VISUAL_IMAGE_REMEDIATION,NO_TRAFFIC,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau
+147,1002417574,Bạn đang cầm chuột đúng cách chưa? Khám phá các kiểu cầm chuột phổ biến,VISUAL_IMAGE_REMEDIATION,NO_TRAFFIC,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau
+167,1002430565,Ép xung RAM là gì? Hướng dẫn cách ép xung RAM an toàn cho laptop,VISUAL_IMAGE_REMEDIATION,NO_TRAFFIC,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau
+174,1002431172,Chia sẻ cách gập màn hình laptop mà không tắt máy win 10 và win 11 cực nhanh gọn,VISUAL_IMAGE_REMEDIATION,NO_TRAFFIC,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau
+194,1002540829,Sửa Máy Tính Quận 1 Uy Tín Tại Sintech,VISUAL_IMAGE_REMEDIATION,NO_TRAFFIC,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau
+21,1002758362,DLSS 4 là gì? Cách bật DLSS 4 trên card NVIDIA,TIME_SENSITIVE_NEWS,LOW,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau
+7,1002549397,"Sửa Máy Tính Quận 6 Chuyên Nghiệp, Nhanh Chóng tại Sintech",TIME_SENSITIVE_NEWS,NO_TRAFFIC,BLOCKED_IMAGE,blocked_image,,,,phụ thuộc ảnh — giữ queue xử lý sau

@@ -1,0 +1,392 @@
+{% extends "base.html" %}
+{% block title %}ALT Manager · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span style="font-weight:600">🖼️ ALT Manager</span>
+<span class="muted" style="font-weight:400;font-size:13px">— quản lý ALT text ảnh SP toàn shop</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('dashboard') }}">← Dashboard</a>
+{% endblock %}
+
+{% block content %}
+
+<section class="card" style="margin-top:0">
+  <p class="muted" style="margin:0">
+    Audit ALT text của <strong>{{ summary.combined_total }}</strong> ảnh (<strong>{{ summary.total_images }}</strong> ảnh SP + <strong>{{ summary.desc_total }}</strong> ảnh mô tả~snapshot) trên <strong>{{ summary.products_with_images }}</strong> SP.
+    Snapshot <strong>{{ summary.last_synced_max or 'N/A' }}</strong> — số ảnh mô tả là ước tính từ DB, số thực tế gen live khi chạy.
+    <br><span style="font-size:12px">⚙️ <strong>none</strong> = ALT rỗng · <strong>weak</strong> = chỉ filename/&lt;5 từ · <strong>good</strong> = ≥5 từ có nghĩa</span>
+  </p>
+</section>
+
+{# ───── KPI ───── #}
+<div class="kpi-grid" style="margin-top:14px">
+  <div class="kpi">
+    <div class="kpi-row"><div class="kpi-icon">📦</div></div>
+    <div class="kpi-num">{{ summary.total_products }}</div>
+    <div class="kpi-label">Tổng SP</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-row"><div class="kpi-icon">🖼️</div></div>
+    <div class="kpi-num">{{ summary.combined_total }}</div>
+    <div class="kpi-label">Tổng ảnh (SP+Mô tả)</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(239,68,68,0.12);color:#dc2626">⛔</div></div>
+    <div class="kpi-num" style="color:#dc2626">{{ summary.none }}</div>
+    <div class="kpi-label">ALT rỗng (none)</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(202,138,4,0.12);color:#b45309">⚠️</div></div>
+    <div class="kpi-num" style="color:#b45309">{{ summary.weak }}</div>
+    <div class="kpi-label">ALT yếu (weak)</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(22,163,74,0.12);color:#15803d">✅</div></div>
+    <div class="kpi-num" style="color:#15803d">{{ summary.combined_good }}</div>
+    <div class="kpi-label">ALT đủ (good)</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(124,58,237,0.12);color:#7c3aed">📊</div></div>
+    <div class="kpi-num" style="color:#7c3aed">{{ summary.coverage_percent }}%</div>
+    <div class="kpi-label">Coverage</div>
+  </div>
+</div>
+
+{# ───── ACTION PANEL (TOP) — Fetch → AI gen / Dual AI gen ───── #}
+<section class="card" style="margin-top:14px;border:1.5px solid rgba(124,58,237,0.25);background:rgba(124,58,237,0.03)" id="alt-action-panel">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+    <div>
+      <div style="font-weight:700;font-size:15px;color:var(--text)">🤖 ALT ảnh mô tả — Fetch → AI gen</div>
+      <div class="muted" style="font-size:12px;margin-top:3px">
+        <strong>1.</strong> Fetch live ảnh mô tả thiếu ALT từ Haravan → <strong>2.</strong> AI gen rồi lưu thẳng Haravan.
+        <span style="color:#b45309">Ảnh SP tạm chưa xử lý.</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button id="btn-fetch" class="btn btn-primary" onclick="altFetch()" title="Quét live Haravan, gom ảnh mô tả thiếu ALT">🔍 Fetch ảnh</button>
+      <button id="btn-aigen" class="btn btn-primary btn-sm" onclick="altGen(false)" disabled title="Gen ALT bằng AI (Codex→Claude→Gemini)">🤖 AI gen</button>
+      <button id="btn-dualgen" class="btn btn-primary btn-sm" onclick="altGen(true)" disabled title="Gen ALT 2 luồng Codex ∥ Claude song song">⚡ Dual AI gen</button>
+      <button id="btn-altstop" class="btn btn-sm" onclick="altStop()" disabled>⏹ Dừng</button>
+    </div>
+  </div>
+
+  {# ── Fetch progress ── #}
+  <div id="fetch-wrap" style="display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+      <span id="fetch-msg" class="muted">—</span>
+      <span id="fetch-pct" style="font-weight:700;color:#7c3aed">0%</span>
+    </div>
+    <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+      <div id="fetch-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#0ea5e9,#7c3aed);border-radius:4px;transition:width .3s"></div>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:8px;font-size:12px;flex-wrap:wrap;color:var(--text)">
+      <span>Quét: <b id="f-scanned">—</b>/<b id="f-total">—</b> SP</span>
+      <span style="color:#dc2626">SP thiếu ALT: <b id="f-fprod">—</b></span>
+      <span style="color:#b45309">Ảnh thiếu: <b id="f-fimg">—</b></span>
+      <span class="muted">SP: <i id="f-current">—</i></span>
+    </div>
+  </div>
+
+  {# ── Gen progress ── #}
+  <div id="gen-wrap" style="display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+      <span id="gen-msg" class="muted">—</span>
+      <span id="gen-pct" style="font-weight:700;color:#7c3aed">0%</span>
+    </div>
+    <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+      <div id="gen-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#ec4899);border-radius:4px;transition:width .3s"></div>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:8px;font-size:12px;flex-wrap:wrap;color:var(--text)">
+      <span>SP: <b id="g-processed">—</b>/<b id="g-total">—</b></span>
+      <span style="color:#15803d">Lưu ảnh: <b id="g-saved">—</b></span>
+      <span style="color:#dc2626">Lỗi: <b id="g-failed">—</b></span>
+      <span class="muted" id="g-current-wrap">SP: <i id="g-current">—</i></span>
+      <span class="muted" id="g-dual-wrap" style="display:none">Codex: <i id="g-codex">—</i> · Claude: <i id="g-claude">—</i></span>
+    </div>
+  </div>
+</section>
+
+{# ───── FILTER BAR ───── #}
+<section class="card" style="margin-top:12px">
+  <form method="get" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+    <input type="text" name="q" placeholder="🔎 Search handle/title/id" value="{{ search or '' }}"
+           style="flex:1;min-width:240px">
+
+    <label class="muted" style="font-size:13px">Loại SP:</label>
+    <select name="type" style="max-width:220px">
+      <option value="">Tất cả ({{ options.types|length }})</option>
+      {% for t in options.types %}
+      <option value="{{ t }}" {% if filter_type == t %}selected{% endif %}>{{ t }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="muted" style="font-size:13px">Vendor:</label>
+    <select name="vendor" style="max-width:180px">
+      <option value="">Tất cả ({{ options.vendors|length }})</option>
+      {% for v in options.vendors %}
+      <option value="{{ v }}" {% if filter_vendor == v %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="muted" style="font-size:13px">Sort:</label>
+    <select name="sort">
+      <option value="missing_desc" {% if sort == 'missing_desc' %}selected{% endif %}>↑ Nhiều thiếu trước</option>
+      <option value="total_desc"   {% if sort == 'total_desc' %}selected{% endif %}>↑ Nhiều ảnh trước</option>
+      <option value="handle_asc"   {% if sort == 'handle_asc' %}selected{% endif %}>🔤 Handle A→Z</option>
+    </select>
+
+    <label style="font-size:13px;display:flex;align-items:center;gap:4px;color:var(--text)">
+      <input type="checkbox" name="missing" value="1" {% if only_missing %}checked{% endif %}>
+      Chỉ SP còn thiếu ALT
+    </label>
+
+    <button type="submit" class="btn btn-primary btn-sm">Lọc</button>
+    <a class="btn btn-sm btn-ghost" href="{{ url_for('alt_manager_page') }}">Reset</a>
+
+    <span style="margin-left:8px;padding:6px 12px;background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.2);border-radius:8px;color:#7c3aed;font-weight:600;font-size:13px;white-space:nowrap">
+      📦 {{ page_data.total }} SP
+      {% if page_data.pages > 1 %}<span class="muted" style="font-weight:400;font-size:12px">· trang {{ page_data.page }}/{{ page_data.pages }}</span>{% endif %}
+    </span>
+  </form>
+</section>
+
+{# ───── TABLE ───── #}
+<section class="card" style="margin-top:16px;padding:0;overflow:hidden">
+  <table style="width:100%;font-size:13px">
+    <thead>
+      <tr style="text-align:left">
+        <th style="width:64px">Ảnh</th>
+        <th>Handle / Title</th>
+        <th style="width:140px">Loại</th>
+        <th style="width:140px">Vendor</th>
+        <th style="width:200px;text-align:center">ALT Coverage ảnh SP</th>
+        <th style="width:96px;text-align:center">Ngày sync</th>
+        <th style="width:140px;text-align:center">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in page_data.rows %}
+      <tr id="row-{{ it.product_id }}">
+        <td>
+          {% if it.thumb %}
+          <img src="{{ it.thumb }}" loading="lazy" style="width:48px;height:48px;object-fit:cover;border-radius:6px;background:var(--surface-2);display:block">
+          {% else %}
+          <div style="width:48px;height:48px;background:var(--surface-2);border-radius:6px;display:flex;align-items:center;justify-content:center" class="muted">—</div>
+          {% endif %}
+        </td>
+        <td>
+          <div style="font-weight:600;color:var(--text)">{{ (it.title or it.handle)[:80] }}</div>
+          <div class="muted" style="font-size:11px;font-family:monospace;margin-top:2px">{{ it.handle }}</div>
+        </td>
+        <td class="muted">{{ it.type or '—' }}</td>
+        <td class="muted">{{ it.vendor or '—' }}</td>
+        <td style="text-align:center">
+          {% set pct = (it.good / it.total * 100)|round(0) if it.total else 0 %}
+          {% set bar_color = '#15803d' if pct >= 80 else ('#b45309' if pct >= 40 else '#dc2626') %}
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:{{ pct }}%;background:{{ bar_color }};border-radius:4px"></div>
+            </div>
+            <span style="font-family:monospace;font-size:12px;white-space:nowrap;color:{{ bar_color }};font-weight:600">{{ it.good }}/{{ it.total }}</span>
+          </div>
+          <div style="font-size:10px;margin-top:3px;display:flex;justify-content:center;gap:6px">
+            {% if it.none %}<span style="color:#dc2626;font-weight:600">⛔{{ it.none }}</span>{% endif %}
+            {% if it.weak %}<span style="color:#b45309;font-weight:600">⚠️{{ it.weak }}</span>{% endif %}
+            {% if it.good %}<span style="color:#15803d;font-weight:600">✅{{ it.good }}</span>{% endif %}
+          </div>
+        </td>
+        <td style="text-align:center;font-size:11px;white-space:nowrap">
+          {% if it.alt_synced_at %}<span style="color:#15803d">{{ it.alt_synced_at }}</span>{% else %}<span class="muted">—</span>{% endif %}
+        </td>
+        <td style="text-align:center">
+          <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+            <button class="btn btn-sm btn-primary" id="gen-btn-{{ it.product_id }}"
+                    onclick="genSaveAll({{ it.product_id }}, this)" title="Gen ALT cho ảnh trong mô tả">
+              ⚡ Gen mô tả
+            </button>
+            <a class="btn btn-sm" href="{{ url_for('alt_manager_product_page', product_id=it.product_id) }}" style="font-size:11px">🖼️ Sửa</a>
+            <a class="btn btn-sm" href="https://sintech.myharavan.com/admin/products/{{ it.product_id }}"
+               target="_blank" rel="noopener" style="font-size:11px">↗ Haravan</a>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" style="padding:24px;text-align:center" class="muted">Không có SP nào khớp filter.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{# ───── PAGINATION ───── #}
+{% if page_data.pages > 1 %}
+<div style="display:flex;justify-content:center;gap:6px;margin-top:16px;flex-wrap:wrap">
+  {% set base_args = {'type': filter_type, 'vendor': filter_vendor, 'q': search, 'sort': sort, 'missing': '1' if only_missing else '0'} %}
+  {% if page_data.page > 1 %}
+  <a class="btn btn-sm" href="{{ url_for('alt_manager_page', page=page_data.page-1, **base_args) }}">← Trước</a>
+  {% endif %}
+  {% set start_p = [1, page_data.page - 3]|max %}
+  {% set end_p = [page_data.pages, page_data.page + 3]|min %}
+  {% if start_p > 1 %}
+  <a class="btn btn-sm btn-ghost" href="{{ url_for('alt_manager_page', page=1, **base_args) }}">1</a>
+  {% if start_p > 2 %}<span class="muted" style="padding:4px 8px">…</span>{% endif %}
+  {% endif %}
+  {% for p in range(start_p, end_p+1) %}
+  <a class="btn btn-sm {% if p == page_data.page %}btn-primary{% else %}btn-ghost{% endif %}"
+     href="{{ url_for('alt_manager_page', page=p, **base_args) }}">{{ p }}</a>
+  {% endfor %}
+  {% if end_p < page_data.pages %}
+  {% if end_p < page_data.pages - 1 %}<span class="muted" style="padding:4px 8px">…</span>{% endif %}
+  <a class="btn btn-sm btn-ghost" href="{{ url_for('alt_manager_page', page=page_data.pages, **base_args) }}">{{ page_data.pages }}</a>
+  {% endif %}
+  {% if page_data.page < page_data.pages %}
+  <a class="btn btn-sm" href="{{ url_for('alt_manager_page', page=page_data.page+1, **base_args) }}">Sau →</a>
+  {% endif %}
+</div>
+{% endif %}
+
+<script>
+// ── Gen & Save All (per row) ─────────────────────────────────────
+async function genSaveAll(productId, btn) {
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Đang gen…';
+  try {
+    const r = await fetch(`/api/alt-manager/${productId}/gen-save-all`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({desc_only: true}),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      btn.textContent = `✅ +${d.saved_desc ?? d.total}`;
+      btn.style.background = 'rgba(22,163,74,0.12)';
+      btn.style.color = '#15803d';
+      btn.style.border = '1px solid rgba(22,163,74,0.3)';
+      // Update row badge hint
+      const row = document.getElementById('row-' + productId);
+      if (row) {
+        const hint = row.querySelector('.gen-status-hint');
+        if (hint) hint.textContent = `SP:${d.saved_product} Mô tả:${d.saved_desc}${d.failed ? ' lỗi:'+d.failed : ''}`;
+      }
+    } else {
+      btn.disabled = false;
+      btn.textContent = orig;
+      alert('Lỗi: ' + (d.error || 'unknown'));
+    }
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = orig;
+    alert('Lỗi: ' + e);
+  }
+}
+
+// ════════ FETCH (live) → AI GEN / DUAL AI GEN ════════
+const $ = id => document.getElementById(id);
+let _fetchTimer = null, _genTimer = null;
+
+function _setGenBtns(enabled) {
+  $('btn-aigen').disabled = !enabled;
+  $('btn-dualgen').disabled = !enabled;
+}
+
+// ── Fetch ảnh ──
+async function altFetch() {
+  const r = await fetch('/api/alt-manager/fetch/start', {method:'POST'});
+  const d = await r.json();
+  if (!d.ok) { alert(d.error || 'Lỗi'); return; }
+  $('fetch-wrap').style.display = 'block';
+  $('btn-fetch').disabled = true;
+  _setGenBtns(false);
+  $('btn-altstop').disabled = false;
+  pollFetch();
+}
+
+function pollFetch() {
+  if (_fetchTimer) return;
+  _fetchTimer = setInterval(async () => {
+    const d = await (await fetch('/api/alt-manager/fetch/status')).json();
+    const pct = d.total ? Math.round(d.scanned / d.total * 100) : 0;
+    $('fetch-bar').style.width = pct + '%';
+    $('fetch-pct').textContent = pct + '%';
+    $('fetch-msg').textContent = d.message || '—';
+    $('f-scanned').textContent = d.scanned || 0;
+    $('f-total').textContent = d.total || 0;
+    $('f-fprod').textContent = d.found_products || 0;
+    $('f-fimg').textContent = d.found_images || 0;
+    $('f-current').textContent = d.current || '—';
+    if (!d.running) {
+      clearInterval(_fetchTimer); _fetchTimer = null;
+      $('btn-fetch').disabled = false;
+      $('btn-altstop').disabled = true;
+      _setGenBtns((d.found_products || 0) > 0);
+    }
+  }, 1500);
+}
+
+// ── AI gen (dual=false) / Dual AI gen (dual=true) ──
+async function altGen(dual) {
+  const url = dual ? '/api/alt-manager/alt-gen/start-dual' : '/api/alt-manager/alt-gen/start';
+  const r = await fetch(url, {method:'POST'});
+  const d = await r.json();
+  if (!d.ok) { alert(d.error || 'Lỗi'); return; }
+  $('gen-wrap').style.display = 'block';
+  $('btn-fetch').disabled = true;
+  _setGenBtns(false);
+  $('btn-altstop').disabled = false;
+  $('g-dual-wrap').style.display = dual ? 'inline' : 'none';
+  $('g-current-wrap').style.display = dual ? 'none' : 'inline';
+  pollGen();
+}
+
+function pollGen() {
+  if (_genTimer) return;
+  _genTimer = setInterval(async () => {
+    const d = await (await fetch('/api/alt-manager/alt-gen/status')).json();
+    const pct = d.total ? Math.round(d.processed / d.total * 100) : 0;
+    $('gen-bar').style.width = pct + '%';
+    $('gen-pct').textContent = pct + '%';
+    $('gen-msg').textContent = d.message || '—';
+    $('g-processed').textContent = d.processed || 0;
+    $('g-total').textContent = d.total || 0;
+    $('g-saved').textContent = d.saved_imgs || 0;
+    $('g-failed').textContent = d.failed || 0;
+    $('g-current').textContent = d.current || '—';
+    $('g-codex').textContent = d.current_codex || '—';
+    $('g-claude').textContent = d.current_claude || '—';
+    if (!d.running) {
+      clearInterval(_genTimer); _genTimer = null;
+      $('btn-fetch').disabled = false;
+      $('btn-altstop').disabled = true;
+      _setGenBtns((d.worklist_count || 0) > 0);
+    }
+  }, 2000);
+}
+
+async function altStop() {
+  await fetch('/api/alt-manager/fetch/stop', {method:'POST'});
+  await fetch('/api/alt-manager/alt-gen/stop', {method:'POST'});
+}
+
+// ── Resume hiển thị khi load lại trang ──
+(async () => {
+  const f = await (await fetch('/api/alt-manager/fetch/status')).json();
+  if (f.running) { $('fetch-wrap').style.display = 'block'; $('btn-fetch').disabled = true; $('btn-altstop').disabled = false; pollFetch(); }
+  else if (f.message) { $('fetch-wrap').style.display = 'block'; $('fetch-msg').textContent = f.message; $('f-fprod').textContent = f.found_products||0; $('f-fimg').textContent = f.found_images||0; }
+
+  const g = await (await fetch('/api/alt-manager/alt-gen/status')).json();
+  if (g.running) {
+    $('gen-wrap').style.display = 'block'; $('btn-fetch').disabled = true; $('btn-altstop').disabled = false;
+    $('g-dual-wrap').style.display = (g.mode === 'dual') ? 'inline' : 'none';
+    $('g-current-wrap').style.display = (g.mode === 'dual') ? 'none' : 'inline';
+    pollGen();
+  } else if (g.message) {
+    $('gen-wrap').style.display = 'block'; $('gen-msg').textContent = g.message;
+    $('g-saved').textContent = g.saved_imgs||0; $('g-failed').textContent = g.failed||0;
+  }
+  if (!g.running && !f.running) _setGenBtns((g.worklist_count || 0) > 0);
+})();
+</script>
+
+{% endblock %}

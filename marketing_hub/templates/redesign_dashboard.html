@@ -1,0 +1,142 @@
+{% extends "redesign_base.html" %}
+{% block title %}Sintech Hub — Dashboard{% endblock %}
+{% block crumb %}<i class="ic" data-icon="layout-dashboard" style="color:var(--accent-ink)"></i><span>Dashboard</span><i class="ic" data-icon="chevron-right"></i><b>Tổng quan hôm nay</b>{% endblock %}
+
+{% macro spark(i) %}
+<svg class="stat-spark" viewBox="0 0 120 24" preserveAspectRatio="none"><defs><linearGradient id="sp{{i}}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--t-solid)" stop-opacity="0.28"></stop><stop offset="1" stop-color="var(--t-solid)" stop-opacity="0"></stop></linearGradient></defs><path d="M 2,18 C 20,14 36,20 54,13 C 72,6 90,16 118,8 L 118,24 L 2,24 Z" fill="url(#sp{{i}})"></path><path d="M 2,18 C 20,14 36,20 54,13 C 72,6 90,16 118,8" fill="none" stroke="var(--t-solid)" stroke-width="2" stroke-linecap="round" vector-effect="non-scaling-stroke"></path></svg>
+{% endmacro %}
+
+{% block content %}
+<div class="sec-head"><h2><i class="ic" data-icon="gauge"></i>Operations Center</h2><div class="sec-meta"><i class="ic" data-icon="refresh-cw"></i>cập nhật {{ updated }} · data thật</div></div>
+
+{% if alerts %}
+<div class="alerts">
+  <div class="alerts-label"><i class="ic" data-icon="triangle-alert"></i>Cần chú ý</div>
+  {% for al in alerts %}<div class="alert-chip" data-tone="{{ al.tone }}"><i class="ic" data-icon="{{ al.icon }}"></i>{{ al.text }}{% if al.small %}<small>· {{ al.small }}</small>{% endif %}</div>{% endfor %}
+  <button class="icon-btn" style="margin-left:auto" aria-label="Đóng"><i class="ic" data-icon="x"></i></button>
+</div>
+{% endif %}
+
+<div class="stat-grid">
+{% for k in kpis %}
+  <div class="stat is-grad" data-tone="{{ k.tone }}" data-grad="{{ k.grad }}">
+    <div class="stat-top"><div class="stat-ico" data-tone="{{ k.tone }}"><i class="ic" data-icon="{{ k.icon }}"></i></div><span class="pill dotty" data-tone="{{ k.pill_tone }}">{{ k.pill }}</span></div>
+    <div><div class="stat-val">{{ k.val }}{% if k.unit %}<small>{{ k.unit }}</small>{% endif %}</div><div class="stat-title" style="margin-top:7px">{{ k.title }}</div></div>
+    <div class="stat-sub">{{ k.sub }}</div>
+    {{ spark(loop.index) }}
+  </div>
+{% endfor %}
+</div>
+
+<div class="split">
+  <section class="panel">
+    <div class="panel-head"><i class="ic lead" data-icon="chart-area"></i><h3>Lưu lượng 7 ngày</h3><a class="chipf" style="margin-left:auto" href="{{ url_for('ga4_page') }}">GA4 →</a></div>
+    {% if charts.ga4 and charts.ga4.has %}
+    <div class="chart-legend"><div class="leg"><span class="swatch" style="background:var(--accent-from)"></span>Tổng phiên</div><div class="leg"><span class="swatch" style="background:#1ab394"></span>Organic Search</div></div>
+    <div style="position:relative;height:230px"><canvas id="ch-traffic"></canvas></div>
+    {% else %}
+    <div style="height:230px;display:flex;align-items:center;justify-content:center;color:var(--ink-3);font-size:13px;text-align:center">Chưa có data GA4.<br>Vào <a href="{{ url_for('ga4_page') }}" style="color:var(--accent-ink)">GA4 Analytics</a> bấm Sync.</div>
+    {% endif %}
+  </section>
+  <section class="panel">
+    <div class="panel-head"><i class="ic lead" data-icon="heart-pulse"></i><h3>Sức khỏe hệ thống &amp; agent</h3></div>
+    <div class="health-list">
+    {% for r in health_rows %}
+      <div class="health-row" data-tone="{{ r.tone }}"{% if r.hk %} data-hk="{{ r.hk }}"{% endif %}><div class="h-ico" data-tone="{{ r.tone }}"><i class="ic" data-icon="{{ r.icon }}"></i></div>
+        <div style="min-width:0"><div class="h-name">{{ r.name }}</div><div class="h-desc">{{ r.desc }}</div></div>
+        <div class="h-right">{% if r.progress is defined %}<div class="progress" style="width:80px"><i style="width:{{ r.progress }}%"></i></div>{% endif %}<span class="pill dotty" data-tone="{{ r.pill_tone }}">{{ r.pill }}</span></div>
+      </div>
+    {% endfor %}
+    </div>
+  </section>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:var(--gap);margin-top:var(--gap)">
+  <section class="panel"><div class="panel-head"><i class="ic lead" data-icon="shield-check"></i><h3>Phân bổ điểm SEO</h3></div><div style="position:relative;height:220px"><canvas id="ch-seo"></canvas></div></section>
+  <section class="panel"><div class="panel-head"><i class="ic lead" data-icon="package"></i><h3>Content jobs theo trạng thái</h3></div><div style="position:relative;height:220px"><canvas id="ch-cj"></canvas></div></section>
+  <section class="panel"><div class="panel-head"><i class="ic lead" data-icon="gauge"></i><h3>CWV điểm TB (PageSpeed)</h3></div><div style="position:relative;height:220px"><canvas id="ch-cwv"></canvas></div></section>
+</div>
+
+<section class="tbl-wrap" style="margin-top:var(--gap)">
+  <div class="tbl-top"><h3><i class="ic" data-icon="inbox"></i>Hàng đợi xử lý</h3><div class="tbl-filter"><button class="chipf on">Tất cả</button><button class="chipf">Đang chạy</button><button class="chipf">Nghỉ</button></div></div>
+  <table><thead><tr><th style="width:54%">Nội dung</th><th>Trạng thái</th><th style="width:200px">Tiến độ</th><th></th></tr></thead><tbody>
+  {% for q in queue %}
+    <tr><td><div class="cell-flex"><div class="row-ico" data-tone="{{ q.tone }}"><i class="ic" data-icon="{{ q.icon }}"></i></div><div style="min-width:0"><div class="td-title">{{ q.title }}</div><div class="td-sub">{{ q.sub }}</div></div></div></td>
+      <td><span class="pill dotty {{ 'pulse' if q.pulse }}" data-tone="{{ q.status_tone }}">{{ q.status }}</span></td>
+      <td><div class="mini-prog"><div class="progress"><i style="width:{{ q.pct }}%"></i></div><b>{{ q.pct }}%</b></div></td>
+      <td><a class="row-act" href="{{ url_for('jobs_center_page') }}" aria-label="Mở"><i class="ic" data-icon="arrow-up-right"></i></a></td></tr>
+  {% else %}
+    <tr><td colspan="4" style="text-align:center;color:var(--ink-3);padding:24px">Không có job nào đang chạy</td></tr>
+  {% endfor %}
+  </tbody></table>
+</section>
+
+<div><div class="sec-head" style="margin-bottom:14px"><h2><i class="ic" data-icon="zap"></i>Quick actions</h2></div>
+<div class="qa-grid">
+  <section class="qa-card" data-tone="emerald"><div class="qa-head"><div class="qa-tag" data-tone="emerald"><i class="ic" data-icon="search"></i></div><h4>SEO &amp; Content</h4></div><div class="qa-list">
+    <a class="qa-item" href="{{ url_for('content_jobs_list_page') }}"><i class="ic lead" data-icon="package"></i><span class="qa-txt"><span class="qa-t" style="display:block">Content jobs</span><span class="qa-s" style="display:block">Viết mô tả sản phẩm</span></span><i class="ic go" data-icon="arrow-right"></i></a>
+    <a class="qa-item" href="{{ url_for('blog_content_page') }}"><i class="ic lead" data-icon="file-text"></i><span class="qa-txt"><span class="qa-t" style="display:block">Blog content</span><span class="qa-s" style="display:block">Bài blog + duyệt</span></span><i class="ic go" data-icon="arrow-right"></i></a>
+    <a class="qa-item" href="{{ url_for('collection_content_page') }}"><i class="ic lead" data-icon="folder-tree"></i><span class="qa-txt"><span class="qa-t" style="display:block">Collection content</span><span class="qa-s" style="display:block">Mô tả bộ sưu tập</span></span><i class="ic go" data-icon="arrow-right"></i></a>
+    <a class="qa-item" href="{{ url_for('seo_dashboard') }}"><i class="ic lead" data-icon="shield-check"></i><span class="qa-txt"><span class="qa-t" style="display:block">Audit SEO</span><span class="qa-s" style="display:block">Quét điểm on-page</span></span><i class="ic go" data-icon="arrow-right"></i></a>
+  </div></section>
+  <section class="qa-card" data-tone="sky"><div class="qa-head"><div class="qa-tag" data-tone="sky"><i class="ic" data-icon="thumbs-up"></i></div><h4>Facebook</h4></div><div class="qa-list">
+    <a class="qa-item" href="{{ url_for('post_new') }}"><i class="ic lead" data-icon="plus-circle"></i><span class="qa-txt"><span class="qa-t" style="display:block">Tạo bài FB</span><span class="qa-s" style="display:block">Caption + ảnh</span></span><i class="ic go" data-icon="arrow-right"></i></a>
+    <a class="qa-item" href="{{ url_for('calendar_page') }}"><i class="ic lead" data-icon="calendar-days"></i><span class="qa-txt"><span class="qa-t" style="display:block">Lịch tuần</span><span class="qa-s" style="display:block">Xem / kéo-thả lịch</span></span><i class="ic go" data-icon="arrow-right"></i></a>
+  </div></section>
+  <section class="qa-card" data-tone="indigo"><div class="qa-head"><div class="qa-tag" data-tone="indigo"><i class="ic" data-icon="shopping-bag"></i></div><h4>Haravan</h4></div><div class="qa-list">
+    <a class="qa-item" href="{{ url_for('haravan_products_page') }}"><i class="ic lead" data-icon="package"></i><span class="qa-txt"><span class="qa-t" style="display:block">Sản phẩm</span><span class="qa-s" style="display:block">Catalog + audit SEO</span></span><i class="ic go" data-icon="arrow-right"></i></a>
+    <a class="qa-item" href="{{ url_for('haravan_dashboard') }}"><i class="ic lead" data-icon="tag"></i><span class="qa-txt"><span class="qa-t" style="display:block">Haravan sync</span><span class="qa-s" style="display:block">Đồng bộ + audit log</span></span><i class="ic go" data-icon="arrow-right"></i></a>
+  </div></section>
+  <section class="qa-card" data-tone="slate"><div class="qa-head"><div class="qa-tag" data-tone="slate"><i class="ic" data-icon="settings"></i></div><h4>System</h4></div><div class="qa-list">
+    <a class="qa-item" href="{{ url_for('api_dashboard_health') }}"><i class="ic lead" data-icon="braces"></i><span class="qa-txt"><span class="qa-t" style="display:block">Health JSON</span><span class="qa-s" style="display:block">Số liệu thô (debug)</span></span><i class="ic go" data-icon="arrow-right"></i></a>
+    <a class="qa-item" href="{{ url_for('jobs_center_page') }}"><i class="ic lead" data-icon="list-checks"></i><span class="qa-txt"><span class="qa-t" style="display:block">Job Center</span><span class="qa-s" style="display:block">Theo dõi job nền</span></span><i class="ic go" data-icon="arrow-right"></i></a>
+  </div></section>
+</div></div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+  const C = {{ charts|tojson }};
+  if (typeof Chart === 'undefined') return;
+  Chart.defaults.font.family = "'Plus Jakarta Sans', ui-sans-serif, sans-serif";
+  Chart.defaults.color = '#98a0b3';
+  const donut = {responsive:true, maintainAspectRatio:false, cutout:'62%', plugins:{legend:{position:'bottom', labels:{boxWidth:12, padding:12, font:{size:12}}}}};
+  const seo = C.seo_dist || {good:0,ok:0,bad:0};
+  new Chart(document.getElementById('ch-seo'), {type:'doughnut', data:{labels:['🟢 Tốt','🟡 OK','🔴 Cần sửa'], datasets:[{data:[seo.good,seo.ok,seo.bad], backgroundColor:['#1ab394','#f59e0b','#ef4444'], borderWidth:0}]}, options:donut});
+  const cj = C.cj_status || {labels:[],values:[]};
+  if (cj.values && cj.values.length) new Chart(document.getElementById('ch-cj'), {type:'doughnut', data:{labels:cj.labels, datasets:[{data:cj.values, backgroundColor:['#6366f1','#03a9f4','#1ab394','#f59e0b','#ef4444'], borderWidth:0}]}, options:donut});
+  const cwv = C.cwv || {mobile:0,desktop:0};
+  new Chart(document.getElementById('ch-cwv'), {type:'bar', data:{labels:['📱 Mobile','🖥️ Desktop'], datasets:[{data:[cwv.mobile,cwv.desktop], backgroundColor:['#ff9966','#03a9f4'], borderRadius:8, barThickness:54}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, max:100, grid:{color:'rgba(28,34,48,0.06)'}}, x:{grid:{display:false}}}}});
+  // Lưu lượng 7 ngày (GA4 thật)
+  const g = C.ga4 || {};
+  var tEl = document.getElementById('ch-traffic');
+  if (tEl && g.has && g.labels && g.labels.length) {
+    new Chart(tEl, {type:'line', data:{labels:g.labels, datasets:[
+      {label:'Tổng phiên', data:g.sessions, borderColor:'#ff7a4d', backgroundColor:'rgba(255,153,102,.18)', borderWidth:3, tension:.35, fill:true, pointRadius:3, pointBackgroundColor:'#ff7a4d'},
+      {label:'Organic Search', data:g.organic, borderColor:'#1ab394', backgroundColor:'transparent', borderWidth:2.5, tension:.35, fill:false, pointRadius:3, pointBackgroundColor:'#1ab394'}
+    ]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true, grid:{color:'rgba(28,34,48,0.06)'}, ticks:{color:'#98a0b3'}}, x:{grid:{display:false}, ticks:{color:'#98a0b3'}}}}});
+  }
+  // Nạp 3 row sức khỏe chậm (git/bot/provider) qua AJAX — dashboard load tức thì, data này điền sau
+  function setHRow(hk, tone, name, desc, pill, pillTone){
+    var row = document.querySelector('.health-row[data-hk="'+hk+'"]'); if(!row) return;
+    row.setAttribute('data-tone', tone);
+    var ico = row.querySelector('.h-ico'); if(ico) ico.setAttribute('data-tone', tone);
+    if(name){ var n = row.querySelector('.h-name'); if(n) n.textContent = name; }
+    var d = row.querySelector('.h-desc'); if(d) d.textContent = desc;
+    var p = row.querySelector('.pill'); if(p){ p.textContent = pill; p.setAttribute('data-tone', pillTone); }
+  }
+  fetch('{{ url_for("api_dashboard_health") }}', {cache:'no-store'}).then(function(r){return r.json();}).then(function(h){
+    var prov = h.provider||{}, prim = prov.primary;
+    setHRow('provider', prim?'emerald':'amber', null, prim||'chưa cấu hình', prim?'sẵn sàng':'thiếu', prim?'emerald':'amber');
+    var bot = h.bot||{}, botOk = bot.status==='ok';
+    setHRow('bot', botOk?'emerald':'rose', null, bot.username||'thông báo', botOk?'Up':(bot.detail||'down'), botOk?'emerald':'rose');
+    var git = h.git||{};
+    if(git.available){ var unc = git.uncommitted||0;
+      setHRow('git', unc?'amber':'emerald', 'Git ('+(git.branch||'')+')', '↑'+(git.ahead||0)+' · '+unc+' chưa commit', unc?'lệch':'sạch', unc?'amber':'emerald');
+    } else { setHRow('git', 'slate', 'Git', 'không có repo', '—', 'slate'); }
+  }).catch(function(){});
+})();
+</script>
+{% endblock %}

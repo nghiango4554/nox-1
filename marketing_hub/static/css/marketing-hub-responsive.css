@@ -1,0 +1,39 @@
+/* ════════════════════════════════════════════════════════════════
+   Marketing Hub — RESPONSIVE
+   Grid .mh-* + đảm bảo dashboard hiện có scroll/wrap gọn trên tablet/mobile.
+   Additive — không phá layout desktop.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ---- Tablet ---- */
+@media (max-width: 1024px) {
+  .mh-grid-kpi { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .mh-grid-report { grid-template-columns: 1fr; }
+  .mh-page-title { font-size: 18px; }
+}
+
+/* ---- Mobile ---- */
+@media (max-width: 640px) {
+  .mh-grid-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .mh-card, .mh-kpi-card, .mh-report-card, .mh-chart-card { padding: 13px 14px; }
+  .mh-page-header { flex-direction: column; align-items: stretch; gap: 10px; }
+  .mh-toolbar { width: 100%; }
+  .mh-table { font-size: 12px; }
+  .mh-kpi-value { font-size: 22px; }
+
+  /* Dashboard hiện có — KPI dồn 2 cột, card gọn lại */
+  #trk-app .trk-kpis, #gsc-health .gh-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  #trk-app .trk-card, #gsc-health .gh-card, #tc-app .tc-card, #ops-app .ops-card, .content .g4-card { padding: 12px 13px !important; }
+  /* Bảng dashboard luôn scroll ngang, không vỡ */
+  #trk-app .trk-tblwrap, .content .g4-tblwrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+  /* Toolbar/filter wrap dọc */
+  .content .g4-quick { flex-wrap: wrap !important; }
+}
+
+/* ---- Mobile nhỏ ---- */
+@media (max-width: 400px) {
+  .mh-grid-kpi { grid-template-columns: 1fr; }
+  .mh-kpi-value { font-size: 20px; }
+}
+
+/* Bảng .mh-table luôn cuộn ngang trong wrapper */
+.mh-table-wrap { -webkit-overflow-scrolling: touch; }

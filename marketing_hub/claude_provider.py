@@ -21,7 +21,7 @@ from pathlib import Path
 
 CLAUDE_BIN = "claude"
 DEFAULT_TIMEOUT = 120  # giây
-DEFAULT_MODEL = None  # None = dùng default model từ Claude config (Sonnet/Opus tùy plan)
+DEFAULT_MODEL = "claude-fable-5"  # gen dùng Fable (vợ chốt 12/6/2026) — đặt None để về default plan
 
 # Patterns Claude CLI / Anthropic API in ra khi quota hết
 RATE_LIMIT_PATTERNS = [
@@ -92,6 +92,7 @@ def call_claude(system_prompt: str, user_prompt: str,
                 text=True,
                 encoding="utf-8",
                 timeout=timeout,
+                creationflags=(subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0),
             )
         except subprocess.TimeoutExpired:
             raise RuntimeError(f"Claude CLI timeout sau {timeout}s.")

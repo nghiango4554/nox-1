@@ -454,12 +454,13 @@ def save_desc_image_alts(product_id: int, updates: list[dict[str, Any]], body_ht
 
 # ─────────────────────────── P3.5 GEN & SAVE ALL (single SP) ───────────────────────────
 
-def gen_and_save_all_alts(product_id: int) -> dict[str, Any]:
-    """Gen + save ALT cho TẤT CẢ ảnh (product + desc) của 1 SP.
+def gen_and_save_all_alts(product_id: int, desc_only: bool = False) -> dict[str, Any]:
+    """Gen + save ALT cho ảnh của 1 SP.
 
     - Ảnh SP: dùng _gen_alt_for_position, PUT /products/{id}/images/{image_id}
     - Ảnh mô tả: fetch live body_html, inject ALT, PUT /products/{id}
     - Bỏ qua ảnh đã good.
+    - desc_only=True: CHỈ xử lý ảnh mô tả (bỏ qua ảnh SP).
     Returns: {ok, saved_product, saved_desc, failed, total}
     """
     from content_writer import _gen_alt_for_position
@@ -478,23 +479,24 @@ def gen_and_save_all_alts(product_id: int) -> dict[str, Any]:
     imgs = product.get("images", [])
     total_imgs = len(imgs)
 
-    for i, im in enumerate(imgs):
-        if classify_alt(im.get("alt")) == "good":
-            continue
-        image_id = im.get("id")
-        if not image_id:
-            failed += 1
-            continue
-        try:
-            new_alt = _gen_alt_for_position(title, i + 1, total_imgs)
-            result = hv_client.put_image_alt(product_id, image_id, new_alt)
-            if result.get("ok"):
-                update_image_alt_local(product_id, image_id, new_alt)
-                saved_product += 1
-            else:
+    if not desc_only:
+        for i, im in enumerate(imgs):
+            if classify_alt(im.get("alt")) == "good":
+                continue
+            image_id = im.get("id")
+            if not image_id:
                 failed += 1
-        except Exception:
-            failed += 1
+                continue
+            try:
+                new_alt = _gen_alt_for_position(title, i + 1, total_imgs)
+                result = hv_client.put_image_alt(product_id, image_id, new_alt)
+                if result.get("ok"):
+                    update_image_alt_local(product_id, image_id, new_alt)
+                    saved_product += 1
+                else:
+                    failed += 1
+            except Exception:
+                failed += 1
 
     # Part 2: desc images (live fetch)
     try:
@@ -558,8 +560,11 @@ def stop_bulk_gen() -> bool:
     return False
 
 
-def run_bulk_gen():
-    """Worker: gen ALT + PUT Haravan cho tất cả ảnh (SP + desc). Chạy trong background thread."""
+def run_bulk_gen(desc_only: bool = False):
+    """Worker: gen ALT + PUT Haravan cho ảnh. Chạy trong background thread.
+
+    desc_only=True: CHỈ xử lý ảnh mô tả (body_html), bỏ qua ảnh SP.
+    """
     from content_writer import _gen_alt_for_position
     import haravan_client as hv_client
 
@@ -570,20 +575,29 @@ def run_bulk_gen():
     sp_img_count = 0
     for p in products:
         imgs = p["images"]
-        missing_sp = [
-            (i, im) for i, im in enumerate(imgs)
-            if classify_alt(im.get("alt")) != "good"
-        ]
-        # Đếm ảnh SP thiếu + ước tính desc (sẽ fetch live khi chạy)
-        sp_img_count += len(missing_sp)
-        if missing_sp:
-            product_tasks.append({
-                "product_id": p["product_id"],
-                "title": (p["title"] or p["handle"] or "").strip(),
-                "images": imgs,
-                "missing_sp": missing_sp,
-            })
+        if desc_only:
+            # Chỉ chọn SP có ảnh mô tả thiếu ALT (lọc theo DB snapshot để né API thừa)
+            missing_sp = []
+            _, desc_missing = _count_desc_images(p.get("body_html"))
+            if desc_missing == 0:
+                continue
+        else:
+            missing_sp = [
+                (i, im) for i, im in enumerate(imgs)
+                if classify_alt(im.get("alt")) != "good"
+            ]
+            # Đếm ảnh SP thiếu + ước tính desc (sẽ fetch live khi chạy)
+            sp_img_count += len(missing_sp)
+            if not missing_sp:
+                continue
+        product_tasks.append({
+            "product_id": p["product_id"],
+            "title": (p["title"] or p["handle"] or "").strip(),
+            "images": imgs,
+            "missing_sp": missing_sp,
+        })
 
+    mode_label = "ảnh mô tả" if desc_only else f"{sp_img_count} ảnh SP + ảnh mô tả"
     with _bulk_gen_lock:
         _bulk_gen_state.update({
             "running": True,
@@ -596,7 +610,7 @@ def run_bulk_gen():
             "current": "",
             "started_at": datetime.now().isoformat(timespec="seconds"),
             "finished_at": None,
-            "message": f"Đang gen {len(product_tasks)} SP ({sp_img_count} ảnh SP + ảnh mô tả)...",
+            "message": f"Đang gen {len(product_tasks)} SP ({mode_label})...",
         })
 
     for pt in product_tasks:
@@ -675,11 +689,314 @@ def run_bulk_gen():
         })
 
 
-def start_bulk_gen_async() -> bool:
-    """Khởi chạy bulk gen trong background thread. Trả False nếu đang chạy rồi."""
+def start_bulk_gen_async(desc_only: bool = False) -> bool:
+    """Khởi chạy bulk gen trong background thread. Trả False nếu đang chạy rồi.
+
+    desc_only=True: chỉ gen ALT cho ảnh mô tả.
+    """
     with _bulk_gen_lock:
         if _bulk_gen_state["running"]:
             return False
-    t = threading.Thread(target=run_bulk_gen, daemon=True)
+    t = threading.Thread(target=run_bulk_gen, kwargs={"desc_only": desc_only}, daemon=True)
     t.start()
     return True
+
+
+# ════════════════════════════════════════════════════════════════════════════
+#  ALT MÔ TẢ — FETCH (live) → AI GEN / DUAL AI GEN
+#  Flow mới: (1) Fetch ảnh thiếu ALT trong mô tả LIVE từ Haravan → worklist
+#            (2) AI gen (fallback chain) HOẶC Dual AI gen (Codex ∥ Claude)
+#            → inject ALT + PUT thẳng lên Haravan.
+# ════════════════════════════════════════════════════════════════════════════
+
+# Worklist: list[{product_id, title, missing_count}] — SP có ảnh mô tả thiếu ALT.
+_alt_worklist: list[dict[str, Any]] = []
+
+_alt_fetch_state: dict[str, Any] = {
+    "running": False, "stop_requested": False,
+    "total": 0, "scanned": 0,
+    "found_products": 0, "found_images": 0,
+    "current": "", "started_at": None, "finished_at": None,
+    "message": "", "done": False,
+}
+_alt_fetch_lock = threading.Lock()
+
+_alt_gen_state: dict[str, Any] = {
+    "running": False, "stop_requested": False, "mode": None,
+    "total": 0, "processed": 0, "saved_imgs": 0, "failed": 0,
+    "current": "", "current_codex": "", "current_claude": "",
+    "providers": [], "started_at": None, "finished_at": None, "message": "",
+}
+_alt_gen_lock = threading.Lock()
+
+
+def alt_fetch_state() -> dict[str, Any]:
+    with _alt_fetch_lock:
+        return dict(_alt_fetch_state)
+
+
+def alt_gen_state() -> dict[str, Any]:
+    with _alt_gen_lock:
+        st = dict(_alt_gen_state)
+    st["worklist_count"] = len(_alt_worklist)
+    return st
+
+
+def stop_alt_fetch() -> bool:
+    with _alt_fetch_lock:
+        if _alt_fetch_state["running"]:
+            _alt_fetch_state["stop_requested"] = True
+            return True
+    return False
+
+
+def stop_alt_gen() -> bool:
+    with _alt_gen_lock:
+        if _alt_gen_state["running"]:
+            _alt_gen_state["stop_requested"] = True
+            _alt_gen_state["message"] = "⏹️ Đang dừng — chờ SP hiện tại xong..."
+            return True
+    return False
+
+
+# ─────────────────────────── FETCH (live Haravan) ───────────────────────────
+
+def _candidates_with_desc_images() -> list[dict[str, Any]]:
+    """SP có khả năng chứa ảnh mô tả (DB body_html có <img). Pre-filter để né
+    quét live toàn shop. Trả [{product_id, title}]."""
+    conn = db.get_conn()
+    rows = conn.execute("""
+        SELECT haravan_id, handle, title
+        FROM haravan_products
+        WHERE body_html LIKE '%<img%'
+    """).fetchall()
+    conn.close()
+    return [{"product_id": r["haravan_id"],
+             "title": (r["title"] or r["handle"] or "").strip()} for r in rows]
+
+
+def run_alt_fetch():
+    """Worker: quét LIVE body_html từng SP → đếm ảnh mô tả thiếu ALT → build worklist."""
+    global _alt_worklist
+    cands = _candidates_with_desc_images()
+    _alt_worklist = []
+
+    with _alt_fetch_lock:
+        _alt_fetch_state.update({
+            "running": True, "stop_requested": False,
+            "total": len(cands), "scanned": 0,
+            "found_products": 0, "found_images": 0,
+            "current": "", "done": False,
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+            "finished_at": None,
+            "message": f"Đang quét live {len(cands)} SP có ảnh mô tả...",
+        })
+
+    found_imgs = 0
+    for c in cands:
+        with _alt_fetch_lock:
+            if _alt_fetch_state["stop_requested"]:
+                break
+            _alt_fetch_state["current"] = c["title"][:60]
+        try:
+            desc_imgs, _ = get_product_desc_images(c["product_id"])
+            missing = sum(1 for im in desc_imgs if classify_alt(im.get("alt")) != "good")
+        except Exception:
+            missing = 0
+        if missing > 0:
+            _alt_worklist.append({
+                "product_id": c["product_id"],
+                "title": c["title"],
+                "missing_count": missing,
+            })
+            found_imgs += missing
+        with _alt_fetch_lock:
+            _alt_fetch_state["scanned"] += 1
+            _alt_fetch_state["found_products"] = len(_alt_worklist)
+            _alt_fetch_state["found_images"] = found_imgs
+        time.sleep(0.25)
+
+    with _alt_fetch_lock:
+        stop_req = _alt_fetch_state["stop_requested"]
+        _alt_fetch_state.update({
+            "running": False, "done": True, "current": "",
+            "finished_at": datetime.now().isoformat(timespec="seconds"),
+            "message": (
+                f"{'⏹️ Dừng' if stop_req else '✅ Quét xong'} — "
+                f"{len(_alt_worklist)} SP / {found_imgs} ảnh mô tả thiếu ALT."
+            ),
+        })
+
+
+def start_alt_fetch_async() -> dict[str, Any]:
+    with _alt_fetch_lock:
+        if _alt_fetch_state["running"]:
+            return {"ok": False, "error": "Đang fetch rồi."}
+    with _alt_gen_lock:
+        if _alt_gen_state["running"]:
+            return {"ok": False, "error": "Đang gen — dừng gen trước khi fetch lại."}
+    threading.Thread(target=run_alt_fetch, daemon=True).start()
+    return {"ok": True}
+
+
+# ─────────────────────────── AI GEN (single + dual) ───────────────────────────
+
+_ALT_GEN_SYSTEM = (
+    "Bạn là chuyên gia SEO tiếng Việt, viết ALT text cho ảnh trong phần mô tả "
+    "sản phẩm máy tính/linh kiện. Mỗi ALT 6–14 từ, mô tả tự nhiên, có chứa tên/loại "
+    "sản phẩm, KHÔNG nhồi từ khoá, KHÔNG dùng dấu ngoặc kép, KHÔNG đánh số thứ tự."
+)
+
+
+def _gen_alts_via_ai(title: str, n: int, provider: str | None) -> list[str]:
+    """Gọi AI gen n ALT cho 1 SP. provider=None → fallback chain; ngược lại ghim 1 provider.
+    Trả list[str] đúng n phần tử (fallback template nếu thiếu)."""
+    import ai_provider
+    user = (
+        f"Sản phẩm: {title}\n"
+        f"Hãy viết {n} câu ALT khác nhau cho {n} ảnh mô tả (theo thứ tự). "
+        f"Trả về DUY NHẤT một mảng JSON gồm {n} chuỗi, không giải thích. "
+        f'Ví dụ: ["chuột gaming Logitech thiết kế công thái học", "..."]'
+    )
+    if provider:
+        raw = ai_provider.call_ai_single(provider, _ALT_GEN_SYSTEM, user, timeout=120)
+    else:
+        raw = ai_provider.call_ai(_ALT_GEN_SYSTEM, user, timeout=120)
+    alts: list[str] = []
+    m = re.search(r"\[.*\]", raw or "", re.DOTALL)
+    if m:
+        try:
+            arr = json.loads(m.group(0))
+            alts = [str(x).strip().strip('"').replace('"', "")[:125] for x in arr if str(x).strip()]
+        except Exception:
+            alts = []
+    # Bù cho đủ n (template) nếu AI trả thiếu / lỗi parse
+    for i in range(len(alts), n):
+        alts.append(gen_alt_for_desc_image(title, i))
+    return alts[:n]
+
+
+def _gen_save_one_product(product_id: int, title: str, provider: str | None) -> int:
+    """Re-fetch live → gen ALT các ảnh thiếu → inject → PUT Haravan. Trả số ảnh đã lưu.
+    Raise nếu AI provider hết quota (caller xử lý cho dual)."""
+    import haravan_client as hv_client
+    desc_imgs, live_html = get_product_desc_images(product_id)
+    if not live_html:
+        return 0
+    missing = [im for im in desc_imgs if classify_alt(im.get("alt")) != "good"]
+    if not missing:
+        return 0
+    alts = _gen_alts_via_ai(title, len(missing), provider)
+    updates = [{"index": im["index"], "alt": a} for im, a in zip(missing, alts)]
+    new_html = save_desc_image_alts(product_id, updates, live_html)
+    hv_client.update_product(product_id, {"body_html": new_html})
+    db.mark_alt_synced(product_id)
+    return len(updates)
+
+
+def run_alt_gen(dual: bool):
+    """Worker gen ALT trên worklist. dual=False: 1 luồng fallback chain.
+    dual=True: 2 luồng Codex ∥ Claude (mỗi luồng ghim 1 provider)."""
+    global _alt_worklist
+    import ai_provider
+    queue = list(_alt_worklist)
+
+    with _alt_gen_lock:
+        _alt_gen_state.update({
+            "running": True, "stop_requested": False,
+            "mode": "dual" if dual else "single",
+            "total": len(queue), "processed": 0, "saved_imgs": 0, "failed": 0,
+            "current": "", "current_codex": "", "current_claude": "",
+            "providers": ["codex", "claude"] if dual else ai_provider.available_providers(),
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+            "finished_at": None,
+            "message": (f"Dual-AI (Codex ∥ Claude): gen {len(queue)} SP."
+                        if dual else f"AI gen: {len(queue)} SP."),
+        })
+
+    quota_flag = {"codex": False, "claude": False, "single": False}
+
+    def worker(provider: str | None):
+        cur_key = f"current_{provider}" if provider else "current"
+        qkey = provider or "single"
+        while True:
+            with _alt_gen_lock:
+                if _alt_gen_state["stop_requested"] or not queue:
+                    break
+                item = queue.pop(0)
+                _alt_gen_state[cur_key] = item["title"][:60]
+            try:
+                saved = _gen_save_one_product(item["product_id"], item["title"], provider)
+                with _alt_gen_lock:
+                    _alt_gen_state["saved_imgs"] += saved
+                    _alt_gen_state["processed"] += 1
+                    _alt_gen_state[cur_key] = ""
+            except ai_provider.AIQuotaError:
+                # Trả SP về hàng đợi cho luồng kia; luồng này nghỉ.
+                with _alt_gen_lock:
+                    queue.insert(0, item)
+                    quota_flag[qkey] = True
+                    _alt_gen_state[cur_key] = ""
+                break
+            except Exception:
+                with _alt_gen_lock:
+                    _alt_gen_state["failed"] += 1
+                    _alt_gen_state["processed"] += 1
+                    _alt_gen_state[cur_key] = ""
+            time.sleep(0.5)
+
+    if dual:
+        tc = threading.Thread(target=worker, args=("codex",), daemon=True)
+        tk = threading.Thread(target=worker, args=("claude",), daemon=True)
+        tc.start(); tk.start(); tc.join(); tk.join()
+    else:
+        worker(None)
+
+    with _alt_gen_lock:
+        st = _alt_gen_state
+        stop_req = st["stop_requested"]
+        leftover = len(queue)
+        st.update({
+            "running": False, "mode": None, "current": "",
+            "current_codex": "", "current_claude": "",
+            "finished_at": datetime.now().isoformat(timespec="seconds"),
+        })
+        if stop_req:
+            prefix = "⏹️ Đã dừng"
+        elif dual and quota_flag["codex"] and quota_flag["claude"]:
+            prefix = "⛔ Cả Codex + Claude hết quota"
+        elif quota_flag["single"]:
+            prefix = "⛔ Hết quota AI"
+        else:
+            prefix = "🏁 Hoàn tất"
+        st["message"] = (
+            f"{prefix} — lưu {st['saved_imgs']} ảnh (❌ {st['failed']}) / {st['total']} SP."
+            + (f" Còn {leftover} SP chưa làm." if leftover else "")
+        )
+    # Worklist còn lại = phần chưa làm (cho lần bấm sau)
+    _alt_worklist = queue
+
+
+def start_alt_gen_async(dual: bool) -> dict[str, Any]:
+    """Khởi chạy gen trên worklist đã fetch. dual=True cần CẢ Codex + Claude khả dụng."""
+    import ai_provider
+    if not _alt_worklist:
+        return {"ok": False, "error": "Chưa có data — bấm 'Fetch ảnh' trước."}
+    with _alt_fetch_lock:
+        if _alt_fetch_state["running"]:
+            return {"ok": False, "error": "Đang fetch — đợi xong rồi gen."}
+    with _alt_gen_lock:
+        if _alt_gen_state["running"]:
+            return {"ok": False, "error": "Đang gen rồi."}
+    if dual:
+        avail = ai_provider.available_providers()
+        missing = [p for p in ("codex", "claude") if p not in avail]
+        if missing:
+            return {"ok": False,
+                    "error": f"Dual-AI cần CẢ Codex + Claude. Thiếu: {', '.join(missing)} "
+                             f"(đang có: {', '.join(avail) or 'không có'})."}
+    else:
+        if not ai_provider.available_providers():
+            return {"ok": False, "error": "Không có provider AI nào khả dụng."}
+    threading.Thread(target=run_alt_gen, kwargs={"dual": dual}, daemon=True).start()
+    return {"ok": True, "count": len(_alt_worklist), "mode": "dual" if dual else "single"}

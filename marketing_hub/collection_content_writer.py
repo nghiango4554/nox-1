@@ -922,6 +922,9 @@ def compress_html(html: str) -> str:
 
     # 4. Unwrap span lồng nhau không có style: <span><span>X</span></span> → X
     # Idempotent — chạy nhiều lần để unwrap dần các tầng
+    # 4a. Span chỉ chứa khoảng trắng (vd space đứng trước link) → &nbsp; để KHÔNG bị
+    #     bước strip-whitespace nuốt mất (gây dính chữ vào anchor text). Phải chạy TRƯỚC unwrap + strip.
+    html = re.sub(r'<span[^>]*>\s+</span>', '&nbsp;', html)
     for _ in range(5):
         html_new = re.sub(r'<span>\s*([^<]*?)\s*</span>', r'\1', html)
         if html_new == html: break

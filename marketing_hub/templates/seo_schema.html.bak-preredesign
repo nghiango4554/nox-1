@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Schema audit · SEO · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
+<span class="crumb"></span>
+<span style="font-weight:600">🔖 Schema audit (JSON-LD)</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('seo_dashboard') }}">← SEO dashboard</a>
+{% endblock %}
+
+{% block content %}
+<style>
+.schema-wrap { max-width: 1280px; margin: 0 auto; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.summary-card { background: var(--surface, #fff); border: 1px solid var(--border, #e2e8f0); border-radius: 10px; padding: 14px; }
+.summary-card .lbl { color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+.summary-card .num { font-size: 28px; font-weight: 700; line-height: 1; margin: 6px 0 4px; }
+.summary-card .sub { color: #64748b; font-size: 12px; }
+.summary-card.green { border-left: 4px solid #22c55e; }
+.summary-card.red { border-left: 4px solid #ef4444; }
+.summary-card.yellow { border-left: 4px solid #f59e0b; }
+.summary-card.blue { border-left: 4px solid #3b82f6; }
+
+.filter-bar { background: var(--surface, #fff); border: 1px solid var(--border, #e2e8f0); border-radius: 10px; padding: 12px; margin-bottom: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.filter-bar label { font-size: 13px; color: #475569; }
+.filter-bar select, .filter-bar input { padding: 6px 10px; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; font-size: 13px; }
+.filter-bar .chip { padding: 4px 10px; background: #f1f5f9; border-radius: 12px; font-size: 12px; color: #475569; }
+.filter-bar .chip.active { background: #dbeafe; color: #1e40af; font-weight: 600; }
+
+.schema-table { width: 100%; border-collapse: collapse; background: var(--surface, #fff); border-radius: 10px; overflow: hidden; border: 1px solid var(--border, #e2e8f0); }
+.schema-table th, .schema-table td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border, #e2e8f0); font-size: 13px; }
+.schema-table th { background: #f1f5f9; font-weight: 600; }
+.schema-table tr:last-child td { border-bottom: none; }
+.schema-table .url-cell { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.schema-table .url-cell a { color: #2563eb; text-decoration: none; }
+.schema-table .url-cell a:hover { text-decoration: underline; }
+.schema-badge { display: inline-block; padding: 2px 7px; margin: 1px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.schema-badge.b-product { background: #dcfce7; color: #166534; }
+.schema-badge.b-article { background: #dbeafe; color: #1e40af; }
+.schema-badge.b-faq { background: #fef3c7; color: #92400e; }
+.schema-badge.b-itemlist { background: #ede9fe; color: #5b21b6; }
+.schema-badge.b-breadcrumb { background: #f1f5f9; color: #475569; }
+.schema-badge.b-org { background: #f1f5f9; color: #475569; }
+.schema-badge.b-store { background: #f1f5f9; color: #475569; }
+.schema-badge.b-other { background: #f1f5f9; color: #475569; }
+.schema-badge.missing { background: #fee2e2; color: #991b1b; }
+
+.pagination { margin-top: 16px; display: flex; gap: 8px; justify-content: center; }
+.pagination a, .pagination span { padding: 6px 12px; border: 1px solid var(--border, #e2e8f0); border-radius: 6px; font-size: 13px; color: #475569; text-decoration: none; }
+.pagination .current { background: #2563eb; color: white; border-color: #2563eb; }
+
+.btn-mini { padding: 3px 8px; font-size: 11px; border: 1px solid var(--border, #e2e8f0); background: white; border-radius: 4px; cursor: pointer; }
+.btn-mini:hover { background: #f1f5f9; }
+
+#detail-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100; align-items: center; justify-content: center; }
+#detail-modal.show { display: flex; }
+#detail-modal .modal-box { background: white; border-radius: 12px; padding: 20px; max-width: 900px; max-height: 80vh; overflow: auto; width: 90%; }
+#detail-modal h3 { margin: 0 0 12px; font-size: 16px; }
+#detail-modal pre { background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 6px; font-size: 12px; overflow: auto; max-height: 400px; }
+</style>
+
+<div class="schema-wrap">
+
+  <!-- ── Summary cards ── -->
+  <div class="summary-grid">
+    {% set sp = stats_by_type.get('product', {}) %}
+    {% set bl = stats_by_type.get('blog', {}) %}
+    {% set col = stats_by_type.get('collection', {}) %}
+    <div class="summary-card green">
+      <div class="lbl">📦 Product schema (SP)</div>
+      <div class="num">{{ sp.pct_has_product or 0 }}%</div>
+      <div class="sub">{{ sp.has_product or 0 }}/{{ sp.total_audited or 0 }} audited</div>
+    </div>
+    <div class="summary-card {% if (bl.pct_has_article or 0) > 90 %}green{% else %}yellow{% endif %}">
+      <div class="lbl">📰 Article schema (blog)</div>
+      <div class="num">{{ bl.pct_has_article or 0 }}%</div>
+      <div class="sub">{{ bl.has_article or 0 }}/{{ bl.total_audited or 0 }} audited</div>
+    </div>
+    <div class="summary-card red">
+      <div class="lbl">❓ FAQPage (blog) — gap</div>
+      <div class="num">{{ bl.pct_has_faq or 0 }}%</div>
+      <div class="sub">🔴 {{ (bl.total_audited or 0) - (bl.has_faq or 0) }} blog thiếu</div>
+    </div>
+    <div class="summary-card red">
+      <div class="lbl">📋 ItemList (collection) — gap</div>
+      <div class="num">0%</div>
+      <div class="sub">🔴 {{ col.total_audited or 0 }} collection thiếu</div>
+    </div>
+  </div>
+
+  <!-- ── Filter bar ── -->
+  <form method="get" class="filter-bar">
+    <label>url_type:
+      <select name="url_type" onchange="this.form.submit()">
+        <option value="">— Tất cả —</option>
+        <option value="product" {% if url_type=='product' %}selected{% endif %}>product (SP)</option>
+        <option value="blog" {% if url_type=='blog' %}selected{% endif %}>blog</option>
+        <option value="collection" {% if url_type=='collection' %}selected{% endif %}>collection</option>
+        <option value="page" {% if url_type=='page' %}selected{% endif %}>page</option>
+      </select>
+    </label>
+    <label>Thiếu schema:
+      <select name="missing" onchange="this.form.submit()">
+        <option value="">— Không filter —</option>
+        <option value="product" {% if missing=='product' %}selected{% endif %}>thiếu Product</option>
+        <option value="faq" {% if missing=='faq' %}selected{% endif %}>thiếu FAQPage</option>
+        <option value="article" {% if missing=='article' %}selected{% endif %}>thiếu Article</option>
+        <option value="itemlist" {% if missing=='itemlist' %}selected{% endif %}>thiếu ItemList</option>
+        <option value="any" {% if missing=='any' %}selected{% endif %}>không có schema nào</option>
+        <option value="errors" {% if missing=='errors' %}selected{% endif %}>có parse error / 404</option>
+      </select>
+    </label>
+    <span class="chip {% if total %}active{% endif %}">{{ total }} URL match</span>
+    {% if url_type or missing %}
+      <a href="{{ url_for('seo_schema_page') }}" class="chip" style="text-decoration:none">🔄 Reset</a>
+    {% endif %}
+  </form>
+
+  <!-- ── Table ── -->
+  <table class="schema-table">
+    <thead>
+      <tr>
+        <th>URL</th>
+        <th>Type</th>
+        <th>Schema types có</th>
+        <th>Thiếu</th>
+        <th>Scanned</th>
+        <th style="text-align:center">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in rows %}
+      {% set types_str = r.schema_types or '[]' %}
+      {% set has_breadcrumb = 'BreadcrumbList' in types_str %}
+      {% set has_org = 'Organization' in types_str %}
+      <tr data-id="{{ r.id }}">
+        <td class="url-cell" title="{{ r.url }}">
+          <a href="{{ r.url }}" target="_blank" rel="noopener">{{ r.url|replace('https://sintech.vn', '') }}</a>
+        </td>
+        <td><span class="schema-badge b-other">{{ r.url_type or '—' }}</span></td>
+        <td>
+          {% if r.schema_has_product %}<span class="schema-badge b-product">Product</span>{% endif %}
+          {% if r.schema_has_article %}<span class="schema-badge b-article">Article</span>{% endif %}
+          {% if r.schema_has_faq %}<span class="schema-badge b-faq">FAQPage</span>{% endif %}
+          {% if 'ItemList' in types_str %}<span class="schema-badge b-itemlist">ItemList</span>{% endif %}
+          {% if has_breadcrumb %}<span class="schema-badge b-breadcrumb">Breadcrumb</span>{% endif %}
+          {% if has_org %}<span class="schema-badge b-org">Org</span>{% endif %}
+        </td>
+        <td>
+          {% if r.url_type == 'product' and not r.schema_has_product %}<span class="schema-badge missing">Product</span>{% endif %}
+          {% if r.url_type == 'blog' and not r.schema_has_faq %}<span class="schema-badge missing">FAQPage</span>{% endif %}
+          {% if r.url_type == 'blog' and not r.schema_has_article %}<span class="schema-badge missing">Article</span>{% endif %}
+          {% if r.url_type == 'collection' and 'ItemList' not in types_str %}<span class="schema-badge missing">ItemList</span>{% endif %}
+          {% if r.schema_count == 0 %}<span class="schema-badge missing">no schema</span>{% endif %}
+        </td>
+        <td><small style="color:#64748b">{{ r.schema_scanned_at|truncate(16, True, '') if r.schema_scanned_at else '—' }}</small></td>
+        <td style="text-align:center;white-space:nowrap">
+          <button class="btn-mini" onclick="rescanRow({{ r.id }}, this)">🔄</button>
+          <button class="btn-mini" onclick="showDetail({{ r.id }})">👁</button>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" style="text-align:center;padding:30px;color:#94a3b8">— Không có URL match filter —</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- ── Pagination ── -->
+  {% if total_pages > 1 %}
+    <div class="pagination">
+      {% if page_num > 1 %}
+        <a href="?{% if url_type %}url_type={{ url_type }}&{% endif %}{% if missing %}missing={{ missing }}&{% endif %}page={{ page_num - 1 }}">← Prev</a>
+      {% endif %}
+      <span class="current">Trang {{ page_num }} / {{ total_pages }}</span>
+      {% if page_num < total_pages %}
+        <a href="?{% if url_type %}url_type={{ url_type }}&{% endif %}{% if missing %}missing={{ missing }}&{% endif %}page={{ page_num + 1 }}">Next →</a>
+      {% endif %}
+    </div>
+  {% endif %}
+
+</div>
+
+<!-- Detail modal -->
+<div id="detail-modal" onclick="if(event.target.id=='detail-modal') hideDetail()">
+  <div class="modal-box">
+    <h3>🔖 Schema detail</h3>
+    <div id="detail-content"><em>Đang fetch URL + extract JSON-LD...</em></div>
+    <div style="text-align:right;margin-top:12px">
+      <button class="btn-mini" onclick="hideDetail()">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<script>
+async function rescanRow(pageId, btn) {
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  try {
+    const r = await fetch('/seo/schema/rescan/' + pageId, { method: 'POST' });
+    const data = await r.json();
+    if (data.ok) {
+      btn.textContent = '✅';
+      setTimeout(() => location.reload(), 800);
+    } else {
+      btn.textContent = '❌';
+      alert('Re-scan fail: ' + (data.error || 'unknown'));
+      btn.disabled = false;
+      btn.textContent = '🔄';
+    }
+  } catch (e) {
+    btn.textContent = '❌';
+    alert('Network error: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '🔄';
+  }
+}
+
+async function showDetail(pageId) {
+  const modal = document.getElementById('detail-modal');
+  const content = document.getElementById('detail-content');
+  content.innerHTML = '<em>Đang fetch URL + extract JSON-LD...</em>';
+  modal.classList.add('show');
+  try {
+    const r = await fetch('/seo/schema/detail/' + pageId);
+    const data = await r.json();
+    if (!data.ok) {
+      content.innerHTML = '<div style="color:#991b1b;padding:12px;background:#fee2e2;border-radius:6px">❌ ' + (data.error || 'fail') + '<br><small>' + (data.url || '') + '</small></div>';
+      return;
+    }
+    let html = '<div style="margin-bottom:12px"><a href="' + data.url + '" target="_blank" style="color:#2563eb">' + data.url + '</a><br>';
+    html += '<small style="color:#64748b">' + (data.title || '') + ' · ' + (data.url_type || '') + '</small></div>';
+    html += '<div style="margin-bottom:8px"><strong>All types found:</strong> ';
+    if (data.all_types.length === 0) {
+      html += '<span style="color:#991b1b">none</span>';
+    } else {
+      data.all_types.forEach(t => { html += '<span class="schema-badge b-other">' + t + '</span> '; });
+    }
+    html += '</div>';
+    if (data.errors && data.errors.length) {
+      html += '<div style="margin-bottom:8px;color:#991b1b"><strong>Parse errors:</strong> ' + data.errors.join('; ') + '</div>';
+    }
+    html += '<div><strong>Blocks (' + data.blocks.length + '):</strong></div>';
+    data.blocks.forEach((b, i) => {
+      html += '<details style="margin:6px 0"><summary>Block #' + i + ' — types: ' + (b.types.join(', ') || '(none)') + (b.error ? ' [ERROR]' : '') + '</summary>';
+      html += '<pre>' + JSON.stringify(b, null, 2) + '</pre></details>';
+    });
+    content.innerHTML = html;
+  } catch (e) {
+    content.innerHTML = '<div style="color:#991b1b">❌ ' + e.message + '</div>';
+  }
+}
+
+function hideDetail() {
+  document.getElementById('detail-modal').classList.remove('show');
+}
+</script>
+
+{% endblock %}

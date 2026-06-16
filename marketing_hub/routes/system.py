@@ -151,7 +151,7 @@ def competitors_page():
         filters={"competitor": f_competitor, "topic": f_topic,
                  "q": f_search or "", "sort": f_sort},
         page_num=page_num, total_pages=total_pages, total=total,
-        per_page=per_page,
+        per_page=per_page, active="competitors",
     )
 
 

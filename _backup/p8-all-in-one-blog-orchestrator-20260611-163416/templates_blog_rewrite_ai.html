@@ -1,0 +1,587 @@
+{% extends "base.html" %}
+{% block title %}AI Viết Lại Blog · SEO · Sintech Hub{% endblock %}
+{% block page_title %}<span>✍️ AI Viết Lại Blog</span>{% endblock %}
+
+{% block content %}
+<style>
+  .br-wrap{padding:4px 2px 40px}
+  .br-intro{color:#555;margin:0 0 16px;font-size:14px}
+  .br-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
+  .br-kpi{background:#fff;border:1px solid #e6e6ef;border-radius:12px;padding:12px 14px}
+  .br-kpi .n{font-size:24px;font-weight:800;line-height:1}
+  .br-kpi .l{font-size:12px;color:#777;margin-top:4px}
+  .br-kpi.high .n{color:#dc2626}.br-kpi.med .n{color:#d97706}.br-kpi.rev .n{color:#2563eb}.br-kpi.unk .n{color:#64748b}
+  .br-actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .br-btn{border:1px solid #d4d4e0;background:#fff;border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer;font-weight:600}
+  .br-btn.primary{background:#4f46e5;color:#fff;border-color:#4f46e5}
+  .br-btn:disabled{opacity:.45;cursor:not-allowed}
+  .br-phase{font-size:11px;color:#9333ea;border:1px dashed #c4b5fd;border-radius:6px;padding:2px 6px;margin-left:4px}
+  .br-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;align-items:center}
+  .br-filters select,.br-filters input{border:1px solid #d4d4e0;border-radius:8px;padding:6px 10px;font-size:13px}
+  table.br-tbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e6e6ef;border-radius:12px;overflow:hidden;font-size:13px}
+  table.br-tbl th{background:#f6f6fb;text-align:left;padding:9px 10px;font-size:11px;text-transform:uppercase;color:#666;position:sticky;top:0}
+  table.br-tbl td{padding:8px 10px;border-top:1px solid #f0f0f5;vertical-align:top}
+  .risk{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
+  /* Khung đọc như Word */
+  .br-read{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:22px 30px;max-height:62vh;overflow:auto;
+    font-family:'Segoe UI',Calibri,Arial,sans-serif;font-size:15.5px;line-height:1.8;color:#1f2937;max-width:780px;margin:0 auto;
+    box-shadow:0 1px 4px rgba(0,0,0,.06)}
+  .br-read h1,.br-read h2{font-size:21px;font-weight:700;color:#111827;margin:20px 0 8px;line-height:1.35}
+  .br-read h3{font-size:17px;font-weight:700;color:#1f2937;margin:16px 0 6px}
+  .br-read p{margin:0 0 12px}
+  .br-read ul,.br-read ol{margin:0 0 12px;padding-left:24px}
+  .br-read li{margin:4px 0}
+  .br-read img{max-width:100%;height:auto;border-radius:6px;margin:8px 0}
+  .br-read table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14px}
+  .br-read th,.br-read td{border:1px solid #d1d5db;padding:7px 10px;text-align:left}
+  .br-read th{background:#f3f4f6;font-weight:700}
+  .br-read a{color:#4f46e5;text-decoration:underline}
+  .risk.high{background:#fee2e2;color:#b91c1c}.risk.medium{background:#fef3c7;color:#b45309}
+  .risk.review{background:#dbeafe;color:#1d4ed8}.risk.unknown{background:#f1f5f9;color:#475569}
+  .badge-notraffic{font-size:10px;color:#94a3b8;border:1px solid #e2e8f0;border-radius:5px;padding:1px 5px}
+  .br-title-cell a{color:#1f2937;text-decoration:none;font-weight:600}
+  .br-title-cell a:hover{color:#4f46e5}
+  .br-pager{display:flex;gap:6px;align-items:center;margin-top:12px;font-size:13px}
+  #br-detail{position:fixed;top:0;right:0;width:min(520px,92vw);height:100vh;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.12);transform:translateX(100%);transition:.25s;overflow:auto;z-index:50;padding:20px}
+  #br-detail.open{transform:translateX(0)}
+  #br-detail h3{margin-top:0}
+  #br-detail pre{background:#f6f6fb;padding:10px;border-radius:8px;font-size:12px;white-space:pre-wrap;word-break:break-word}
+  .br-x{float:right;cursor:pointer;font-size:20px;color:#888}
+</style>
+
+<div class="br-wrap">
+  <p class="br-intro">Tạo hàng đợi biên tập cho các bài blog cần viết lại. <b>Chỉ cập nhật Haravan sau khi duyệt</b> — P1 mới import scan + xếp ưu tiên, chưa gọi AI.</p>
+
+  <div class="br-kpis" id="br-kpis"></div>
+
+  <div class="br-actions">
+    <button class="br-btn" id="btn-dry">🔎 Dry-run import</button>
+    <button class="br-btn primary" id="btn-import">⬇️ Import scan (ghi DB)</button>
+    <button class="br-btn" id="btn-export">📤 Export CSV</button>
+    <button class="br-btn" id="btn-refresh">🔄 Refresh</button>
+    <button class="br-btn" disabled>⚡ Generate selected <span class="br-phase">P3</span></button>
+    <button class="br-btn" disabled>✅ Approve <span class="br-phase">P4</span></button>
+    <button class="br-btn" disabled>🚀 Apply <span class="br-phase">P5</span></button>
+    <button class="br-btn" disabled>↩️ Rollback <span class="br-phase">P5</span></button>
+  </div>
+  <div id="br-msg" style="font-size:13px;color:#4f46e5;margin-bottom:10px"></div>
+
+  <div class="br-actions" style="background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px;padding:10px">
+    <span style="font-weight:700;color:#7c3aed;font-size:13px;align-self:center">Chọn bài:</span>
+    <button class="br-btn" onclick="bulk('top_priority',5)">⭐ Top 5</button>
+    <button class="br-btn" onclick="bulk('top_priority',10)">Top 10</button>
+    <button class="br-btn" onclick="bulk('top_priority',20)">Top 20</button>
+    <button class="br-btn" onclick="bulk('select_page')">Chọn trang</button>
+    <button class="br-btn" onclick="bulk('unselect_page')">Bỏ chọn trang</button>
+    <button class="br-btn" onclick="bulk('clear_all')">Bỏ chọn tất cả</button>
+    <span style="flex:1"></span>
+    <span style="background:#7c3aed;color:#fff;border-radius:7px;padding:4px 10px;font-size:12px;font-weight:700">MOCK MODE — không gọi AI thật</span>
+    <button class="br-btn primary" onclick="genJob('top_priority',5)">⚡ Generate mock top 5</button>
+    <button class="br-btn" onclick="genJob('selected')">Generate mock selected</button>
+  </div>
+
+  <div id="br-queue" style="margin-bottom:14px"></div>
+  <div id="br-batch" style="margin-bottom:14px"></div>
+  <details style="margin-bottom:14px;background:#fff;border:1px solid #fde68a;border-radius:10px;padding:8px">
+    <summary style="cursor:pointer;font-weight:700;color:#b45309">🖼️ Xử lý ảnh bài viết (image remediation — local)</summary>
+    <div id="br-images" style="margin-top:8px">đang tải...</div>
+  </details>
+  <details style="margin-bottom:14px;background:#fff;border:1px solid #bbf7d0;border-radius:10px;padding:8px">
+    <summary style="cursor:pointer;font-weight:700;color:#047857">⚡ Bài dễ xử lý trước (quick-win)</summary>
+    <div id="br-quickwin" style="margin-top:8px">đang tải...</div>
+  </details>
+  <details style="margin-bottom:14px;background:#fff;border:1px solid #93c5fd;border-radius:10px;padding:8px">
+    <summary style="cursor:pointer;font-weight:700;color:#1d4ed8">🚀 Canary rollout (prep — chưa apply)</summary>
+    <div id="br-canary" style="margin-top:8px">đang tải...</div>
+  </details>
+  <details style="margin-bottom:14px;background:#fff;border:1px solid #c4b5fd;border-radius:10px;padding:8px">
+    <summary style="cursor:pointer;font-weight:700;color:#6d28d9">🤖 Autopilot (mặc định OFF)</summary>
+    <div id="br-autopilot" style="margin-top:8px">đang tải...</div>
+  </details>
+  <details style="margin-bottom:14px;background:#fff;border:2px solid #f0abfc;border-radius:10px;padding:8px">
+    <summary style="cursor:pointer;font-weight:700;color:#a21caf">🚀 Full Auto Rewrite &amp; Sync (chạy hết queue — chưa bật)</summary>
+    <div id="br-fullauto" style="margin-top:8px">đang tải...</div>
+  </details>
+
+  <div class="br-filters">
+    <select id="f-risk"><option value="">Risk: tất cả</option><option value="high">high</option><option value="medium">medium</option><option value="review">review</option><option value="unknown">unknown</option></select>
+    <select id="f-traffic"><option value="">Traffic: tất cả</option><option value="has_data">Có traffic</option><option value="no_traffic_data">Chưa có</option></select>
+    <select id="f-sort"><option value="priority_score">Sort: Priority</option><option value="gsc_clicks_28d">GSC clicks</option><option value="gsc_impressions_28d">Impressions</option><option value="ga4_organic_sessions_28d">GA4 sessions</option><option value="updated_at">Updated</option></select>
+    <input id="f-q" placeholder="🔍 tìm tiêu đề / URL" style="min-width:200px">
+    <label style="font-size:13px"><input type="checkbox" id="f-sel"> chỉ selected</label>
+  </div>
+
+  <div style="max-height:64vh;overflow:auto;border-radius:12px">
+  <table class="br-tbl">
+    <thead><tr>
+      <th>Sel</th><th>#ID</th><th>Prio</th><th>Risk</th><th>Tiêu đề</th><th>Nhóm</th>
+      <th>GSC click</th><th>Impr</th><th>GA4 ss</th><th>Người viết</th><th>Năm</th><th></th>
+    </tr></thead>
+    <tbody id="br-rows"><tr><td colspan="12" style="padding:20px;color:#999">Chưa có candidate — bấm <b>Import scan</b>.</td></tr></tbody>
+  </table>
+  </div>
+  <div class="br-pager">
+    <button class="br-btn" id="pg-prev">‹</button>
+    <span id="pg-info">0</span>
+    <button class="br-btn" id="pg-next">›</button>
+  </div>
+</div>
+
+<div id="br-detail"><span class="br-x" onclick="document.getElementById('br-detail').classList.remove('open')">✕</span><div id="br-detail-body"></div></div>
+
+<script>
+const S={limit:50,offset:0,total:0};
+const $=id=>document.getElementById(id);
+const f_risk=$('f-risk'),f_traffic=$('f-traffic'),f_sort=$('f-sort'),f_q=$('f-q'),f_sel=$('f-sel'),
+  btn_dry=$('btn-dry'),btn_import=$('btn-import'),btn_export=$('btn-export'),btn_refresh=$('btn-refresh'),
+  pg_prev=$('pg-prev'),pg_next=$('pg-next');
+function kpi(s){
+  document.getElementById('br-kpis').innerHTML=[
+    ['total','Tổng candidate',''],['high','High risk','high'],['medium','Medium','med'],
+    ['review','Review','rev'],['unknown','Unknown','unk'],['selected','Selected',''],
+    ['has_traffic','Có traffic',''],['no_traffic','Chưa có traffic','']
+  ].map(([k,l,c])=>`<div class="br-kpi ${c}"><div class="n">${s[k]??0}</div><div class="l">${l}</div></div>`).join('');
+}
+async function loadStatus(){const r=await fetch('/api/blog-rewrite/status');kpi(await r.json());}
+async function loadRows(){
+  const p=new URLSearchParams({risk:f_risk.value,traffic:f_traffic.value,sort:f_sort.value,
+    q:f_q.value,only_selected:f_sel.checked?'1':'',limit:S.limit,offset:S.offset});
+  const r=await fetch('/api/blog-rewrite/candidates?'+p);const d=await r.json();
+  S.total=d.total;
+  document.getElementById('pg-info').textContent=`${d.total} bài · ${S.offset+1}-${Math.min(S.offset+S.limit,d.total)}`;
+  const tb=document.getElementById('br-rows');
+  if(!d.items.length){tb.innerHTML='<tr><td colspan="12" style="padding:20px;color:#999">Không có kết quả.</td></tr>';return;}
+  window._pageIds=d.items.map(c=>c.id);
+  tb.innerHTML=d.items.map(c=>`<tr>
+    <td><input type="checkbox" ${c.selected?'checked':''} onchange="toggleSel(${c.id},this.checked)"
+        title="${c.risk_level!=='high'?'⚠️ '+c.risk_level+' — duyệt thủ công':''}">${c.risk_level!=='high'&&c.selected?' <span class="badge-notraffic">review tay</span>':''}</td>
+    <td style="font-weight:700;color:#7c3aed">#${c.id}</td>
+    <td><b>${c.priority_score}</b></td>
+    <td><span class="risk ${c.risk_level}">${c.risk_level}</span></td>
+    <td class="br-title-cell"><a href="${c.article_url}" target="_blank">${esc(c.title)}</a></td>
+    <td style="font-size:11px;color:#777">${c.source_group_primary}</td>
+    <td>${c.gsc_clicks_28d||0}</td><td>${c.gsc_impressions_28d||0}</td><td>${c.ga4_organic_sessions_28d||0}</td>
+    <td>${esc(c.author||'')}</td><td>${c.published_year||''}</td>
+    <td><button class="br-btn" style="padding:3px 8px" onclick="detail(${c.id})">👁</button></td>
+  </tr>`).join('');
+}
+function esc(s){return (s||'').replace(/[<>&]/g,m=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[m]));}
+async function toggleSel(id,checked){await fetch(`/api/blog-rewrite/candidates/${id}/select`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({selected:checked})});loadStatus();}
+async function bulk(mode,limit){
+  let body={mode,limit:limit||5,risk:'high'};
+  if(mode==='select_page'||mode==='unselect_page')body.ids=window._pageIds||[];
+  await fetch('/api/blog-rewrite/candidates/select-bulk',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  loadStatus();loadRows();
+}
+async function genJob(mode,limit){
+  let body={mode};if(mode==='top_priority'){body.limit=limit;}
+  let r=await fetch('/api/blog-rewrite/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  let d=await r.json();
+  if(!d.ok){
+    if(d.needs_confirm){
+      if(confirm(`Chọn ${d.count} bài (>20). Xác nhận generate mock tất cả?`)){
+        body.explicit_confirm=true;
+        r=await fetch('/api/blog-rewrite/jobs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});d=await r.json();
+      } else return;
+    }
+    if(!d.ok){document.getElementById('br-msg').textContent='Lỗi: '+(d.error||'');return;}
+  }
+  document.getElementById('br-msg').textContent=`🟣 MOCK job #${d.job_id} (${d.count} bài) — không gọi AI thật`;
+  pollQueue();setTimeout(()=>{loadStatus();loadRows();},800);
+}
+let _qTimer=null;
+async function pollQueue(){
+  const r=await fetch('/api/blog-rewrite/jobs');const d=await r.json();
+  const box=document.getElementById('br-queue');
+  if(!d.jobs.length){box.innerHTML='';return;}
+  box.innerHTML=`<div style="background:#fff;border:1px solid #e9d5ff;border-radius:10px;padding:12px">
+    <b style="color:#7c3aed">🟣 Hàng đợi MOCK</b> <span style="font-size:11px;color:#999">(không gọi AI thật)</span>
+    <table style="width:100%;font-size:12px;margin-top:8px;border-collapse:collapse">
+    <tr style="color:#888"><td>Job</td><td>Mode</td><td>Status</td><td>Tiến độ</td><td>OK/Fail</td><td></td></tr>
+    ${d.jobs.slice(0,6).map(j=>`<tr style="border-top:1px solid #f3f0fa">
+      <td>#${j.id}</td><td>${j.mode}</td>
+      <td><b style="color:${j.status==='running'?'#16a34a':j.status.includes('completed')?'#2563eb':j.status==='cancelled'?'#9ca3af':j.status==='stale'?'#dc2626':'#d97706'}">${j.status}</b></td>
+      <td>${j.progress_pct}% (${j.completed_count+j.failed_count}/${j.candidate_count})</td>
+      <td>${j.completed_count}/${j.failed_count}</td>
+      <td>${['queued','running','cancel_requested'].includes(j.status)?`<button class="br-btn" style="padding:2px 8px" onclick="cancelJob(${j.id})">Cancel</button>`:''}
+          ${j.failed_count>0?`<button class="br-btn" style="padding:2px 8px" onclick="retryJob(${j.id})">Retry</button>`:''}</td>
+    </tr>`).join('')}</table></div>`;
+  const active=d.jobs.some(j=>['queued','running','cancel_requested'].includes(j.status));
+  clearTimeout(_qTimer);
+  if(active)_qTimer=setTimeout(pollQueue,2500); else {loadStatus();loadRows();}
+}
+async function cancelJob(id){await fetch(`/api/blog-rewrite/jobs/${id}/cancel`,{method:'POST'});pollQueue();}
+async function retryJob(id){const r=await fetch(`/api/blog-rewrite/jobs/${id}/retry-failed`,{method:'POST'});const d=await r.json();if(d.ok){document.getElementById('br-msg').textContent='🔁 Retry job #'+d.job_id;pollQueue();}}
+window.showTab=(i)=>{document.querySelectorAll('.br-tabc').forEach(e=>e.style.display=e.dataset.t==i?'block':'none');document.querySelectorAll('.br-tab').forEach(e=>e.style.background=e.dataset.t==i?'#ede9fe':'#fff');};
+let _CUR={cid:null,draft:null};
+async function detail(id){
+  _CUR.cid=id;
+  const d=(await (await fetch('/api/blog-rewrite/candidates/'+id)).json()).candidate;
+  const ev=(await (await fetch('/api/blog-rewrite/candidates/'+id+'/events')).json()).events;
+  const drafts=(await (await fetch('/api/blog-rewrite/candidates/'+id+'/drafts')).json()).drafts;
+  let dft=null;const rr=await fetch('/api/blog-rewrite/candidates/'+id+'/draft');if(rr.ok)dft=(await rr.json()).draft;
+  _CUR.draft=dft;
+  const tabs=['Tổng quan','Bài gốc','Draft AI','So sánh','Quality','Link & ảnh','Lịch sử','Apply Preview'];
+  let q={},topts=[],mopts=[],outline=[];
+  if(dft){try{q=JSON.parse(dft.quality_json||'{}')}catch(e){}try{topts=JSON.parse(dft.seo_title_suggestions_json||'[]')}catch(e){}try{mopts=JSON.parse(dft.meta_description_suggestions_json||'[]')}catch(e){}try{outline=JSON.parse(dft.outline_json||'[]')}catch(e){}}
+  const sc=q.scorecard||{};const ia=q.image_audit||{};
+  const wm='<span style="color:#dc2626;font-weight:700">DRAFT LOCAL — CHƯA APPLY HARAVAN</span>';
+  const origBody=dft?dft.original_body_html||'':'';
+  document.getElementById('br-detail-body').innerHTML=`<h3>${esc(d.title)}</h3>
+    <div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:10px">${tabs.map((t,i)=>`<span class="br-tab br-btn" data-t="${i}" style="padding:4px 9px;font-size:12px" onclick="showTab(${i})">${t}</span>`).join('')}</div>
+    <div class="br-tabc" data-t="0">
+      <p><a href="${d.article_url}" target="_blank">${d.article_url}</a></p>
+      <p><span class="risk ${d.risk_level}">${d.risk_level}</span> · nhóm ${d.source_group_primary} · priority <b>${d.priority_score}</b> · status <b>${d.status}</b></p>
+      <p>handle ${d.handle} · article_id ${d.article_id} · selected ${d.selected?'✅':'⬜'} · rewrite_eligible ${d.rewrite_eligible?'✅':'⬜'} · reverse ${d.audit_reverse_copy?'⚠️ defense':'không'}</p>
+      <p>GSC ${d.gsc_clicks_28d} clicks/${d.gsc_impressions_28d} impr · GA4 ${d.ga4_organic_sessions_28d} ss · NV ${esc(d.author||'-')}</p>
+      <p>Audit: ${esc(d.audit_source||'-')} · ${esc(d.risk_reason||'')}</p>
+      ${dft?`<p>Latest draft v${dft.version} · provider ${q.scorecard?'claude':'-'} · approval <b>${dft.approval_status}</b></p>`:'<p style="color:#999">Chưa có draft.</p>'}</div>
+    <div class="br-tabc" data-t="1" style="display:none"><span class="badge-notraffic">Chỉ đọc — bài gốc live</span>
+      <div class="br-read" style="margin-top:6px">${origBody||'<i>—</i>'}</div></div>
+    <div class="br-tabc" data-t="2" style="display:none">
+      <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:6px;margin-bottom:8px;font-weight:700;color:#047857">🟢 Draft AI · v${dft?dft.version:'-'} · ${wm}</div>
+      ${dft?`
+      <div class="br-read"><h1>${esc(dft.draft_title||'')}</h1>${dft.draft_body_html||'<i>(trống)</i>'}</div>
+      <details style="margin-top:10px;border:1px solid #eee;border-radius:8px;padding:6px 10px">
+        <summary style="cursor:pointer;font-size:12px;color:#6b7280;font-weight:600">✏️ Sửa nội dung (HTML nâng cao)</summary>
+        <div style="margin-top:8px">
+          <label style="font-size:12px">Title:</label><input id="ed-title" style="width:100%;padding:6px;margin-bottom:6px" value="${esc(dft.draft_title||'')}">
+          <p style="font-size:12px"><b>Options:</b> ${topts.map(esc).join(' · ')}</p>
+          <p style="font-size:12px"><b>Meta:</b> ${mopts.map(t=>esc(t).slice(0,55)).join(' | ')}</p>
+          <p style="font-size:12px"><b>Outline:</b> ${outline.map(o=>esc(o.heading||'')).join(' → ')}</p>
+          <label style="font-size:12px">Summary HTML:</label><textarea id="ed-summary" style="width:100%;height:50px;font-family:monospace;font-size:12px">${esc(dft.draft_summary_html||'')}</textarea>
+          <label style="font-size:12px">Body HTML:</label><textarea id="ed-body" style="width:100%;height:200px;font-family:monospace;font-size:12px">${esc(dft.draft_body_html||'')}</textarea>
+        </div>
+      </details>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        <button class="br-btn primary" onclick="saveDraftLocal(${dft.id})">💾 Lưu draft local</button>
+        <button class="br-btn" onclick="regenSingle(${id})">♻️ Regenerate single</button>
+        <button class="br-btn" onclick="cloneVer(${dft.id})">📑 Tạo version mới</button>
+        <button class="br-btn" style="background:#dcfce7" onclick="approveLocal(${dft.id})">✅ Approve local</button>
+        <button class="br-btn" style="background:#fee2e2" onclick="rejectLocal(${dft.id})">✖ Reject local</button>
+        <button class="br-btn" disabled title="P5">🚀 Apply Haravan (P5)</button>
+      </div>
+      <p style="font-size:11px;color:#9333ea;margin-top:4px">Duyệt local KHÔNG cập nhật website. Apply Haravan = P5.</p>`:'<p style="color:#999">Chưa có draft — bấm Generate.</p>'}</div>
+    <div class="br-tabc" data-t="3" style="display:none"><h4>So sánh gốc ↔ draft</h4>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+        <div><b>BÀI GỐC</b> (${wcOf(origBody)} từ)<div style="border:1px solid #eee;border-radius:6px;padding:6px;max-height:280px;overflow:auto">${origBody||'—'}</div></div>
+        <div><b>DRAFT</b> (${dft?wcOf(dft.draft_body_html):0} từ)<div style="border:1px solid #a7f3d0;border-radius:6px;padding:6px;max-height:280px;overflow:auto">${dft?dft.draft_body_html:'—'}</div></div></div>
+      <p style="font-size:12px;margin-top:6px">overlap <b>${q.normalized_5gram_overlap!=null?(q.normalized_5gram_overlap*100).toFixed(1)+'%':'-'}</b> · longest phrase ${q.longest_common_phrase??'-'} từ · headings draft ${q.heading_count_draft??'-'}</p></div>
+    <div class="br-tabc" data-t="4" style="display:none"><table style="font-size:13px;width:100%">
+      <tr><td>Originality</td><td><b style="color:${sc.originality==='high'?'#16a34a':'#d97706'}">${sc.originality||'-'}</b></td></tr>
+      <tr><td>5-gram overlap</td><td>${q.normalized_5gram_overlap!=null?(q.normalized_5gram_overlap*100).toFixed(1)+'%':'-'}</td></tr>
+      <tr><td>Longest common phrase</td><td>${q.longest_common_phrase??'-'} từ</td></tr>
+      <tr><td>Word count gốc→draft</td><td>${q.word_count_original??'-'} → ${q.word_count_draft??'-'}</td></tr>
+      <tr><td>Images</td><td>${ia.status||'-'} (${ia.image_count_original??'-'}→${ia.image_count_draft??'-'})</td></tr>
+      <tr><td>Brand cleanup</td><td><b style="color:${sc.brand_cleanup==='PASS'?'#16a34a':'#dc2626'}">${sc.brand_cleanup||'-'}</b></td></tr>
+      <tr><td>Manual verify</td><td>${sc.manual_verification||'-'}</td></tr></table></div>
+    <div class="br-tabc" data-t="5" style="display:none"><button class="br-btn" onclick="refreshImgPlan(${dft?dft.id:0})">🔄 Refresh image plan (dry-run)</button>
+      <div id="img-plan" style="margin-top:8px;font-size:12px">đang tải...</div></div>
+    <div class="br-tabc" data-t="6" style="display:none"><h4>Versions</h4>${drafts.map(v=>`<div style="font-size:12px">v${v.version} · ${v.approval_status} · ${v.created_at}</div>`).join('')||'—'}
+      <h4>Events</h4>${ev.map(e=>`<div style="font-size:12px;border-left:2px solid #ddd;padding:2px 8px;margin:2px 0"><b>${e.event_type}</b> · ${e.created_at}</div>`).join('')||'—'}</div>
+    <div class="br-tabc" data-t="7" style="display:none">
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:8px;margin-bottom:8px;font-weight:700;color:#b91c1c">⛔ P5A PREVIEW ONLY — CHƯA CẬP NHẬT HARAVAN</div>
+      ${dft?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <button class="br-btn" onclick="doApplyPreview(${dft.id})">🔍 Kiểm tra conflict</button>
+        <button class="br-btn" onclick="refreshImgPlan(${dft.id})">🖼️ Image dry-run plan</button>
+        <button class="br-btn" onclick="doBackupPreview(${dft.id})">💾 Backup preview local</button>
+        <button class="br-btn" disabled title="P5B">🚀 Apply Haravan (P5B)</button>
+        <button class="br-btn" disabled title="P5B">⬆️ Upload ảnh (P5B)</button>
+        <button class="br-btn" disabled title="P5B">↩️ Rollback live (P5B)</button>
+      </div>
+      <div id="ap-result" style="font-size:13px">Bấm "Kiểm tra conflict" để xem trạng thái.</div>
+      <div style="margin-top:8px"><b>Field cập nhật (preview):</b><br>
+        <label><input type="checkbox" checked disabled> body_html (mặc định ON)</label><br>
+        <label><input type="checkbox" disabled> title</label> ·
+        <label><input type="checkbox" disabled> summary_html</label> ·
+        <label><input type="checkbox" disabled> tags</label><br>
+        <label><input type="checkbox" disabled> Tôi xác nhận đã review draft</label> ·
+        <label><input type="checkbox" disabled> Tôi xác nhận đã kiểm tra ảnh</label></div>
+      <p style="font-size:11px;color:#9333ea;margin-top:6px">Checkbox + Apply chỉ mở ở P5B sau khi vợ duyệt pilot preview.</p>
+      <div style="border-top:2px dashed #fca5a5;margin-top:12px;padding-top:10px">
+        <div style="background:#7f1d1d;color:#fff;border-radius:6px;padding:6px;font-weight:700;text-align:center">🔒 P5B LIVE APPLY — LOCKED · CHƯA CẬP NHẬT WEBSITE</div>
+        <div id="p5b-status" style="font-size:12px;margin-top:8px">đang tải trạng thái...</div>
+        <label style="font-size:12px">Confirm phrase:</label><input id="p5b-phrase" placeholder="APPLY PILOT ARTICLE <article_id>" style="width:100%;padding:5px" disabled>
+        <div style="font-size:12px;margin-top:4px"><label><input type="checkbox" disabled> Tôi đã review nội dung draft</label> · <label><input type="checkbox" disabled> Tôi đã review ảnh</label></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="br-btn" disabled title="flag OFF">🚀 Apply Haravan</button>
+          <button class="br-btn" disabled title="flag OFF">↩️ Rollback live</button>
+          <button class="br-btn" disabled title="P5B-2">📦 Bulk apply</button>
+        </div>
+        <p style="font-size:11px;color:#dc2626;margin-top:4px">Live apply/rollback bị khóa bằng feature flag (mặc định OFF). Mở ở P5B sau khi vợ duyệt.</p>
+      </div>`:'<p style="color:#999">Chưa có draft.</p>'}</div>`;
+  document.getElementById('br-detail').classList.add('open');showTab(0);
+  if(dft){refreshImgPlan(dft.id,true);loadApplyStatus(dft.id);}
+}
+async function loadApplyStatus(did){
+  const m=document.getElementById('p5b-status');if(!m)return;
+  const d=await (await fetch('/api/blog-rewrite/drafts/'+did+'/apply-status')).json();
+  if(!d.ok){m.textContent='—';return;}
+  const f=d.flags||{};
+  m.innerHTML=`<table style="font-size:12px">
+    <tr><td>article_id</td><td>${d.article_id}</td></tr>
+    <tr><td>version / approval</td><td>v${d.version} · <b>${d.approval_status}</b></td></tr>
+    <tr><td>rewrite_eligible / reverse</td><td>${d.rewrite_eligible?'✅':'⬜'} / ${d.reverse_copy?'⚠️ defense':'không'}</td></tr>
+    <tr><td>backup</td><td>${d.has_backup?'✅ có':'⬜ chưa'}</td></tr>
+    <tr><td>đã apply</td><td>${d.applied_at||'chưa'}</td></tr>
+    <tr><td>flags</td><td>live_apply <b style="color:${f.live_apply?'#16a34a':'#dc2626'}">${f.live_apply?'ON':'LOCKED'}</b> · rollback ${f.live_rollback?'ON':'LOCKED'} · bulk ${f.bulk_apply?'ON':'LOCKED'}</td></tr>
+    <tr><td>fields</td><td>body_html only</td></tr></table>`;
+}
+function wcOf(h){return (h||'').replace(/<[^>]+>/g,' ').trim().split(/\s+/).filter(Boolean).length;}
+async function saveDraftLocal(did){
+  const b={draft_title:document.getElementById('ed-title').value,draft_summary_html:document.getElementById('ed-summary').value,draft_body_html:document.getElementById('ed-body').value};
+  const r=await fetch('/api/blog-rewrite/drafts/'+did,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});
+  const d=await r.json();document.getElementById('br-msg').textContent=d.ok?'💾 Đã lưu draft local (KHÔNG apply website)':'Lỗi: '+(d.error||'');if(d.ok)detail(_CUR.cid);
+}
+async function regenSingle(cid){if(!confirm('Regenerate bài này bằng AI thật (tạo version mới)?'))return;
+  const r=await fetch('/api/blog-rewrite/candidates/'+cid+'/regenerate-single',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({explicit_confirm:true})});
+  const d=await r.json();document.getElementById('br-msg').textContent=d.ok?'♻️ Regenerate job #'+d.job_id+' (chờ worker AI)...':'Lỗi: '+(d.error||'');pollQueue();}
+async function cloneVer(did){const r=await fetch('/api/blog-rewrite/drafts/'+did+'/clone-version',{method:'POST'});const d=await r.json();if(d.ok){document.getElementById('br-msg').textContent='📑 Version mới v'+d.version;detail(_CUR.cid);}}
+async function approveLocal(did){const r=await fetch('/api/blog-rewrite/drafts/'+did+'/approve-local',{method:'POST'});const d=await r.json();document.getElementById('br-msg').textContent=d.ok?'✅ Approved LOCAL (KHÔNG cập nhật website)':'Lỗi';detail(_CUR.cid);loadStatus();}
+async function rejectLocal(did){const reason=prompt('Lý do reject?')||'';const r=await fetch('/api/blog-rewrite/drafts/'+did+'/reject-local',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason})});const d=await r.json();document.getElementById('br-msg').textContent=d.ok?'✖ Rejected local':'Lỗi';detail(_CUR.cid);}
+async function doApplyPreview(did){
+  const m=document.getElementById('ap-result');m.textContent='Đang fetch live + hash...';
+  const d=await (await fetch('/api/blog-rewrite/drafts/'+did+'/apply-preview',{method:'POST'})).json();
+  const col=d.conflict_status==='SAFE_TO_APPLY'?'#16a34a':d.conflict_status==='CONFLICT_LIVE_CHANGED'?'#dc2626':'#d97706';
+  const g=d.image_gate||{};
+  const gcol=g.apply_allowed?'#16a34a':'#dc2626';
+  m.innerHTML=`<table style="font-size:13px">
+    <tr><td>Conflict status</td><td><b style="color:${col}">${d.conflict_status}</b></td></tr>
+    <tr><td>article_id</td><td>${d.article_id}</td></tr>
+    <tr><td>hash gốc / live</td><td>${d.body_hash_original} / ${d.body_hash_live||'-'}</td></tr>
+    <tr><td colspan="2"><b style="color:#b45309">🖼️ Image gate (store-aware):</b></td></tr>
+    <tr><td>Tổng ảnh / safe</td><td>${g.total??'-'} / ${g.safe??'-'}</td></tr>
+    <tr><td>BLOCK (chết/đối thủ/unknown)</td><td><b style="color:${gcol}">${g.blocked??0}</b> (chết ${g.dead||0} · đối thủ ${g.competitor||0} · unknown ${g.unknown||0})</td></tr>
+    <tr><td>Other-store / review</td><td>${g.other_store||0} / ${g.review||0}</td></tr>
+    <tr><td>Image gate</td><td><b style="color:${gcol}">${g.apply_allowed?'ALLOW ✅':'BLOCK ⛔'}</b></td></tr>
+    <tr><td>Apply enabled</td><td><b style="color:#dc2626">${d.apply_enabled} (P5A luôn OFF)</b></td></tr></table>`;
+}
+async function doBackupPreview(did){
+  const d=await (await fetch('/api/blog-rewrite/drafts/'+did+'/backup-preview',{method:'POST'})).json();
+  document.getElementById('ap-result').innerHTML=d.ok?`💾 Backup preview local: article ${d.article_id}, body ${d.body_len} ký tự, hash ${d.hash} (KHÔNG PUT)`:'Lỗi: '+(d.error||'');
+}
+async function refreshImgPlan(did,silent){if(!did){document.getElementById('img-plan').innerHTML='—';return;}
+  const r=await fetch('/api/blog-rewrite/drafts/'+did+'/image-plan'+(silent?'':'/refresh'),{method:silent?'GET':'POST'});
+  const d=await r.json();const m=document.getElementById('img-plan');if(!m)return;
+  if(!d.ok||!d.plan||!d.plan.length){m.innerHTML='<p style="color:#999">Chưa có ảnh / plan.</p>';return;}
+  const rc=r=>r==='HARAVAN_EXISTING'||r==='OWNED_SINTECH'||r==='OFFICIAL_MANUFACTURER'?'#16a34a':r==='COMPETITOR_SOURCE'||r==='NEWS_MEDIA_SOURCE'?'#dc2626':'#d97706';
+  m.innerHTML='<table style="width:100%;font-size:11px"><tr style="color:#888"><td>Host</td><td>Filename</td><td>Rights</td><td>Action</td><td>Upload?</td></tr>'+
+    d.plan.map(p=>`<tr><td>${p.hostname||'-'}</td><td title="${p.filename}">${(p.filename||'').slice(0,22)}</td><td><b style="color:${rc(p.rights_status)}">${p.rights_status}</b></td><td>${p.recommended_action}</td><td>${p.eligible_for_upload?'✅':'⛔'}</td></tr>`).join('')+
+    '</table><p style="color:#9333ea;margin-top:4px">Dry-run — KHÔNG tải/upload/đổi URL. ⛔ ảnh đối thủ/news KHÔNG auto rehost (bản quyền). planned_new_url=null. Upload thật: P5B.</p>';
+}
+async function imp(apply){
+  document.getElementById('br-msg').textContent=apply?'Đang import vào DB...':'Đang dry-run...';
+  const r=await fetch('/api/blog-rewrite/import-scan'+(apply?'?apply=1':''),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({apply})});
+  const d=await r.json();
+  if(!d.ok){document.getElementById('br-msg').textContent='Lỗi: '+(d.error||'');return;}
+  const s=d.summary;
+  document.getElementById('br-msg').textContent=`${apply?'✅ Import xong':'🔎 Dry-run'}: ${s.dedup_candidates} candidate · high ${s.by_risk.high||0} / medium ${s.by_risk.medium||0} / review ${s.by_risk.review||0} / unknown ${s.by_risk.unknown||0} · GSC match ${s.gsc_matched} · GA4 ${s.ga4_matched}`;
+  if(apply){await loadStatus();S.offset=0;await loadRows();}
+}
+btn_dry.onclick=()=>imp(false);
+btn_import.onclick=()=>imp(true);
+btn_export.onclick=()=>location.href='/api/blog-rewrite/export';
+btn_refresh.onclick=()=>{loadStatus();loadRows();};
+[f_risk,f_traffic,f_sort,f_sel].forEach(e=>e.onchange=()=>{S.offset=0;loadRows();});
+let qt;f_q.oninput=()=>{clearTimeout(qt);qt=setTimeout(()=>{S.offset=0;loadRows();},350);};
+pg_prev.onclick=()=>{if(S.offset>0){S.offset-=S.limit;loadRows();}};
+pg_next.onclick=()=>{if(S.offset+S.limit<S.total){S.offset+=S.limit;loadRows();}};
+async function loadBatch(){
+  const d=(await (await fetch('/api/blog-rewrite/batch-results')).json()).results;
+  const box=document.getElementById('br-batch');
+  if(!d.length){box.innerHTML='';return;}
+  const col=v=>v==='PASS'?'#16a34a':v==='PARTIAL'?'#d97706':'#dc2626';
+  box.innerHTML=`<div style="background:#fff;border:1px solid #fde68a;border-radius:10px;padding:12px">
+    <b style="color:#b45309">🧪 Batch validation</b> <span style="font-size:11px;background:#fef3c7;color:#b45309;border-radius:5px;padding:1px 6px">LOCAL VALIDATION ONLY — CHƯA CẬP NHẬT HARAVAN</span>
+    <table style="width:100%;font-size:12px;margin-top:8px;border-collapse:collapse">
+    <tr style="color:#888"><td>Candidate</td><td>Nguồn</td><td>v</td><td>Verdict</td><td>Overlap</td><td>Ảnh</td><td>Brand(text)</td><td>Brand(file)</td><td></td></tr>
+    ${d.map(r=>`<tr style="border-top:1px solid #f3f0fa">
+      <td>${esc((r.title||'').slice(0,34))}</td><td style="font-size:11px;color:#777">${r.source_group||''}</td><td>v${r.draft_version}</td>
+      <td><b style="color:${col(r.verdict)}">${r.verdict}</b></td><td>${(r.overlap*100).toFixed(1)}%</td><td>${r.img}</td>
+      <td>${r.brand_visible.length?'⚠️'+r.brand_visible.join(','):'✓'}</td><td>${r.brand_src_filename.length?r.brand_src_filename.join(','):'-'}</td>
+      <td><button class="br-btn" style="padding:2px 8px" onclick="detail(${r.candidate_id})">👁 Review</button></td>
+    </tr>`).join('')}</table>
+    <p style="font-size:11px;color:#777;margin-top:4px">FAIL=rơi ảnh/brand text/HTML lỗi · PARTIAL=cần rehost filename ảnh hoặc editor chỉnh · PASS=sạch. KHÔNG có Apply (P5).</p></div>`;
+}
+btn_refresh.addEventListener('click',loadBatch);
+async function loadImageRemediation(){
+  const box=document.getElementById('br-images');if(!box)return;
+  const s=await (await fetch('/api/blog-rewrite/image-summary')).json();
+  const bs=s.by_source||{};
+  box.innerHTML=`<div class="br-kpis">
+    ${[['total_images','Tổng ảnh',s.total_images],['safe','Bài SAFE',s.safe],['blocked','Bài BLOCKED',s.blocked],
+      ['dead','Ảnh chết',s.dead],['uncertain','Uncertain',s.uncertain]].map(([k,l,v])=>`<div class="br-kpi"><div class="n">${v??0}</div><div class="l">${l}</div></div>`).join('')}
+    ${[['SINTECH_OWNED','Sintech'],['COMPETITOR_SOURCE','Đối thủ'],['NEWS_MEDIA_SOURCE','Báo'],['UNKNOWN_EXTERNAL','Unknown'],['HARAVAN_OTHER_STORE','Store khác'],['OFFICIAL_MANUFACTURER','Chính hãng']].map(([k,l])=>`<div class="br-kpi"><div class="n">${bs[k]||0}</div><div class="l">${l}</div></div>`).join('')}
+  </div>
+  <div style="margin:8px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <select id="img-f-src"><option value="">Source: tất cả</option>${['SINTECH_OWNED','COMPETITOR_SOURCE','NEWS_MEDIA_SOURCE','UNKNOWN_EXTERNAL','HARAVAN_OTHER_STORE','OFFICIAL_MANUFACTURER'].map(x=>`<option>${x}</option>`).join('')}</select>
+    <select id="img-f-av"><option value="">Availability: tất cả</option>${['REACHABLE','DEAD_404','DEAD_410','UNCERTAIN_TIMEOUT','INVALID'].map(x=>`<option>${x}</option>`).join('')}</select>
+    <input id="img-f-q" placeholder="🔍 src/alt/filename" style="min-width:160px">
+    <button class="br-btn" onclick="loadImgItems()">Lọc</button>
+    <button class="br-btn" onclick="bulkDead()">🗑️ Gỡ hết ảnh chết (local)</button>
+    <button class="br-btn" onclick="fetch('/api/blog-rewrite/image-export').then(r=>r.json()).then(d=>document.getElementById('br-msg').textContent='📤 Export '+d.rows+' dòng')">📤 Export workload</button>
+  </div>
+  <p style="font-size:11px;color:#dc2626">Local only — KHÔNG upload/PUT/sửa live. Ảnh đối thủ/news/unknown KHÔNG auto gỡ (cần review/thay).</p>
+  <div id="img-items" style="max-height:40vh;overflow:auto"></div>`;
+  loadImgItems();
+}
+async function loadImgItems(){
+  const p=new URLSearchParams({source_class:document.getElementById('img-f-src')?.value||'',availability:document.getElementById('img-f-av')?.value||'',q:document.getElementById('img-f-q')?.value||'',limit:100});
+  const d=await (await fetch('/api/blog-rewrite/image-items?'+p)).json();
+  const m=document.getElementById('img-items');
+  const ac=c=>c==='SINTECH_OWNED'?'#16a34a':c==='COMPETITOR_SOURCE'||c==='NEWS_MEDIA_SOURCE'?'#dc2626':'#d97706';
+  m.innerHTML=`<div style="font-size:11px;color:#888;margin-bottom:4px">${d.total} ảnh (hiện ${d.items.length})</div>
+  <table class="br-tbl" style="font-size:11px"><thead><tr><th>Bài</th><th>Filename</th><th>Source</th><th>Avail</th><th>Action</th><th>Store</th></tr></thead><tbody>
+  ${d.items.map(it=>`<tr><td>#${it.candidate_id}</td><td title="${it.original_src}">${(it.filename||'').slice(0,20)}</td>
+    <td><b style="color:${ac(it.source_class)}">${it.source_class.replace('_SOURCE','').replace('_EXTERNAL','')}</b></td>
+    <td>${it.availability_status}</td>
+    <td><select onchange="setImgAction(${it.id},this.value)" style="font-size:11px">${['KEEP','REMOVE_DEAD_IMAGE','REMOVE_FROM_DRAFT','REPLACE_WITH_OFFICIAL_IMAGE_LATER','CREATE_ORIGINAL_IMAGE_LATER','MANUAL_REVIEW'].map(a=>`<option ${a===it.selected_action?'selected':''}>${a}</option>`).join('')}</select></td>
+    <td>${it.store_id||'-'}</td></tr>`).join('')}</tbody></table>`;
+}
+async function setImgAction(id,action){await fetch('/api/blog-rewrite/image-items/'+id+'/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});}
+async function bulkDead(){if(!confirm('Gỡ HẾT ảnh chết (404/410/invalid) khỏi draft local? (chỉ local, không sửa live)'))return;
+  const r=await fetch('/api/blog-rewrite/image-bulk-dead',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm_phrase:'REMOVE DEAD IMAGES FROM LOCAL DRAFTS'})});
+  const d=await r.json();document.getElementById('br-msg').textContent=d.ok?'🗑️ Đã mark '+d.marked+' ảnh chết → REMOVE (local)':'Lỗi';loadImageRemediation();}
+async function loadQuickWin(){
+  const box=document.getElementById('br-quickwin');if(!box)return;
+  const d=(await (await fetch('/api/blog-rewrite/remediation/top20')).json()).top20;
+  const arts=(await (await fetch('/api/blog-rewrite/remediation/articles')).json()).articles;
+  const grp={};arts.forEach(a=>grp[a.remediation_group]=(grp[a.remediation_group]||0)+1);
+  const gc=g=>g==='SAFE_NOW'?'#16a34a':g==='DEAD_ONLY_CLEANUP'?'#0891b2':g==='LOW_COMPLEXITY_REVIEW'?'#d97706':g==='REPLACEMENT_NEEDED'?'#dc2626':'#7c3aed';
+  box.innerHTML=`<div class="br-kpis">${['SAFE_NOW','DEAD_ONLY_CLEANUP','LOW_COMPLEXITY_REVIEW','REPLACEMENT_NEEDED','UNKNOWN_HEAVY','MANUAL_COMPLEX'].map(g=>`<div class="br-kpi"><div class="n" style="color:${gc(g)}">${grp[g]||0}</div><div class="l">${g.replace(/_/g,' ').toLowerCase()}</div></div>`).join('')}</div>
+  <p style="font-size:11px;color:#888;margin:6px 0">Top 20 bài nên xử lý trước (gate ALLOW/dead-only/ít ảnh blocked + traffic). KHÔNG apply live.</p>
+  <table class="br-tbl" style="font-size:11px"><thead><tr><th>#</th><th>Bài</th><th>Group</th><th>Gate</th><th>Score</th><th>dead/comp/news/unk</th><th></th></tr></thead><tbody>
+  ${d.map((a,i)=>`<tr><td>${i+1}</td><td title="${esc(a.title||'')}">${esc((a.title||'').slice(0,30))}</td>
+    <td><b style="color:${gc(a.remediation_group)}">${a.remediation_group.replace(/_/g,' ')}</b></td>
+    <td>${a.gate_status==='ALLOW'?'✅ ALLOW':a.gate_status}</td><td><b>${a.quick_win_score}</b></td>
+    <td>${a.dead_images}/${a.competitor_images}/${a.news_images}/${a.unknown_images}</td>
+    <td><button class="br-btn" style="padding:2px 8px" onclick="detail(${a.candidate_id})">👁</button></td></tr>`).join('')}</tbody></table>`;
+}
+async function loadCanary(){
+  const box=document.getElementById('br-canary');if(!box)return;
+  const d=await (await fetch('/api/blog-rewrite/remediation/canary-prep')).json();
+  const cm=['[ ] Tôi đã xem draft','[ ] Tôi đã xem ảnh','[ ] Tôi đã xem bảng','[ ] Tôi đã xem internal link','[ ] Tôi đã xem CTA','[ ] Tôi xác nhận body-only'];
+  box.innerHTML=`<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:6px;font-weight:700;color:#b91c1c;margin-bottom:8px">⛔ PREP ONLY — Apply live KHÓA (flags OFF). Vợ xác nhận từng bài trực tiếp.</div>
+  <p style="font-size:12px">SAFE_NOW: <b>${d.safe_now_total}</b> · <b style="color:#dc2626">${d.safe_now_no_draft.length} chưa có draft</b> (cần generate trước) · Canary-ready: <b>${d.canary_ready.length}</b></p>
+  ${d.canary_ready.length?`<table class="br-tbl" style="font-size:11px"><thead><tr><th>Bài</th><th>Draft</th><th>Gate</th><th>Conflict</th><th>Approval</th><th>Overlap</th><th>Img/Tbl</th><th></th></tr></thead><tbody>
+  ${d.canary_ready.map(r=>`<tr><td title="${esc(r.title||'')}">${esc((r.title||'').slice(0,28))}</td><td>${r.latest_draft_id} v${r.version}</td>
+    <td>✅ ${r.gate_status}</td><td>${r.conflict}</td><td><b style="color:${r.approved_local?'#16a34a':'#d97706'}">${r.approval_status}</b></td>
+    <td>${((r.overlap||0)*100).toFixed(1)}%${(r.overlap||0)>0.15?' ⚠️':''}</td><td>${r.image_count}/${r.table_count}</td>
+    <td><button class="br-btn" style="padding:2px 8px" onclick="detail(${r.candidate_id})">👁 Review</button></td></tr>`).join('')}</tbody></table>`:'<p style="color:#999">Chưa có bài canary-ready (cần generate draft + gate ALLOW).</p>'}
+  <div style="font-size:11px;color:#666;margin-top:6px"><b>Checklist thủ công (mỗi bài):</b> ${cm.join(' · ')}</div>
+  <p style="font-size:11px;color:#1d4ed8;margin-top:4px">${esc(d.note||'')}</p>
+  <div id="fact-review" style="margin-top:8px"></div>`;
+  // fact-review (P5G-3)
+  const fc=(await (await fetch('/api/blog-rewrite/remediation/fact-check')).json()).fact_check||{};
+  const fcm=document.getElementById('fact-review');
+  if(fcm&&Object.keys(fc).length){
+    const fcol=v=>v.includes('FAIL')?'#dc2626':v.includes('REQUIRED')?'#d97706':'#16a34a';
+    fcm.innerHTML=`<div style="border-top:1px dashed #ccc;padding-top:6px"><b style="color:#7c3aed">🔬 Fact review (2 canary):</b>
+    <table style="font-size:11px;width:100%;margin-top:4px">${Object.values(fc).map(f=>`<tr>
+      <td>#${f.candidate} ${esc((f.title||'').slice(0,24))}</td>
+      <td><b style="color:${fcol(f.fact_review)}">${f.fact_review}</b></td>
+      <td>stable ${f.facts_stable}·review ${f.manual_review}·unsupported ${f.unsupported}</td>
+      <td>${f.ready_manual_approve?'✅ ready':'⛔ chưa'}</td></tr>`).join('')}</table>
+    <p style="font-size:11px;color:#dc2626;margin-top:2px">Sau fact-check: cả 2 canary CHƯA ready (#55 facts lỗi thời, #26 bỏ số FPS). Chi tiết: docs/BLOG_REWRITE_CANARY_FACT_CHECK.md</p></div>`;
+  }
+}
+async function loadAutopilot(){
+  const box=document.getElementById('br-autopilot');if(!box)return;
+  const s=await (await fetch('/api/blog-rewrite/autopilot/status')).json();
+  const bcol=s.badge==='CIRCUIT BREAKER OPEN'?'#dc2626':s.badge==='SAFE AUTO APPLY'?'#16a34a':s.badge==='PAUSED'?'#d97706':'#6b7280';
+  const last=s.last_run;
+  box.innerHTML=`<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:8px;margin-bottom:8px">
+    <b>Badge:</b> <span style="font-weight:700;color:${bcol}">${s.badge}</span> · enabled ${s.enabled?'✅':'⬜'} · mode ${s.mode} · scheduler ${s.scheduler_enabled?'ON':'OFF (02:00 GMT+7)'}
+    ${s.circuit_breaker&&s.circuit_breaker.open?`<div style="color:#dc2626;font-weight:700">⛔ CIRCUIT BREAKER OPEN: ${esc(s.circuit_breaker.reason||'')}</div>`:''}</div>
+  <div class="br-kpis">
+    ${[['today_applied','Apply hôm nay',s.today_applied],['ap','Apply/ngày',s.limits.max_apply_per_day],['ar','Apply/run',s.limits.max_apply_per_run],['gen','Gen/run',s.limits.max_generate_per_run],['cd','Cooldown',s.limits.cooldown_minutes_between_apply+'p'],['ov','Overlap≤',s.quality.max_overlap_percent+'%'],['qs','Quality≥',s.quality.min_quality_score]].map(([k,l,v])=>`<div class="br-kpi"><div class="n">${v}</div><div class="l">${l}</div></div>`).join('')}
+  </div>
+  <div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap">
+    <button class="br-btn" onclick="apAct('dry-run','POST')">🔍 Dry-run</button>
+    <button class="br-btn" onclick="apAct('run-prep','POST')">▶️ Run PREP_ONLY</button>
+    <button class="br-btn" style="background:#dcfce7" onclick="apEnableApply()">🟢 Enable SAFE_AUTO_APPLY</button>
+    <button class="br-btn" onclick="apAct('pause','POST')">⏸️ Pause</button>
+    <button class="br-btn" onclick="apAct('resume','POST')">▶️ Resume</button>
+    <button class="br-btn" style="background:#fee2e2" onclick="apAct('emergency-stop','POST')">🛑 Emergency Stop</button>
+  </div>
+  <p style="font-size:11px;color:#dc2626">SAFE_AUTO_APPLY chỉ tự apply bài evergreen đạt chuẩn chặt · max ${s.limits.max_apply_per_day}/ngày · 1 bài/lần · circuit breaker tự dừng khi lỗi. Bật cần confirm phrase.</p>
+  ${last?`<div style="font-size:12px;border-top:1px dashed #ddd;padding-top:6px">Last run #${last.id} (${last.mode}): ${last.status} · selected ${last.selected_count} · applied ${last.applied_count} · hold ${last.hold_count} · blocked ${last.blocked_count} · failed ${last.failed_count}</div>`:''}`;
+}
+async function apAct(ep,method){
+  const r=await fetch('/api/blog-rewrite/autopilot/'+ep,{method});const d=await r.json();
+  document.getElementById('br-msg').textContent='🤖 '+ep+': '+(d.error||JSON.stringify(d.summary?d.summary.groups:d).slice(0,120));
+  loadAutopilot();
+}
+async function apEnableApply(){
+  if(!confirm('Bật SAFE_AUTO_APPLY? Autopilot sẽ TỰ APPLY LIVE bài evergreen đạt chuẩn (tối đa 2/ngày). Cần gõ confirm phrase.'))return;
+  const ph=prompt('Gõ chính xác: ENABLE SAFE BLOG AUTOPILOT');if(!ph)return;
+  const r=await fetch('/api/blog-rewrite/autopilot/config',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({patch:{enabled:true,mode:'SAFE_AUTO_APPLY'},confirm_phrase:ph})});
+  const d=await r.json();document.getElementById('br-msg').textContent=d.ok?'🟢 SAFE_AUTO_APPLY enabled':'❌ '+(d.error||'lỗi');loadAutopilot();
+}
+let faPollTimer=null;
+async function loadFullAuto(){
+  const box=document.getElementById('br-fullauto');if(!box)return;
+  const p=await (await fetch('/api/blog-rewrite/full-auto/progress')).json();
+  renderFullAuto(p);
+  if(p.running && !faPollTimer) faPollTimer=setInterval(pollFullAuto,2000);
+}
+async function pollFullAuto(){
+  const p=await (await fetch('/api/blog-rewrite/full-auto/progress')).json();
+  renderFullAuto(p);
+  if(!p.running && faPollTimer){clearInterval(faPollTimer);faPollTimer=null;}
+}
+function renderFullAuto(p){
+  const box=document.getElementById('br-fullauto');if(!box)return;
+  const cp=p.checkpoint||{}; const badge=p.badge||'OFF';
+  const bcol=badge==='PAUSED_ERROR'?'#dc2626':badge==='RUNNING'?'#16a34a':badge==='DONE'?'#0891b2':badge==='RECONCILED'?'#7c3aed':'#6b7280';
+  const items=p.items||[];
+  // P7.2/P7.3 — badge decision (reconcile 500-but-write + lane)
+  const dcol=d=>d==='APPLIED'?'#16a34a':d==='APPLIED_RECONCILED'?'#7c3aed':d==='NOT_APPLIED_RETRYABLE'?'#d97706':d==='UNCERTAIN_POST_PUT'?'#dc2626':d==='HOLD_QUALITY'?'#ca8a04':d==='MANUAL_COMPLEX'?'#9333ea':(d||'').startsWith('BLOCKED')?'#dc2626':(d||'').startsWith('HOLD')?'#d97706':d==='AUTO_ELIGIBLE'?'#16a34a':d==='CONFLICT'?'#dc2626':d==='FAILED'?'#991b1b':d==='MANUAL_REVIEW'?'#d97706':'#9ca3af';
+  const dico=d=>d==='APPLIED'?'✅':d==='APPLIED_RECONCILED'?'✅':d==='NOT_APPLIED_RETRYABLE'?'⏳':d==='UNCERTAIN_POST_PUT'?'⛔':d==='HOLD_QUALITY'?'⏸️':'';
+  const lbadge=l=>l==='AUTO'?'<span style="background:#dcfce7;color:#15803d;border-radius:3px;padding:0 4px;font-size:9px;font-weight:700">AUTO</span>':l==='DEFER'?'<span style="background:#fef3c7;color:#b45309;border-radius:3px;padding:0 4px;font-size:9px;font-weight:700">DEFER</span>':'';
+  const icon=it=>it.status==='done'?'✅':it.status==='processing'?'🔄':'⏳';
+  box.innerHTML=`<div style="background:#fdf4ff;border:1px solid #f0abfc;border-radius:6px;padding:8px;margin-bottom:8px">
+    <b>Trạng thái:</b> <span style="font-weight:700;color:${bcol}">${badge}</span> ${badge==='RUNNING'?'<span class="br-spin">⏳</span>':''} · scheduler OFF · không duyệt tay
+    ${cp.dry_run?' · <b>DRY-RUN (không sync live)</b>':''}
+    ${badge==='PAUSED_ERROR'?'<div style="color:#dc2626;font-weight:700">⛔ Dừng do lỗi nghiêm trọng — kiểm tra rồi Resume</div>':''}
+    ${badge==='RECONCILED'?'<div style="color:#7c3aed;font-weight:700">✅ Đã reconcile sự cố 500-but-write — không re-PUT, không rollback. Bài live=draft đánh dấu APPLIED_RECONCILED.</div>':''}</div>
+  <div class="br-kpis">
+    ${[['AUTO lane',cp.auto_lane],['DEFER lane',cp.defer_lane],['Queue',cp.queue_total],['Đã xử lý',cp.processed],['Đã sync',cp.applied],['Reconciled',cp.applied_reconciled],['Retry',cp.retryable],['HOLD',cp.hold],['HOLD chất lượng',cp.hold_quality],['Blocked ảnh',cp.blocked_image],['Blocked facts',cp.blocked_fact],['Conflict',cp.conflict],['Lỗi',cp.failed]].map(([l,v])=>`<div class="br-kpi"><div class="n">${v??0}</div><div class="l">${l}</div></div>`).join('')}
+  </div>
+  <p style="font-size:12px;color:#666">Lane: <b>${esc(cp.current_lane||'-')}</b> · Stage: <b>${esc(cp.current_stage||'-')}</b> · đang xử lý #${cp.current_candidate_id||'-'} (vị trí ${cp.current_index>=0?cp.current_index+1:'-'}/${cp.queue_total||'-'}) · cập nhật ${esc(cp.updated_at||'-')}</p>
+  <div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap">
+    <button class="br-btn" style="background:#fae8ff" onclick="faStart(false)">🚀 Run Full Auto</button>
+    <button class="br-btn" style="background:#dcfce7" onclick="faStart(true,5)">🚀 Chạy thử 5 bài</button>
+    <button class="br-btn" onclick="faStart(true,30)">🚀 Chạy thử 30 bài</button>
+    <button class="br-btn" onclick="faDry()">🔍 Dry-run</button>
+    <button class="br-btn" onclick="faAct('pause')">⏸️ Pause</button>
+    <button class="br-btn" onclick="faAct('emergency-stop')">🛑 Emergency Stop</button>
+  </div>
+  ${items.length?`<div style="font-size:12px;color:#666;margin-bottom:4px">Tiến độ realtime (✅ xong · 🔄 đang xử lý · ⏳ đợi):</div>
+  <div style="max-height:46vh;overflow:auto"><table class="br-tbl" style="font-size:11px"><thead><tr><th>#</th><th>Bài</th><th>Traffic</th><th>Trạng thái</th><th>Kết quả</th></tr></thead><tbody>
+  ${items.map(it=>`<tr style="${it.status==='processing'?'background:#fef9c3':''}">
+    <td>${it.pos}</td>
+    <td title="${esc(it.title)}">${lbadge(it.lane)} ${esc(it.title.slice(0,36))}</td>
+    <td>${it.clicks||0} <span style="color:#aaa">${it.tier}</span></td>
+    <td>${icon(it)} ${it.status==='waiting'?'đợi #'+it.wait_position:it.status==='processing'?'<b>đang xử lý</b> ('+esc(it.stage||'')+')':'xong'}</td>
+    <td>${it.decision?`<b style="color:${dcol(it.decision)}">${dico(it.decision)} ${it.decision}</b>${it.decision_reason?`<div style="font-size:10px;color:#888">${esc((it.decision_reason||'').slice(0,64))}</div>`:''}${it.decision==='APPLIED_RECONCILED'?'<div style="font-size:10px;color:#7c3aed">PUT 5xx nhưng live=draft · không re-PUT</div>':''}`:'—'}</td></tr>`).join('')}
+  </tbody></table></div>`:'<p style="color:#999;font-size:12px">Chưa có run nào. Bấm Dry-run hoặc Run Full Auto.</p>'}
+  <p style="font-size:11px;color:#dc2626;font-weight:700;margin-top:6px">⚠️ Run Full Auto TỰ ĐĂNG LIVE bài đạt chuẩn (không duyệt từng bài). Cần confirm phrase. Bấm "Chạy thử 30 bài" để test an toàn trước.</p>`;
+}
+async function faStart(small,n){
+  if(!confirm('Run Full Auto sẽ TỰ ĐỘNG viết lại + ĐĂNG LIVE '+(small?('thử '+n+' bài'):'TOÀN BỘ queue')+' bài đạt chuẩn (KHÔNG duyệt từng bài). Chắc chắn?'))return;
+  const ph=prompt('Gõ chính xác: START FULL AUTO BLOG REWRITE SYNC');if(!ph)return;
+  const body={confirm_phrase:ph};if(small)body.max_articles=n;
+  const r=await fetch('/api/blog-rewrite/full-auto/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await r.json();document.getElementById('br-msg').textContent=d.ok?'🚀 Full Auto chạy nền — theo dõi realtime bên dưới':'❌ '+(d.error||'lỗi');
+  setTimeout(loadFullAuto,800);
+}
+async function faDry(){
+  const r=await fetch('/api/blog-rewrite/full-auto/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dry_run:true})});
+  const d=await r.json();document.getElementById('br-msg').textContent=d.ok?'🔍 Dry-run chạy nền — theo dõi realtime':'❌ '+(d.error||'lỗi');setTimeout(loadFullAuto,800);
+}
+async function faAct(ep){const r=await fetch('/api/blog-rewrite/full-auto/'+ep,{method:'POST'});const d=await r.json();document.getElementById('br-msg').textContent='🚀 '+ep+': '+(d.error||JSON.stringify(d).slice(0,100));loadFullAuto();}
+document.querySelectorAll('details summary').forEach(s=>s.addEventListener('click',()=>{setTimeout(()=>{loadImageRemediation();loadQuickWin();loadCanary();loadAutopilot();loadFullAuto();},50);},{once:true}));
+loadStatus();loadRows();pollQueue();loadBatch();
+</script>
+{% endblock %}

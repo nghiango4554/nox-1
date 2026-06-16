@@ -1,0 +1,68 @@
+/* ════════════════════════════════════════════════════════════════
+   Marketing Hub — THEME TOKENS
+   Palette trích từ AdminPro Gradient Design (chỉ học màu/gradient/shadow).
+   Radius/shadow tham khảo Nalika. Tất cả namespaced --mh-* (additive, an toàn).
+   ════════════════════════════════════════════════════════════════ */
+:root {
+  /* ---- Nền sáng + bề mặt ---- */
+  --mh-bg-page: #f4f6fa;
+  --mh-bg-surface: #ffffff;
+  --mh-bg-card: #ffffff;
+  --mh-bg-soft: #f2f4f8;
+
+  /* ---- Chữ ---- */
+  --mh-text-primary: #2a2d3a;
+  --mh-text-secondary: #5a6072;
+  --mh-text-muted: #939aa9;
+  --mh-text-inverse: #ffffff;
+
+  /* ---- Border ---- */
+  --mh-border-soft: #ecedf2;
+  --mh-border-strong: #e0e2ea;
+
+  /* ---- Shadow (nhẹ, mềm — Nalika style) ---- */
+  --mh-shadow-xs: 0 1px 2px rgba(28, 30, 50, 0.05);
+  --mh-shadow-sm: 0 2px 6px rgba(28, 30, 50, 0.06);
+  --mh-shadow-md: 0 6px 18px rgba(28, 30, 50, 0.08);
+  --mh-shadow-lg: 0 14px 38px rgba(28, 30, 50, 0.12);
+  --mh-shadow-warm: 0 8px 22px rgba(215, 81, 81, 0.22);
+
+  /* ---- Radius ---- */
+  --mh-radius-sm: 8px;
+  --mh-radius-md: 12px;
+  --mh-radius-lg: 16px;
+  --mh-radius-pill: 999px;
+
+  /* ---- Gradient (AdminPro warm signature) ---- */
+  --mh-gradient-orange: linear-gradient(135deg, #ff9966 0%, #d75151 100%);
+  --mh-gradient-pink:   linear-gradient(135deg, #ff6aa9 0%, #e73c7e 100%);
+  --mh-gradient-yellow: linear-gradient(135deg, #ffd23f 0%, #f5971f 100%);
+  --mh-gradient-warm:   linear-gradient(135deg, #ff9966 0%, #ff66cc 100%);
+  --mh-gradient-mint:   linear-gradient(135deg, #1ab394 0%, #2dda7a 100%);
+  --mh-gradient-info:   linear-gradient(135deg, #36c6f4 0%, #2a7de1 100%);
+  --mh-gradient-soft:   linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+
+  /* ---- Accent (điểm nhấn) ---- */
+  --mh-accent-orange: #ff7a45;
+  --mh-accent-pink: #e73c7e;
+  --mh-accent-yellow: #f5971f;
+  --mh-accent: #ff7a45;
+
+  /* ---- Status (badge/trạng thái) ---- */
+  --mh-status-success: #16a87e;
+  --mh-status-success-bg: rgba(26, 179, 148, 0.13);
+  --mh-status-warning: #e08a1e;
+  --mh-status-warning-bg: rgba(248, 172, 89, 0.16);
+  --mh-status-danger: #e2445c;
+  --mh-status-danger-bg: rgba(237, 85, 101, 0.13);
+  --mh-status-info: #1093d4;
+  --mh-status-info-bg: rgba(3, 169, 244, 0.12);
+  --mh-status-neutral: #8a90a0;
+  --mh-status-neutral-bg: rgba(138, 144, 160, 0.13);
+
+  /* ---- Typography scale ---- */
+  --mh-fs-kpi: 26px;
+  --mh-fs-title: 15px;
+  --mh-fs-body: 13px;
+  --mh-fs-meta: 11px;
+}

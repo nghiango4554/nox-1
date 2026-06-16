@@ -1,15 +1,19 @@
-{% extends "base.html" %}
+{% extends "redesign_base.html" %}
 {% block title %}Job #{{ job.id }} · Content Jobs · Sintech Hub{% endblock %}
-
-{% block page_title %}
-<a href="{{ url_for('content_jobs_list_page') }}" class="muted" style="font-weight:500">📝 Content Jobs</a>
-<span class="crumb"></span>
-<span style="font-weight:600">Job #{{ job.id }}</span>
-{% endblock %}
-
-{% block page_actions %}
-<a class="btn" href="{{ url_for('content_jobs_list_page') }}">← Quay lại list</a>
-{% endblock %}
+{% block page_title %}<a href="{{ url_for('content_jobs_list_page') }}" style="color:var(--ink-2);text-decoration:none">Content Jobs</a><i class="ic" data-icon="chevron-right"></i><b>Job #{{ job.id }}</b>{% endblock %}
+{% block page_actions %}<a class="btn" href="{{ url_for('content_jobs_list_page') }}"><i class="ic" data-icon="arrow-left"></i>Quay lại list</a>{% endblock %}
+{% block head_extra %}<style>
+:root{--border:rgba(28,34,48,.12);--text-muted:#98a0b3}
+.card{background:var(--card-bg);border:var(--card-border);border-radius:var(--r);box-shadow:var(--card-shadow);padding:var(--pad);margin-bottom:0}
+.muted{color:var(--ink-3)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;transition:.14s;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-primary{background:linear-gradient(120deg,var(--accent-from),var(--accent-to));color:#fff;border-color:transparent}
+.btn-ghost{background:transparent}
+input[type=text],textarea,select{padding:8px 11px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px;background:#fff;color:var(--ink)}
+.pill,.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--surface-2);color:var(--ink-2)}
+</style>{% endblock %}
 
 {% block content %}
 

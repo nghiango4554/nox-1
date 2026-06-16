@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% block title %}Pillar–Cluster · Blog Content · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('blog_content_page') }}" class="muted" style="font-weight:500">📰 Blog Content</a>
+<span class="crumb"></span>
+<span style="font-weight:600">🏛️ Kế hoạch Pillar–Cluster</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('blog_content_page') }}">← Danh sách bài</a>
+<a class="btn" href="{{ url_for('blog_content_page') }}?source=ai_pillar">📋 Xem bài AI Pillar</a>
+{% endblock %}
+
+{% block content %}
+<style>
+  .plg-wrap { --money:var(--success); --support:var(--info); --media:var(--warning); max-width:1080px }
+
+  /* ---------- HERO GENERATE ---------- */
+  .plg-hero {
+    position:relative; overflow:hidden;
+    background:var(--bg-elevated); border:1px solid var(--border);
+    border-radius:var(--radius-lg); padding:22px 24px; margin-bottom:18px;
+    box-shadow:var(--shadow);
+  }
+  .plg-hero::before {
+    content:""; position:absolute; inset:0 0 auto 0; height:3px; background:var(--gradient-accent);
+  }
+  .plg-hero::after {
+    content:""; position:absolute; top:-60px; right:-60px; width:220px; height:220px; border-radius:50%;
+    background:var(--accent-glow); filter:blur(60px); opacity:.5; pointer-events:none;
+  }
+  .plg-hero h2 { margin:0 0 4px; font-size:18px; font-weight:800; letter-spacing:-.3px;
+    background:var(--gradient-text); -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; width:fit-content }
+  .plg-hero .sub { font-size:12.5px; color:var(--text-secondary); line-height:1.65; max-width:680px; margin-bottom:16px }
+  .plg-hero .sub b { color:var(--text) }
+  .plg-controls { display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap; position:relative; z-index:1 }
+  .plg-field { display:flex; flex-direction:column; gap:5px }
+  .plg-field label { font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px }
+  .plg-field input { width:84px; padding:9px 11px; border:1px solid var(--border-strong); border-radius:var(--radius-sm);
+    background:var(--surface); color:var(--text); font-size:15px; font-weight:700; text-align:center; transition:border-color .15s, box-shadow .15s }
+  .plg-field input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft) }
+  .plg-btn-gen { padding:10px 20px; font-size:13.5px; font-weight:700; border:none; border-radius:var(--radius-sm);
+    background:var(--gradient-accent); color:#fff; cursor:pointer; box-shadow:var(--shadow-sm); transition:transform .12s, opacity .15s; }
+  .plg-btn-gen:hover { transform:translateY(-1px) }
+  .plg-btn-gen:disabled { opacity:.5; cursor:default; transform:none }
+  .plg-btn-stop { padding:10px 16px; font-size:13px; font-weight:600; border:1px solid var(--border-strong); border-radius:var(--radius-sm);
+    background:var(--surface); color:var(--danger); cursor:pointer; display:none }
+
+  /* ---------- PROGRESS ---------- */
+  .plg-prog { display:none; margin-top:18px; padding:14px 16px; border-radius:var(--radius); background:var(--surface); border:1px solid var(--border) }
+  .plg-prog-msg { font-size:13px; font-weight:600; color:var(--text) }
+  .plg-bar { height:7px; border-radius:99px; background:var(--border-soft); overflow:hidden; margin:9px 0 6px }
+  .plg-bar > i { display:block; height:100%; width:0; border-radius:99px; background:var(--gradient-accent); transition:width .5s ease }
+  .plg-prog-stat { font-size:11.5px; color:var(--text-muted) }
+
+  /* ---------- STAT TILES ---------- */
+  .plg-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:18px }
+  .plg-stat { background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; transition:transform .15s, border-color .15s }
+  .plg-stat:hover { transform:translateY(-2px); border-color:var(--border-strong) }
+  .plg-stat .num { font-size:26px; font-weight:800; line-height:1; letter-spacing:-1px }
+  .plg-stat .lbl { font-size:11.5px; color:var(--text-muted); margin-top:5px; font-weight:500 }
+  .plg-stat.s-pillar .num { color:var(--accent) }
+  .plg-stat.s-cluster .num { color:var(--info) }
+  .plg-stat .legend { display:flex; gap:10px; margin-top:7px; flex-wrap:wrap }
+  .plg-stat .legend span { font-size:11px; color:var(--text-secondary); display:flex; align-items:center; gap:4px }
+  .dot { width:8px; height:8px; border-radius:50% }
+  .dot.money{background:var(--money)} .dot.support{background:var(--support)} .dot.media{background:var(--media)}
+
+  /* ---------- PILLAR CARDS ---------- */
+  .plg-card { background:var(--bg-elevated); border:1px solid var(--border); border-left:3px solid var(--border-strong);
+    border-radius:var(--radius); margin-bottom:11px; overflow:hidden; transition:box-shadow .18s, transform .12s, border-color .15s }
+  .plg-card:hover { box-shadow:var(--shadow); transform:translateY(-1px) }
+  .plg-card.l-money  { border-left-color:var(--money) }
+  .plg-card.l-support{ border-left-color:var(--support) }
+  .plg-card.l-media  { border-left-color:var(--media) }
+  .plg-head { padding:13px 16px; cursor:pointer; display:flex; align-items:center; gap:11px; user-select:none }
+  .plg-head:hover { background:var(--surface) }
+  .plg-pill { font-size:10px; padding:3px 10px; border-radius:99px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap }
+  .plg-pill.l-money  { background:rgba(34,197,94,.15);  color:var(--money) }
+  .plg-pill.l-support{ background:rgba(59,130,246,.15); color:var(--support) }
+  .plg-pill.l-media  { background:rgba(234,179,8,.15);  color:var(--media) }
+  .plg-tt { font-weight:700; font-size:14.5px; flex:1; line-height:1.4 }
+  .plg-star { font-size:11px; color:var(--warning); font-weight:700; white-space:nowrap }
+  .plg-count { font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:6px; white-space:nowrap }
+  .plg-chev { transition:transform .25s; color:var(--text-muted); font-size:11px }
+  .plg-card.open .plg-chev { transform:rotate(180deg) }
+
+  .plg-body { display:none; padding:4px 16px 16px }
+  .plg-card.open .plg-body { display:block; animation:plgFade .25s ease }
+  @keyframes plgFade { from{opacity:0; transform:translateY(-4px)} to{opacity:1; transform:none} }
+  .plg-meta { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:8px 18px;
+    font-size:12px; color:var(--text-secondary); padding:12px 14px; background:var(--surface); border-radius:var(--radius-sm); margin-bottom:12px; line-height:1.5 }
+  .plg-meta b { color:var(--text); font-weight:600 }
+
+  .plg-cl { display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:var(--radius-sm); transition:background .12s }
+  .plg-cl:hover { background:var(--surface) }
+  .plg-cl + .plg-cl { border-top:1px solid var(--border-soft) }
+  .plg-cl .cdot { width:7px; height:7px; border-radius:50%; flex:none }
+  .plg-cl a { color:var(--text); text-decoration:none; flex:1; font-size:13px; line-height:1.4 }
+  .plg-cl a:hover { color:var(--accent) }
+  .plg-tag { font-size:10px; padding:2px 8px; border-radius:99px; background:var(--surface); border:1px solid var(--border); color:var(--text-muted); white-space:nowrap }
+  .plg-tag.ext { background:rgba(168,85,247,.14); border-color:transparent; color:#c084fc }
+  .plg-tag.hi { color:var(--danger); border-color:rgba(239,68,68,.3) }
+  .plg-tag.st { text-transform:capitalize }
+
+  /* ---------- EMPTY ---------- */
+  .plg-empty { text-align:center; padding:48px 20px; background:var(--bg-elevated); border:1px dashed var(--border-strong); border-radius:var(--radius-lg); color:var(--text-muted) }
+  .plg-empty .ico { font-size:40px; margin-bottom:10px; opacity:.7 }
+  .plg-empty b { color:var(--text) }
+
+  @media (max-width:680px){ .plg-stats{grid-template-columns:1fr} .plg-controls{gap:10px} }
+</style>
+
+<div class="plg-wrap">
+
+  <!-- HERO -->
+  <div class="plg-hero">
+    <h2>🏛️ Tạo kế hoạch nội dung Pillar–Cluster</h2>
+    <div class="sub">
+      AI đọc dữ liệu Sintech thật (collections + top keyword Google Search Console) → đề xuất <b>Pillar</b> (chủ đề trụ)
+      và các bài <b>Cluster</b> theo 3 lớp Money / Support / Media. Chỉ tạo <b>khung chủ đề</b> — không viết nội dung
+      (viết bài là bước riêng ở Blog Content). Không ghi đè kế hoạch cũ.
+    </div>
+    <div class="plg-controls">
+      <div class="plg-field">
+        <label>Số Pillar</label>
+        <input type="number" id="n-pillars" value="12" min="1" max="20">
+      </div>
+      <div class="plg-field">
+        <label>Cluster / Pillar</label>
+        <input type="number" id="n-clusters" value="10" min="1" max="15">
+      </div>
+      <button class="plg-btn-gen" type="button" onclick="startGen(this)">✨ Tạo kế hoạch</button>
+      <button class="plg-btn-stop" type="button" id="pl-stop-btn" onclick="stopGen(this)">⏹ Dừng</button>
+    </div>
+    <div class="plg-prog" id="pl-prog">
+      <div class="plg-prog-msg" id="pl-prog-msg">Đang khởi động…</div>
+      <div class="plg-bar"><i id="pl-bar-fill"></i></div>
+      <div class="plg-prog-stat" id="pl-prog-stat"></div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  {% set money = pillars|selectattr('layer','equalto','money')|list|length %}
+  {% set support = pillars|selectattr('layer','equalto','support')|list|length %}
+  {% set media = pillars|selectattr('layer','equalto','media')|list|length %}
+  <div class="plg-stats">
+    <div class="plg-stat s-pillar">
+      <div class="num">{{ pillars|length }}</div>
+      <div class="lbl">Pillar (chủ đề trụ)</div>
+    </div>
+    <div class="plg-stat s-cluster">
+      <div class="num">{{ total_jobs }}</div>
+      <div class="lbl">Bài Cluster đã đề xuất</div>
+    </div>
+    <div class="plg-stat">
+      <div class="num" style="font-size:15px;font-weight:700;color:var(--text-secondary)">3 lớp</div>
+      <div class="legend">
+        <span><i class="dot money"></i>Money {{ money }}</span>
+        <span><i class="dot support"></i>Support {{ support }}</span>
+        <span><i class="dot media"></i>Media {{ media }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PILLAR LIST -->
+  {% if not pillars %}
+  <div class="plg-empty">
+    <div class="ico">🪴</div>
+    Chưa có Pillar nào.<br>Bấm <b>"✨ Tạo kế hoạch"</b> ở trên để AI đề xuất chủ đề trụ + bài cluster.
+  </div>
+  {% endif %}
+
+  {% for p in pillars %}
+  {% set lyr = p.layer or 'media' %}
+  <div class="plg-card l-{{ lyr }}" id="plg-card-{{ p.id }}">
+    <div class="plg-head" onclick="togglePillar({{ p.id }})">
+      <span class="plg-pill l-{{ lyr }}">{{ p.layer or '—' }}</span>
+      <span class="plg-tt">{{ p.title }}</span>
+      {% if p.priority == 'Cao' %}<span class="plg-star">★ Ưu tiên</span>{% endif %}
+      <span class="plg-count">{{ p.clusters|length }} bài <span class="plg-chev">▾</span></span>
+    </div>
+    <div class="plg-body">
+      <div class="plg-meta">
+        <div><b>Intent:</b> {{ p.intent or '—' }}</div>
+        <div><b>Đối tượng:</b> {{ p.audience or '—' }}</div>
+        <div><b>Ưu tiên:</b> {{ p.priority or '—' }}</div>
+        <div><b>Kéo link về:</b> {{ p.target_category or '—' }}</div>
+        {% if p.reason %}<div style="grid-column:1/-1"><b>Lý do:</b> {{ p.reason }}</div>{% endif %}
+      </div>
+      {% for c in p.clusters %}
+      <div class="plg-cl">
+        <i class="cdot dot {{ c.content_layer or 'media' }}"></i>
+        <a href="{{ url_for('blog_content_detail_page', job_id=c.id) }}">{{ c.article_title }}</a>
+        {% if c.is_external %}<span class="plg-tag ext">ngoài lề</span>{% endif %}
+        {% if c.article_type %}<span class="plg-tag">{{ c.article_type }}</span>{% endif %}
+        {% if c.priority == 'Cao' %}<span class="plg-tag hi">★ Cao</span>{% endif %}
+        <span class="plg-tag st">{{ c.status }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+</div>
+
+<script>
+function togglePillar(id) {
+  document.getElementById('plg-card-' + id).classList.toggle('open');
+}
+
+let POLL = null;
+async function startGen(btn) {
+  const nP = parseInt(document.getElementById('n-pillars').value) || 12;
+  const nC = parseInt(document.getElementById('n-clusters').value) || 10;
+  if (!confirm(`Tạo ${nP} pillar × ~${nC} cluster (~${nP*nC} bài đề xuất). Chỉ tạo khung chủ đề, KHÔNG viết nội dung. Bắt đầu?`)) return;
+  btn.disabled = true;
+  try {
+    const r = await fetch('/blog-pillars/generate', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({n_pillars: nP, clusters_per_pillar: nC}),
+    });
+    const d = await r.json();
+    if (!d.ok) { alert('❌ ' + (d.error || 'lỗi')); btn.disabled = false; return; }
+    document.getElementById('pl-prog').style.display = 'block';
+    document.getElementById('pl-stop-btn').style.display = 'inline-block';
+    pollStatus();
+    POLL = setInterval(pollStatus, 4000);
+  } catch (e) { alert('❌ ' + e); btn.disabled = false; }
+}
+
+async function stopGen(btn) {
+  if (!confirm('Dừng sau pillar đang chạy?')) return;
+  btn.disabled = true;
+  try { await fetch('/blog-pillars/stop', {method: 'POST'}); } catch (e) {}
+}
+
+async function pollStatus() {
+  try {
+    const d = await (await fetch('/blog-pillars/status')).json();
+    const msg = document.getElementById('pl-prog-msg');
+    const fill = document.getElementById('pl-bar-fill');
+    const stat = document.getElementById('pl-prog-stat');
+    let pct = 4;
+    if (d.phase === 'pillars' || d.phase === 'starting') {
+      pct = 5; msg.textContent = '🔎 ' + (d.msg || 'Đang đề xuất Pillar…');
+    } else if (d.pillar_total) {
+      pct = Math.round((d.pillar_idx || 0) * 100 / d.pillar_total);
+      msg.textContent = `🏛️ Pillar ${d.pillar_idx}/${d.pillar_total}: ${d.pillar_title || ''}`;
+    }
+    stat.textContent = `Đã đề xuất ${d.jobs_created || 0} bài cluster`;
+    fill.style.width = Math.max(pct, 3) + '%';
+    if (!d.running) {
+      clearInterval(POLL);
+      document.getElementById('pl-stop-btn').style.display = 'none';
+      if (d.error) { fill.style.background = 'var(--danger)'; msg.textContent = '❌ Lỗi: ' + d.error; }
+      else {
+        fill.style.width = '100%';
+        msg.textContent = `✅ Xong! ${d.n_pillars} pillar · ${d.jobs_created} bài cluster.`;
+        setTimeout(() => location.reload(), 1800);
+      }
+    }
+  } catch (e) { /* giữ poll */ }
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const d = await (await fetch('/blog-pillars/status')).json();
+    if (d.running) {
+      document.getElementById('pl-prog').style.display = 'block';
+      document.getElementById('pl-stop-btn').style.display = 'inline-block';
+      pollStatus(); POLL = setInterval(pollStatus, 4000);
+    }
+  } catch (e) {}
+});
+</script>
+{% endblock %}

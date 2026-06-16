@@ -1,0 +1,688 @@
+# -*- coding: utf-8 -*-
+"""Routes — Blog Rewrite AI (P1: page + read-only API + import-scan local DB).
+
+KHÔNG gọi AI, KHÔNG PUT Haravan, KHÔNG upload ảnh. import-scan chỉ ghi SQLite local.
+Generate/Approve/Apply/Rollback = P2/P3+ (chưa làm).
+"""
+import csv, io, sys, subprocess
+from pathlib import Path
+from flask import render_template, request, jsonify, Response
+import blog_rewrite as br
+import blog_rewrite_apply as ap
+import blog_rewrite_remediate as rem
+
+_WORKER = Path(__file__).parent.parent / "_scripts" / "run_blog_rewrite_worker.py"
+
+
+def _spawn_worker(job_id):
+    """Spawn worker nền KHÔNG hiện console (con claude CLI kế thừa console ẩn)."""
+    flags = 0
+    if hasattr(subprocess, "CREATE_NO_WINDOW"):
+        flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen([sys.executable, str(_WORKER), "--job", str(job_id)],
+                     cwd=str(_WORKER.parent.parent), stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     creationflags=flags, close_fds=True)
+
+
+def _p5_blocked():
+    return jsonify({"ok": False, "phase": "P5B",
+                    "error": "Live apply chưa bật. Không có thay đổi nào được gửi lên Haravan."}), 501
+
+
+def seo_blog_rewrite_page():
+    return render_template("blog_rewrite_ai.html", summary=br.status_summary())
+
+
+def api_status():
+    return jsonify(br.status_summary())
+
+
+def api_candidates():
+    a = request.args
+    res = br.list_candidates(
+        risk=a.get("risk") or None, status=a.get("status") or None,
+        source_host=a.get("source_host") or None, traffic=a.get("traffic") or None,
+        q=a.get("q") or None, only_selected=(a.get("only_selected") == "1"),
+        sort=a.get("sort", "priority_score"), direction=a.get("direction", "desc"),
+        limit=min(int(a.get("limit", 100)), 500), offset=int(a.get("offset", 0)))
+    return jsonify(res)
+
+
+def api_candidate_detail(cid):
+    d = br.get_candidate(int(cid))
+    if not d:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    return jsonify({"ok": True, "candidate": d})
+
+
+def api_import_scan():
+    """POST: import scan vào DB local. dry_run mặc định True (chỉ preview).
+    KHÔNG ghi Haravan, KHÔNG gọi AI. apply=true mới ghi DB."""
+    payload = request.get_json(silent=True) or {}
+    dry = not (payload.get("apply") is True or request.args.get("apply") == "1")
+    try:
+        res = br.build_candidates(dry_run=dry)
+        return jsonify({"ok": True, "dry_run": dry, **res})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)[:200]}), 500
+
+
+def api_export():
+    res = br.list_candidates(limit=500, offset=0)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["article_url", "title", "author", "published_year", "risk_level",
+                "source_group_primary", "priority_score", "gsc_clicks_28d",
+                "gsc_impressions_28d", "ga4_organic_sessions_28d", "traffic_data_status",
+                "status", "selected"])
+    for r in res["items"]:
+        w.writerow([r["article_url"], r["title"], r["author"], r["published_year"],
+                    r["risk_level"], r["source_group_primary"], r["priority_score"],
+                    r["gsc_clicks_28d"], r["gsc_impressions_28d"], r["ga4_organic_sessions_28d"],
+                    r["traffic_data_status"], r["status"], r["selected"]])
+    return Response("﻿" + buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=blog_rewrite_candidates.csv"})
+
+
+# ─────────────── P2: selection ───────────────
+def api_select(cid):
+    payload = request.get_json(silent=True) or {}
+    br.set_selected(int(cid), bool(payload.get("selected", True)))
+    return jsonify({"ok": True})
+
+
+def api_select_bulk():
+    p = request.get_json(silent=True) or {}
+    res = br.bulk_select(mode=p.get("mode", "top_priority"), limit=int(p.get("limit", 5)),
+                         risk=p.get("risk", "high"), ids=p.get("ids"))
+    return jsonify(res)
+
+
+# ─────────────── P2: jobs (mock) ───────────────
+def api_create_job():
+    p = request.get_json(silent=True) or {}
+    mode = p.get("mode", "selected")
+    if mode == "top_priority":
+        br.bulk_select("clear_all")
+        br.bulk_select("top_priority", limit=int(p.get("limit", 5)), risk="high")
+    ids = p.get("ids") or br.selected_ids()
+    import blog_rewrite_autopilot as au
+    provider = p.get("provider") or au.gen_provider()   # mặc định = công tắc gen (codex)
+    res = br.create_job(ids, mode=mode, explicit_confirm=bool(p.get("explicit_confirm")), provider=provider)
+    if res.get("ok"):
+        _spawn_worker(res["job_id"])
+    code = 200 if res.get("ok") else (409 if res.get("needs_confirm") else 400)
+    return jsonify(res), code
+
+
+def api_provider_health():
+    import blog_rewrite_gen as gen
+    return jsonify(gen.provider_health(request.args.get("provider", "claude")))
+
+
+def api_jobs():
+    br.recover_stale_jobs()
+    return jsonify({"jobs": br.list_jobs()})
+
+
+def api_job_detail(jid):
+    j = br.get_job(int(jid))
+    if not j:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    return jsonify({"ok": True, "job": j})
+
+
+def api_job_cancel(jid):
+    return jsonify(br.cancel_job(int(jid)))
+
+
+def api_job_retry(jid):
+    res = br.retry_failed(int(jid))
+    if res.get("ok"):
+        _spawn_worker(res["job_id"])
+    return jsonify(res), (200 if res.get("ok") else 400)
+
+
+def api_draft(did):
+    d = br.get_draft(int(did))
+    if not d:
+        return jsonify({"ok": False, "error": "not found"}), 404
+    return jsonify({"ok": True, "draft": d})
+
+
+def api_candidate_events(cid):
+    return jsonify({"events": br.candidate_events(int(cid))})
+
+
+def api_candidate_draft(cid):
+    d = br.latest_draft_for_candidate(int(cid))
+    if not d:
+        return jsonify({"ok": False, "error": "chưa có draft"}), 404
+    return jsonify({"ok": True, "draft": d})
+
+
+# ─────────────── P4: review studio (local) ───────────────
+def api_edit_draft(did):
+    return jsonify(br.edit_draft(int(did), request.get_json(silent=True) or {}))
+
+
+def api_candidate_drafts(cid):
+    return jsonify({"drafts": br.list_drafts(int(cid))})
+
+
+def api_clone_version(did):
+    return jsonify(br.clone_version(int(did)))
+
+
+def api_regenerate_single(cid):
+    p = request.get_json(silent=True) or {}
+    if not p.get("explicit_confirm"):
+        return jsonify({"ok": False, "error": "regenerate-single cần explicit_confirm=true"}), 400
+    import blog_rewrite_autopilot as au
+    res = br.create_job([int(cid)], mode="single", provider=p.get("provider") or au.gen_provider())
+    if res.get("ok"):
+        _spawn_worker(res["job_id"])
+    return jsonify(res), (200 if res.get("ok") else 400)
+
+
+def api_approve_local(did):
+    return jsonify(br.approve_local(int(did)))
+
+
+def api_reject_local(did):
+    return jsonify(br.reject_local(int(did), (request.get_json(silent=True) or {}).get("reason", "")))
+
+
+def api_image_plan(did):
+    return jsonify(ap.build_image_rehost_plan(int(did), refresh=False))
+
+
+def api_image_plan_refresh(did):
+    return jsonify(ap.build_image_rehost_plan(int(did), refresh=True))
+
+
+def api_batch_results():
+    return jsonify({"results": br.batch_results()})
+
+
+# ─────────────── P5E: image remediation queue (local) ───────────────
+def api_image_summary():
+    return jsonify(rem.image_summary())
+
+
+def api_image_items():
+    a = request.args
+    return jsonify(rem.list_items(candidate_id=a.get("candidate_id"), source_class=a.get("source_class"),
+        availability=a.get("availability"), selected_action=a.get("selected_action"),
+        review_status=a.get("review_status"), q=a.get("q"),
+        limit=min(int(a.get("limit", 200)), 1000), offset=int(a.get("offset", 0))))
+
+
+def api_image_set_action(iid):
+    p = request.get_json(silent=True) or {}
+    return jsonify(rem.set_action(int(iid), p.get("action", ""), p.get("note")))
+
+
+def api_image_bulk_dead():
+    p = request.get_json(silent=True) or {}
+    return jsonify(rem.bulk_dead_local(p.get("confirm_phrase", "")))
+
+
+def api_image_remediate(cid):
+    p = request.get_json(silent=True) or {}
+    return jsonify(rem.build_remediated_draft_local(int(cid), p.get("source_draft_id")))
+
+
+def api_image_gate(cid):
+    return jsonify({"candidate_id": int(cid), "apply_gate": rem.article_gate(int(cid))})
+
+
+def api_image_export():
+    return jsonify(rem.export_workload())
+
+
+# ─────────────── P5F: quick-win remediation board + verify ───────────────
+def api_rem_articles():
+    return jsonify({"articles": rem.list_article_remediation()})
+
+
+def api_rem_article(cid):
+    s = rem.article_remediation_summary(int(cid))
+    return jsonify(s or {"ok": False, "error": "not found"}), (200 if s else 404)
+
+
+def api_rem_top20():
+    return jsonify({"top20": rem.top20()})
+
+
+def api_rem_remove_dead():
+    return jsonify(rem.bulk_remove_dead_and_clone())
+
+
+def api_rem_recompute_gate(cid):
+    return jsonify({"candidate_id": int(cid), "apply_gate": rem.article_gate(int(cid))})
+
+
+def api_verify_live(did):
+    return jsonify(ap.verify_live(int(did)))
+
+
+def api_verify_status(did):
+    return jsonify(ap.verify_status(int(did)))
+
+
+def api_canary_prep():
+    return jsonify(rem.canary_prep())
+
+
+# ─────────────── P6: Autopilot (mặc định OFF, scheduler OFF) ───────────────
+def api_ap_status():
+    import blog_rewrite_autopilot as au
+    return jsonify(au.status())
+
+
+def api_ap_config():
+    import blog_rewrite_autopilot as au
+    return jsonify(au.load_config())
+
+
+def api_ap_config_patch():
+    import blog_rewrite_autopilot as au
+    body = request.get_json(force=True, silent=True) or {}
+    patch = body.get("patch") or {}
+    wants_apply = patch.get("mode") == "SAFE_AUTO_APPLY" or patch.get("enabled") is True
+    if wants_apply and body.get("confirm_phrase") != au.ENABLE_APPLY_PHRASE:
+        return jsonify({"ok": False, "error": "CONFIRM_PHRASE_REQUIRED", "need": au.ENABLE_APPLY_PHRASE}), 403
+    sched = (patch.get("schedule") or {}).get("enabled")
+    if sched is True and body.get("confirm_phrase") != au.ENABLE_SCHEDULE_PHRASE:
+        return jsonify({"ok": False, "error": "SCHEDULE_CONFIRM_PHRASE_REQUIRED", "need": au.ENABLE_SCHEDULE_PHRASE}), 403
+    return jsonify({"ok": True, "config": au.patch_config(patch)})
+
+
+def api_ap_dry_run():
+    import blog_rewrite_autopilot as au
+    return jsonify(au.run(mode="PREP_ONLY", dry_run=True))
+
+
+def api_ap_run_prep():
+    import blog_rewrite_autopilot as au
+    return jsonify(au.run(mode="PREP_ONLY"))
+
+
+def api_ap_pause():
+    import blog_rewrite_autopilot as au
+    return jsonify(au.pause())
+
+
+def api_ap_resume():
+    import blog_rewrite_autopilot as au
+    return jsonify(au.resume())
+
+
+def api_ap_emergency_stop():
+    import blog_rewrite_autopilot as au
+    return jsonify(au.emergency_stop())
+
+
+def api_ap_runs():
+    import blog_rewrite_autopilot as au
+    return jsonify({"runs": au.list_runs()})
+
+
+def api_ap_run(rid):
+    import blog_rewrite_autopilot as au
+    return jsonify(au.get_run(int(rid)))
+
+
+def api_ap_events():
+    import blog_rewrite_autopilot as au
+    return jsonify({"events": au.list_events(limit=80)})
+
+
+# ─────────────── P7: Full Auto Run Once ───────────────
+_FA_RUNNER = Path(__file__).parent.parent / "_scripts" / "run_blog_rewrite_full_auto.py"
+
+
+def _spawn_full_auto(args):
+    """Spawn full-auto runner nền KHÔNG hiện cửa sổ console (con claude CLI kế thừa console ẩn)."""
+    flags = 0
+    if hasattr(subprocess, "CREATE_NO_WINDOW"):
+        flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen([sys.executable, str(_FA_RUNNER)] + args, cwd=str(_FA_RUNNER.parent.parent),
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     creationflags=flags, close_fds=True)
+
+
+def api_fa_start():
+    import blog_rewrite_full_auto as fa
+    body = request.get_json(force=True, silent=True) or {}
+    dry = bool(body.get("dry_run"))
+    cb = fa.auto.cb_state()
+    if cb.get("open"):
+        return jsonify({"ok": False, "error": "CIRCUIT_BREAKER_OPEN", "reason": cb.get("reason")}), 409
+    # đang chạy rồi → không spawn trùng (completed_reconciled = terminal, KHÔNG chặn)
+    cur = fa.load_checkpoint()
+    if cur and cur.get("current_stage") not in fa.TERMINAL_STAGES:
+        return jsonify({"ok": False, "error": "ALREADY_RUNNING", "checkpoint": {k: cur[k] for k in cur if k != "queue_ids"}}), 409
+    args = []
+    if dry:
+        args = ["--dry-run"]
+    else:
+        if body.get("confirm_phrase") != fa.START_PHRASE:
+            return jsonify({"ok": False, "error": "CONFIRM_PHRASE_REQUIRED", "need": fa.START_PHRASE}), 403
+        args = ["--live", "--confirm", fa.START_PHRASE]
+    if body.get("max_articles"):
+        args += ["--max-articles", str(int(body["max_articles"]))]
+    if body.get("priority_cids"):
+        args += ["--priority-cids", ",".join(str(int(x)) for x in body["priority_cids"])]
+    _spawn_full_auto(args)
+    return jsonify({"ok": True, "started": True, "dry_run": dry, "mode": "background",
+                    "note": "Đang chạy nền — poll /full-auto/progress để xem realtime."})
+
+
+def api_fa_progress():
+    import blog_rewrite_full_auto as fa
+    return jsonify(fa.progress())
+
+
+def api_fa_pause():
+    import blog_rewrite_full_auto as fa
+    return jsonify(fa.pause())
+
+
+def api_fa_resume():
+    import blog_rewrite_full_auto as fa
+    return jsonify(fa.resume())
+
+
+def api_fa_estop():
+    import blog_rewrite_full_auto as fa
+    return jsonify(fa.emergency_stop())
+
+
+def api_fa_status():
+    import blog_rewrite_full_auto as fa
+    return jsonify(fa.status())
+
+
+def api_fa_items():
+    import blog_rewrite_full_auto as fa
+    return jsonify(fa.list_items())
+
+
+def api_fa_events():
+    import blog_rewrite_full_auto as fa
+    return jsonify({"events": fa.list_events()})
+
+
+def api_fa_report():
+    import blog_rewrite_full_auto as fa
+    return jsonify(fa.report())
+
+
+# ─────────────── P8 ALL-IN-ONE (reuse full_auto checkpoint/progress) ───────────────
+_AIO_RUNNER = Path(__file__).parent.parent / "_scripts" / "run_blog_rewrite_all_in_one.py"
+
+
+def _spawn_all_in_one(args):
+    flags = 0
+    if hasattr(subprocess, "CREATE_NO_WINDOW"):
+        flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
+    subprocess.Popen([sys.executable, str(_AIO_RUNNER)] + args, cwd=str(_AIO_RUNNER.parent.parent),
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     creationflags=flags, close_fds=True)
+
+
+def api_aio_start():
+    import blog_rewrite_full_auto as fa
+    import blog_rewrite_all_in_one as aio
+    body = request.get_json(force=True, silent=True) or {}
+    dry = bool(body.get("dry_run"))
+    if fa.auto.cb_state().get("open"):
+        return jsonify({"ok": False, "error": "CIRCUIT_BREAKER_OPEN"}), 409
+    cur = fa.load_checkpoint()
+    if cur and cur.get("current_stage") not in fa.TERMINAL_STAGES:
+        return jsonify({"ok": False, "error": "ALREADY_RUNNING",
+                        "checkpoint": {k: cur[k] for k in cur if k != "queue_ids"}}), 409
+    args = ["--dry-run"] if dry else ["--live", "--confirm", aio.ALL_IN_ONE_PHRASE]
+    if not dry and body.get("confirm_phrase") != aio.ALL_IN_ONE_PHRASE:
+        return jsonify({"ok": False, "error": "CONFIRM_PHRASE_REQUIRED", "need": aio.ALL_IN_ONE_PHRASE}), 403
+    if body.get("max_articles"):
+        args += ["--max-articles", str(int(body["max_articles"]))]
+    if body.get("no_reclassify"):
+        args += ["--no-reclassify"]
+    if body.get("skip_decided"):
+        args += ["--skip-decided"]
+    _spawn_all_in_one(args)
+    return jsonify({"ok": True, "started": True, "dry_run": dry, "mode": "all_in_one_background"})
+
+
+def api_aio_status():
+    import blog_rewrite_all_in_one as aio
+    return jsonify(aio.status())
+
+
+def api_aio_report():
+    import blog_rewrite_all_in_one as aio
+    return jsonify(aio.report())
+
+
+def api_aio_plan():
+    import blog_rewrite_all_in_one as aio
+    _, _, per = aio.build_ordered(reclassify=False)
+    return jsonify({"ok": True, "plan": {k: len(v) for k, v in per.items()}})
+
+
+# ─────────────── P9: P0 Quickwin Executor (preview-only, KHÔNG PUT/upload) ───────────────
+def api_p0_status():
+    import blog_rewrite_p0_executor as p9
+    return jsonify({"ok": True, **p9.summary()})
+
+
+def api_p0_items():
+    import blog_rewrite_p0_executor as p9
+    return jsonify({"ok": True, "items": p9.run_preview(force=False)})
+
+
+def api_p0_preview():
+    """POST: chạy executor (tạo/refresh draft local). force=1 → tạo version mới."""
+    import blog_rewrite_p0_executor as p9
+    force = (request.json or {}).get("force") if request.is_json else (request.form.get("force") == "1")
+    items = p9.run_preview(force=bool(force))
+    return jsonify({"ok": True, "items": items, "kpi": p9.summary()["kpi"]})
+
+
+def api_p0_export():
+    """POST: ghi 5 file output vào docs/. KHÔNG PUT/upload."""
+    import blog_rewrite_p0_executor as p9
+    counts = p9.export_all()
+    return jsonify({"ok": True, "counts": counts,
+                    "files": ["BLOG_PERFORMANCE_P0_EXECUTOR_PREVIEW.md",
+                              "blog_performance_p0_executor_items.csv",
+                              "blog_performance_p0_image_execution_tasks.csv",
+                              "blog_performance_p0_theme_handoff.csv",
+                              "blog_performance_p0_manual_review.csv"]})
+
+
+# ─────────────── P9.1: P0 Quickwin APPLY (live body-only, gate confirm phrase) ───────────────
+def api_p0_apply_status():
+    import blog_rewrite_p0_apply as p91
+    return jsonify({"ok": True, **p91.status()})
+
+
+def api_p0_apply():
+    """POST: apply LIVE 5 bài safe-only. Cần confirm_phrase. dry_run=1 → preflight không PUT."""
+    import blog_rewrite_p0_apply as p91
+    body = request.json if request.is_json else request.form
+    phrase = (body.get("confirm_phrase") or "").strip()
+    dry = str(body.get("dry_run") or "") in ("1", "true", "True")
+    res = p91.run_apply(confirm_phrase=phrase, dry_run=dry)
+    if res.get("ok") and not dry:
+        try:
+            res["exports"] = p91.export_all()
+        except Exception as e:
+            res["export_error"] = str(e)[:120]
+    return jsonify(res)
+
+
+def api_p0_rollback():
+    """POST: rollback body-only 1 bài từ backup. Cần confirm_phrase rollback riêng."""
+    import blog_rewrite_p0_apply as p91
+    body = request.json if request.is_json else request.form
+    aid = body.get("article_id")
+    phrase = (body.get("confirm_phrase") or "").strip()
+    if not aid:
+        return jsonify({"ok": False, "error": "thiếu article_id"}), 400
+    return jsonify(p91.rollback(str(aid), confirm_phrase=phrase))
+
+
+def api_canary_fact_check():
+    import json as _json
+    from pathlib import Path
+    p = Path(__file__).parent.parent / "state" / "_canary_fact_check.json"
+    try:
+        return jsonify({"ok": True, "fact_check": _json.loads(p.read_text(encoding="utf-8"))})
+    except Exception:
+        return jsonify({"ok": True, "fact_check": {}})
+
+
+# ─────────────── P5A: apply preview (dry-run, KHÔNG PUT) ───────────────
+def api_apply_preview(did):
+    return jsonify(ap.apply_preview(int(did)))
+
+
+def api_backup_preview(did):
+    return jsonify(ap.backup_preview(int(did)))
+
+
+# ─────────────── P5B-1: armed apply (feature flag OFF → 423) ───────────────
+def api_apply_live(did):
+    p = request.get_json(silent=True) or {}
+    res, code = ap.apply_draft_body_only(
+        int(did), confirm_phrase=p.get("confirm_phrase", ""), fields=p.get("fields"),
+        confirm_reviewed_draft=bool(p.get("confirm_reviewed_draft")),
+        confirm_reviewed_images=bool(p.get("confirm_reviewed_images")))
+    return jsonify(res), code
+
+
+def api_rollback_live(did):
+    p = request.get_json(silent=True) or {}
+    res, code = ap.rollback_draft_apply(int(did), confirm_phrase=p.get("confirm_phrase", ""))
+    return jsonify(res), code
+
+
+def api_apply_status(did):
+    return jsonify(ap.apply_status(int(did)))
+
+
+def api_bulk_apply():
+    return jsonify({"ok": False, "locked": True, "error": "Bulk apply chưa được hỗ trợ."}), 501
+
+
+def register(app):
+    """Đăng ký route Blog Rewrite AI (P1 + P2 mock queue)."""
+    # P1
+    app.add_url_rule("/seo/blog-rewrite-ai", "seo_blog_rewrite_page", seo_blog_rewrite_page)
+    app.add_url_rule("/api/blog-rewrite/status", "br_status", api_status)
+    app.add_url_rule("/api/blog-rewrite/candidates", "br_candidates", api_candidates)
+    app.add_url_rule("/api/blog-rewrite/candidates/<cid>", "br_candidate_detail", api_candidate_detail)
+    app.add_url_rule("/api/blog-rewrite/import-scan", "br_import_scan", api_import_scan, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/export", "br_export", api_export)
+    # P2 selection
+    app.add_url_rule("/api/blog-rewrite/candidates/<cid>/select", "br_select", api_select, methods=["PATCH", "POST"])
+    app.add_url_rule("/api/blog-rewrite/candidates/select-bulk", "br_select_bulk", api_select_bulk, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/candidates/<cid>/events", "br_candidate_events", api_candidate_events)
+    app.add_url_rule("/api/blog-rewrite/candidates/<cid>/draft", "br_candidate_draft", api_candidate_draft)
+    # P4 review studio (local — KHÔNG PUT)
+    app.add_url_rule("/api/blog-rewrite/drafts/<did>", "br_edit_draft", api_edit_draft, methods=["PATCH"])
+    app.add_url_rule("/api/blog-rewrite/candidates/<cid>/drafts", "br_candidate_drafts", api_candidate_drafts)
+    app.add_url_rule("/api/blog-rewrite/drafts/<did>/clone-version", "br_clone_version", api_clone_version, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/candidates/<cid>/regenerate-single", "br_regen_single", api_regenerate_single, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/drafts/<did>/approve-local", "br_approve_local", api_approve_local, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/drafts/<did>/reject-local", "br_reject_local", api_reject_local, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/drafts/<did>/image-plan", "br_image_plan", api_image_plan)
+    app.add_url_rule("/api/blog-rewrite/drafts/<did>/image-plan/refresh", "br_image_plan_refresh", api_image_plan_refresh, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/batch-results", "br_batch_results", api_batch_results)
+    # P5E image remediation queue (local — KHÔNG upload/PUT)
+    app.add_url_rule("/api/blog-rewrite/image-summary", "br_image_summary", api_image_summary)
+    app.add_url_rule("/api/blog-rewrite/image-items", "br_image_items", api_image_items)
+    app.add_url_rule("/api/blog-rewrite/image-items/<iid>/action", "br_image_set_action", api_image_set_action, methods=["POST", "PATCH"])
+    app.add_url_rule("/api/blog-rewrite/image-bulk-dead", "br_image_bulk_dead", api_image_bulk_dead, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/candidates/<cid>/remediate-images", "br_image_remediate", api_image_remediate, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/candidates/<cid>/image-gate", "br_image_gate", api_image_gate)
+    app.add_url_rule("/api/blog-rewrite/image-export", "br_image_export", api_image_export)
+    # P5F quick-win remediation board + verify (read-only)
+    app.add_url_rule("/api/blog-rewrite/remediation/articles", "br_rem_articles", api_rem_articles)
+    app.add_url_rule("/api/blog-rewrite/remediation/articles/<cid>", "br_rem_article", api_rem_article)
+    app.add_url_rule("/api/blog-rewrite/remediation/top20", "br_rem_top20", api_rem_top20)
+    app.add_url_rule("/api/blog-rewrite/remediation/remove-dead-local", "br_rem_remove_dead", api_rem_remove_dead, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/remediation/articles/<cid>/recompute-gate", "br_rem_recompute", api_rem_recompute_gate, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/drafts/<did>/verify-live", "br_verify_live", api_verify_live, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/drafts/<did>/verify-status", "br_verify_status", api_verify_status)
+    app.add_url_rule("/api/blog-rewrite/remediation/canary-prep", "br_canary_prep", api_canary_prep)
+    app.add_url_rule("/api/blog-rewrite/remediation/fact-check", "br_canary_fact_check", api_canary_fact_check)
+    # P6 Autopilot (default OFF + scheduler OFF)
+    app.add_url_rule("/api/blog-rewrite/autopilot/status", "br_ap_status", api_ap_status)
+    app.add_url_rule("/api/blog-rewrite/autopilot/config", "br_ap_config", api_ap_config)
+    app.add_url_rule("/api/blog-rewrite/autopilot/config", "br_ap_config_patch", api_ap_config_patch, methods=["PATCH", "POST"])
+    app.add_url_rule("/api/blog-rewrite/autopilot/dry-run", "br_ap_dry", api_ap_dry_run, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/autopilot/run-prep", "br_ap_runprep", api_ap_run_prep, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/autopilot/pause", "br_ap_pause", api_ap_pause, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/autopilot/resume", "br_ap_resume", api_ap_resume, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/autopilot/emergency-stop", "br_ap_estop", api_ap_emergency_stop, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/autopilot/runs", "br_ap_runs", api_ap_runs)
+    app.add_url_rule("/api/blog-rewrite/autopilot/runs/<rid>", "br_ap_run", api_ap_run)
+    app.add_url_rule("/api/blog-rewrite/autopilot/events", "br_ap_events", api_ap_events)
+    # P7 Full Auto Run Once
+    app.add_url_rule("/api/blog-rewrite/full-auto/start", "br_fa_start", api_fa_start, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/full-auto/pause", "br_fa_pause", api_fa_pause, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/full-auto/resume", "br_fa_resume", api_fa_resume, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/full-auto/emergency-stop", "br_fa_estop", api_fa_estop, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/full-auto/status", "br_fa_status", api_fa_status)
+    app.add_url_rule("/api/blog-rewrite/full-auto/items", "br_fa_items", api_fa_items)
+    app.add_url_rule("/api/blog-rewrite/full-auto/events", "br_fa_events", api_fa_events)
+    app.add_url_rule("/api/blog-rewrite/full-auto/report", "br_fa_report", api_fa_report)
+    app.add_url_rule("/api/blog-rewrite/full-auto/progress", "br_fa_progress", api_fa_progress)
+    # P8 ALL-IN-ONE (start/status/report/plan riêng; progress/items/events/pause/resume/estop reuse full-auto)
+    app.add_url_rule("/api/blog-rewrite/all-in-one/start", "br_aio_start", api_aio_start, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/all-in-one/status", "br_aio_status", api_aio_status)
+    app.add_url_rule("/api/blog-rewrite/all-in-one/report", "br_aio_report", api_aio_report)
+    app.add_url_rule("/api/blog-rewrite/all-in-one/plan", "br_aio_plan", api_aio_plan)
+    # P9 P0 Quickwin Executor (preview-only — KHÔNG PUT/upload/theme)
+    app.add_url_rule("/api/blog-rewrite/p0/status", "br_p0_status", api_p0_status)
+    app.add_url_rule("/api/blog-rewrite/p0/items", "br_p0_items", api_p0_items)
+    app.add_url_rule("/api/blog-rewrite/p0/preview", "br_p0_preview", api_p0_preview, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/p0/export", "br_p0_export", api_p0_export, methods=["POST"])
+    # P9.1 P0 Quickwin APPLY (live body-only — gate confirm phrase + eligible==5)
+    app.add_url_rule("/api/blog-rewrite/p0/apply-status", "br_p0_apply_status", api_p0_apply_status)
+    app.add_url_rule("/api/blog-rewrite/p0/apply", "br_p0_apply", api_p0_apply, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/p0/rollback", "br_p0_rollback", api_p0_rollback, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/all-in-one/progress", "br_aio_progress", api_fa_progress)
+    app.add_url_rule("/api/blog-rewrite/all-in-one/items", "br_aio_items", api_fa_items)
+    app.add_url_rule("/api/blog-rewrite/all-in-one/events", "br_aio_events", api_fa_events)
+    app.add_url_rule("/api/blog-rewrite/all-in-one/pause", "br_aio_pause", api_fa_pause, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/all-in-one/resume", "br_aio_resume", api_fa_resume, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/all-in-one/emergency-stop", "br_aio_estop", api_fa_estop, methods=["POST"])
+    # P5A apply preview (dry-run — KHÔNG PUT/upload)
+    app.add_url_rule("/api/blog-rewrite/drafts/<did>/apply-preview", "br_apply_preview", api_apply_preview, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/drafts/<did>/backup-preview", "br_backup_preview", api_backup_preview, methods=["POST"])
+    # P5B-1 armed apply (flag OFF → 423 Locked)
+    app.add_url_rule("/api/blog-rewrite/drafts/<did>/apply-live", "br_apply_live", api_apply_live, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/drafts/<did>/rollback-live", "br_rollback_live", api_rollback_live, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/drafts/<did>/apply-status", "br_apply_status", api_apply_status)
+    app.add_url_rule("/api/blog-rewrite/bulk-apply", "br_bulk_apply", api_bulk_apply, methods=["POST"])
+    # P2 jobs (mock)
+    app.add_url_rule("/api/blog-rewrite/jobs", "br_create_job", api_create_job, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/jobs", "br_jobs", api_jobs)
+    app.add_url_rule("/api/blog-rewrite/jobs/<jid>", "br_job_detail", api_job_detail)
+    app.add_url_rule("/api/blog-rewrite/jobs/<jid>/cancel", "br_job_cancel", api_job_cancel, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/jobs/<jid>/retry-failed", "br_job_retry", api_job_retry, methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/drafts/<did>", "br_draft", api_draft)
+    app.add_url_rule("/api/blog-rewrite/provider-health", "br_provider_health", api_provider_health)
+    # P5 placeholder — BLOCKED (501)
+    for ep, path in [("approve", "approve"), ("reject", "reject"), ("apply", "apply"), ("rollback", "rollback")]:
+        app.add_url_rule(f"/api/blog-rewrite/drafts/<did>/{path}", f"br_p5_{ep}",
+                         lambda did=None: _p5_blocked(), methods=["POST"])
+    app.add_url_rule("/api/blog-rewrite/bulk-approve", "br_p5_bulk_approve",
+                     lambda: _p5_blocked(), methods=["POST"])

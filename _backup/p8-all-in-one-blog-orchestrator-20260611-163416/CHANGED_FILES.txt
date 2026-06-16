@@ -1,0 +1,13 @@
+﻿P8 ALL-IN-ONE BLOG ORCHESTRATOR - backup 20260611-163416
+
+MODIFIED:
+blog_rewrite_full_auto.py
+blog_rewrite_queues.py
+routes\blog_rewrite.py
+templates\blog_rewrite_ai.html
+
+NEW (sẽ tạo):
+blog_rewrite_all_in_one.py
+_scripts/run_blog_rewrite_all_in_one.py
+_scripts/qa_p8_all_in_one.py
+docs/BLOG_REWRITE_AI_P8_ALL_IN_ONE_COMPLETE.md (+5 CSV)

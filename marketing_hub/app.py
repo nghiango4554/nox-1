@@ -34,6 +34,7 @@ from routes import content_blog as routes_content_blog
 from routes import content_pillar as routes_content_pillar
 from routes import dashboard as routes_dashboard
 from routes import products as routes_products
+from routes import blog_rewrite as routes_blog_rewrite
 
 ROOT = Path(__file__).parent
 
@@ -69,6 +70,7 @@ routes_content_blog.register(app)
 routes_content_pillar.register(app)
 routes_dashboard.register(app)
 routes_products.register(app)
+routes_blog_rewrite.register(app)
 
 
 @app.template_filter("from_json")

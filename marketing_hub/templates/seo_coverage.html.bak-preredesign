@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Coverage nội dung · SEO · Sintech Hub{% endblock %}
+{% block content %}
+<style>
+  .cv-sec { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+  .cv-head { display:flex; align-items:center; gap:10px; margin:0 0 10px; }
+  .cv-title { font-weight:700; font-size:15px; margin:0; }
+  .cv-big { font-size:26px; font-weight:800; }
+  .cv-muted { color:var(--text-muted,#94a3b8); font-size:12px; }
+  .cv-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid rgba(255,255,255,.05); font-size:13px; }
+  .cv-row:last-child { border-bottom:none; }
+  .cv-pill { font-size:11px; padding:2px 9px; border-radius:10px; font-weight:600; white-space:nowrap; }
+  .cv-draft { background:rgba(52,211,153,.15); color:#34d399; }
+  .cv-failed{ background:rgba(248,113,113,.15); color:#f87171; }
+  .cv-pending{ background:rgba(250,204,21,.15); color:#facc15; }
+  .cv-none  { background:rgba(148,163,184,.15); color:#94a3b8; }
+</style>
+
+<h1 style="font-size:20px;margin:0 0 4px">🩺 Coverage nội dung (sức khỏe content)</h1>
+<p class="cv-muted" style="margin:0 0 16px">1 chỗ thấy hết chỗ hổng: SP/collection thiếu mô tả + author/schema. Sửa dần để full coverage.</p>
+
+{# ───── SP thiếu mô tả ───── #}
+<div class="cv-sec">
+  <div class="cv-head">
+    <span style="font-size:20px">🛍️</span>
+    <h2 class="cv-title">Sản phẩm thiếu mô tả</h2>
+    <span style="flex:1"></span>
+    <a class="btn btn-sm" href="{{ url_for('seo_empty_desc_page') }}">Mở trang chi tiết →</a>
+  </div>
+  <div style="display:flex;align-items:baseline;gap:8px">
+    <span class="cv-big" style="color:{{ '#34d399' if sp_empty_count==0 else '#f87171' }}">{{ sp_empty_count }}</span>
+    <span class="cv-muted">SP đang rỗng mô tả</span>
+  </div>
+  {% if sp_empty_sample %}
+  <div style="margin-top:8px">
+    {% for s in sp_empty_sample %}
+    <div class="cv-row"><span class="ee-bad" style="color:#f87171">✗</span>
+      <a href="{{ s.url }}" target="_blank" rel="noopener" style="color:#60a5fa">{{ (s.title or s.url)[:70] }}</a></div>
+    {% endfor %}
+    {% if sp_empty_count > sp_empty_sample|length %}<div class="cv-muted" style="margin-top:6px">… và {{ sp_empty_count - sp_empty_sample|length }} SP nữa — xem ở trang chi tiết.</div>{% endif %}
+  </div>
+  {% else %}<div class="cv-muted" style="margin-top:6px">🎉 Tất cả SP đều có mô tả.</div>{% endif %}
+</div>
+
+{# ───── Collection thiếu mô tả ───── #}
+<div class="cv-sec">
+  <div class="cv-head">
+    <span style="font-size:20px">🗂️</span>
+    <h2 class="cv-title">Collection thiếu mô tả</h2>
+    <span style="flex:1"></span>
+    <button type="button" class="btn btn-sm" id="cv-scan-btn" onclick="cvScan(this)" style="background:#0891b2;color:#fff">🔄 Quét lại (Haravan)</button>
+  </div>
+  {% if coll %}
+    <div style="display:flex;align-items:baseline;gap:8px">
+      <span class="cv-big" style="color:{{ '#34d399' if coll.missing|length==0 else '#f87171' }}">{{ coll.missing|length }}</span>
+      <span class="cv-muted">/ {{ coll.total }} collection thiếu mô tả · quét lúc {{ coll.scanned_at[:16]|replace('T',' ') }}</span>
+    </div>
+    {% if coll.missing %}
+    <div style="margin-top:8px">
+      {% for c in coll.missing %}
+      <div class="cv-row">
+        <span style="color:#f87171">✗</span>
+        <a href="https://sintech.vn/collections/{{ c.handle }}" target="_blank" rel="noopener" style="color:#60a5fa;flex:1">{{ c.title }}</a>
+        {% if c.job_status == 'draft' and c.gen_len > 0 %}<span class="cv-pill cv-draft">✅ Đã gen — chỉ cần Sync</span>
+        {% elif c.job_status == 'failed' %}<span class="cv-pill cv-failed">❌ Gen lỗi</span>
+        {% elif c.job_status == 'pending' %}<span class="cv-pill cv-pending">⏳ Chưa gen</span>
+        {% else %}<span class="cv-pill cv-none">➕ Chưa vào pipeline</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="cv-muted" style="margin-top:8px">👉 Bài "Đã gen" chỉ cần bấm Sync ở <a href="{{ url_for('collection_content_page') }}" style="color:#60a5fa">Collection Content</a>; bài lỗi/chưa gen thì gen lại ở đó.</div>
+    {% else %}<div class="cv-muted" style="margin-top:6px">🎉 Tất cả collection đều có mô tả.</div>{% endif %}
+  {% else %}
+    <div class="cv-muted">Chưa quét lần nào — bấm "🔄 Quét lại" để fetch mô tả live từ Haravan (~vài giây).</div>
+  {% endif %}
+</div>
+
+{# ───── Author / Schema ───── #}
+<div class="cv-sec">
+  <div class="cv-head">
+    <span style="font-size:20px">🎓</span>
+    <h2 class="cv-title">Tác giả &amp; Schema (E-E-A-T)</h2>
+    <span style="flex:1"></span>
+    <a class="btn btn-sm" href="{{ url_for('seo_eeat_page') }}">Mở audit E-E-A-T →</a>
+  </div>
+  {% set ap = (blog_jobs_author * 100 // blog_jobs_total) if blog_jobs_total else 0 %}
+  <div class="cv-row"><span class="{{ 'cv-pill cv-draft' if ap>=100 else 'cv-pill cv-pending' }}">{{ ap }}%</span>
+    <div>Hộp tác giả trên bài blog: <strong>{{ blog_jobs_author }}/{{ blog_jobs_total }}</strong> bài</div></div>
+  <div class="cv-row"><span class="{{ 'cv-pill cv-draft' if blog_faq>0 else 'cv-pill cv-failed' }}">{{ blog_faq }}/{{ blog_audited }}</span>
+    <div>FAQPage schema trên blog <span class="cv-muted">(gap đã biết)</span></div></div>
+</div>
+
+<script>
+async function cvScan(btn){
+  const old = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Đang quét Haravan...';
+  try {
+    const r = await fetch('{{ url_for("seo_coverage_scan_collections") }}', { method:'POST' });
+    const d = await r.json();
+    btn.disabled = false; btn.textContent = old;
+    if (!d.ok) { (window.toast||alert)('❌ ' + (d.error||'lỗi')); return; }
+    (window.toast||alert)(`✅ Quét xong: ${d.missing}/${d.total} collection thiếu mô tả`);
+    location.reload();
+  } catch(e){ btn.disabled = false; btn.textContent = old; (window.toast||alert)('❌ ' + e); }
+}
+</script>
+{% endblock %}

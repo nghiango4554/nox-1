@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Canva Connect · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span style="font-weight:600">🎨 Canva Connect</span>
+{% endblock %}
+
+{% block content %}
+
+<style>
+  .canva-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:18px 22px; margin-bottom:14px;
+  }
+  .canva-card.connected { border-left:4px solid #34d399 }
+  .canva-card.disconnected { border-left:4px solid #f87171 }
+  .canva-status-row { display:flex; align-items:center; gap:14px; flex-wrap:wrap }
+  .canva-status-pill { font-size:12px; padding:4px 12px; border-radius:14px; font-weight:600 }
+  .canva-pill-ok { background:rgba(52,211,153,0.18); color:#34d399 }
+  .canva-pill-no { background:rgba(239,68,68,0.18); color:#f87171 }
+  .canva-tpl-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-top:14px }
+  .canva-tpl-card {
+    background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px;
+    padding:10px; text-decoration:none; color:inherit;
+  }
+  .canva-tpl-card:hover { border-color:#7c3aed }
+  .canva-tpl-thumb {
+    width:100%; aspect-ratio:1.5; background:rgba(255,255,255,0.05);
+    border-radius:6px; object-fit:cover; margin-bottom:8px;
+  }
+  .canva-tpl-title { font-size:13px; font-weight:600; line-height:1.3 }
+  .canva-tpl-id { font-size:11px; color:var(--text-muted); font-family:Consolas, monospace; margin-top:4px; word-break:break-all }
+</style>
+
+<div class="canva-card {% if connected %}connected{% else %}disconnected{% endif %}">
+  <div class="canva-status-row">
+    {% if connected %}
+      <span class="canva-status-pill canva-pill-ok">✅ Đã kết nối</span>
+      {% if profile %}
+        <span><strong>{{ profile.display_name or profile.user_id }}</strong></span>
+        {% if profile.email %}<span class="muted">· {{ profile.email }}</span>{% endif %}
+      {% endif %}
+      <form method="post" action="{{ url_for('canva_disconnect') }}" style="margin-left:auto"
+            onsubmit="return confirm('Ngắt kết nối Canva? Token sẽ bị xóa, phải connect lại để dùng.');">
+        <button class="btn" type="submit" style="background:rgba(239,68,68,0.12);color:#f87171">🔌 Ngắt kết nối</button>
+      </form>
+    {% else %}
+      <span class="canva-status-pill canva-pill-no">❌ Chưa kết nối</span>
+      <span class="muted">Bấm Connect để authorize Canva và bắt đầu autofill template</span>
+      <a class="btn btn-primary" href="{{ url_for('canva_connect') }}" style="margin-left:auto">🎨 Connect với Canva</a>
+    {% endif %}
+  </div>
+  {% if err %}
+  <div style="margin-top:10px;padding:10px 12px;background:rgba(239,68,68,0.10);color:#fca5a5;border-radius:6px;font-size:12px">
+    ❌ Lỗi: {{ err }}
+  </div>
+  {% endif %}
+</div>
+
+{% if connected %}
+<div class="canva-card">
+  <h3 style="margin:0 0 6px;font-size:15px">📐 Brand Templates của em ({{ templates|length }})</h3>
+  <p class="muted" style="font-size:12px;margin:0">
+    Sau khi em design 1 template trong Canva với các field text/image,
+    nó sẽ hiện ở đây để anh viết code autofill (vd: thay tên SP + giá + ảnh).
+  </p>
+
+  {% if not templates %}
+  <div style="margin-top:14px;padding:14px;background:rgba(250,204,21,0.08);border-radius:8px;font-size:13px">
+    <strong>⚠️ Chưa có brand template nào.</strong><br>
+    Em vào Canva, tạo 1 design (vd: Facebook Post 1200x630), đặt các text + image cần thay,
+    rồi <strong>Save as Brand Template</strong> (gói Canva Team có quyền này).
+    Quay lại đây F5 sẽ thấy template hiện ra.
+  </div>
+  {% else %}
+  <div class="canva-tpl-grid">
+    {% for t in templates %}
+    <a class="canva-tpl-card" href="{{ t.view_url or '#' }}" target="_blank" rel="noopener">
+      {% if t.thumbnail and t.thumbnail.url %}
+      <img class="canva-tpl-thumb" src="{{ t.thumbnail.url }}" alt="{{ t.title or '' }}">
+      {% else %}
+      <div class="canva-tpl-thumb"></div>
+      {% endif %}
+      <div class="canva-tpl-title">{{ t.title or '(không tên)' }}</div>
+      <div class="canva-tpl-id">{{ t.id }}</div>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="canva-card">
+  <h3 style="margin:0 0 6px;font-size:15px">🛠 Bước tiếp theo</h3>
+  <ol style="font-size:13px;line-height:1.7;margin:0;padding-left:20px">
+    <li>Em design 1 brand template <strong>"FB Post SP Sintech"</strong> trong Canva (1200×630px) với:
+      <ul style="margin:4px 0;padding-left:20px">
+        <li>Text field: <code>product_name</code> (tên SP)</li>
+        <li>Text field: <code>price</code> (giá che vd "3tr9xx")</li>
+        <li>Text field: <code>spec_line</code> (1 dòng spec ngắn)</li>
+        <li>Image field: <code>product_image</code> (ảnh SP)</li>
+      </ul>
+    </li>
+    <li>Save as Brand Template → F5 trang này → copy <code>Template ID</code></li>
+    <li>Báo anh template ID → anh code page <strong>"🎨 Tạo ảnh FB"</strong> trong /posts/&lt;id&gt;</li>
+  </ol>
+</div>
+{% endif %}
+
+{% endblock %}

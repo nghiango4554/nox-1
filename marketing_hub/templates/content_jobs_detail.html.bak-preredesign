@@ -1,0 +1,569 @@
+{% extends "base.html" %}
+{% block title %}Job #{{ job.id }} · Content Jobs · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('content_jobs_list_page') }}" class="muted" style="font-weight:500">📝 Content Jobs</a>
+<span class="crumb"></span>
+<span style="font-weight:600">Job #{{ job.id }}</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('content_jobs_list_page') }}">← Quay lại list</a>
+{% endblock %}
+
+{% block content %}
+
+{% set ic, label, color = {
+  'pending':   ('⏳','Chờ AI','#94a3b8'),
+  'drafting':  ('🤖','Đang gen','#60a5fa'),
+  'draft':     ('📝','Draft','#facc15'),
+  'approved':  ('✅','Approved','#4ade80'),
+  'synced':    ('🚀','Synced','#a3a3a3'),
+  'failed':    ('❌','Lỗi','#f87171'),
+}.get(job.status, ('❓',job.status,'#94a3b8')) %}
+
+{# ───── HEADER PRODUCT INFO ───── #}
+<section class="card" style="margin-top:0">
+  <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center">
+    <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:8px;background:rgba(148,163,184,0.15);color:{{ color }};font-weight:600">
+      {{ ic }} {{ label }}
+    </span>
+    <strong style="font-size:15px">
+      <a href="{{ job.product_url }}" target="_blank" rel="noopener">{{ job.product_title or job.product_url }}</a>
+    </strong>
+    <span style="flex:1"></span>
+    {% if job.haravan_id %}
+    <span class="muted" style="font-size:12px">haravan_id: {{ job.haravan_id }}</span>
+    {% endif %}
+    {% if job.vendor %}<span class="muted" style="font-size:12px">| {{ job.vendor }}</span>{% endif %}
+    {% if job.product_type %}<span class="muted" style="font-size:12px">| {{ job.product_type }}</span>{% endif %}
+    {% if ai_stats and ai_stats.get('template_id') %}
+    <span style="padding:3px 10px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#ec4899);color:white;font-size:11px;font-weight:600;letter-spacing:0.05em" title="Template cấu trúc bài (round-robin 4 templates × 10 bài)">📐 Template {{ ai_stats.template_id }}</span>
+    {% endif %}
+  </div>
+  <div class="muted" style="margin-top:6px;font-size:12px">
+    URL: <a href="{{ job.product_url }}" target="_blank" rel="noopener">{{ job.product_url }}</a>
+    · WC hiện tại: <strong>{{ job.current_word_count or 0 }}</strong>
+    · Lý do: <strong>{{ job.reason or '—' }}</strong>
+    · Cập nhật: {{ (job.updated_at or '')[:16] }}
+    {% if job.ai_generated_at %} · AI gen lúc: {{ job.ai_generated_at[:16] }}{% endif %}
+    {% if job.approved_at %} · Duyệt: {{ job.approved_at[:16] }}{% endif %}
+    {% if job.synced_at %} · Synced: {{ job.synced_at[:16] }}{% endif %}
+  </div>
+  {% if job.error %}
+  <div style="margin-top:8px;padding:8px;background:rgba(239,68,68,0.1);border-radius:6px;color:#f87171;font-size:13px">
+    ⚠️ {{ job.error }}
+  </div>
+  {% endif %}
+  {% if spec_conflicts %}
+  <div style="margin-top:10px;padding:10px 12px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);border-radius:8px">
+    <div style="color:#f59e0b;font-weight:700;font-size:13px;margin-bottom:6px">
+      ⚠️ Thông số LỆCH giữa mô tả gốc và web — cần verify trước khi sync ({{ spec_conflicts|length }})
+    </div>
+    <table style="border-collapse:collapse;font-size:12.5px;width:100%;max-width:520px">
+      <tr style="color:#94a3b8;text-align:left">
+        <th style="padding:3px 8px">Thông số</th><th style="padding:3px 8px">Mô tả gốc</th><th style="padding:3px 8px">Web tra cứu</th>
+      </tr>
+      {% for c in spec_conflicts %}
+      <tr style="border-top:1px solid rgba(148,163,184,0.2)">
+        <td style="padding:3px 8px;font-weight:600">{{ c.field }}</td>
+        <td style="padding:3px 8px;color:#34d399">{{ c.body }}</td>
+        <td style="padding:3px 8px;color:#f87171">{{ c.web }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <div class="muted" style="font-size:11px;margin-top:6px">AI đã gen theo mô tả GỐC. Nếu web đúng hơn → chỉnh body/title/meta rồi sync lại.</div>
+  </div>
+  {% endif %}
+</section>
+
+{# ───── ACTIONS BAR ───── #}
+<section class="card" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+  {% if job.status in ('pending', 'failed', 'draft') %}
+  <form method="post" action="{{ url_for('content_jobs_generate', job_id=job.id) }}" style="display:inline">
+    <button class="btn btn-primary" type="submit"
+            onclick="return confirm('Đẩy job vào queue + start worker (chạy ngầm ~2-3 phút/bài)?')">
+      📥 {{ 'Gen lại' if job.status == 'draft' else 'Đẩy vào queue gen AI' }}
+    </button>
+  </form>
+  {% endif %}
+
+  {% if job.ai_body_html or job.edited_body_html %}
+  <form method="post" action="{{ url_for('content_jobs_spec_block', job_id=job.id) }}" style="display:inline">
+    <button class="btn" type="submit" style="background:#0ea5e9;color:white"
+            onclick="return confirm('Cào thông số web + tạo/làm mới BẢNG thông số kỹ thuật (khối trích dẫn) cuối bài?\n~30-60s. Bảng cũ (nếu có) sẽ được thay.')">
+      📊 Tạo bảng thông số KT
+    </button>
+  </form>
+  {% endif %}
+
+  {% if job.status == 'draft' %}
+  <form method="post" action="{{ url_for('content_jobs_approve', job_id=job.id) }}" style="display:inline">
+    <button class="btn" style="background:#22c55e;color:white" type="submit"
+            onclick="return confirm('Duyệt bài này? Sau đó về list để bấm SYNC.')">
+      ✅ Duyệt
+    </button>
+  </form>
+  {% endif %}
+
+  {% if job.status == 'approved' %}
+  <form method="post" action="{{ url_for('content_jobs_unapprove', job_id=job.id) }}" style="display:inline">
+    <button class="btn" type="submit">↩️ Bỏ duyệt (chỉnh tiếp)</button>
+  </form>
+  {% endif %}
+
+  <span style="flex:1"></span>
+
+  <form method="post" action="{{ url_for('content_jobs_delete', job_id=job.id) }}" style="display:inline"
+        onsubmit="return confirm('Xoá hẳn job này?')">
+    <button class="btn" style="color:#f87171" type="submit">🗑️ Xoá job</button>
+  </form>
+</section>
+
+{% if job.status in ('pending',) and not job.ai_body_html %}
+<section class="card" style="margin-top:14px;text-align:center">
+  <p class="muted" style="margin:0">Chưa có content AI. Bấm <strong>🤖 Sinh content AI</strong> ở trên để bắt đầu.</p>
+</section>
+{% endif %}
+
+{# ───── PHẦN PHÂN TÍCH (read-only) ───── #}
+{% if job.ai_analysis_md %}
+<section class="card" style="margin-top:14px">
+  <h3 style="margin-top:0">🔍 Phân tích (AI gen — read-only)</h3>
+  <div style="background:rgba(96,165,250,0.05);padding:12px 16px;border-radius:8px;font-size:13px;white-space:pre-wrap;line-height:1.6">{{ job.ai_analysis_md }}</div>
+</section>
+{% endif %}
+
+{# ───── OUTLINE (read-only) ───── #}
+{% if job.ai_outline %}
+<section class="card" style="margin-top:14px">
+  <h3 style="margin-top:0">📑 Outline H2/H3</h3>
+  <div style="font-size:13px;white-space:pre-wrap;line-height:1.6">{{ job.ai_outline }}</div>
+</section>
+{% endif %}
+
+{% if job.ai_body_html or titles or metas %}
+<form method="post" action="{{ url_for('content_jobs_save', job_id=job.id) }}" id="save-form">
+
+  {# ───── 3 KHUNG TITLE — RADIO + EDITABLE ───── #}
+  {% if titles %}
+  <section class="card" style="margin-top:14px">
+    <h3 style="margin-top:0">🏷️ Title — Em chọn 1 (radio) + có thể chỉnh</h3>
+    {% for t in titles %}
+    {% set idx = loop.index0 %}
+    {% set chosen = (job.selected_title_idx or 0) == idx %}
+    {# Ô chosen dùng edited_title (giá trị em đã chỉnh + lưu), các ô khác dùng AI gốc #}
+    {% set display_value = (job.edited_title if chosen and job.edited_title else t) %}
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;padding:10px;border-radius:8px;
+                {% if chosen %}background:rgba(74,222,128,0.10);border:1px solid rgba(74,222,128,0.3){% else %}background:rgba(148,163,184,0.06){% endif %}">
+      <label style="display:flex;align-items:center;gap:6px;min-width:80px">
+        <input type="radio" name="selected_title_idx" value="{{ idx }}" {% if chosen %}checked{% endif %}
+               onchange="syncTitle(this, {{ idx }})">
+        <strong>#{{ idx + 1 }}</strong>
+      </label>
+      <input type="text" class="title-input" data-idx="{{ idx }}" value="{{ display_value }}"
+             style="flex:1;padding:6px 10px;font-size:13px"
+             oninput="updateTitleCounter(this); syncTitleIfChosen({{ idx }}, this.value)">
+      <span class="muted title-counter" data-idx="{{ idx }}"
+            style="font-size:11px;width:60px;text-align:right;{% if display_value|length < 45 or display_value|length > 61 %}color:#facc15;font-weight:600;{% endif %}">{{ display_value|length }}c</span>
+    </div>
+    {% endfor %}
+    <input type="hidden" id="edited_title_hidden" name="edited_title"
+           value="{{ job.edited_title or (titles[0] if titles else '') }}">
+  </section>
+  {% endif %}
+
+  {# ───── 3 KHUNG META DESC — RADIO + EDITABLE ───── #}
+  {% if metas %}
+  <section class="card" style="margin-top:14px">
+    <h3 style="margin-top:0">📋 Meta description — Em chọn 1 + có thể chỉnh</h3>
+    {% for m in metas %}
+    {% set idx = loop.index0 %}
+    {% set chosen = (job.selected_meta_idx or 0) == idx %}
+    {# Ô chosen dùng edited_meta (giá trị em đã chỉnh + lưu), các ô khác dùng AI gốc #}
+    {% set display_value = (job.edited_meta if chosen and job.edited_meta else m) %}
+    <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;padding:10px;border-radius:8px;
+                {% if chosen %}background:rgba(74,222,128,0.10);border:1px solid rgba(74,222,128,0.3){% else %}background:rgba(148,163,184,0.06){% endif %}">
+      <label style="display:flex;align-items:center;gap:6px;min-width:80px;padding-top:4px">
+        <input type="radio" name="selected_meta_idx" value="{{ idx }}" {% if chosen %}checked{% endif %}
+               onchange="syncMeta(this, {{ idx }})">
+        <strong>#{{ idx + 1 }}</strong>
+      </label>
+      <textarea class="meta-input" data-idx="{{ idx }}" rows="2"
+                style="flex:1;padding:6px 10px;font-size:13px;resize:vertical"
+                oninput="updateMetaCounter(this); syncMetaIfChosen({{ idx }}, this.value)">{{ display_value }}</textarea>
+      <span class="muted meta-counter" data-idx="{{ idx }}"
+            style="font-size:11px;width:60px;text-align:right;padding-top:6px;{% if display_value|length < 140 or display_value|length > 160 %}color:#facc15;font-weight:600;{% endif %}">{{ display_value|length }}c</span>
+    </div>
+    {% endfor %}
+    <input type="hidden" id="edited_meta_hidden" name="edited_meta"
+           value="{{ job.edited_meta or (metas[0] if metas else '') }}">
+  </section>
+  {% endif %}
+
+  {# ───── ẢNH ĐÃ UPLOAD (600x388 white bg, sẵn sàng chèn vào body) ───── #}
+  {% if ai_stats and ai_stats.get('images_uploaded') %}
+  <section class="card" style="margin-top:14px">
+    <h3 style="margin-top:0">🖼️ Ảnh đã process & upload Haravan ({{ ai_stats.images_uploaded|length }})</h3>
+    <p class="muted" style="margin:0 0 10px 0;font-size:12px">
+      Ảnh SP gốc đã resize 600×388 với background trắng — SP nguyên vẹn, không cắt.
+      Đã chèn tự động vào body bài viết (sau intro + sau section "Vì sao Sintech").
+    </p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      {% for img in ai_stats.images_uploaded %}
+      <div style="border:1px solid #444;border-radius:8px;overflow:hidden;background:#fff">
+        <img src="{{ img.url_cdn }}" alt="{{ img.alt }}" style="width:300px;height:auto;display:block">
+        <div class="muted" style="padding:6px 10px;font-size:11px;background:#1a1a1a;color:#aaa">
+          {{ img.alt }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {# ───── KEYWORD RESEARCH (Google Suggest data) ───── #}
+  {% if ai_stats and ai_stats.get('keyword_research') %}
+  {% set kr = ai_stats.keyword_research %}
+  <section class="card" style="margin-top:14px">
+    <h3 style="margin-top:0">🔍 Keyword research (Google Suggest VN)</h3>
+    <div class="muted" style="font-size:12px;margin-bottom:10px">
+      Pull <strong>{{ kr.raw_count or 0 }}</strong> suggestions thực từ Google · Core keywords: {{ kr.core_keywords|join(' / ') }}
+    </div>
+    {% if kr.intent_summary %}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      {% for intent, count in kr.intent_summary.items() %}
+      <span style="padding:3px 10px;border-radius:8px;background:rgba(124,58,237,0.08);color:#7c3aed;font-size:11px;font-weight:600">
+        {{ intent }}: {{ count }}
+      </span>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if kr.top_questions %}
+    <div style="font-size:12px;color:#475569;margin-bottom:4px;font-weight:600">❓ Top câu hỏi khách thường tìm:</div>
+    <ul style="margin:0;padding-left:20px;font-size:13px;color:#1c1917">
+      {% for q in kr.top_questions %}
+      <li>{{ q }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {# ───── INTERNAL LINKS GỢI Ý ───── #}
+  {% if internal_link_list %}
+  <section class="card" style="margin-top:14px">
+    <h3 style="margin-top:0">🔗 Internal links đã chèn vào content ({{ internal_link_list|length }})</h3>
+    <ul style="margin:0;padding-left:20px;font-size:13px">
+      {% for l in internal_link_list %}
+      <li style="margin-bottom:4px">
+        <a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.anchor }}</a>
+        <span class="muted" style="font-size:11px">— {{ l.source }} (score {{ l.score }})</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {# ───── KHUNG TO: CONTENT EDITOR (PREVIEW WYSIWYG mặc định, edit raw HTML khi cần) ───── #}
+  {% if job.ai_body_html %}
+  <section class="card" style="margin-top:14px">
+    <h3 style="margin-top:0">📝 Content — Em chỉnh trực tiếp trong preview (WYSIWYG)</h3>
+    <div style="display:flex;gap:8px;margin-bottom:10px;font-size:13px;align-items:center;flex-wrap:wrap">
+      <button type="button" class="btn btn-primary" id="btn-preview" onclick="showPreview()">👁️ Preview (WYSIWYG)</button>
+      <button type="button" class="btn" id="btn-edit" onclick="showEditRaw()">✍️ Edit raw HTML</button>
+      <span style="flex:1"></span>
+      <span id="content-stats" class="muted" style="font-size:13px;font-weight:600;padding:4px 10px;background:rgba(124,58,237,0.1);border-radius:6px;color:#7c3aed">
+        📊 — từ · — ký tự
+      </span>
+    </div>
+
+    {# ───── Format toolbar (đồng bộ pattern /collection-content & /blog-content) ───── #}
+    <div id="cj-toolbar" style="display:flex;gap:4px;padding:6px 8px;flex-wrap:wrap;align-items:center;border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0;background:rgba(255,255,255,0.03)">
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('bold')" title="Bold (Ctrl+B)"><b>B</b></button>
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('italic')" title="Italic"><i>I</i></button>
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('underline')" title="Underline"><u>U</u></button>
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('strikeThrough')" title="Strike"><s>S</s></button>
+      <span class="cj-tb-sep"></span>
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('formatBlock', 'H2')" title="Heading 2">H2</button>
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('formatBlock', 'H3')" title="Heading 3">H3</button>
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('formatBlock', 'P')" title="Paragraph">¶</button>
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('formatBlock', 'BLOCKQUOTE')" title="Khối trích dẫn — bọc vùng đang chọn vào blockquote (theme Sintech render thành BẢNG thông số)">❝ Trích dẫn</button>
+      <span class="cj-tb-sep"></span>
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('insertUnorderedList')" title="Bullet list">•—</button>
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('insertOrderedList')" title="Numbered list">1.</button>
+      <span class="cj-tb-sep"></span>
+      <button type="button" class="cj-tb-btn" onclick="cjAlign('left')" title="Căn trái">⬅</button>
+      <button type="button" class="cj-tb-btn" onclick="cjAlign('center')" title="Căn giữa (áp cho cell bảng nếu đang trong table)">⬌</button>
+      <button type="button" class="cj-tb-btn" onclick="cjAlign('right')" title="Căn phải">➡</button>
+      <span class="cj-tb-sep"></span>
+      <button type="button" class="cj-tb-btn" onclick="cjInsertLink()" title="Chèn link">🔗</button>
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('unlink')" title="Bỏ link">✂️🔗</button>
+      <input type="color" id="cj-color-picker" onchange="cjCmd('foreColor', this.value)" title="Màu chữ" style="width:24px;height:24px;padding:0;border:none;cursor:pointer;background:transparent">
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('removeFormat')" title="Xóa định dạng">🧹</button>
+      <span class="cj-tb-sep"></span>
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('undo')" title="Undo">↶</button>
+      <button type="button" class="cj-tb-btn" onclick="cjCmd('redo')" title="Redo">↷</button>
+      <span class="cj-tb-sep"></span>
+      <button type="button" class="cj-tb-btn" onclick="cjApplyFullFormat(this)" title="Áp toàn bộ định dạng Sintech: font Arial, H2/H3 đậm, link đỏ, viền bảng" style="background:linear-gradient(135deg,#7c3aed,#e74c3c);color:white;font-weight:700;padding:5px 12px">🎨 Format full</button>
+    </div>
+    <style>
+      .cj-tb-btn { background:transparent;border:1px solid transparent;color:inherit;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;min-width:28px;height:26px;display:inline-flex;align-items:center;justify-content:center; }
+      .cj-tb-btn:hover { background:rgba(0,0,0,0.06);border-color:var(--border); }
+      .cj-tb-sep { width:1px;height:18px;background:var(--border);margin:0 4px; }
+      /* Khối trích dẫn (blockquote) — hiện rõ trong editor như bảng spec để vợ phân biệt với text thường.
+         Nhãn ::before chỉ là gợi ý trong editor, KHÔNG lưu vào body_html / KHÔNG lên web. */
+      #view-preview blockquote { position:relative; border:1px solid #cbd5e1; border-left:4px solid #e74c3c; background:#f8fafc; border-radius:8px; padding:30px 18px 14px; margin:18px 0; }
+      #view-preview blockquote::before { content:"📊 KHỐI TRÍCH DẪN → web Sintech render thành BẢNG thông số"; position:absolute; top:0; left:0; right:0; background:#e74c3c; color:#fff; font-size:10px; font-weight:700; letter-spacing:.03em; padding:3px 10px; border-radius:7px 7px 0 0; }
+      #view-preview blockquote h3 { font-size:13pt; font-weight:700; color:#0f172a; margin:14px 0 6px; border-bottom:1px solid #e2e8f0; padding-bottom:4px; }
+      #view-preview blockquote h3:first-of-type { margin-top:0; }
+      #view-preview blockquote ul { margin:6px 0 10px; padding-left:20px; }
+      #view-preview blockquote li { margin:3px 0; }
+      #view-preview blockquote li strong { color:#0f172a; }
+    </style>
+
+    <div id="view-preview" contenteditable="true" spellcheck="false" lang="vi"
+         style="display:block;border:1px solid #d1d5db;border-top:none;border-radius:0 0 8px 8px;padding:24px;background:#FFFFFF;color:#000000;min-height:400px;max-height:700px;overflow:auto;font-family:Arial,sans-serif;font-size:11pt;line-height:1.38;outline:none"
+         oninput="syncPreviewToTextarea(); updateContentStats()">{{ (job.edited_body_html or job.ai_body_html)|safe }}</div>
+
+    <div id="view-edit" style="display:none">
+      <textarea name="edited_body_html" id="body-textarea" rows="30"
+                style="width:100%;font-family:'Consolas',monospace;font-size:12px;padding:10px;line-height:1.5"
+                oninput="updateContentStats()">{{ job.edited_body_html or job.ai_body_html }}</textarea>
+    </div>
+
+    <p class="muted" style="margin:8px 0 0 0;font-size:11px">
+      💡 Tip: Click chuột vào preview để chỉnh trực tiếp. Bold/link sẽ giữ nguyên format. Nếu cần sửa HTML thô → bấm "Edit raw HTML".
+    </p>
+  </section>
+  {% endif %}
+
+  {# ───── MONEY PRODUCT FLAG + SAVE BUTTON ───── #}
+  <section class="card" style="margin-top:14px;text-align:center">
+    <label style="display:inline-block;margin-right:18px;font-size:13px;cursor:pointer">
+      <input type="checkbox" name="is_money_product" value="1"
+             {% if job.is_money_product %}checked{% endif %}
+             style="vertical-align:middle;margin-right:6px">
+      💰 <strong>Money product</strong> — bài AI gen sẽ dùng format SPEC-FIRST (mỗi spec/feature = 1 H3)
+    </label>
+    <br>
+    <button class="btn btn-primary" type="submit" style="padding:8px 24px;font-size:14px;margin-top:10px">
+      💾 Lưu chỉnh sửa
+    </button>
+    <span class="muted" style="margin-left:12px;font-size:12px">
+      Lưu xong → bấm <strong>✅ Duyệt</strong> ở header → quay về list bấm 🚀 SYNC.
+    </span>
+  </section>
+
+</form>
+
+<script>
+  // ─── Sync title/meta vào hidden field (source of truth duy nhất submit) ───
+  function _checkedRadioVal(name) {
+    const r = document.querySelector('input[name="' + name + '"]:checked');
+    return r ? parseInt(r.value) : null;
+  }
+
+  // Khi user gõ vào ô title — sync hidden NẾU ô này đang là chosen
+  function syncTitleIfChosen(idx, value) {
+    if (_checkedRadioVal('selected_title_idx') === idx) {
+      document.getElementById('edited_title_hidden').value = value;
+    }
+  }
+  function syncMetaIfChosen(idx, value) {
+    if (_checkedRadioVal('selected_meta_idx') === idx) {
+      document.getElementById('edited_meta_hidden').value = value;
+    }
+  }
+
+  // Khi user đổi radio — lấy value của ô tương ứng → update hidden
+  function syncTitle(radio, idx) {
+    const input = document.querySelector('.title-input[data-idx="' + idx + '"]');
+    document.getElementById('edited_title_hidden').value = input ? input.value : '';
+  }
+  function syncMeta(radio, idx) {
+    const input = document.querySelector('.meta-input[data-idx="' + idx + '"]');
+    document.getElementById('edited_meta_hidden').value = input ? input.value : '';
+  }
+
+  // Init: khi page load, đảm bảo hidden có value của ô đang chosen (defensive)
+  document.addEventListener('DOMContentLoaded', function() {
+    const titleIdx = _checkedRadioVal('selected_title_idx');
+    if (titleIdx !== null) {
+      const input = document.querySelector('.title-input[data-idx="' + titleIdx + '"]');
+      if (input) document.getElementById('edited_title_hidden').value = input.value;
+    }
+    const metaIdx = _checkedRadioVal('selected_meta_idx');
+    if (metaIdx !== null) {
+      const input = document.querySelector('.meta-input[data-idx="' + metaIdx + '"]');
+      if (input) document.getElementById('edited_meta_hidden').value = input.value;
+    }
+  });
+  function updateTitleCounter(input) {
+    const len = input.value.length;
+    const counter = document.querySelector('.title-counter[data-idx="' + input.dataset.idx + '"]');
+    if (counter) {
+      counter.textContent = len + 'c';
+      // Yellow nếu ngoài 45-61, mặc định grey
+      if (len < 45 || len > 61) {
+        counter.style.color = '#facc15';
+        counter.style.fontWeight = '600';
+      } else {
+        counter.style.color = '';
+        counter.style.fontWeight = '';
+      }
+    }
+  }
+  function updateMetaCounter(textarea) {
+    const len = textarea.value.length;
+    const counter = document.querySelector('.meta-counter[data-idx="' + textarea.dataset.idx + '"]');
+    if (counter) {
+      counter.textContent = len + 'c';
+      if (len < 140 || len > 160) {
+        counter.style.color = '#facc15';
+        counter.style.fontWeight = '600';
+      } else {
+        counter.style.color = '';
+        counter.style.fontWeight = '';
+      }
+    }
+  }
+  // ─── WYSIWYG toolbar helpers (đồng bộ pattern /collection-content & /blog-content) ───
+  function cjCmd(command, arg) {
+    document.getElementById('view-preview').focus();
+    document.execCommand(command, false, arg || null);
+    syncPreviewToTextarea();
+    updateContentStats();
+  }
+  function cjInsertLink() {
+    const url = prompt('Nhập URL (bao gồm https://):', 'https://sintech.vn');
+    if (url) cjCmd('createLink', url);
+  }
+
+  // ─── Auto-format Sintech (port từ /collection-content) ───
+  function cjStripPasteWrapper(editor) {
+    const WRAPPER_ATTRS = ['data-turn-id-container','data-is-intersecting','data-writing-block','data-message-id','data-message-author-role','data-testid'];
+    const WRAPPER_CLASS = ['R6Vx5W_','_threadScrollVars','text-token-','has-data-','scroll-mb-','focus:outline','pointer-events','relative w-full overflow-visible','thread-','markdown','prose','dark:','empty:','wrap-break-word','flex w-full','flex max-w-full','flex-col','gap-1','gap-4','markdown-new-styling'];
+    const isWrapper = el => { for (const a of WRAPPER_ATTRS) if (el.hasAttribute(a)) return true; const cls = el.className || ''; return WRAPPER_CLASS.some(p => (typeof cls === 'string') && cls.includes(p)); };
+    const unwrap = el => { const p = el.parentNode; while (el.firstChild) p.insertBefore(el.firstChild, el); p.removeChild(el); };
+    editor.querySelectorAll('section').forEach(unwrap);
+    for (let i = 0; i < 15; i++) { let changed = false; editor.querySelectorAll('div').forEach(el => { if (isWrapper(el)) { unwrap(el); changed = true; } }); if (!changed) break; }
+    const STRIP_ATTRS = ['data-turn-id-container','data-is-intersecting','data-start','data-end','data-is-last-node','data-is-only-node','data-writing-block','data-message-id','data-message-author-role','data-testid','data-node-index'];
+    editor.querySelectorAll('*').forEach(el => STRIP_ATTRS.forEach(a => el.removeAttribute(a)));
+    editor.querySelectorAll('div.contents').forEach(d => { if (!d.textContent.trim()) d.remove(); });
+  }
+
+  function cjApplyFullFormat(btn) {
+    const editor = document.getElementById('view-preview');
+    if (!editor) return;
+    cjStripPasteWrapper(editor);
+    editor.style.fontFamily = 'Arial, sans-serif'; editor.style.fontSize = '14px';
+    editor.style.fontWeight = '500'; editor.style.lineHeight = '1.65'; editor.style.color = '#000000';
+    const H2 = {fontSize:'17pt',fontWeight:'700',color:'#000000',margin:'24px 0 5px',lineHeight:'1.38',fontFamily:'Arial, sans-serif',fontStyle:'normal',textDecoration:'none'};
+    const H3 = {fontSize:'13pt',fontWeight:'700',color:'#000000',margin:'18px 0 4px',lineHeight:'1.38',fontFamily:'Arial, sans-serif',fontStyle:'normal',textDecoration:'none'};
+    const P  = {fontFamily:'Arial, sans-serif',fontSize:'12pt',fontWeight:'500',lineHeight:'1.65',margin:'10px 0',color:'#000000'};
+    let nH2=0,nH3=0,nLinks=0,nTables=0;
+    editor.querySelectorAll('h2').forEach(h => { Object.assign(h.style,H2); h.querySelectorAll('*').forEach(c=>{Object.assign(c.style,H2);c.style.letterSpacing='';}); nH2++; });
+    editor.querySelectorAll('h3').forEach(h => { Object.assign(h.style,H3); h.querySelectorAll('*').forEach(c=>{Object.assign(c.style,H3);c.style.letterSpacing='';}); nH3++; });
+    editor.querySelectorAll('p').forEach(p => { Object.assign(p.style,P); p.querySelectorAll('span, em, u').forEach(c=>{ if(!c.closest('a')){c.style.fontFamily='Arial, sans-serif';c.style.fontSize='12pt';c.style.fontWeight='500';c.style.lineHeight='1.65';}}); });
+    editor.querySelectorAll('a').forEach(a => { a.style.color='#e74c3c'; a.style.textDecoration='underline'; a.style.fontWeight='700'; a.querySelectorAll('*').forEach(c=>{c.style.color='#e74c3c';c.style.textDecoration='underline';c.style.fontWeight='700';}); if(!/<strong/i.test(a.innerHTML)){a.innerHTML='<strong style="color:#e74c3c;text-decoration:underline;font-weight:700">'+a.innerHTML+'</strong>';} nLinks++; });
+    editor.querySelectorAll('table').forEach(t => { t.style.borderCollapse='collapse'; t.style.width='100%'; t.style.margin='16px 0'; t.style.fontSize='11pt'; t.style.fontFamily='Arial, sans-serif'; t.style.color='#000000'; t.style.border='2px solid #555555'; t.setAttribute('border','1'); t.removeAttribute('cellspacing'); t.removeAttribute('cellpadding'); nTables++; });
+    editor.querySelectorAll('td, th').forEach(c => { c.style.border='1px solid #999999'; c.style.padding='9px 12px'; c.style.verticalAlign='top'; c.style.color='#000000'; c.style.fontFamily='Arial, sans-serif'; c.style.lineHeight='1.55'; });
+    editor.querySelectorAll('th').forEach(th => { th.style.fontWeight='700'; th.style.background='#eef0f2'; th.style.color='#111111'; th.style.textAlign='left'; th.style.borderBottom='2px solid #555555'; });
+    editor.querySelectorAll('table').forEach(t => { if(t.rows.length) Array.from(t.rows[t.rows.length-1].cells).forEach(c=>{c.style.borderBottom='2px solid #555555';}); });
+    editor.querySelectorAll('ul, ol').forEach(l => { l.style.margin='10px 0'; l.style.paddingLeft='28px'; l.style.fontFamily='Arial, sans-serif'; l.style.fontSize='12pt'; l.style.fontWeight='500'; l.style.lineHeight='1.65'; });
+    editor.querySelectorAll('li').forEach(li => { li.style.margin='6px 0'; li.style.color='#000000'; li.style.fontSize='12pt'; li.style.fontWeight='500'; li.style.fontFamily='Arial, sans-serif'; li.style.lineHeight='1.65'; });
+    syncPreviewToTextarea(); updateContentStats();
+    if (btn) { const o=btn.textContent; btn.textContent=`✓ ${nH2}H2 ${nH3}H3 ${nLinks}link ${nTables}table`; setTimeout(()=>{btn.textContent=o;},1400); }
+  }
+  function cjAlign(dir) {
+    const editor = document.getElementById('view-preview');
+    editor.focus();
+    const sel = window.getSelection();
+    let cell = null;
+    if (sel && sel.rangeCount > 0) {
+      let node = sel.getRangeAt(0).commonAncestorContainer;
+      if (node.nodeType === 3) node = node.parentNode;
+      cell = node.closest && node.closest('td, th');
+    }
+    if (cell) {
+      cell.style.textAlign = dir;
+      syncPreviewToTextarea();
+      return;
+    }
+    const map = {left: 'justifyLeft', center: 'justifyCenter', right: 'justifyRight'};
+    document.execCommand(map[dir], false, null);
+    syncPreviewToTextarea();
+  }
+
+  // ─── Content editor (WYSIWYG default + edit raw HTML khi cần) ───
+  function showPreview() {
+    // Load HTML từ textarea (nếu user vừa edit raw) → render vào contenteditable
+    const html = document.getElementById('body-textarea').value;
+    document.getElementById('view-preview').innerHTML = html;
+    document.getElementById('view-edit').style.display = 'none';
+    document.getElementById('view-preview').style.display = 'block';
+    document.getElementById('btn-preview').classList.add('btn-primary');
+    document.getElementById('btn-edit').classList.remove('btn-primary');
+    const tb = document.getElementById('cj-toolbar');
+    if (tb) tb.style.display = 'flex';
+    updateContentStats();
+  }
+  function showEditRaw() {
+    // Sync HTML từ contenteditable → textarea trước khi switch
+    syncPreviewToTextarea();
+    document.getElementById('view-edit').style.display = 'block';
+    document.getElementById('view-preview').style.display = 'none';
+    document.getElementById('btn-edit').classList.add('btn-primary');
+    document.getElementById('btn-preview').classList.remove('btn-primary');
+    const tb = document.getElementById('cj-toolbar');
+    if (tb) tb.style.display = 'none';
+    updateContentStats();
+  }
+  function syncPreviewToTextarea() {
+    // contenteditable.innerHTML → textarea (sẽ submit)
+    const preview = document.getElementById('view-preview');
+    const textarea = document.getElementById('body-textarea');
+    if (preview && textarea) {
+      textarea.value = preview.innerHTML;
+    }
+  }
+  function updateContentStats() {
+    // Đếm từ + ký tự từ TEXT (không phải HTML tag)
+    const preview = document.getElementById('view-preview');
+    const textarea = document.getElementById('body-textarea');
+    let text = '';
+    // Ưu tiên đọc innerText từ contenteditable nếu đang hiện
+    if (preview && preview.style.display !== 'none') {
+      text = preview.innerText || preview.textContent || '';
+    } else if (textarea) {
+      // Strip HTML tags từ textarea
+      const tmp = document.createElement('div');
+      tmp.innerHTML = textarea.value;
+      text = tmp.innerText || tmp.textContent || '';
+    }
+    const wordCount = (text.trim().match(/\S+/g) || []).length;
+    const charCount = text.length;
+    const charCountNoSpace = text.replace(/\s/g, '').length;
+    const stats = document.getElementById('content-stats');
+    if (stats) {
+      stats.textContent = `📊 ${wordCount.toLocaleString('vi-VN')} từ · ${charCount.toLocaleString('vi-VN')} ký tự (${charCountNoSpace.toLocaleString('vi-VN')} không tính dấu cách)`;
+    }
+  }
+
+  // Init khi load — count stats lần đầu + sync preview→textarea (defensive)
+  document.addEventListener('DOMContentLoaded', function() {
+    syncPreviewToTextarea();
+    updateContentStats();
+    // Final sync trước khi submit form — đảm bảo textarea luôn có value mới nhất
+    const saveForm = document.getElementById('save-form');
+    if (saveForm) {
+      saveForm.addEventListener('submit', function() {
+        syncPreviewToTextarea();
+      });
+    }
+  });
+</script>
+{% endif %}
+
+{% endblock %}

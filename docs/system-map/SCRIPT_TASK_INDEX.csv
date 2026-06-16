@@ -1,0 +1,28 @@
+﻿Script,Type,Purpose,Trigger,Task Scheduler name,Key actions,Side effects,Status,Risk,Notes,Confidence
+backup_db.py,py,Daily DB backup 30d retention,Task Scheduler daily,Marketing Hub DB Backup (run_backup.bat),"zip posts.db→data/backups/, prune>30d","write zip, delete old",production,low,,HIGH
+backup_secrets.py,py,Backup .secrets+.env zip,Task Scheduler daily,Marketing Hub Secrets Backup (run_backup_secrets.bat),"zip creds→data/backups/secrets_*.zip,30d","write zip (LIVE tokens),delete old",production,HIGH: unencrypted secrets zip,do NOT sync to cloud,HIGH
+audit_schema_all.py,py,Bulk JSON-LD schema audit 200 URL,Task Scheduler weekly (vbs),Marketing Hub Weekly Schema Audit (start_audit_schema_hidden.vbs),"ThreadPool scan,upsert seo_pages+schema_history",write DB,production,low,7d re-audit window,HIGH
+weekly_cwv_snapshot.py,py,Weekly CWV→history snapshot,Task Scheduler weekly (vbs),Marketing Hub Weekly CWV Diff (start_weekly_cwv_hidden.vbs),capture seo_cwv→seo_cwv_history,write DB,production,low,idempotent/week,HIGH
+weekly_cwv_diff.py,py,Diff CWV vs prior week,Task Scheduler weekly (chained),(run_weekly_cwv.bat chain),"compare history rows,flag regression",read DB,production,low,report only,HIGH
+weekly_empty_desc_scan.py,py,Scan products missing desc,Task Scheduler weekly,Marketing Hub Weekly EmptyDesc Scan (weekly_empty_desc_scan.bat),run_empty_desc_scan threshold 800,write DB,production,low,standalone,HIGH
+cwv_lcp_analysis.py,py,Enrich top LCP URLs (P0A-C),Manual,-,"PSI enrich,record seo_cwv_lcp(_runs)","write DB,PSI calls",production,low,new (P0C),HIGH
+build_seo_tiers.py,py,Gen seo_tiers.json from Sheet,Manual one-time,-,read Sheet mindmap→seo_tiers.json,write json,production,low,hardcoded Sheet ID,MEDIUM
+sync_collection_products.py,py,Sync collections→products,Manual,-,"read seo_tiers,Haravan list,replace collection_products","write DB,Haravan read",production,low,0.3s delay,HIGH
+cleanup_404_products.py,py,Mark 404 products archived,Manual/Sched,-,"Haravan 404 check,mark status",write DB,partial,low,NEEDS_REVIEW table name,MEDIUM
+cleanup_asset_storage.py,py,Remove orphaned asset_storage imgs,Manual,-,"find unused CDN,DELETE Haravan imgs",write Haravan (DELETE),partial,MED: destructive Haravan write,review before run,MEDIUM
+refresh_google_token.py,py,Re-auth Google OAuth (Sheets),Manual one-time,-,local OAuth :8765→.secrets/google_token.json,write token,production,MED: writes creds,user browser consent,HIGH
+verify_environment.py,py,Pre-run env check,Manual,-,"validate py,packages,secrets,tokens",read only,production,low,info only,HIGH
+generate_current_state.py,py,Snapshot DB state→JSON,Manual,-,dump posts.db→json,write json,partial,low,informational,MEDIUM
+stop_title_meta_gen.ps1,ps1,Stop title/meta gen job daily,Task Scheduler? (NEEDS_REVIEW not in list),NEEDS_REVIEW,POST /seo/title-meta/fix-all/stop,API call,partial,low,not in current TS list,LOW
+auto_commit.bat,bat,Auto-commit local snapshot (no push),Task Scheduler daily — DISABLED,Marketing Hub Auto Commit,git add -A + commit,git local,DISABLED,low,disabled 6/6,HIGH
+run_backup.bat,bat,Wrapper backup_db.py,Task Scheduler daily,Marketing Hub DB Backup,"call backup_db.py,log",indirect,production,low,,HIGH
+run_backup_secrets.bat,bat,Wrapper backup_secrets.py,Task Scheduler daily,Marketing Hub Secrets Backup,"call backup_secrets.py,log",indirect,production,low,,HIGH
+run_weekly_cwv.bat,bat,Chain snapshot+diff,Task Scheduler weekly (via vbs),Marketing Hub Weekly CWV Diff,"snapshot→diff,log",indirect,production,low,,HIGH
+run_audit_schema.bat,bat,Wrapper audit_schema_all.py,Task Scheduler weekly (via vbs),Marketing Hub Weekly Schema Audit,call audit_schema_all.py,indirect,production,low,,HIGH
+weekly_empty_desc_scan.bat,bat,Wrapper empty_desc scan,Task Scheduler weekly,Marketing Hub Weekly EmptyDesc Scan,call py,indirect,production,low,,HIGH
+start_marketing_hub.bat,bat,Start Flask w/ restart loop,Startup/manual (NEEDS_REVIEW not TS),NEEDS_REVIEW (watchdog),"loop app.py,restart 5s,log","write logs,spawn worker",production,low,watchdog; not in TS list,MEDIUM
+start_telegram_bot.bat,bat,Start Telegram bot loop,Startup/manual (NEEDS_REVIEW),NEEDS_REVIEW,"loop telegram_bot.py,restart 10s",write logs,production,low,not in TS list,MEDIUM
+start_audit_schema_hidden.vbs,vbs,Hidden launcher schema audit,Task Scheduler weekly,Marketing Hub Weekly Schema Audit,run bat hidden,indirect,production,low,,HIGH
+start_marketing_hub_hidden.vbs,vbs,Hidden launcher Flask,Startup (NEEDS_REVIEW),NEEDS_REVIEW,run bat hidden,indirect,production,low,,MEDIUM
+start_telegram_bot_hidden.vbs,vbs,Hidden launcher bot,Startup (NEEDS_REVIEW),NEEDS_REVIEW,run bat hidden,indirect,production,low,,MEDIUM
+start_weekly_cwv_hidden.vbs,vbs,Hidden launcher weekly CWV,Task Scheduler weekly,Marketing Hub Weekly CWV Diff,run bat hidden,indirect,production,low,,HIGH

@@ -125,7 +125,7 @@ def seo_coverage_page():
         sp_empty_count=len(sp_empty), sp_empty_sample=sp_empty[:12],
         coll=coll,
         blog_jobs_total=blog_jobs_total, blog_jobs_author=blog_jobs_author,
-        blog_audited=blog_audited, blog_faq=blog_faq,
+        blog_audited=blog_audited, blog_faq=blog_faq, active="coverage",
     )
 
 
@@ -200,7 +200,7 @@ def seo_eeat_page():
         trust=trust, broken_pages=broken_pages, broken_links=broken_links,
         home_org=home_org, blog_audited=blog_audited, blog_article=blog_article, blog_faq=blog_faq,
         blog_jobs_total=blog_jobs_total, blog_jobs_author=blog_jobs_author,
-        author=author_block.AUTHOR,
+        author=author_block.AUTHOR, active="eeat",
     )
 
 
@@ -227,7 +227,7 @@ def seo_h1_in_desc_page():
     return render_template(
         "seo_h1_in_desc.html",
         items=items, summary=summary, state=state,
-        url_type=url_type, show_all=show_all,
+        url_type=url_type, show_all=show_all, active="h1",
     )
 
 
@@ -319,7 +319,7 @@ def seo_title_meta_page():
         sync_filter=sync_filter,
         issue_labels=seo_mod.TITLE_META_LABELS,
         tiers=tiers,
-        recrawl=seo_mod.tm_recrawl_state(),
+        recrawl=seo_mod.tm_recrawl_state(), active="title_meta",
     )
 
 
@@ -533,7 +533,7 @@ def seo_title_meta_gen_map():
 def seo_gsc_page():
     cache = seo_mod.gsc_load_cache()
     if not cache:
-        return render_template("seo_gsc.html", cache=None, tasks=[], summary=None)
+        return render_template("seo_gsc.html", cache=None, tasks=[], summary=None, active="gsc")
     tasks = seo_mod.gsc_build_tasks(cache)
     return render_template(
         "seo_gsc.html",
@@ -542,6 +542,7 @@ def seo_gsc_page():
         fetched_at=cache.get("fetched_at"),
         performance=cache.get("performance", {}),
         coverage=cache.get("coverage", {}),
+        active="gsc",
     )
 
 
@@ -622,6 +623,7 @@ def seo_cwv_page():
         total_mobile=total_mobile, total_desktop=total_desktop,
         lcp_rows=lcp_rows, lcp_strategy=lcp_strategy, lcp_filters=lcp_filters,
         lcp_summary=lcp_summary, lcp_pt=lcp_pt, lcp_scope=lcp_scope, lcp_opp=lcp_opp,
+        active="cwv",
     )
 
 
@@ -688,7 +690,7 @@ def api_cwv_scan_start_all():
     Tự resume nếu có đợt dở, hoặc bắt đầu đợt mới (quét lại tất cả) nếu đợt cũ đã xong."""
     body = request.get_json(silent=True) or {}
     api_key = body.get("api_key", "").strip() or _load_psi_key()
-    res = cwv_mod.start_full_scan_async(api_key=api_key)
+    res = cwv_mod.start_full_scan_async(api_key=api_key, force_new=bool(body.get("force_new")))
     msg = {"new": "Đã bắt đầu quét đợt mới (toàn bộ)",
            "resume": "Đã quét tiếp đợt đang dở",
            "running": "Đang quét rồi"}.get(res.get("mode"), "")
@@ -813,7 +815,7 @@ def seo_schema_page():
         "seo_schema.html",
         stats_all=stats_all, stats_by_type=stats_by_type,
         rows=rows, total=total, total_pages=total_pages,
-        page_num=page_num, url_type=url_type, missing=missing,
+        page_num=page_num, url_type=url_type, missing=missing, active="schema",
     )
 
 
@@ -893,7 +895,7 @@ def seo_empty_desc_page():
     return render_template(
         "seo_empty_desc.html",
         items=items, summary=summary, state=state,
-        threshold=threshold, show_all=show_all,
+        threshold=threshold, show_all=show_all, active="empty_desc",
     )
 
 

@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block title %}Blog & News · Haravan · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('haravan_dashboard') }}" class="muted" style="font-weight:500">🛒 Haravan</a>
+<span class="crumb"></span>
+<span style="font-weight:600">📝 Blog &amp; News</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('haravan_dashboard') }}">← Haravan</a>
+<a class="btn" href="{{ url_for('haravan_products_page') }}">📦 Sản phẩm</a>
+{% endblock %}
+
+{% block content %}
+
+{# ─── Notice nguồn data ─── #}
+<div class="muted" style="font-size:12px;padding:8px 12px;background:rgba(59,130,246,0.05);border-left:3px solid #93c5fd;border-radius:4px;margin-bottom:14px">
+  💡 <strong>Nguồn data:</strong> {{ stats.total }} bài đã crawl từ <code>sintech.vn</code> qua SEO crawler.
+  Haravan API <code>/blogs.json</code> đang trả 502 — khi Haravan fix sẽ sync trực tiếp được.
+</div>
+
+{# ───── 1. KPI ───── #}
+<div class="kpi-grid">
+  <div class="kpi">
+    <div class="kpi-row"><div class="kpi-icon accent">📝</div></div>
+    <div class="kpi-num">{{ stats.total }}</div>
+    <div class="kpi-label">Tổng blog</div>
+  </div>
+  <div class="kpi">
+    <div class="kpi-row"><div class="kpi-icon yellow">📊</div></div>
+    <div class="kpi-num">{{ stats.avg_score }}<span style="font-size:14px;color:var(--text-muted)">/100</span></div>
+    <div class="kpi-label">Điểm SEO TB</div>
+  </div>
+  <a href="?band=good" class="kpi" style="text-decoration:none;color:inherit;border-color:rgba(34,197,94,0.35)">
+    <div class="kpi-row"><div class="kpi-icon green">✅</div></div>
+    <div class="kpi-num" style="color:#4ade80">{{ stats.good }}</div>
+    <div class="kpi-label">🟢 Tốt (≥80)</div>
+  </a>
+  <a href="?band=ok" class="kpi" style="text-decoration:none;color:inherit;border-color:rgba(234,179,8,0.35)">
+    <div class="kpi-row"><div class="kpi-icon yellow">🟡</div></div>
+    <div class="kpi-num" style="color:#facc15">{{ stats.ok }}</div>
+    <div class="kpi-label">OK (60-79)</div>
+  </a>
+  <a href="?band=bad" class="kpi" style="text-decoration:none;color:inherit;border-color:rgba(239,68,68,0.35)">
+    <div class="kpi-row"><div class="kpi-icon">🔴</div></div>
+    <div class="kpi-num" style="color:#f87171">{{ stats.bad }}</div>
+    <div class="kpi-label">Cần sửa (&lt;60)</div>
+  </a>
+</div>
+
+{# ───── 2. PHÂN NHÓM CHỦ ĐỀ ───── #}
+<section class="card" style="margin-top:14px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+    <div>
+      <h3 style="margin:0;font-size:15px">🎯 Phân nhóm theo chủ đề</h3>
+      <small class="muted">Auto-detect từ title. Click 1 nhóm → filter list bên dưới.</small>
+    </div>
+    {% if filters.topic %}
+      <a href="{{ url_for('haravan_blogs') }}" class="btn btn-sm">✕ Bỏ filter</a>
+    {% endif %}
+  </div>
+  <div class="topic-grid">
+    {% for t in topic_breakdown %}
+      {% if t.count > 0 %}
+      <a href="?topic={{ t.code }}"
+         class="topic-pill {% if filters.topic == t.code %}topic-pill-active{% endif %} {% if t.code == 'pirate' %}topic-pill-warn{% endif %}"
+         style="--pill-color: {{ t.color }}">
+        <span class="topic-label">{{ t.label }}</span>
+        <span class="topic-count">{{ t.count }}</span>
+      </a>
+      {% endif %}
+    {% endfor %}
+  </div>
+</section>
+
+{# ───── 3. FILTER + LIST ───── #}
+<section class="card seo-list-section" style="margin-top:14px">
+  <div class="seo-list-head">
+    <h3 style="margin:0;font-size:15px">
+      📋 Danh sách blog
+      <span class="muted" style="font-weight:400;font-size:13px">
+        — {{ total }} kết quả
+        {% if total_pages > 1 %} · trang {{ page_num }}/{{ total_pages }}{% endif %}
+        {% if filters.topic %} · chủ đề <strong>{{ topic_labels[filters.topic][0] if filters.topic in topic_labels else filters.topic }}</strong>{% endif %}
+      </span>
+    </h3>
+  </div>
+
+  <form method="get" class="seo-filter-form seo-filter-sticky">
+    <input type="text" name="q" value="{{ filters.q }}"
+           placeholder="🔍 Tìm theo title hoặc URL..." class="seo-filter-input">
+
+    {% if filters.topic %}<input type="hidden" name="topic" value="{{ filters.topic }}">{% endif %}
+
+    <select name="band" class="seo-filter-select">
+      <option value="">Tất cả điểm</option>
+      <option value="bad"  {% if filters.band == 'bad'  %}selected{% endif %}>🔴 Cần sửa (&lt;60)</option>
+      <option value="ok"   {% if filters.band == 'ok'   %}selected{% endif %}>🟡 OK (60-79)</option>
+      <option value="good" {% if filters.band == 'good' %}selected{% endif %}>🟢 Tốt (≥80)</option>
+    </select>
+
+    <select name="sort" class="seo-filter-select">
+      <option value="score_asc"   {% if filters.sort == 'score_asc'   %}selected{% endif %}>↑ Điểm thấp trước (sửa ngay)</option>
+      <option value="score_desc"  {% if filters.sort == 'score_desc'  %}selected{% endif %}>↓ Điểm cao trước</option>
+      <option value="issues_desc" {% if filters.sort == 'issues_desc' %}selected{% endif %}>⚠️ Nhiều vấn đề trước</option>
+      <option value="wc_asc"      {% if filters.sort == 'wc_asc'      %}selected{% endif %}>📏 Word count ít → nhiều</option>
+      <option value="wc_desc"     {% if filters.sort == 'wc_desc'     %}selected{% endif %}>📏 Word count nhiều → ít</option>
+      <option value="title"       {% if filters.sort == 'title'       %}selected{% endif %}>🔤 Title A→Z</option>
+      <option value="recent"      {% if filters.sort == 'recent'      %}selected{% endif %}>🕐 Crawl gần nhất</option>
+    </select>
+
+    <button class="btn btn-primary btn-sm" type="submit">Lọc</button>
+    <a href="{{ url_for('haravan_blogs') }}" class="btn btn-sm btn-ghost">Reset</a>
+  </form>
+
+  {% if blogs %}
+    <div class="table-wrap">
+    <table class="table seo-table">
+      <thead>
+        <tr>
+          <th class="col-stt">STT</th>
+          <th>Bài blog</th>
+          <th>Chủ đề</th>
+          <th>Word count</th>
+          <th>Điểm</th>
+          <th>Vấn đề</th>
+          <th>Hành động</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in blogs %}
+        <tr>
+          <td class="col-stt">{{ (page_num - 1) * per_page + loop.index }}</td>
+          <td class="seo-url-cell">
+            <div style="font-weight:500;color:var(--text);font-size:13px;line-height:1.35">
+              {{ b.title or '(không title)' }}
+            </div>
+            <a href="{{ b.url }}" target="_blank" rel="noopener"
+               class="seo-url-link" style="font-size:11.5px;word-break:break-all">{{ b.url }}</a>
+          </td>
+          <td>
+            {% set tinfo = topic_labels.get(b.topic, ('❓ Khác', 'rgba(120,120,140,0.15)')) %}
+            <span class="topic-mini" style="background:{{ tinfo[1] }}">{{ tinfo[0] }}</span>
+          </td>
+          <td>
+            {% if b.word_count %}
+              {% if b.word_count >= 800 %}
+                <span style="color:#86efac">{{ b.word_count }}</span>
+              {% elif b.word_count >= 300 %}
+                <span style="color:#fde68a">{{ b.word_count }}</span>
+              {% else %}
+                <span style="color:#fca5a5">{{ b.word_count }}</span>
+              {% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            {% if b.score is not none and b.last_crawled %}
+              {% if b.score >= 80 %}<span class="seo-score seo-score-good">{{ b.score }}</span>
+              {% elif b.score >= 60 %}<span class="seo-score seo-score-ok">{{ b.score }}</span>
+              {% else %}<span class="seo-score seo-score-bad">{{ b.score }}</span>
+              {% endif %}
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
+          <td>
+            {% if b.issue_count > 0 %}
+              <span class="pill pill-warn">{{ b.issue_count }} vấn đề</span>
+            {% else %}
+              <span class="pill" style="background:rgba(34,197,94,0.15);color:#4ade80">tốt</span>
+            {% endif %}
+          </td>
+          <td style="white-space:nowrap">
+            <a href="{{ url_for('seo_url_detail', page_id=b.id) }}" class="btn btn-sm">Chi tiết</a>
+            {% if b.score is not none and b.score < 60 %}
+              <a href="{{ url_for('haravan_blog_ai_rewrite', page_id=b.id) }}"
+                 class="btn btn-sm btn-primary"
+                 title="AI viết lại theo rule v2">✨ AI rewrite</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+
+    {% if total_pages > 1 %}
+      {% set qs = request.args.to_dict() %}
+      <div class="seo-pagination">
+        {% if page_num > 1 %}
+          {% set _ = qs.update({'page': page_num - 1}) %}
+          <a class="btn btn-sm" href="?{{ qs|urlencode }}">← Trước</a>
+        {% endif %}
+        <span class="muted">Trang {{ page_num }}/{{ total_pages }}</span>
+        {% if page_num < total_pages %}
+          {% set _ = qs.update({'page': page_num + 1}) %}
+          <a class="btn btn-sm" href="?{{ qs|urlencode }}">Sau →</a>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% else %}
+    <div style="padding:40px 12px;text-align:center">
+      <div style="font-size:36px;margin-bottom:8px">🪶</div>
+      <p class="muted">
+        {% if stats.total == 0 %}
+          Chưa có blog nào trong DB. Chạy crawl ở <a href="{{ url_for('seo_dashboard') }}">/seo</a> để load.
+        {% else %}
+          Không có blog khớp filter. <a href="{{ url_for('haravan_blogs') }}">Reset</a>.
+        {% endif %}
+      </p>
+    </div>
+  {% endif %}
+</section>
+
+{% endblock %}
+
+{% block scripts %}
+<style>
+.topic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+.topic-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--pill-color, rgba(255,255,255,0.03));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-decoration: none;
+  color: inherit;
+  font-size: 13px;
+  transition: transform .12s, border-color .12s;
+}
+.topic-pill:hover { transform: translateY(-1px); border-color: var(--accent); }
+.topic-pill-active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.topic-pill-warn { border-color: rgba(239,68,68,0.4); }
+.topic-label { font-weight: 500; }
+.topic-count {
+  background: rgba(255,255,255,0.08);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.topic-mini {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.seo-table { table-layout: auto; }
+.seo-table th:nth-child(2),
+.seo-table td:nth-child(2) { width: auto; text-align: left; }
+.seo-table th:nth-child(3),
+.seo-table td:nth-child(3) { width: 160px; text-align: center; }
+.seo-table th:nth-child(4),
+.seo-table td:nth-child(4) { width: 100px; text-align: center; }
+.seo-table th:nth-child(5),
+.seo-table td:nth-child(5) { width: 80px;  text-align: center; }
+.seo-table th:nth-child(6),
+.seo-table td:nth-child(6) { width: 120px; text-align: center; }
+.seo-table th:nth-child(7),
+.seo-table td:nth-child(7) { width: 200px; text-align: center; }
+</style>
+{% endblock %}

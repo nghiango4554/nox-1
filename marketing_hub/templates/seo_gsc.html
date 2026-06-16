@@ -1,172 +1,61 @@
-{% extends "base.html" %}
-{% block title %}Google Search Console · SEO · Sintech Hub{% endblock %}
-
-{% block page_title %}
-<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
-<span class="crumb"></span>
-<span style="font-weight:600">🔵 Google Search Console</span>
-{% endblock %}
-
-{% block page_actions %}
-<form method="post" action="{{ url_for('seo_gsc_refresh') }}" style="display:inline">
-  <button class="btn" type="submit" title="Re-fetch data từ 2 Google Sheet GSC export">🔄 Refresh cache</button>
-</form>
-<a class="btn" href="{{ url_for('seo_dashboard') }}">← SEO dashboard</a>
-{% endblock %}
+{% extends "redesign_base.html" %}
+{% block title %}Google Search Console · Sintech Hub{% endblock %}
+{% block page_title %}<i class="ic" data-icon="search" style="color:var(--accent-ink)"></i><span>Phân tích</span><i class="ic" data-icon="chevron-right"></i><b>Search Console</b>{% endblock %}
+{% block page_actions %}<form method="post" action="{{ url_for('seo_gsc_refresh') }}" style="display:inline"><button class="btn-primary" type="submit"><i class="ic" data-icon="refresh-cw"></i>Refresh cache</button></form>{% endblock %}
+{% block head_extra %}<style>:root{--border:rgba(28,34,48,.10);--text-muted:#98a0b3;--text:#1c2230}
+.gsc-task{display:flex;align-items:center;gap:14px;padding:14px 16px;border:1px solid var(--line);border-left:4px solid var(--t-solid);border-radius:var(--r-sm);background:var(--card-bg);box-shadow:var(--card-shadow);text-decoration:none;color:var(--ink);transition:transform .12s,box-shadow .12s}
+.gsc-task:hover{transform:translateY(-1px);box-shadow:var(--card-shadow-hover)}
+.gsc-task .ti{font-size:22px;width:34px;text-align:center;flex:0 0 auto}
+.gsc-task .tc{font-family:var(--ff-num);font-size:22px;font-weight:800;min-width:54px;text-align:right;color:var(--t-fg)}
+</style>{% endblock %}
 
 {% block content %}
+<div class="sec-head"><h2><i class="ic" data-icon="search"></i>Google Search Console</h2><div class="sec-meta">Task SEO từ data GSC (3 tháng){% if fetched_at %} · cập nhật {{ fetched_at[:16]|replace('T',' ') }}{% endif %}</div></div>
 
-{# ── GSC API source & data health (LIVE-1B) — render bởi gsc_dashboard.js, đọc /api/gsc/status ── #}
-<div id="gsc-health"><div class="gsc-skel" style="height:90px;border-radius:12px;background:linear-gradient(90deg,rgba(255,255,255,.04),rgba(255,255,255,.09),rgba(255,255,255,.04));background-size:200% 100%;animation:gscsh 1.2s infinite;margin-bottom:16px"></div></div>
-<style>@keyframes gscsh{0%{background-position:200% 0}100%{background-position:-200% 0}}</style>
-
-<style>
-  .gsc-kpi-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-bottom:20px }
-  .gsc-kpi { background:var(--surface,#1a1a1a); border:1px solid var(--border,rgba(255,255,255,.1)); border-radius:10px; padding:14px 16px; }
-  .gsc-kpi-num { font-size:26px; font-weight:700; line-height:1; letter-spacing:-.5px; }
-  .gsc-kpi-label { font-size:11px; color:var(--text-muted,#94a3b8); margin-top:6px; text-transform:uppercase; letter-spacing:.4px }
-
-  .gsc-tasks { display:flex; flex-direction:column; gap:10px; }
-  .gsc-task-card {
-    display:flex; align-items:center; gap:14px; padding:14px 16px;
-    border:1px solid var(--border,rgba(255,255,255,.1)); border-radius:10px;
-    background:var(--surface,#1a1a1a); transition:transform .12s, border-color .12s;
-    text-decoration:none; color:inherit;
-  }
-  .gsc-task-card:hover { transform:translateY(-1px); border-color:var(--accent,#7c3aed); }
-  .gsc-task-icon { font-size:24px; line-height:1; flex-shrink:0; width:36px; text-align:center }
-  .gsc-task-body { flex:1; min-width:0 }
-  .gsc-task-title { font-size:14px; font-weight:600; margin-bottom:3px; line-height:1.35 }
-  .gsc-task-desc { font-size:12px; color:var(--text-muted,#94a3b8); line-height:1.4 }
-  .gsc-task-count { font-size:22px; font-weight:700; min-width:50px; text-align:right; font-variant-numeric:tabular-nums }
-  .gsc-task-action { font-size:10.5px; color:var(--text-muted,#94a3b8); padding:4px 10px; border-radius:14px; white-space:nowrap; min-width:90px; text-align:center; }
-
-  .level-critical { border-left:4px solid #ef4444 }
-  .level-critical .gsc-task-count { color:#f87171 }
-  .level-critical .gsc-task-action { background:rgba(239,68,68,.14); color:#fca5a5 }
-  .level-high     { border-left:4px solid #f59e0b }
-  .level-high .gsc-task-count { color:#facc15 }
-  .level-high .gsc-task-action { background:rgba(245,158,11,.14); color:#fde047 }
-  .level-medium   { border-left:4px solid #6366f1 }
-  .level-medium .gsc-task-count { color:#a5b4fc }
-  .level-medium .gsc-task-action { background:rgba(99,102,241,.14); color:#c7d2fe }
-  .level-info     { border-left:4px solid #34d399 }
-  .level-info .gsc-task-count { color:#34d399 }
-  .level-info .gsc-task-action { background:rgba(52,211,153,.14); color:#86efac }
-
-  .gsc-section-h { font-size:14px; font-weight:600; margin:24px 0 10px; padding-bottom:8px; border-bottom:1px solid var(--border,rgba(255,255,255,.08)); display:flex; justify-content:space-between; align-items:baseline }
-  .gsc-mini-table { width:100%; font-size:12px; border-collapse:collapse }
-  .gsc-mini-table th { font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px; padding:6px 8px; text-align:left; border-bottom:1px solid var(--border) }
-  .gsc-mini-table td { padding:6px 8px; border-bottom:1px solid rgba(255,255,255,.04) }
-  .gsc-mini-table tbody tr:hover { background:rgba(255,255,255,.02) }
-</style>
+{# API health panel — render bởi gsc_dashboard.js #}
+<div id="gsc-health"><div style="height:80px;border-radius:var(--r);background:var(--surface-2);margin-bottom:var(--gap)"></div></div>
 
 {% if not cache %}
-<section class="card" style="margin-top:14px;padding:24px;text-align:center">
-  <h3>📭 Chưa có data GSC cache</h3>
-  <p class="muted">Chạy script <code>marketing_hub/_fetch_gsc_cache.py</code> để fetch data từ 2 Google Sheet GSC export.</p>
-  <form method="post" action="{{ url_for('seo_gsc_refresh') }}" style="margin-top:12px">
-    <button class="btn btn-primary" type="submit">🔄 Fetch ngay</button>
-  </form>
-</section>
+<section class="panel"><div style="text-align:center;padding:30px"><h3>📭 Chưa có data GSC cache</h3><p class="sec-meta" style="margin:8px 0 14px">Chạy <code>_fetch_gsc_cache.py</code> để fetch data từ 2 Google Sheet GSC export.</p><form method="post" action="{{ url_for('seo_gsc_refresh') }}"><button class="btn-primary" type="submit"><i class="ic" data-icon="refresh-cw"></i>Fetch ngay</button></form></div></section>
 {% else %}
 
-{# KPI Overview #}
-<div class="gsc-kpi-row">
-  <div class="gsc-kpi">
-    <div class="gsc-kpi-num" style="color:#60a5fa">{{ "{:,}".format(summary.total_click) }}</div>
-    <div class="gsc-kpi-label">Total click (3 tháng)</div>
-  </div>
-  <div class="gsc-kpi">
-    <div class="gsc-kpi-num">{{ "{:,}".format(summary.total_imp) }}</div>
-    <div class="gsc-kpi-label">Total impression</div>
-  </div>
-  <div class="gsc-kpi">
-    <div class="gsc-kpi-num" style="color:{% if summary.avg_ctr >= 5 %}#34d399{% elif summary.avg_ctr >= 3 %}#facc15{% else %}#f87171{% endif %}">{{ summary.avg_ctr }}%</div>
-    <div class="gsc-kpi-label">CTR trung bình</div>
-  </div>
-  <div class="gsc-kpi">
-    <div class="gsc-kpi-num">{{ summary.avg_position }}</div>
-    <div class="gsc-kpi-label">Position TB (1-100)</div>
-  </div>
-  <div class="gsc-kpi" style="background:rgba(239,68,68,0.04);border-color:rgba(239,68,68,0.30)">
-    <div class="gsc-kpi-num" style="color:#f87171">{{ coverage.critical.get('crawled_not_indexed', {}).get('count', 0) }}</div>
-    <div class="gsc-kpi-label">URL chưa được index</div>
-  </div>
-  <div class="gsc-kpi">
-    <div class="gsc-kpi-num" style="font-size:13px;font-weight:500;color:var(--text-muted)">{{ fetched_at[:16] if fetched_at else '—' }}</div>
-    <div class="gsc-kpi-label">Fetched at</div>
-  </div>
+<div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
+  <div class="stat is-grad" data-tone="sky" data-grad="blue"><div class="stat-top"><div class="stat-ico" data-tone="sky"><i class="ic" data-icon="mouse-pointer-click"></i></div></div><div><div class="stat-val">{{ "{:,}".format(summary.total_click) }}</div><div class="stat-title" style="margin-top:7px">Total click (3 tháng)</div></div></div>
+  <div class="stat is-grad" data-tone="indigo" data-grad="violet"><div class="stat-top"><div class="stat-ico" data-tone="indigo"><i class="ic" data-icon="eye"></i></div></div><div><div class="stat-val">{{ "{:,}".format(summary.total_imp) }}</div><div class="stat-title" style="margin-top:7px">Total impression</div></div></div>
+  <div class="stat is-grad" data-tone="{{ 'teal' if summary.avg_ctr>=5 else 'amber' if summary.avg_ctr>=3 else 'rose' }}" data-grad="teal"><div class="stat-top"><div class="stat-ico" data-tone="teal"><i class="ic" data-icon="percent"></i></div></div><div><div class="stat-val">{{ summary.avg_ctr }}<small>%</small></div><div class="stat-title" style="margin-top:7px">CTR trung bình</div></div></div>
+  <div class="stat is-grad" data-tone="amber" data-grad="amber"><div class="stat-top"><div class="stat-ico" data-tone="amber"><i class="ic" data-icon="trending-up"></i></div></div><div><div class="stat-val">{{ summary.avg_position }}</div><div class="stat-title" style="margin-top:7px">Position TB (1-100)</div></div></div>
+  <div class="stat is-grad" data-tone="rose" data-grad="red"><div class="stat-top"><div class="stat-ico" data-tone="rose"><i class="ic" data-icon="ban"></i></div></div><div><div class="stat-val">{{ coverage.critical.get('crawled_not_indexed', {}).get('count', 0) }}</div><div class="stat-title" style="margin-top:7px">URL chưa được index</div></div></div>
 </div>
 
-{# Tasks list #}
-<div class="gsc-section-h">
-  <span>🎯 Task cần làm — click vào để xem chi tiết</span>
-  <span class="muted" style="font-size:11px">{{ tasks|length }} task</span>
-</div>
-
-<div class="gsc-tasks">
+<div class="sec-head" style="margin-top:var(--gap)"><h2><i class="ic" data-icon="target"></i>Task cần làm</h2><div class="sec-meta">{{ tasks|length }} task · click để xem chi tiết</div></div>
+<div style="display:flex;flex-direction:column;gap:10px">
   {% for t in tasks %}
-  <a class="gsc-task-card level-{{ t.level }}" href="{{ url_for('seo_gsc_task_page', task_id=t.id) }}">
-    <div class="gsc-task-icon">{{ t.icon }}</div>
-    <div class="gsc-task-body">
-      <div class="gsc-task-title">{{ t.title }}</div>
-      <div class="gsc-task-desc">{{ t.desc }}</div>
-    </div>
-    <div class="gsc-task-count">{{ "{:,}".format(t.count) }}</div>
-    <div class="gsc-task-action">
-      {% if t.needs_export %}📁 Cần export{% else %}🔧 Có data chi tiết{% endif %}
-    </div>
+  {% set tone = 'rose' if t.level=='critical' else 'amber' if t.level=='high' else 'indigo' if t.level=='medium' else 'teal' %}
+  <a class="gsc-task" data-tone="{{ tone }}" href="{{ url_for('seo_gsc_task_page', task_id=t.id) }}">
+    <span class="ti">{{ t.icon }}</span>
+    <span style="flex:1;min-width:0"><span class="td-title" style="display:block">{{ t.title }}</span><span class="td-sub">{{ t.desc }}</span></span>
+    <span class="pill" data-tone="{{ tone }}">{{ '📁 Cần export' if t.needs_export else '🔧 Có data' }}</span>
+    <span class="tc">{{ "{:,}".format(t.count) }}</span>
   </a>
   {% endfor %}
 </div>
 
-{# Top Performance preview #}
-<div class="gsc-section-h">
-  <span>🔍 Top 10 Keyword (3 tháng)</span>
-  <a href="{{ url_for('seo_gsc_task_page', task_id='top_cash_cow') }}" class="muted" style="font-size:12px">Xem tất cả →</a>
-</div>
-<section class="card" style="padding:0 14px">
-  <table class="gsc-mini-table">
-    <thead><tr><th>#</th><th>Keyword</th><th style="text-align:right">Click</th><th style="text-align:right">Imp</th><th style="text-align:right">CTR</th><th style="text-align:right">Pos</th></tr></thead>
-    <tbody>
-      {% for q in performance.queries[:10] %}
-      <tr>
-        <td class="muted">{{ loop.index }}</td>
-        <td>{{ q.query[:80] }}</td>
-        <td style="text-align:right;font-weight:600">{{ q.click }}</td>
-        <td style="text-align:right" class="muted">{{ q.imp }}</td>
-        <td style="text-align:right;color:{% if q.ctr >= 10 %}#34d399{% elif q.ctr >= 3 %}#facc15{% else %}#f87171{% endif %}">{{ q.ctr }}%</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums">{{ q.pos }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
+<section class="tbl-wrap" style="margin-top:var(--gap)">
+  <div class="tbl-top"><h3><i class="ic" data-icon="search"></i>Top 10 Keyword (3 tháng)</h3><a class="chipf" style="margin-left:auto" href="{{ url_for('seo_gsc_task_page', task_id='top_cash_cow') }}">Xem tất cả →</a></div>
+  <table>
+    <thead><tr><th style="width:40px">#</th><th>Keyword</th><th style="text-align:right">Click</th><th style="text-align:right">Imp</th><th style="text-align:right">CTR</th><th style="text-align:right">Pos</th></tr></thead>
+    <tbody>{% for q in performance.queries[:10] %}<tr><td style="color:var(--ink-3)">{{ loop.index }}</td><td class="td-title">{{ q.query[:80] }}</td><td style="text-align:right;font-weight:700">{{ q.click }}</td><td style="text-align:right;color:var(--ink-3)">{{ q.imp }}</td><td style="text-align:right;color:{{ '#0f766e' if q.ctr>=10 else '#b45309' if q.ctr>=3 else '#be123c' }}">{{ q.ctr }}%</td><td style="text-align:right;font-family:var(--ff-num)">{{ q.pos }}</td></tr>{% endfor %}</tbody>
   </table>
 </section>
 
-<div class="gsc-section-h">
-  <span>📄 Top 10 URL (3 tháng)</span>
-</div>
-<section class="card" style="padding:0 14px">
-  <table class="gsc-mini-table">
-    <thead><tr><th>#</th><th>URL</th><th style="text-align:right">Click</th><th style="text-align:right">Imp</th><th style="text-align:right">CTR</th><th style="text-align:right">Pos</th></tr></thead>
-    <tbody>
-      {% for p in performance.pages[:10] %}
-      <tr>
-        <td class="muted">{{ loop.index }}</td>
-        <td><a href="{{ p.url }}" target="_blank" rel="noopener" style="word-break:break-all;font-size:11.5px">{{ p.url|replace('https://sintech.vn', '') }}</a></td>
-        <td style="text-align:right;font-weight:600">{{ p.click }}</td>
-        <td style="text-align:right" class="muted">{{ p.imp }}</td>
-        <td style="text-align:right;color:{% if p.ctr >= 5 %}#34d399{% elif p.ctr >= 3 %}#facc15{% else %}#f87171{% endif %}">{{ p.ctr }}%</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums">{{ p.pos }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
+<section class="tbl-wrap" style="margin-top:var(--gap)">
+  <div class="tbl-top"><h3><i class="ic" data-icon="file-text"></i>Top 10 URL (3 tháng)</h3></div>
+  <table>
+    <thead><tr><th style="width:40px">#</th><th>URL</th><th style="text-align:right">Click</th><th style="text-align:right">Imp</th><th style="text-align:right">CTR</th><th style="text-align:right">Pos</th></tr></thead>
+    <tbody>{% for p in performance.pages[:10] %}<tr><td style="color:var(--ink-3)">{{ loop.index }}</td><td><a href="{{ p.url }}" target="_blank" rel="noopener" style="color:var(--accent-ink);word-break:break-all;font-size:12px">{{ p.url|replace('https://sintech.vn','') }}</a></td><td style="text-align:right;font-weight:700">{{ p.click }}</td><td style="text-align:right;color:var(--ink-3)">{{ p.imp }}</td><td style="text-align:right;color:{{ '#0f766e' if p.ctr>=5 else '#b45309' if p.ctr>=3 else '#be123c' }}">{{ p.ctr }}%</td><td style="text-align:right;font-family:var(--ff-num)">{{ p.pos }}</td></tr>{% endfor %}</tbody>
   </table>
 </section>
-
 {% endif %}
-
 {% endblock %}
 
 {% block scripts %}

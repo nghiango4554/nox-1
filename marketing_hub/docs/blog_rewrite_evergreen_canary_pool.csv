@@ -1,0 +1,6 @@
+﻿candidate_id,article_id,title,draft_id,gate,conflict,overlap,rollout_status,selected_canary
+110,1002411576,Tần số quét màn hình là gì? Điểm danh các loại tần,28,ALLOW,SAFE_TO_APPLY,0.0232,READY_EVERGREEN,1
+112,1002411585,Cảm biến Hero là gì? Liệu có phù hợp với nhu cầu c,27,ALLOW,SAFE_TO_APPLY,0.0246,READY_EVERGREEN,1
+21,1002758362,DLSS 4 là gì? Cách bật DLSS 4 trên card NVIDIA,23,ALLOW,SAFE_TO_APPLY,0.1001,READY_EVERGREEN,0
+26,1002767147,So sánh 3 VGA tầm giá 5–7 triệu: RTX 3050 vs RTX 3,22,ALLOW,SAFE_TO_APPLY,0.0916,HOLD_UNSUPPORTED_BENCHMARKS,0
+55,1002398280,Nvidia sắp ngừng sản xuất card đồ họa GeForce RTX ,24,ALLOW,SAFE_TO_APPLY,0.0148,HOLD_TIME_SENSITIVE_NEWS,0

@@ -30,7 +30,7 @@ def seo_duplicates():
         "meta_desc": len(db.seo_find_duplicates("meta_desc")),
         "h1": len(db.seo_find_duplicates("h1")),
     }
-    return render_template("seo_duplicates.html", field=field, groups=dup_groups, counts=counts)
+    return render_template("seo_duplicates.html", field=field, groups=dup_groups, counts=counts, active="dup")
 
 
 # ─────────────────────── INLINKS / ORPHANS ───────────────────────
@@ -45,7 +45,7 @@ def seo_inlinks_page():
         items = db.seo_top_inlinks(limit=100)
     return render_template(
         "seo_inlinks.html",
-        summary=summary, items=items, view=view, url_type=url_type,
+        summary=summary, items=items, view=view, url_type=url_type, active="inlinks",
     )
 
 
@@ -57,7 +57,7 @@ def seo_indexability_page():
     pages = db.seo_list_non_indexable(reason=reason, limit=500)
     return render_template(
         "seo_indexability.html",
-        stats=stats, pages=pages, active_reason=reason,
+        stats=stats, pages=pages, active_reason=reason, active="index",
     )
 
 
@@ -111,7 +111,7 @@ def seo_broken_links_page():
             "internal": internal_arg, "q": search or "", "sort": sort,
         },
         page_num=page_num, total_pages=total_pages, total_filtered=total_filtered,
-        per_page=per_page,
+        per_page=per_page, active="broken",
     )
 
 

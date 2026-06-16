@@ -2,6 +2,30 @@
 
 > File anh (Claude) tự update sau mỗi milestone. Sau /clear, anh đọc file này là biết task tuần này tới đâu, file nào đã edit, bug đang debug. Vợ Nghia có thể scan nhanh để xem anh đang làm gì.
 
+## ✅ 2026-06-07 (tối) — UI POLISH + REFRESH (origin/master `b865838`, kèm UI refresh LOCAL chưa commit)
+Next session đọc: `docs/UI_REFRESH_ADMINPRO_NALIKA_REPORT.md` + `docs/DAILY_ANALYTICS_RELEASE_REPORT_20260607.md`.
+**Đã PUSH sạch (origin tiến `1efba83`→`b865838`):**
+- Việt hóa 5 dashboard (giữ jargon GSC/GA4/CTR/Organic…) → `f2d5892`.
+- Sidebar sắp xếp lại thông minh: gom GA4/Search Console/Tracking/Task/Ops vào nhóm **"Phân tích & Đo lường"**; SEO submenu gọn còn audit tools → `3430e22`.
+- Sidebar tông **xám-lavender dịu** (bớt trắng) + active pill trắng; **header đổi đen→sáng** → `b865838`.
+**UI REFRESH AdminPro+Nalika — LOCAL, CHƯA COMMIT/PUSH (theo task Past.txt):**
+- 3 file CSS mới `marketing_hub/static/css/marketing-hub-{theme,components,responsive}.css` (palette warm AdminPro cam/hồng/vàng + KPI tile/card/badge/table kiểu Nalika, namespace `.mh-*` + lớp ADOPT refresh dashboard cũ qua `!important`).
+- Sửa 1 dòng: `base.html` thêm 3 `<link>`. KHÔNG đụng JS/API/DB/route.
+- Backup: `_backup/ui-refresh-20260607-205321/`. Rollback = xoá 3 CSS + restore base.html (lệnh trong report).
+- Ref clone ở **Downloads** (`adminpro-ui-reference`, `nalika-ui-reference`), KHÔNG trong repo.
+- QA: compileall PASS · secret scan sạch · 6 route 200 · screenshot `Desktop\ui_refresh_screens\`.
+- ⚠️ Nếu vợ muốn giữ UI refresh: cần COMMIT 4 file (3 CSS + base.html) qua clean worktree. Nếu KHÔNG ưng: chạy rollback trong report.
+
+## ✅ 2026-06-07 (ngày) — SINTECH ANALYTICS FULL RELEASE (origin/master `1efba83`)
+Next session: đọc `docs/DAILY_ANALYTICS_RELEASE_REPORT_20260607.md`.
+- **GSC direct API daily sync** + Data Health UI (`/seo/gsc`), fallback Sheet vẫn còn.
+- **SEO × GA4 daily-aligned join** (organic), 2 mode API daily ↔ Sheet period (`/seo/ga4#seojoin`), max confidence medium, clicks≠sessions.
+- **Tracking Audit** (`/seo/tracking`): catalog 17/30/23, 6 findings. **Task Center** (`/tasks`): dedup+cooldown. **Analytics Ops** (`/ops/analytics`): orchestration 1 nút.
+- **Telegram alert** lọc theo **incident severity** P0/P1 (đã fix tách khỏi implementation_priority); contact gap = impl P0 / sev P2 → KHÔNG alert khẩn.
+- **Scheduler enabled=false** (chưa bật live). Telegram live chưa bật. Website Haravan KHÔNG đụng.
+- 9 commit push sạch qua clean worktree (e8a6103→bc41510 … 1a18246→1efba83). Canonical HEAD `1a18246`, **73 file WIP cũ giữ nguyên** (chưa reconcile — plan ở `docs/CANONICAL_RECONCILE_NEXT_PLAN.md`).
+- DEFERRED (làm sau): GTM contact publish · theme Build PC · ecommerce checkout · mark key event · bật scheduler/Telegram live · canonical reconcile.
+
 ## 🚧 Đang dở (active) — snapshot trước /clear LẦN 2 (16/5 21:00)
 
 ### 🔴 Active — có thể trigger NGAY (anh hoặc vợ 1-click)

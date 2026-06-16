@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+{% block title %}ALT Editor · {{ (product.title or product.handle)[:60] }}{% endblock %}
+
+{% block page_title %}
+<span style="font-weight:600">🖼️ ALT Editor</span>
+<span class="muted" style="font-weight:400;font-size:13px">— {{ (product.title or product.handle)[:60] }}</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('alt_manager_page') }}">← Danh sách SP</a>
+<a class="btn" href="https://sintech.vn/products/{{ product.handle }}" target="_blank" rel="noopener">🌐 Xem Sintech</a>
+<a class="btn" href="https://sintech.myharavan.com/admin/products/{{ product.product_id }}" target="_blank" rel="noopener">↗ Haravan</a>
+{% endblock %}
+
+{% block content %}
+
+{# ───── INFO BAR ───── #}
+<section class="card" style="margin-top:0;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+  <div>
+    <div style="font-weight:600;color:var(--text);font-size:15px">{{ product.title or product.handle }}</div>
+    <div class="muted" style="font-size:11px;font-family:monospace;margin-top:3px">
+      ID {{ product.product_id }} · {{ product.type or '—' }} · {{ product.vendor or '—' }}
+    </div>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <span id="badge-summary" style="font-size:13px;padding:5px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text)">
+      Đang tính…
+    </span>
+    <button class="btn btn-sm" onclick="genAll()">🤖 Gen tất cả</button>
+    <button id="btn-save-all" class="btn btn-sm btn-primary" onclick="saveAll()">💾 Lưu tất cả</button>
+  </div>
+</section>
+
+{# ───── STATUS BAR ───── #}
+<div id="status-bar" style="display:none;margin-top:12px;padding:10px 14px;
+     background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);
+     border-radius:8px;color:#1d4ed8;font-size:13px"></div>
+
+{# ───── TAB BAR ───── #}
+<div style="display:flex;gap:0;margin-top:20px;border-bottom:2px solid var(--border)">
+  <button id="tab-product" onclick="switchTab('product')"
+          style="padding:10px 20px;background:none;border:none;border-bottom:2px solid #7c3aed;margin-bottom:-2px;
+                 font-weight:600;color:#7c3aed;cursor:pointer;font-size:14px">
+    🖼️ Ảnh sản phẩm <span id="tab-product-count" style="font-size:12px;color:var(--text-muted)"></span>
+  </button>
+  <button id="tab-desc" onclick="switchTab('desc')"
+          style="padding:10px 20px;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;
+                 font-weight:500;color:var(--text-muted);cursor:pointer;font-size:14px">
+    📄 Ảnh mô tả <span id="tab-desc-count" style="font-size:12px;color:var(--text-muted)"></span>
+  </button>
+</div>
+
+{# ───── GRID — Ảnh sản phẩm ───── #}
+<div id="panel-product">
+<div id="alt-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:16px">
+  {% for img in product.images %}
+  <div class="card alt-card" data-image-id="{{ img.id }}" data-position="{{ loop.index }}"
+       style="padding:14px;display:flex;flex-direction:column;gap:10px">
+
+    {# thumbnail #}
+    <div style="position:relative">
+      <img src="{{ img.src }}" loading="lazy"
+           style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;background:var(--surface-2);display:block">
+      <span class="alt-badge" data-id="{{ img.id }}"
+            style="position:absolute;top:8px;right:8px;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:700;
+                   {% if img.status == 'good' %}background:#dcfce7;color:#15803d
+                   {% elif img.status == 'weak' %}background:#fef3c7;color:#92400e
+                   {% else %}background:#fee2e2;color:#991b1b{% endif %}">
+        {{ img.status }}
+      </span>
+    </div>
+
+    {# label #}
+    <div class="muted" style="font-size:11px">
+      Ảnh {{ loop.index }} / {{ product.images|length }}
+      {% if img.id %}<span style="font-family:monospace"> · #{{ img.id }}</span>{% endif %}
+    </div>
+
+    {# ALT input — để CSS global xử lý màu sắc #}
+    <textarea class="alt-input" data-id="{{ img.id }}"
+              rows="3"
+              placeholder="Nhập ALT text…"
+              style="width:100%;font-size:13px;resize:vertical;box-sizing:border-box"
+              oninput="onAltChange(this)"
+    >{{ img.alt }}</textarea>
+
+    {# char counter + gen btn #}
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span class="char-count muted" data-id="{{ img.id }}" style="font-size:11px">{{ img.alt|length }}c</span>
+      <button class="btn btn-sm btn-ghost" onclick="genSingle({{ img.id }}, {{ loop.index }})">🤖 Gen</button>
+    </div>
+
+  </div>
+  {% else %}
+  <p class="muted" style="grid-column:1/-1;text-align:center;padding:32px">SP này không có ảnh nào trong DB.</p>
+  {% endfor %}
+</div>
+</div>{# end panel-product #}
+
+{# ───── PANEL — Ảnh mô tả (lazy load) ───── #}
+<div id="panel-desc" style="display:none;margin-top:16px">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+    <span class="muted" style="font-size:13px">Ảnh nhúng trong phần Mô tả sản phẩm (body_html)</span>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-sm" onclick="descGenAll()">🤖 Gen tất cả</button>
+      <button id="btn-desc-save" class="btn btn-sm btn-primary" onclick="descSaveAll()">💾 Lưu mô tả</button>
+    </div>
+  </div>
+  <div id="desc-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px">
+    <p class="muted" style="grid-column:1/-1;text-align:center;padding:24px">Đang tải…</p>
+  </div>
+</div>
+
+<script>
+const PRODUCT_ID = {{ product.product_id }};
+const TOTAL_IMGS = {{ product.images|length }};
+
+function refreshBadge() {
+  const inputs = document.querySelectorAll('.alt-input');
+  let none = 0, weak = 0, good = 0;
+  inputs.forEach(el => {
+    const v = el.value.trim();
+    if (!v) { none++; return; }
+    if (v.split(/\s+/).filter(Boolean).length < 5) { weak++; } else { good++; }
+  });
+  const pct = TOTAL_IMGS ? Math.round(good / TOTAL_IMGS * 100) : 0;
+  const color = pct >= 80 ? '#15803d' : (pct >= 40 ? '#b45309' : '#dc2626');
+  document.getElementById('badge-summary').innerHTML =
+    `<span style="color:${color};font-weight:700">${good}/${TOTAL_IMGS}</span> good`
+    + (weak ? ` · <span style="color:#b45309">${weak} weak</span>` : '')
+    + (none ? ` · <span style="color:#dc2626">${none} rỗng</span>` : '');
+}
+refreshBadge();
+
+function onAltChange(el) {
+  const id = el.dataset.id;
+  const words = el.value.trim().split(/\s+/).filter(Boolean);
+  const status = !el.value.trim() ? 'none' : (words.length < 5 ? 'weak' : 'good');
+  const badge = document.querySelector(`.alt-badge[data-id="${id}"]`);
+  if (badge) {
+    badge.textContent = status;
+    const styles = {
+      good: {bg:'#dcfce7', color:'#15803d'},
+      weak: {bg:'#fef3c7', color:'#92400e'},
+      none: {bg:'#fee2e2', color:'#991b1b'},
+    }[status];
+    badge.style.background = styles.bg;
+    badge.style.color = styles.color;
+  }
+  const cc = document.querySelector(`.char-count[data-id="${id}"]`);
+  if (cc) cc.textContent = el.value.length + 'c';
+  refreshBadge();
+}
+
+async function genSingle(imageId, position) {
+  showStatus(`🤖 Đang gen ALT cho ảnh #${imageId}…`);
+  try {
+    const r = await fetch(`/api/alt-manager/${PRODUCT_ID}/gen-alt`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({position, total: TOTAL_IMGS}),
+    });
+    const d = await r.json();
+    if (d.alt) {
+      const el = document.querySelector(`.alt-input[data-id="${imageId}"]`);
+      if (el) { el.value = d.alt; onAltChange(el); }
+      showStatus(`✅ Gen xong ảnh #${imageId}`, 2000);
+    }
+  } catch(e) { showStatus(`❌ Lỗi: ${e}`, 4000); }
+}
+
+async function genAll() {
+  showStatus(`🤖 Đang gen ${TOTAL_IMGS} ảnh…`);
+  const inputs = document.querySelectorAll('.alt-input');
+  for (const el of inputs) {
+    const card = el.closest('.alt-card');
+    try {
+      const r = await fetch(`/api/alt-manager/${PRODUCT_ID}/gen-alt`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({position: parseInt(card.dataset.position), total: TOTAL_IMGS}),
+      });
+      const d = await r.json();
+      if (d.alt) { el.value = d.alt; onAltChange(el); }
+    } catch(e) {}
+  }
+  showStatus(`✅ Gen xong ${TOTAL_IMGS} ảnh`, 3000);
+}
+
+async function saveAll() {
+  const updates = [...document.querySelectorAll('.alt-input')]
+    .map(el => ({image_id: parseInt(el.dataset.id), alt: el.value.trim()}))
+    .filter(u => u.image_id);
+  if (!updates.length) { showStatus('Không có ảnh nào để lưu.', 2000); return; }
+  document.getElementById('btn-save-all').disabled = true;
+  showStatus(`💾 Đang lưu ${updates.length} ảnh lên Haravan…`);
+  try {
+    const r = await fetch(`/api/alt-manager/${PRODUCT_ID}/save`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({updates}),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      showStatus(`✅ Lưu thành công ${d.saved}/${updates.length} ảnh!`, 4000);
+    } else {
+      showStatus(`⚠️ Lưu được ${d.saved}/${updates.length} · Lỗi: ${d.errors.map(e=>`#${e.image_id}`).join(', ')}`, 8000);
+    }
+  } catch(e) {
+    showStatus(`❌ Lỗi kết nối: ${e}`, 5000);
+  } finally {
+    document.getElementById('btn-save-all').disabled = false;
+  }
+}
+
+let _statusTimer;
+function showStatus(msg, autoHideMs) {
+  const bar = document.getElementById('status-bar');
+  bar.style.display = 'block';
+  bar.innerHTML = msg;
+  clearTimeout(_statusTimer);
+  if (autoHideMs) _statusTimer = setTimeout(() => bar.style.display = 'none', autoHideMs);
+}
+
+// ── Tab switcher ──────────────────────────────────────────────────
+let _descLoaded = false;
+function switchTab(tab) {
+  const isProduct = tab === 'product';
+  document.getElementById('panel-product').style.display = isProduct ? '' : 'none';
+  document.getElementById('panel-desc').style.display = isProduct ? 'none' : '';
+  const tProd = document.getElementById('tab-product');
+  const tDesc = document.getElementById('tab-desc');
+  tProd.style.borderBottomColor = isProduct ? '#7c3aed' : 'transparent';
+  tProd.style.color = isProduct ? '#7c3aed' : 'var(--text-muted)';
+  tProd.style.fontWeight = isProduct ? '600' : '500';
+  tDesc.style.borderBottomColor = !isProduct ? '#7c3aed' : 'transparent';
+  tDesc.style.color = !isProduct ? '#7c3aed' : 'var(--text-muted)';
+  tDesc.style.fontWeight = !isProduct ? '600' : '500';
+  if (!isProduct && !_descLoaded) loadDescImages();
+}
+
+// ── Load desc images ──────────────────────────────────────────────
+let _descImages = [];
+async function loadDescImages() {
+  _descLoaded = true;
+  const r = await fetch(`/api/alt-manager/${PRODUCT_ID}/desc-images`);
+  const d = await r.json();
+  _descImages = d.images || [];
+  const grid = document.getElementById('desc-grid');
+  const cnt  = document.getElementById('tab-desc-count');
+  const none = _descImages.filter(i => i.status === 'none').length;
+  const weak = _descImages.filter(i => i.status === 'weak').length;
+  cnt.textContent = `(${_descImages.length} ảnh · ${none+weak} cần sửa)`;
+
+  if (!_descImages.length) {
+    grid.innerHTML = '<p class="muted" style="grid-column:1/-1;text-align:center;padding:24px">Không có ảnh trong mô tả.</p>';
+    return;
+  }
+
+  grid.innerHTML = _descImages.map((img, i) => {
+    const statusColors = {good:{bg:'#dcfce7',c:'#15803d'},weak:{bg:'#fef3c7',c:'#92400e'},none:{bg:'#fee2e2',c:'#991b1b'}};
+    const sc = statusColors[img.status] || statusColors.none;
+    const thumb = img.src ? `<img src="${img.src}" loading="lazy"
+        style="width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:8px;background:var(--surface-2)">` :
+      `<div style="width:100%;height:100px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center" class="muted">—</div>`;
+    return `
+    <div class="card" data-desc-index="${img.index}" style="padding:12px;display:flex;flex-direction:column;gap:10px">
+      <div style="position:relative">
+        ${thumb}
+        <span style="position:absolute;top:6px;right:6px;padding:3px 7px;border-radius:4px;font-size:11px;font-weight:700;background:${sc.bg};color:${sc.c}"
+              id="dbadge-${img.index}">${img.status}</span>
+      </div>
+      <div class="muted" style="font-size:11px">Mô tả ảnh ${img.index+1}/${_descImages.length}</div>
+      <textarea class="desc-alt-input" data-index="${img.index}" rows="3"
+                style="width:100%;font-size:13px;resize:vertical;box-sizing:border-box"
+                placeholder="Nhập ALT text…"
+                oninput="onDescAltChange(this)">${escHtml(img.alt)}</textarea>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span class="muted" style="font-size:11px" id="dcc-${img.index}">${img.alt.length}c</span>
+        <button class="btn btn-sm btn-ghost" onclick="descGenSingle(${img.index})">🤖 Gen</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function onDescAltChange(el) {
+  const idx = parseInt(el.dataset.index);
+  const words = el.value.trim().split(/\s+/).filter(Boolean);
+  const status = !el.value.trim() ? 'none' : (words.length < 5 ? 'weak' : 'good');
+  const colors = {good:{bg:'#dcfce7',c:'#15803d'},weak:{bg:'#fef3c7',c:'#92400e'},none:{bg:'#fee2e2',c:'#991b1b'}};
+  const sc = colors[status];
+  const badge = document.getElementById(`dbadge-${idx}`);
+  if (badge) { badge.textContent = status; badge.style.background = sc.bg; badge.style.color = sc.c; }
+  const cc = document.getElementById(`dcc-${idx}`);
+  if (cc) cc.textContent = el.value.length + 'c';
+}
+
+async function descGenSingle(idx) {
+  showStatus(`🤖 Gen ALT ảnh mô tả #${idx+1}…`);
+  const r = await fetch(`/api/alt-manager/${PRODUCT_ID}/gen-alt-desc`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({index: idx}),
+  });
+  const d = await r.json();
+  if (d.alt) {
+    const el = document.querySelector(`.desc-alt-input[data-index="${idx}"]`);
+    if (el) { el.value = d.alt; onDescAltChange(el); }
+    showStatus(`✅ Gen xong ảnh mô tả #${idx+1}`, 2000);
+  }
+}
+
+async function descGenAll() {
+  showStatus(`🤖 Đang gen ${_descImages.length} ảnh mô tả…`);
+  const inputs = document.querySelectorAll('.desc-alt-input');
+  for (const el of inputs) {
+    const idx = parseInt(el.dataset.index);
+    try {
+      const r = await fetch(`/api/alt-manager/${PRODUCT_ID}/gen-alt-desc`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({index: idx}),
+      });
+      const d = await r.json();
+      if (d.alt) { el.value = d.alt; onDescAltChange(el); }
+    } catch(e) {}
+  }
+  showStatus(`✅ Gen xong ${_descImages.length} ảnh mô tả`, 3000);
+}
+
+async function descSaveAll() {
+  const updates = [...document.querySelectorAll('.desc-alt-input')]
+    .map(el => ({index: parseInt(el.dataset.index), alt: el.value.trim()}));
+  if (!updates.length) { showStatus('Không có ảnh nào.', 2000); return; }
+  document.getElementById('btn-desc-save').disabled = true;
+  showStatus(`💾 Đang lưu ${updates.length} ảnh mô tả lên Haravan…`);
+  try {
+    const r = await fetch(`/api/alt-manager/${PRODUCT_ID}/save-desc`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({updates}),
+    });
+    const d = await r.json();
+    if (d.ok) showStatus(`✅ Lưu thành công ${d.saved} ảnh mô tả!`, 4000);
+    else showStatus(`❌ Lỗi: ${d.error}`, 6000);
+  } catch(e) {
+    showStatus(`❌ Lỗi kết nối: ${e}`, 5000);
+  } finally {
+    document.getElementById('btn-desc-save').disabled = false;
+  }
+}
+
+// init tab product count badge
+document.getElementById('tab-product-count').textContent = `(${TOTAL_IMGS} ảnh)`;
+</script>
+{% endblock %}

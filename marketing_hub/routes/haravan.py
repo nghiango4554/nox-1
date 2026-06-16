@@ -206,6 +206,7 @@ def haravan_blogs():
         topic_labels=BLOG_TOPIC_LABELS,
         filters={"topic": f_topic, "band": f_band, "q": f_search or "", "sort": f_sort},
         page_num=page_num, total_pages=total_pages, total=total, per_page=per_page,
+        active="hv_blogs",
     )
 
 
@@ -222,7 +223,7 @@ def haravan_dashboard():
         enriched_top.append({**it, "icon": icon, "label": label})
     return render_template(
         "haravan.html",
-        stats=stats, state=state, latest=latest, top_issues=enriched_top,
+        stats=stats, state=state, latest=latest, top_issues=enriched_top, active="hv_home",
     )
 
 
@@ -245,6 +246,19 @@ def haravan_sync_incremental_start():
     if ok:
         return jsonify({"ok": True, "message": "Incremental sync đã bắt đầu"})
     return jsonify({"ok": False, "message": "Đang sync — chờ xong"}), 409
+
+
+def haravan_prune_stale():
+    """Dọn SP 'chết' trong cache (đã xóa trên Haravan nhưng còn trong DB local)."""
+    dry = (request.args.get("dry") or request.form.get("dry") or "").lower() in ("1", "true", "yes")
+    try:
+        res = hv_sync.prune_stale_products(dry_run=dry)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)[:200]}), 500
+    msg = (f"Đã dọn {res['deleted']} SP chết" if not dry
+           else f"(thử) Có {res['stale']} SP chết") + \
+          f" · cache {res['cache_before']}→{res['cache_before'] - res['deleted']} · live {res['live']}"
+    return jsonify({"ok": True, "message": msg, **res})
 
 
 def haravan_sync_status_api():
@@ -295,7 +309,7 @@ def haravan_products_page():
         "haravan_products.html",
         products=products, stats=stats, top_issues=enriched_top,
         filters=filters, band=band,
-        page_num=page_num, total_pages=total_pages, total=total,
+        page_num=page_num, total_pages=total_pages, total=total, active="hv_products",
     )
 
 
@@ -334,7 +348,7 @@ def haravan_audit_page():
     rows = db.haravan_audit_list(limit=PAGE, offset=(page - 1) * PAGE, only_fail=only_fail)
     stats = db.haravan_audit_stats()
     return render_template("haravan_audit.html", rows=rows, stats=stats,
-                           page=page, only_fail=only_fail, page_size=PAGE)
+                           page=page, only_fail=only_fail, page_size=PAGE, active="hv_audit")
 
 
 # ─────────────────────── REGISTRATION ────────────────────────────
@@ -351,6 +365,7 @@ def register(app):
     app.add_url_rule("/haravan/sync", "haravan_sync_start", haravan_sync_start, methods=["POST"])
     app.add_url_rule("/api/haravan/sync-incremental/start",
                      "haravan_sync_incremental_start", haravan_sync_incremental_start, methods=["POST"])
+    app.add_url_rule("/api/haravan/prune-stale", "haravan_prune_stale", haravan_prune_stale, methods=["POST"])
     app.add_url_rule("/api/haravan/sync/status", "haravan_sync_status_api", haravan_sync_status_api)
     app.add_url_rule("/api/haravan/status", "haravan_status_api", haravan_status_api)
     app.add_url_rule("/haravan/products", "haravan_products_page", haravan_products_page)

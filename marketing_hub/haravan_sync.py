@@ -396,3 +396,46 @@ def start_sync_incremental_async() -> bool:
     t = threading.Thread(target=run_sync_incremental, daemon=True)
     t.start()
     return True
+
+
+def _fetch_all_live_ids() -> set:
+    """Kéo TOÀN BỘ haravan_id còn sống trên Haravan (page-based + retry).
+    Raise nếu fetch dở dang để CALLER không dám xóa nhầm."""
+    expected = hv.count_products()
+    live, page, errs = set(), 1, 0
+    while page <= 200:
+        try:
+            items = hv.list_products(page=page, limit=PAGE_LIMIT, fields="id")
+        except Exception:
+            errs += 1
+            if errs > 3:
+                raise RuntimeError(f"Fetch live ids lỗi liên tục tại page {page}")
+            time.sleep(2)
+            continue
+        if not items:
+            break
+        live.update(p["id"] for p in items)
+        page += 1
+        errs = 0
+        time.sleep(PER_PAGE_DELAY)
+    # Safety: thiếu >5% so với count → coi như fetch dở, KHÔNG cho xóa
+    if expected and len(live) < expected * 0.95:
+        raise RuntimeError(f"Fetch chỉ được {len(live)}/{expected} SP — bỏ prune để tránh xóa nhầm")
+    return live
+
+
+def prune_stale_products(dry_run: bool = False) -> dict:
+    """Dọn SP 'chết' trong cache = SP còn trong haravan_products nhưng KHÔNG còn trên Haravan live.
+    Có safety: chỉ xóa khi đã kéo đủ ≥95% danh sách live. dry_run=True chỉ đếm, không xóa."""
+    live = _fetch_all_live_ids()
+    cache = db.hv_all_product_ids()
+    stale = sorted(cache - live)
+    missing = sorted(live - cache)  # SP live chưa có trong cache (chỉ báo, không xử lý ở đây)
+    deleted = 0
+    if stale and not dry_run:
+        deleted = db.hv_delete_products(stale)
+    return {
+        "live": len(live), "cache_before": len(cache),
+        "stale": len(stale), "deleted": deleted,
+        "missing_in_cache": len(missing), "dry_run": dry_run,
+    }

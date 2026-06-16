@@ -91,6 +91,11 @@ CREATE TABLE IF NOT EXISTS seo_links (
 
 CREATE INDEX IF NOT EXISTS idx_seo_links_source ON seo_links(source_url);
 CREATE INDEX IF NOT EXISTS idx_seo_links_status ON seo_links(status_code);
+-- Phase 2 unchecked query: WHERE is_internal=0 AND status_code IS NULL GROUP BY target_url
+-- (additive — KHÔNG drop/truncate/migrate phá dữ liệu)
+CREATE INDEX IF NOT EXISTS idx_seo_links_check ON seo_links(is_internal, status_code, target_url);
+-- Trang /seo/inlinks JOIN seo_pages ON l.target_url=p.url → cần target_url đứng đầu (tránh quét 731k dòng).
+CREATE INDEX IF NOT EXISTS idx_seo_links_target ON seo_links(target_url, is_internal);
 
 CREATE TABLE IF NOT EXISTS activity_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -310,6 +315,113 @@ CREATE TABLE IF NOT EXISTS collection_products (
 );
 CREATE INDEX IF NOT EXISTS idx_colprod_handle ON collection_products(collection_handle);
 CREATE INDEX IF NOT EXISTS idx_colprod_url ON collection_products(product_url);
+
+-- ─────────────── BLOG REWRITE AI (P1, additive) ───────────────
+CREATE TABLE IF NOT EXISTS blog_rewrite_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id INTEGER,
+    blog_id INTEGER,
+    handle TEXT,
+    article_url TEXT,
+    title TEXT,
+    author TEXT,
+    published_year TEXT,
+    source_group_primary TEXT,
+    source_groups_json TEXT,
+    risk_level TEXT,            -- high | medium | review | unknown
+    risk_reason TEXT,
+    source_hosts_json TEXT,
+    source_evidence_json TEXT,
+    scan_source TEXT,
+    gsc_clicks_28d INTEGER DEFAULT 0,
+    gsc_impressions_28d INTEGER DEFAULT 0,
+    gsc_position_28d REAL,
+    ga4_organic_sessions_28d INTEGER DEFAULT 0,
+    traffic_data_status TEXT,  -- has_data | no_traffic_data
+    priority_score REAL DEFAULT 0,
+    content_hash TEXT,
+    live_updated_at TEXT,
+    status TEXT DEFAULT 'imported',
+    selected INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(article_id)
+);
+CREATE INDEX IF NOT EXISTS idx_brc_article ON blog_rewrite_candidates(article_id);
+CREATE INDEX IF NOT EXISTS idx_brc_handle ON blog_rewrite_candidates(handle);
+CREATE INDEX IF NOT EXISTS idx_brc_risk ON blog_rewrite_candidates(risk_level);
+CREATE INDEX IF NOT EXISTS idx_brc_status ON blog_rewrite_candidates(status);
+CREATE INDEX IF NOT EXISTS idx_brc_selected ON blog_rewrite_candidates(selected);
+CREATE INDEX IF NOT EXISTS idx_brc_priority ON blog_rewrite_candidates(priority_score);
+CREATE INDEX IF NOT EXISTS idx_brc_updated ON blog_rewrite_candidates(updated_at);
+
+CREATE TABLE IF NOT EXISTS blog_rewrite_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    mode TEXT,                 -- single | selected | batch
+    status TEXT DEFAULT 'queued',
+    candidate_count INTEGER DEFAULT 0,
+    completed_count INTEGER DEFAULT 0,
+    failed_count INTEGER DEFAULT 0,
+    skipped_count INTEGER DEFAULT 0,
+    provider TEXT,
+    model TEXT,
+    prompt_version TEXT,
+    started_at TEXT,
+    finished_at TEXT,
+    last_heartbeat_at TEXT,
+    error_summary TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_brj_status ON blog_rewrite_jobs(status);
+
+CREATE TABLE IF NOT EXISTS blog_rewrite_drafts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidate_id INTEGER,
+    job_id INTEGER,
+    version INTEGER DEFAULT 1,
+    original_title TEXT,
+    original_body_html TEXT,
+    original_summary_html TEXT,
+    original_tags TEXT,
+    original_handle TEXT,
+    original_content_hash TEXT,
+    draft_title TEXT,
+    draft_body_html TEXT,
+    draft_summary_html TEXT,
+    draft_tags TEXT,
+    seo_title_suggestions_json TEXT,
+    meta_description_suggestions_json TEXT,
+    outline_json TEXT,
+    quality_json TEXT,
+    similarity_json TEXT,
+    internal_links_json TEXT,
+    external_links_json TEXT,
+    image_flags_json TEXT,
+    image_mapping_json TEXT,
+    approval_status TEXT DEFAULT 'pending',
+    approved_at TEXT,
+    applied_at TEXT,
+    applied_payload_json TEXT,
+    live_backup_payload_json TEXT,
+    apply_result_json TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_brd_candidate ON blog_rewrite_drafts(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_brd_job ON blog_rewrite_drafts(job_id);
+
+CREATE TABLE IF NOT EXISTS blog_rewrite_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    candidate_id INTEGER,
+    draft_id INTEGER,
+    job_id INTEGER,
+    event_type TEXT,
+    detail_json TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_bre_candidate ON blog_rewrite_events(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_bre_job ON blog_rewrite_events(job_id);
 """
 
 
@@ -1932,17 +2044,22 @@ def seo_broken_link_summary() -> dict:
     - total_all: tổng cả internal + external (link gom được trên site)
     """
     conn = get_conn()
+    # PHÂN LOẠI ĐÚNG (spec Phase 5): timeout/5xx/403/429/dns/ssl ≠ broken chắc chắn → uncertain (retry).
+    # confirmed_broken = chỉ 404/410/invalid_url (trang gãy thật, gone/not-found/url sai).
     ext = conn.execute(
         """SELECT
-            COUNT(DISTINCT CASE WHEN (status_code >= 400 OR status_code = 0)
-                                 AND (error_kind IS NULL OR error_kind != 'social_share_skip')
-                                THEN target_url END) broken,
+            COUNT(DISTINCT CASE WHEN status_code IN (404, 410) OR error_kind = 'invalid_url'
+                                THEN target_url END) confirmed_broken,
+            COUNT(DISTINCT CASE WHEN (status_code >= 400 AND status_code NOT IN (404, 410))
+                                  OR (status_code = 0 AND error_kind NOT IN ('social_share_skip','invalid_url'))
+                                THEN target_url END) uncertain,
             COUNT(DISTINCT CASE WHEN status_code IS NULL
                                 THEN target_url END) unchecked,
-            COUNT(DISTINCT CASE WHEN status_code IS NOT NULL
-                                 AND ((status_code > 0 AND status_code < 400)
-                                      OR error_kind = 'social_share_skip')
+            COUNT(DISTINCT CASE WHEN (status_code BETWEEN 200 AND 399)
+                                  OR error_kind = 'social_share_skip'
                                 THEN target_url END) ok,
+            COUNT(DISTINCT CASE WHEN error_kind = 'social_share_skip'
+                                THEN target_url END) skipped,
             COUNT(DISTINCT target_url) total
            FROM seo_links
            WHERE is_internal = 0"""
@@ -1955,9 +2072,13 @@ def seo_broken_link_summary() -> dict:
     ).fetchone()["c"]
     conn.close()
     return {
-        "broken": ext["broken"] or 0,
+        # broken (compat) = confirmed_broken (chỉ link gãy THẬT, không gộp timeout)
+        "broken": ext["confirmed_broken"] or 0,
+        "confirmed_broken": ext["confirmed_broken"] or 0,
+        "uncertain": ext["uncertain"] or 0,
         "unchecked": ext["unchecked"] or 0,
         "ok": ext["ok"] or 0,
+        "skipped": ext["skipped"] or 0,
         "total": ext["total"] or 0,
         "internal_verified": internal_count or 0,
         "total_all": total_all or 0,
@@ -2451,6 +2572,31 @@ def hv_get_product_by_handle(handle: str):
     ).fetchone()
     conn.close()
     return dict(row) if row else None
+
+
+def hv_all_product_ids() -> set:
+    """Set toàn bộ haravan_id đang có trong cache."""
+    conn = get_conn()
+    ids = {r[0] for r in conn.execute("SELECT haravan_id FROM haravan_products").fetchall()}
+    conn.close()
+    return ids
+
+
+def hv_delete_products(ids) -> int:
+    """Xóa các SP theo haravan_id khỏi cache (dọn SP đã xóa trên Haravan). Trả số dòng xóa."""
+    ids = [int(i) for i in ids]
+    if not ids:
+        return 0
+    conn = get_conn()
+    n = 0
+    for i in range(0, len(ids), 500):  # chunk tránh giới hạn biến SQL
+        chunk = ids[i:i + 500]
+        ph = ",".join("?" * len(chunk))
+        cur = conn.execute(f"DELETE FROM haravan_products WHERE haravan_id IN ({ph})", chunk)
+        n += cur.rowcount
+    conn.commit()
+    conn.close()
+    return n
 
 
 def hv_stats() -> dict:

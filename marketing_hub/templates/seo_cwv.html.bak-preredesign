@@ -1,0 +1,830 @@
+{% extends "base.html" %}
+{% block title %}Core Web Vitals · SEO · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
+<span class="crumb"></span>
+<span style="font-weight:600">⚡ Core Web Vitals</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('seo_dashboard') }}">← SEO dashboard</a>
+{% endblock %}
+
+{% block content %}
+<style>
+/* ── Light theme override cho trang CWV ── */
+.content-area, .main-content, main, #content, [class*="content"] {
+  background: #f0f4f8 !important;
+  color: #1a202c !important;
+}
+:root {
+  --surface: #ffffff;
+  --surface2: #f0f4f8;
+  --border: rgba(0,0,0,.1);
+  --border2: rgba(0,0,0,.14);
+  --text-muted: #64748b;
+  --good: #16a34a;
+  --ok: #d97706;
+  --bad: #dc2626;
+  --accent: #4f46e5;
+}
+/* Force text màu tối trên nền sáng */
+.cwv-header, .cwv-kpi, .scanner-card, .cwv-table,
+.cwv-header *, .cwv-kpi *, .scanner-card *, .cwv-table * {
+  color: #1a202c;
+}
+.cwv-kpi-label, .cwv-coverage-label, .type-pbar-label,
+.kpi-counts, .scanner-grid label, .kpi-explain,
+details summary, .scan-msg, .cwv-table th {
+  color: #64748b !important;
+}
+.cwv-grade-badge, .cwv-kpi-num, .scanner-title,
+.cwv-header-title, .badge-good, .badge-ok, .badge-bad,
+.strat-btn.active, .batch-pill.active, .batch-pill.next {
+  color: inherit;
+}
+/* Badge màu nền sáng */
+.badge-good { background:#dcfce7; color:#15803d !important; }
+.badge-ok   { background:#fef9c3; color:#a16207 !important; }
+.badge-bad  { background:#fee2e2; color:#b91c1c !important; }
+.badge-none { background:#f1f5f9; color:#64748b !important; }
+.badge-type { background:#ede9fe; color:#6d28d9 !important; }
+/* Card nền trắng */
+.cwv-header, .cwv-kpi, .scanner-card {
+  background: #ffffff !important;
+  border-color: rgba(0,0,0,.1) !important;
+}
+/* Table */
+.cwv-table tbody tr:hover { background: rgba(0,0,0,.03) !important; }
+.cwv-table th { border-bottom-color: rgba(0,0,0,.1) !important; }
+.cwv-table td { border-bottom-color: rgba(0,0,0,.05) !important; }
+.url-cell a { color: #4338ca !important; }
+/* Input/select sáng */
+.scanner-grid select, .scanner-grid input[type=text],
+#urlTypeSelect, #apiKey {
+  background: #f8fafc !important;
+  border-color: rgba(0,0,0,.15) !important;
+  color: #1a202c !important;
+}
+/* Strategy & batch pills */
+.strat-btn { background: #f1f5f9 !important; border-color: rgba(0,0,0,.12) !important; color: #374151 !important; }
+.strat-btn:hover { background: #e2e8f0 !important; }
+.strat-btn.active { background: #ede9fe !important; border-color: #6d28d9 !important; color: #4f46e5 !important; }
+.batch-pill { background: #f1f5f9 !important; border-color: rgba(0,0,0,.1) !important; color: #475569 !important; }
+.batch-pill:hover { background: #e2e8f0 !important; }
+.batch-pill.active { background: #ede9fe !important; border-color: #6d28d9 !important; color: #4f46e5 !important; }
+.batch-pill.next { border-color: #16a34a !important; color: #16a34a !important; }
+/* Grade badges sáng */
+.cwv-grade-A { background:#dcfce7 !important; color:#15803d !important; border-color:#86efac !important; }
+.cwv-grade-B { background:#d1fae5 !important; color:#065f46 !important; border-color:#6ee7b7 !important; }
+.cwv-grade-C { background:#fef9c3 !important; color:#92400e !important; border-color:#fde047 !important; }
+.cwv-grade-D { background:#ffedd5 !important; color:#9a3412 !important; border-color:#fdba74 !important; }
+.cwv-grade-F { background:#fee2e2 !important; color:#991b1b !important; border-color:#fca5a5 !important; }
+/* Progress running bar */
+.scan-running-bar { background: #f0f4f8 !important; }
+.scan-pbar-wrap { background: rgba(0,0,0,.08) !important; }
+.type-pbar-wrap { background: rgba(0,0,0,.08) !important; }
+.cwv-coverage-bar { background: rgba(0,0,0,.08) !important; }
+/* Sort links */
+.sort-link { color: #64748b !important; }
+.sort-link.active { color: #4f46e5 !important; }
+.sort-link:hover { color: #1a202c !important; }
+/* Kpi top border */
+.cwv-kpi.kpi-good::before { background: #16a34a !important; }
+.cwv-kpi.kpi-ok::before   { background: #d97706 !important; }
+.cwv-kpi.kpi-bad::before  { background: #dc2626 !important; }
+/* Distribution bars sáng hơn */
+.dist-good { background: #16a34a !important; }
+.dist-ok   { background: #d97706 !important; }
+.dist-bad  { background: #dc2626 !important; }
+/* KPI num color */
+.kpi-num-good { color: #15803d !important; }
+.kpi-num-ok   { color: #a16207 !important; }
+.kpi-num-bad  { color: #b91c1c !important; }
+/* Warning banner */
+.cwv-warn-banner { background: #fffbeb !important; border-color: #fcd34d !important; color: #78350f !important; }
+/* Empty state */
+.cwv-empty { color: #64748b !important; }
+/* Pagination */
+.cwv-pagination a, .cwv-pagination span { color: #64748b !important; }
+
+/* ── Header area ── */
+.cwv-header { display:grid; grid-template-columns:auto 1fr; gap:20px; align-items:center;
+  background:var(--surface); border:1px solid var(--border); border-radius:12px;
+  padding:20px 24px; margin-bottom:20px }
+.cwv-grade-badge { width:72px; height:72px; border-radius:16px; display:flex;
+  align-items:center; justify-content:center; font-size:36px; font-weight:800;
+  letter-spacing:-1px; flex-shrink:0 }
+.cwv-grade-A { background:rgba(52,211,153,.18); color:#34d399; border:2px solid rgba(52,211,153,.35) }
+.cwv-grade-B { background:rgba(74,222,128,.15); color:#4ade80; border:2px solid rgba(74,222,128,.3) }
+.cwv-grade-C { background:rgba(250,204,21,.13); color:#facc15; border:2px solid rgba(250,204,21,.28) }
+.cwv-grade-D { background:rgba(251,146,60,.13); color:#fb923c; border:2px solid rgba(251,146,60,.28) }
+.cwv-grade-F { background:rgba(248,113,113,.13); color:#f87171; border:2px solid rgba(248,113,113,.28) }
+.cwv-header-info { min-width:0 }
+.cwv-header-title { font-size:18px; font-weight:700; margin-bottom:6px }
+.cwv-header-meta { font-size:12.5px; color:var(--text-muted); margin-bottom:10px }
+.cwv-coverage-bar { background:rgba(255,255,255,.06); border-radius:6px; height:10px; overflow:hidden; position:relative }
+.cwv-coverage-fill { height:10px; border-radius:6px;
+  background:linear-gradient(90deg, #818cf8 0%, #a5b4fc 100%); transition:width .5s }
+.cwv-coverage-label { font-size:11px; color:var(--text-muted); margin-top:5px }
+
+/* ── KPI cards ── */
+.cwv-kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px }
+@media(max-width:900px){ .cwv-kpi-row { grid-template-columns:repeat(2,1fr) } }
+@media(max-width:520px){ .cwv-kpi-row { grid-template-columns:1fr } }
+.cwv-kpi { background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:16px 18px; position:relative; overflow:hidden }
+.cwv-kpi::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; border-radius:12px 12px 0 0 }
+.cwv-kpi.kpi-good::before { background:var(--good) }
+.cwv-kpi.kpi-ok::before   { background:var(--ok) }
+.cwv-kpi.kpi-bad::before  { background:var(--bad) }
+.cwv-kpi-num { font-size:30px; font-weight:800; line-height:1; letter-spacing:-1px; margin-bottom:4px }
+.cwv-kpi-label { font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px }
+.dist-bar { display:flex; height:7px; border-radius:4px; overflow:hidden; gap:1px; margin-bottom:6px }
+.dist-good { background:var(--good); min-width:2px }
+.dist-ok   { background:var(--ok);   min-width:2px }
+.dist-bad  { background:var(--bad);  min-width:2px }
+.kpi-counts { font-size:10.5px; color:var(--text-muted); display:flex; gap:8px; flex-wrap:wrap }
+.kpi-counts .c-good { color:var(--good) }
+.kpi-counts .c-ok   { color:var(--ok) }
+.kpi-counts .c-bad  { color:var(--bad) }
+.kpi-explain { font-size:10.5px; color:var(--text-muted); line-height:1.5;
+  border-top:1px solid var(--border); padding-top:8px; margin-top:8px }
+details summary { cursor:pointer; font-size:10px; color:var(--accent); letter-spacing:.3px;
+  list-style:none; user-select:none; margin-bottom:4px }
+details summary::-webkit-details-marker { display:none }
+details[open] summary::before { content:'▾ ' }
+details:not([open]) summary::before { content:'▸ ' }
+
+/* ── Badges ── */
+.badge-good { background:rgba(52,211,153,.15); color:#34d399; border-radius:6px; padding:3px 9px; font-size:12px; font-weight:600; display:inline-block }
+.badge-ok   { background:rgba(250,204,21,.12); color:#facc15; border-radius:6px; padding:3px 9px; font-size:12px; font-weight:600; display:inline-block }
+.badge-bad  { background:rgba(239,68,68,.15);  color:#f87171; border-radius:6px; padding:3px 9px; font-size:12px; font-weight:600; display:inline-block }
+.badge-none { background:rgba(255,255,255,.05); color:#64748b; border-radius:6px; padding:3px 9px; font-size:11px; display:inline-block }
+.badge-type { background:rgba(129,140,248,.12); color:#a5b4fc; border-radius:4px; padding:1px 6px; font-size:10px; font-weight:600 }
+
+/* ── Batch scanner card ── */
+.scanner-card { background:var(--surface); border:1px solid var(--border2);
+  border-radius:12px; padding:20px 22px; margin-bottom:20px }
+.scanner-title { font-size:15px; font-weight:700; margin-bottom:16px; display:flex; align-items:center; gap:8px }
+.scanner-grid { display:grid; grid-template-columns:auto auto 1fr auto; gap:14px; align-items:end; flex-wrap:wrap }
+@media(max-width:860px){ .scanner-grid { grid-template-columns:1fr 1fr } }
+@media(max-width:520px){ .scanner-grid { grid-template-columns:1fr } }
+.scanner-grid label { font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px; display:block; margin-bottom:5px }
+.scanner-grid select, .scanner-grid input[type=text] {
+  background:#0d1117; border:1px solid var(--border); border-radius:7px;
+  color:inherit; padding:7px 11px; font-size:13px; width:100% }
+.scanner-grid input[type=text] { width:220px }
+/* Strategy toggle */
+.strat-btns { display:flex; gap:6px }
+.strat-btn { background:rgba(255,255,255,.06); border:1px solid var(--border); border-radius:7px;
+  padding:7px 14px; font-size:13px; cursor:pointer; color:inherit; transition:.15s }
+.strat-btn:hover { background:rgba(255,255,255,.1) }
+.strat-btn.active { background:rgba(129,140,248,.2); border-color:var(--accent); color:#c7d2fe }
+/* Batch size pills */
+.batch-pills { display:flex; gap:6px; flex-wrap:wrap; margin:12px 0 }
+.batch-pill { background:rgba(255,255,255,.06); border:1px solid var(--border); border-radius:7px;
+  padding:5px 12px; font-size:12px; cursor:pointer; color:var(--text-muted); transition:.15s; user-select:none }
+.batch-pill:hover { background:rgba(255,255,255,.1); color:inherit }
+.batch-pill.active { background:rgba(129,140,248,.2); border-color:var(--accent); color:#c7d2fe; font-weight:600 }
+.batch-pill.next { border-color:rgba(52,211,153,.5); color:var(--good) }
+/* Mini progress bars per type */
+.type-progress-list { display:flex; flex-direction:column; gap:7px; margin:12px 0 }
+.type-progress-row { display:grid; grid-template-columns:90px 1fr 80px; gap:8px; align-items:center; font-size:11.5px }
+.type-pbar-wrap { background:rgba(255,255,255,.06); border-radius:4px; height:6px }
+.type-pbar-fill { height:6px; border-radius:4px; background:linear-gradient(90deg,#818cf8,#a5b4fc); transition:width .4s }
+.type-pbar-label { color:var(--text-muted); text-align:right; font-size:10.5px }
+/* Action buttons */
+.scanner-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px }
+/* Running progress */
+.scan-running-bar { margin-top:14px; display:none }
+.scan-pbar-wrap { background:rgba(255,255,255,.06); border-radius:6px; height:10px; overflow:hidden; margin:8px 0 }
+.scan-pbar-fill { height:10px; border-radius:6px; background:linear-gradient(90deg,#7c3aed,#818cf8); transition:width .3s }
+.scan-msg { font-size:12px; color:var(--text-muted); margin-top:4px }
+
+/* ── Table ── */
+.cwv-table { width:100%; border-collapse:collapse; font-size:12.5px }
+.cwv-table th { font-size:10px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px;
+  padding:9px 10px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap }
+.cwv-table td { padding:8px 10px; border-bottom:1px solid rgba(255,255,255,.035); vertical-align:middle }
+.cwv-table tbody tr:hover { background:rgba(255,255,255,.025) }
+.url-cell { max-width:280px }
+.url-cell a { color:var(--text-muted); font-size:11.5px; text-decoration:none;
+  display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.url-cell a:hover { color:inherit }
+.url-title { font-size:10.5px; color:rgba(139,150,176,.6); margin-top:2px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:280px }
+.sort-link { color:var(--text-muted); text-decoration:none; display:inline-flex; align-items:center; gap:3px }
+.sort-link:hover { color:inherit }
+.sort-link.active { color:#a5b4fc }
+.field-muted { font-size:11px; color:rgba(139,150,176,.5) }
+.badge-traffic { background:rgba(139,150,176,.1); color:rgba(139,150,176,.6);
+  border-radius:4px; padding:1px 5px; font-size:9.5px; border:1px solid rgba(139,150,176,.15) }
+
+/* ── Empty state ── */
+.cwv-empty { text-align:center; padding:80px 24px }
+.cwv-empty-icon { font-size:64px; margin-bottom:16px; opacity:.7 }
+.cwv-empty-title { font-size:18px; font-weight:700; margin-bottom:8px }
+.cwv-empty-sub { font-size:13px; color:var(--text-muted); line-height:1.7; max-width:480px; margin:0 auto }
+
+/* ── Pagination ── */
+.cwv-pagination { display:flex; gap:8px; justify-content:center; margin-top:18px; align-items:center }
+.cwv-pagination .btn { padding:6px 14px; font-size:13px }
+.cwv-pagination .page-info { padding:6px 14px; color:var(--text-muted); font-size:13px }
+
+/* ── Tip banner ── */
+.cwv-tip { background:rgba(245,158,11,.07); border:1px solid rgba(245,158,11,.22);
+  border-radius:8px; padding:10px 14px; margin-bottom:16px; font-size:12px; line-height:1.65 }
+</style>
+
+{# ── Compute overall grade from avg_perf ── #}
+{% set avg_p = stats.avg_perf if stats and stats.avg_perf else 0 %}
+{% if avg_p >= 90 %}{% set grade = 'A' %}
+{% elif avg_p >= 75 %}{% set grade = 'B' %}
+{% elif avg_p >= 60 %}{% set grade = 'C' %}
+{% elif avg_p >= 50 %}{% set grade = 'D' %}
+{% else %}{% set grade = 'F' %}{% endif %}
+
+{# coverage across all types #}
+{% set cov_total = progress | sum(attribute='total') if progress else 0 %}
+{% set cov_scanned = progress | sum(attribute='scanned') if progress else 0 %}
+{% set cov_pct = ((cov_scanned / cov_total * 100) | round(1)) if cov_total > 0 else 0 %}
+
+{# Overall grade cho CẢ 2 thiết bị (header hiện song song) #}
+{% set avg_m = stats_mobile.avg_perf if stats_mobile and stats_mobile.avg_perf else 0 %}
+{% if avg_m >= 90 %}{% set grade_m = 'A' %}{% elif avg_m >= 75 %}{% set grade_m = 'B' %}{% elif avg_m >= 60 %}{% set grade_m = 'C' %}{% elif avg_m >= 50 %}{% set grade_m = 'D' %}{% else %}{% set grade_m = 'F' %}{% endif %}
+{% set avg_d = stats_desktop.avg_perf if stats_desktop and stats_desktop.avg_perf else 0 %}
+{% if avg_d >= 90 %}{% set grade_d = 'A' %}{% elif avg_d >= 75 %}{% set grade_d = 'B' %}{% elif avg_d >= 60 %}{% set grade_d = 'C' %}{% elif avg_d >= 50 %}{% set grade_d = 'D' %}{% else %}{% set grade_d = 'F' %}{% endif %}
+
+<!-- ── A. Header ── -->
+<div class="cwv-header" style="display:block">
+  <div style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px">
+    ⚡ Performance tổng thể — Mobile &amp; Desktop
+  </div>
+
+  <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:stretch">
+    {# ── Mobile ── #}
+    <a href="/seo/cwv?strategy=mobile"
+       style="flex:1; min-width:240px; display:flex; align-items:center; gap:14px; text-decoration:none;
+              padding:14px 16px; border-radius:12px; border:2px solid {{ '#4f46e5' if strategy=='mobile' else 'rgba(0,0,0,.08)' }};
+              background:{{ 'rgba(79,70,229,.05)' if strategy=='mobile' else '#fff' }}">
+      <div class="cwv-grade-badge cwv-grade-{{ grade_m }}">{{ grade_m }}</div>
+      <div>
+        <div class="cwv-header-title" style="font-size:16px">
+          📱 Mobile
+          {% if avg_m %}<span style="color:var(--text-muted); font-weight:400; font-size:14px; margin-left:6px">avg {{ avg_m }}</span>{% endif %}
+          {% if strategy=='mobile' %}<span style="font-size:10px; color:#4f46e5; font-weight:600; margin-left:6px">● đang xem</span>{% endif %}
+        </div>
+        <div class="cwv-header-meta">
+          {% if total_mobile %}{{ total_mobile }} trang đã scan{% else %}chưa có dữ liệu{% endif %}
+        </div>
+      </div>
+    </a>
+
+    {# ── Desktop ── #}
+    <a href="/seo/cwv?strategy=desktop"
+       style="flex:1; min-width:240px; display:flex; align-items:center; gap:14px; text-decoration:none;
+              padding:14px 16px; border-radius:12px; border:2px solid {{ '#4f46e5' if strategy=='desktop' else 'rgba(0,0,0,.08)' }};
+              background:{{ 'rgba(79,70,229,.05)' if strategy=='desktop' else '#fff' }}">
+      <div class="cwv-grade-badge cwv-grade-{{ grade_d }}">{{ grade_d }}</div>
+      <div>
+        <div class="cwv-header-title" style="font-size:16px">
+          🖥️ Desktop
+          {% if avg_d %}<span style="color:var(--text-muted); font-weight:400; font-size:14px; margin-left:6px">avg {{ avg_d }}</span>{% endif %}
+          {% if strategy=='desktop' %}<span style="font-size:10px; color:#4f46e5; font-weight:600; margin-left:6px">● đang xem</span>{% endif %}
+        </div>
+        <div class="cwv-header-meta">
+          {% if total_desktop %}{{ total_desktop }} trang đã scan{% else %}chưa có dữ liệu{% endif %}
+        </div>
+      </div>
+    </a>
+  </div>
+
+  <div class="cwv-header-meta" style="margin-top:10px">A≥90 · B≥75 · C≥60 · D≥50 · F&lt;50 — bấm 1 thẻ để xem bảng chi tiết thiết bị đó</div>
+
+  {% if cov_total > 0 %}
+  <div class="cwv-coverage-bar" style="margin-top:10px">
+    <div class="cwv-coverage-fill" style="width:{{ [cov_pct, 100] | min }}%"></div>
+  </div>
+  <div class="cwv-coverage-label">Coverage {{ strategy }}: đã quét {{ cov_scanned }}/{{ cov_total }} URL ({{ cov_pct }}%)</div>
+  {% endif %}
+</div>
+
+<!-- ── B. 4 KPI Cards — CẢ Mobile + Desktop cùng lúc ── -->
+{% macro kpi_cards(st, avgp) %}
+  <!-- LCP -->
+  {% set lcp_color = 'good' if (st.avg_lcp and st.avg_lcp <= 2500) else ('ok' if (st.avg_lcp and st.avg_lcp <= 4000) else 'bad') %}
+  <div class="cwv-kpi kpi-{{ lcp_color }}">
+    <div class="cwv-kpi-num" style="color:var(--{{ lcp_color }})">
+      {% if st.avg_lcp %}{{ (st.avg_lcp / 1000) | round(2) }}s{% else %}—{% endif %}
+    </div>
+    <div class="cwv-kpi-label">LCP</div>
+    <div class="dist-bar">
+      <div class="dist-good" style="flex:{{ st.lcp_good or 0 }}"></div>
+      <div class="dist-ok"   style="flex:{{ st.lcp_ok or 0 }}"></div>
+      <div class="dist-bad"  style="flex:{{ st.lcp_bad or 0 }}"></div>
+    </div>
+    <div class="kpi-counts">
+      <span class="c-good">{{ st.lcp_good or 0 }} tốt</span>
+      <span class="c-ok">{{ st.lcp_ok or 0 }} cần cải thiện</span>
+      <span class="c-bad">{{ st.lcp_bad or 0 }} kém</span>
+    </div>
+    <details class="kpi-explain">
+      <summary>Giải thích</summary>
+      Thời gian tải phần tử lớn nhất — ảnh hero, tiêu đề SP.<br>
+      ≤2.5s = tốt · ≤4s = cần cải thiện · &gt;4s = kém
+    </details>
+  </div>
+
+  <!-- CLS -->
+  {% set cls_color = 'good' if (st.avg_cls is not none and st.avg_cls <= 0.1) else ('ok' if (st.avg_cls is not none and st.avg_cls <= 0.25) else 'bad') %}
+  <div class="cwv-kpi kpi-{{ cls_color }}">
+    <div class="cwv-kpi-num" style="color:var(--{{ cls_color }})">
+      {{ st.avg_cls if st.avg_cls is not none else '—' }}
+    </div>
+    <div class="cwv-kpi-label">CLS</div>
+    <div class="dist-bar">
+      <div class="dist-good" style="flex:{{ st.cls_good or 0 }}"></div>
+      <div class="dist-ok"   style="flex:{{ st.cls_ok or 0 }}"></div>
+      <div class="dist-bad"  style="flex:{{ st.cls_bad or 0 }}"></div>
+    </div>
+    <div class="kpi-counts">
+      <span class="c-good">{{ st.cls_good or 0 }} tốt</span>
+      <span class="c-ok">{{ st.cls_ok or 0 }} cần cải thiện</span>
+      <span class="c-bad">{{ st.cls_bad or 0 }} kém</span>
+    </div>
+    <details class="kpi-explain">
+      <summary>Giải thích</summary>
+      Tổng dịch chuyển bố cục khi tải — nút nhảy lung tung.<br>
+      ≤0.1 = tốt · ≤0.25 = cần cải thiện · &gt;0.25 = kém
+    </details>
+  </div>
+
+  <!-- TBT -->
+  {% set tbt_color = 'good' if (st.avg_tbt and st.avg_tbt <= 200) else ('ok' if (st.avg_tbt and st.avg_tbt <= 600) else 'bad') %}
+  <div class="cwv-kpi kpi-{{ tbt_color }}">
+    <div class="cwv-kpi-num" style="color:var(--{{ tbt_color }})">
+      {% if st.avg_tbt %}{{ st.avg_tbt | int }}ms{% else %}—{% endif %}
+    </div>
+    <div class="cwv-kpi-label">TBT</div>
+    <div class="dist-bar" style="margin-bottom:6px">
+      {# TBT distribution — approximate from perf bands #}
+      <div class="dist-good" style="flex:{{ st.perf_good or 0 }}"></div>
+      <div class="dist-ok"   style="flex:{{ st.perf_ok or 0 }}"></div>
+      <div class="dist-bad"  style="flex:{{ st.perf_bad or 0 }}"></div>
+    </div>
+    <div class="kpi-counts">
+      <span class="c-good">≤200ms tốt</span>
+      <span class="c-ok">≤600ms chấp nhận</span>
+    </div>
+    <details class="kpi-explain">
+      <summary>Giải thích</summary>
+      Thời gian trang bị block, không phản hồi click.<br>
+      ≤200ms = tốt · ≤600ms = chấp nhận · &gt;600ms = kém
+    </details>
+  </div>
+
+  <!-- Perf score -->
+  {% set perf_color = 'good' if avgp >= 90 else ('ok' if avgp >= 50 else 'bad') %}
+  <div class="cwv-kpi kpi-{{ perf_color }}">
+    <div class="cwv-kpi-num" style="color:var(--{{ perf_color }})">{{ avgp or '—' }}</div>
+    <div class="cwv-kpi-label">Perf Score</div>
+    <div class="dist-bar">
+      <div class="dist-good" style="flex:{{ st.perf_good or 0 }}"></div>
+      <div class="dist-ok"   style="flex:{{ st.perf_ok or 0 }}"></div>
+      <div class="dist-bad"  style="flex:{{ st.perf_bad or 0 }}"></div>
+    </div>
+    <div class="kpi-counts">
+      <span class="c-good">{{ st.perf_good or 0 }} tốt</span>
+      <span class="c-ok">{{ st.perf_ok or 0 }} cần cải thiện</span>
+      <span class="c-bad">{{ st.perf_bad or 0 }} kém</span>
+    </div>
+    <details class="kpi-explain">
+      <summary>Giải thích</summary>
+      Điểm tổng hợp Lighthouse 0–100.<br>
+      ≥90 = tốt · ≥50 = cần cải thiện · &lt;50 = kém
+    </details>
+  </div>
+{% endmacro %}
+
+{% set _dev_lbl = "font-size:12px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px; margin:6px 0 8px" %}
+{% if (stats_mobile and stats_mobile.total) or (stats_desktop and stats_desktop.total) %}
+  {% if stats_mobile and stats_mobile.total %}
+  <div style="{{ _dev_lbl }}">📱 Mobile · {{ stats_mobile.total }} trang · grade {{ grade_m }}</div>
+  <div class="cwv-kpi-row">{{ kpi_cards(stats_mobile, avg_m) }}</div>
+  {% endif %}
+  {% if stats_desktop and stats_desktop.total %}
+  <div style="{{ _dev_lbl }}; margin-top:18px">🖥️ Desktop · {{ stats_desktop.total }} trang · grade {{ grade_d }}</div>
+  <div class="cwv-kpi-row">{{ kpi_cards(stats_desktop, avg_d) }}</div>
+  {% endif %}
+{% endif %}
+
+<!-- ── B2. Top URL LCP tệ nhất (READ-ONLY, đọc seo_cwv_lcp, KHÔNG gọi PSI) ── -->
+<div class="scanner-card" style="margin-top:18px">
+  <div class="scanner-title">🐌 Top URL LCP tệ nhất <span style="font-weight:400;color:var(--text-muted);font-size:12px">— phân tích P0A (đọc từ DB, không đo lại)</span></div>
+
+  <div style="font-size:11.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:8px 12px;margin:10px 0">
+    ⚠️ <b>Lab data</b> dùng để debug kỹ thuật, <b>có thể dao động</b> giữa các lần đo (xem cột Runs).
+    <b>Field data</b> phản ánh trải nghiệm thực tế nhưng có thể là dữ liệu <b>cấp URL</b> hoặc <b>origin fallback</b>.<br>
+    📌 Dữ liệu phân tích chi tiết hiện có: <b>{{ lcp_summary.total }}</b> URL mẫu trên tổng <b>{{ lcp_summary.cwv_total }}</b> URL CWV ({{ lcp_strategy }}) — <b>không</b> phải toàn site.
+  </div>
+
+  {# Summary #}
+  <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:#475569;margin-bottom:10px">
+    <span>📊 <b>{{ lcp_summary.total }}</b> URL ({{ lcp_strategy }})</span>
+    <span>🟢 Field URL: <b>{{ lcp_summary.field_url }}</b></span>
+    <span>🟡 Origin fallback: <b>{{ lcp_summary.field_origin }}</b></span>
+    <span>⚪ Không đủ field: <b>{{ lcp_summary.field_none }}</b></span>
+    {% if lcp_summary.last_scanned %}<span>🕒 Scan: {{ lcp_summary.last_scanned }}</span>{% endif %}
+  </div>
+
+  {# Filter bar — GET form, auto submit #}
+  <form method="get" action="{{ url_for('seo_cwv_page') }}" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+    <input type="hidden" name="strategy" value="{{ strategy }}">
+    <div style="display:flex;gap:4px">
+      <button type="submit" name="lcp_strategy" value="mobile"
+        class="btn btn-sm" style="background:{{ '#4f46e5' if lcp_strategy=='mobile' else '#f1f5f9' }};color:{{ '#fff' if lcp_strategy=='mobile' else '#475569' }}">📱 Mobile</button>
+      <button type="submit" name="lcp_strategy" value="desktop"
+        class="btn btn-sm" style="background:{{ '#4f46e5' if lcp_strategy=='desktop' else '#f1f5f9' }};color:{{ '#fff' if lcp_strategy=='desktop' else '#475569' }}">🖥️ Desktop</button>
+    </div>
+    <input type="hidden" name="lcp_strategy" value="{{ lcp_strategy }}">
+    <select name="lcp_pt" class="btn-sm" onchange="this.form.submit()" style="padding:5px 8px">
+      <option value="">— Page type —</option>
+      {% for pt in lcp_filters.page_types %}<option value="{{ pt }}" {% if pt==lcp_pt %}selected{% endif %}>{{ pt }}</option>{% endfor %}
+    </select>
+    <select name="lcp_scope" class="btn-sm" onchange="this.form.submit()" style="padding:5px 8px">
+      <option value="">— Field scope —</option>
+      {% for sc in ['url','origin','none'] %}<option value="{{ sc }}" {% if sc==lcp_scope %}selected{% endif %}>{{ sc }}</option>{% endfor %}
+    </select>
+    <select name="lcp_opp" class="btn-sm" onchange="this.form.submit()" style="padding:5px 8px">
+      <option value="">— Opportunity —</option>
+      {% for op in lcp_filters.opportunities %}<option value="{{ op }}" {% if op==lcp_opp %}selected{% endif %}>{{ op }}</option>{% endfor %}
+    </select>
+    {% if lcp_pt or lcp_scope or lcp_opp %}<a class="btn btn-sm btn-ghost" href="{{ url_for('seo_cwv_page') }}?strategy={{ strategy }}&lcp_strategy={{ lcp_strategy }}">✕ Xoá lọc</a>{% endif %}
+  </form>
+
+  {% if lcp_rows %}
+  <div style="overflow-x:auto">
+  <table class="cwv-table" style="width:100%;font-size:12.5px;border-collapse:collapse">
+    <thead><tr style="text-align:left;border-bottom:2px solid var(--border)">
+      <th style="padding:6px 8px">URL</th><th>Type</th><th>Strat</th>
+      <th style="text-align:right">LCP Lab median</th><th style="text-align:center">Runs</th>
+      <th style="text-align:right">LCP Field P75</th>
+      <th>Field scope</th><th style="text-align:right">FCP</th><th style="text-align:right">TTFB</th>
+      <th>Opp chính</th><th>Scan time</th>
+    </tr></thead>
+    <tbody>
+    {% for r in lcp_rows %}
+      {% set badge = {'url':('#dcfce7','#15803d','Field URL'),'origin':('#fef9c3','#a16207','Origin fallback'),'none':('#f1f5f9','#64748b','Không đủ field')}.get(r.field_scope or 'none') %}
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px 8px;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          <a href="{{ r.url }}" target="_blank" rel="noopener" style="color:#4338ca"
+             title="{% if r.lcp_element %}LCP element: {{ r.lcp_element|striptags }}{% else %}{{ r.url }}{% endif %}">{{ r.url.split('/')[-1] or r.url }}</a>
+          {% if r.lcp_element %}<span style="cursor:help;opacity:.7" title="LCP element: {{ r.lcp_element|striptags }}{% if r.lcp_asset_url %} · {{ r.lcp_asset_url }}{% endif %}">🔍</span>{% else %}<span style="font-size:9px;color:#cbd5e1" title="PSI không trả về LCP element cho URL này">· chưa detect</span>{% endif %}</td>
+        <td><span class="badge-type" style="font-size:10px">{{ r.page_type }}</span></td>
+        <td>{{ r.strategy }}</td>
+        <td style="text-align:right;font-weight:600;color:{{ '#dc2626' if (r.lab_lcp_median or 0) > 4000 else '#475569' }}">
+          {{ (r.lab_lcp_median/1000)|round(2) if r.lab_lcp_median else '—' }}s</td>
+        <td style="text-align:center;white-space:nowrap">{{ r.lab_run_count or '—' }}{% if (r.lab_run_count or 0) < 3 %}<br><span title="Ít lần đo — lab dao động mạnh" style="background:#fee2e2;color:#b91c1c;padding:0 5px;border-radius:8px;font-size:9px;font-weight:600">tin cậy thấp</span>{% endif %}</td>
+        <td style="text-align:right;color:{{ '#16a34a' if (r.field_lcp_p75 and r.field_lcp_p75<=2500) else '#475569' }}">
+          {{ (r.field_lcp_p75/1000)|round(2) ~ 's' if r.field_lcp_p75 else '—' }}</td>
+        <td><span style="background:{{ badge[0] }};color:{{ badge[1] }};padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600">{{ badge[2] }}</span></td>
+        <td style="text-align:right">{{ r.fcp ~ 'ms' if r.fcp else '—' }}</td>
+        <td style="text-align:right">{{ r.ttfb ~ 'ms' if r.ttfb else '—' }}</td>
+        <td style="font-size:11px">{{ r.primary_opportunity or '—' }}{% if r.opportunity_saving_ms %} <span class="muted">({{ r.opportunity_saving_ms }}ms)</span>{% endif %}</td>
+        <td style="font-size:10.5px;color:var(--text-muted)">{{ (r.lab_scanned_at or '')[:16] }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="muted" style="font-size:11px;margin-top:8px">Sắp xếp theo LCP Lab median giảm dần · {{ lcp_rows|length }} dòng · dữ liệu từ bảng <code>seo_cwv_lcp</code> (không gọi PSI khi mở trang).</div>
+  {% else %}
+  <div class="muted" style="font-size:13px;padding:14px">Chưa có dữ liệu LCP cho bộ lọc này. Chạy <code>_scripts/cwv_lcp_analysis.py</code> để nạp top URL LCP tệ nhất.</div>
+  {% endif %}
+</div>
+
+<!-- ── C. Batch Scanner Panel ── -->
+<div class="scanner-card">
+  <div class="scanner-title">⚡ Quét Core Web Vitals</div>
+
+  <div style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; margin-bottom:4px">
+    <div style="flex:1; min-width:240px">
+      <label style="font-size:10.5px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px">
+        PSI API Key <span style="opacity:.6">(nên có — không key dễ bị rate limit 429)</span>
+      </label>
+      <input type="text" id="apiKey" value="{{ psi_key }}" placeholder="AIza..." style="width:100%; margin-top:5px">
+    </div>
+    <div style="font-size:11.5px; color:var(--text-muted); padding-bottom:8px">
+      Xem bảng:
+      <a href="/seo/cwv?strategy=mobile"
+         style="font-weight:{{ '700' if strategy=='mobile' else '400' }}; color:{{ '#4f46e5' if strategy=='mobile' else '#64748b' }}; text-decoration:none">📱 Mobile</a>
+      &nbsp;·&nbsp;
+      <a href="/seo/cwv?strategy=desktop"
+         style="font-weight:{{ '700' if strategy=='desktop' else '400' }}; color:{{ '#4f46e5' if strategy=='desktop' else '#64748b' }}; text-decoration:none">🖥️ Desktop</a>
+    </div>
+  </div>
+
+  <!-- Trạng thái đợt quét (resume / sẵn sàng đợt mới) -->
+  <div id="passStatus" style="font-size:12.5px; color:#475569; margin:12px 0 6px"></div>
+
+  <!-- Per-type progress mini bars -->
+  {% if progress %}
+  <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:6px">Coverage hiện tại</div>
+  <div class="type-progress-list">
+    {% for p in progress %}
+    {% set pct = ((p.scanned / p.total * 100) | int) if p.total > 0 else 0 %}
+    <div class="type-progress-row">
+      <div>
+        <span class="badge-type">{{ p.url_type or '—' }}</span>
+      </div>
+      <div class="type-pbar-wrap">
+        <div class="type-pbar-fill" style="width:{{ [pct, 100] | min }}%"></div>
+      </div>
+      <div class="type-pbar-label" id="prog_{{ p.url_type }}">{{ p.scanned }}/{{ p.total }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Banner khi đang quét -->
+  <div id="autoScanBanner" style="display:none; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:12.5px; color:#1e40af">
+    🤖 <b>Đang quét toàn bộ</b> — <span id="autoScanPhaseLabel"></span>
+    &nbsp;·&nbsp; Server tự chạy mobile→desktop, đóng/refresh trang vẫn tiếp tục
+  </div>
+
+  <div class="scanner-actions">
+    <button class="btn btn-primary" onclick="startFullScan()" id="btnScanAll"
+      style="background:#4f46e5; border-color:#4338ca; color:#fff; font-weight:600">
+      🚀 Quét toàn bộ
+    </button>
+    <button class="btn" onclick="stopScan()" id="btnStop"
+      style="background:#fef2f2; border-color:#fca5a5; color:#dc2626; display:none">
+      ⏹ Dừng (lưu tiến độ)
+    </button>
+  </div>
+
+  <!-- Running progress bar -->
+  <div class="scan-running-bar" id="scanRunning">
+    <div style="display:flex; justify-content:space-between; align-items:center; font-size:12.5px; margin-bottom:6px">
+      <span id="scanLabel" style="font-weight:600">⚡ Đang scan...</span>
+      <span id="scanCounter" style="color:var(--text-muted)"></span>
+    </div>
+    <div class="scan-pbar-wrap"><div class="scan-pbar-fill" id="scanPbar" style="width:0%"></div></div>
+    <div class="scan-msg" id="scanMsg"></div>
+  </div>
+</div>
+
+<!-- ── API Key tip ── -->
+<div class="cwv-tip">
+  ⚠️ <b>Bắt buộc dùng API Key</b> — PSI không có key bị rate limit 429 rất nhanh.<br>
+  👉 <b>console.cloud.google.com</b> → APIs &amp; Services → Enable "<b>PageSpeed Insights API</b>" → Credentials → Create API Key (miễn phí, 25.000 req/ngày).
+</div>
+
+<!-- ── D. Results table ── -->
+{% if rows %}
+<div style="overflow-x:auto">
+<table class="cwv-table">
+  <thead>
+    <tr>
+      <th style="width:36px">#</th>
+      <th>URL</th>
+      <th>
+        <a class="sort-link {% if sort=='performance_score' %}active{% endif %}"
+           href="?strategy={{ strategy }}&sort=performance_score&order={% if sort=='performance_score' and order=='asc' %}desc{% else %}asc{% endif %}&page=1">
+          Perf {% if sort=='performance_score' %}{{ '▲' if order=='asc' else '▼' }}{% endif %}
+        </a>
+      </th>
+      <th>
+        <a class="sort-link {% if sort=='lcp_ms' %}active{% endif %}"
+           href="?strategy={{ strategy }}&sort=lcp_ms&order={% if sort=='lcp_ms' and order=='asc' %}desc{% else %}asc{% endif %}&page=1">
+          LCP {% if sort=='lcp_ms' %}{{ '▲' if order=='asc' else '▼' }}{% endif %}
+        </a>
+      </th>
+      <th>
+        <a class="sort-link {% if sort=='cls_score' %}active{% endif %}"
+           href="?strategy={{ strategy }}&sort=cls_score&order={% if sort=='cls_score' and order=='asc' %}desc{% else %}asc{% endif %}&page=1">
+          CLS {% if sort=='cls_score' %}{{ '▲' if order=='asc' else '▼' }}{% endif %}
+        </a>
+      </th>
+      <th>
+        <a class="sort-link {% if sort=='tbt_ms' %}active{% endif %}"
+           href="?strategy={{ strategy }}&sort=tbt_ms&order={% if sort=='tbt_ms' and order=='asc' %}desc{% else %}asc{% endif %}&page=1">
+          TBT {% if sort=='tbt_ms' %}{{ '▲' if order=='asc' else '▼' }}{% endif %}
+        </a>
+      </th>
+      <th>FCP</th>
+      <th>
+        <a class="sort-link {% if sort=='lcp_field_ms' %}active{% endif %}"
+           href="?strategy={{ strategy }}&sort=lcp_field_ms&order={% if sort=='lcp_field_ms' and order=='asc' %}desc{% else %}asc{% endif %}&page=1">
+          Field LCP {% if sort=='lcp_field_ms' %}{{ '▲' if order=='asc' else '▼' }}{% endif %}
+        </a>
+      </th>
+      <th>
+        <a class="sort-link {% if sort=='inp_field_ms' %}active{% endif %}"
+           href="?strategy={{ strategy }}&sort=inp_field_ms&order={% if sort=='inp_field_ms' and order=='asc' %}desc{% else %}asc{% endif %}&page=1">
+          Field INP {% if sort=='inp_field_ms' %}{{ '▲' if order=='asc' else '▼' }}{% endif %}
+        </a>
+      </th>
+      <th>Overall</th>
+      <th>Scanned</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    {% set perf = r.performance_score %}
+    {% set lcp  = r.lcp_ms %}
+    {% set cls  = r.cls_score %}
+    {% set tbt  = r.tbt_ms %}
+    <tr>
+      <td style="color:var(--text-muted); font-size:11px">{{ loop.index + (page_num-1)*50 }}</td>
+      <td>
+        <div class="url-cell">
+          <a href="{{ r.url }}" target="_blank" title="{{ r.url }}">{{ r.url | replace('https://sintech.vn','') or '/' }}</a>
+        </div>
+        {% if r.url_type or r.title %}
+        <div style="display:flex; gap:5px; align-items:center; margin-top:3px">
+          {% if r.url_type %}<span class="badge-type">{{ r.url_type }}</span>{% endif %}
+          {% if r.title %}<span class="url-title">{{ r.title[:55] }}</span>{% endif %}
+        </div>
+        {% endif %}
+      </td>
+      <td>
+        {% if perf is not none %}
+          <span class="badge-{% if perf >= 90 %}good{% elif perf >= 50 %}ok{% else %}bad{% endif %}" style="font-size:13px; padding:4px 10px">{{ perf }}</span>
+        {% else %}<span class="badge-none">—</span>{% endif %}
+      </td>
+      <td>
+        {% if lcp is not none %}
+          <span class="badge-{% if lcp <= 2500 %}good{% elif lcp <= 4000 %}ok{% else %}bad{% endif %}">{{ (lcp/1000)|round(2) }}s</span>
+        {% else %}<span class="badge-none">—</span>{% endif %}
+      </td>
+      <td>
+        {% if cls is not none %}
+          <span class="badge-{% if cls <= 0.1 %}good{% elif cls <= 0.25 %}ok{% else %}bad{% endif %}">{{ cls }}</span>
+        {% else %}<span class="badge-none">—</span>{% endif %}
+      </td>
+      <td>
+        {% if tbt is not none %}
+          <span class="badge-{% if tbt <= 200 %}good{% elif tbt <= 600 %}ok{% else %}bad{% endif %}">{{ tbt }}ms</span>
+        {% else %}<span class="badge-none">—</span>{% endif %}
+      </td>
+      <td class="field-muted">
+        {% if r.fcp_ms %}{{ (r.fcp_ms/1000)|round(2) }}s{% else %}—{% endif %}
+      </td>
+      <td>
+        {% if r.lcp_field_ms %}
+          <span class="badge-{% if r.lcp_field_ms <= 2500 %}good{% elif r.lcp_field_ms <= 4000 %}ok{% else %}bad{% endif %}">{{ (r.lcp_field_ms/1000)|round(2) }}s</span>
+        {% elif r.field_data_ok == 0 %}
+          <span class="badge-traffic">ít traffic</span>
+        {% else %}<span class="field-muted">—</span>{% endif %}
+      </td>
+      <td>
+        {% if r.inp_field_ms %}
+          <span class="badge-{% if r.inp_field_ms <= 200 %}good{% elif r.inp_field_ms <= 500 %}ok{% else %}bad{% endif %}">{{ r.inp_field_ms }}ms</span>
+        {% elif r.field_data_ok == 0 %}
+          <span class="badge-traffic">ít traffic</span>
+        {% else %}<span class="field-muted">—</span>{% endif %}
+      </td>
+      <td>
+        {% if r.overall_category == 'FAST' %}<span class="badge-good">FAST</span>
+        {% elif r.overall_category == 'AVERAGE' %}<span class="badge-ok">AVG</span>
+        {% elif r.overall_category == 'SLOW' %}<span class="badge-bad">SLOW</span>
+        {% else %}<span class="badge-none">—</span>{% endif %}
+      </td>
+      <td class="field-muted" style="white-space:nowrap; font-size:10.5px">
+        {{ (r.scanned_at or '')[:16] | replace('T',' ') }}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+{% if total_pages > 1 %}
+<div class="cwv-pagination">
+  {% if page_num > 1 %}
+    <a class="btn" href="?strategy={{ strategy }}&sort={{ sort }}&order={{ order }}&page={{ page_num-1 }}">← Trước</a>
+  {% endif %}
+  <span class="page-info">{{ page_num }} / {{ total_pages }} — {{ total }} kết quả</span>
+  {% if page_num < total_pages %}
+    <a class="btn" href="?strategy={{ strategy }}&sort={{ sort }}&order={{ order }}&page={{ page_num+1 }}">Tiếp →</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<!-- ── E. Empty state ── -->
+<div class="cwv-empty">
+  <div class="cwv-empty-icon">⚡</div>
+  <div class="cwv-empty-title">Chưa có dữ liệu Core Web Vitals</div>
+  <div class="cwv-empty-sub">
+    Chọn <b>Strategy</b> và <b>Loại trang</b> trong panel Batch Scanner ở trên,
+    sau đó nhấn <b>⚡ Quét batch tiếp</b> để bắt đầu.<br><br>
+    Cần có <b>PSI API Key</b> để tránh rate limit — lấy miễn phí tại
+    <b>console.cloud.google.com</b>.
+  </div>
+</div>
+{% endif %}
+
+<script>
+/* ══ CWV Scanner — 2 nút: "Quét toàn bộ" (tự resume/đợt mới) + "Dừng" ══
+   Server lo toàn bộ: chain mobile×4 → desktop×4, resume qua mốc đợt (pass),
+   dừng = lưu tiến độ, xong = snapshot vào /seo/history. Browser chỉ poll. */
+let _pollTimer = null, _statsTimer = null;
+const _VIEW_STRATEGY = "{{ strategy }}";
+
+function _show(id, on){ const e=document.getElementById(id); if(e) e.style.display = on?'':'none'; }
+function setScanning(on){
+  const b=document.getElementById('btnScanAll'); if(b) b.disabled=on;
+  _show('btnStop', on);
+  _show('scanRunning', on);
+}
+function showBanner(html, done){
+  const b=document.getElementById('autoScanBanner');
+  if(!b) return;
+  if(html===null){ b.style.display='none'; return; }
+  b.style.display='block';
+  if(done){ b.style.background='#f0fdf4'; b.style.borderColor='#86efac'; b.style.color='#15803d'; b.innerHTML=html; }
+  else { const l=document.getElementById('autoScanPhaseLabel'); if(l) l.textContent=html; }
+}
+
+/* Dòng trạng thái đợt + nhãn nút (resume vs đợt mới) */
+function renderPass(d){
+  const ps=document.getElementById('passStatus');
+  const btn=document.getElementById('btnScanAll');
+  const p=d.pass||{};
+  if(d.running){ if(ps) ps.textContent=''; return; }
+  if(p.active && p.remaining>0){
+    if(ps) ps.innerHTML=`⏸️ <b>Đợt quét đang dở</b> — còn <b>${(p.remaining||0).toLocaleString()}</b> lượt (đã ${(p.scanned||0).toLocaleString()}/${(p.total||0).toLocaleString()}). Bấm để quét tiếp.`;
+    if(btn) btn.innerHTML='▶️ Quét tiếp đợt dở';
+  } else {
+    if(ps) ps.innerHTML='✅ Sẵn sàng quét <b>đợt mới</b> (mobile + desktop toàn bộ). Xong sẽ lưu vào <a href="/seo/history" style="color:#4f46e5">lịch sử</a> để so sánh đợt.';
+    if(btn) btn.innerHTML='🚀 Quét toàn bộ';
+  }
+}
+
+function _liveStats(on){
+  clearInterval(_statsTimer);
+  if(!on) return;
+  _statsTimer=setInterval(async()=>{
+    try{
+      const r=await fetch('/api/seo/cwv/progress').then(r=>r.json());
+      (r.progress||[]).forEach(p=>{ const e=document.getElementById('prog_'+p.url_type); if(e) e.textContent=`${p.scanned}/${p.total}`; });
+    }catch(e){}
+  },5000);
+}
+
+function _poll(){
+  clearInterval(_pollTimer);
+  _liveStats(true);
+  _pollTimer=setInterval(async()=>{
+    const d=await fetch('/api/seo/cwv/status').then(r=>r.json());
+    const pct=d.total>0?Math.round(d.done/d.total*100):0;
+    const pbar=document.getElementById('scanPbar'), msg=document.getElementById('scanMsg'), ctr=document.getElementById('scanCounter');
+    if(pbar) pbar.style.width=pct+'%';
+    if(msg) msg.textContent=d.message||'';
+    if(ctr) ctr.textContent=`${d.done}/${d.total} URL · phase ${d.phase_idx||0}/${d.phase_total||8}`;
+    if(d.chain_active && d.phase_label) showBanner(`Phase ${d.phase_idx}/${d.phase_total} · ${d.phase_label}`,false);
+    if(!d.running){
+      clearInterval(_pollTimer); _liveStats(false);
+      setScanning(false);
+      const stopped=(d.message||'').includes('Đã dừng');
+      if(stopped){ showBanner(null); }
+      else {
+        const ok=d.chain_total_ok||0, fail=d.chain_total_failed||0;
+        showBanner(`✅ <b>Hoàn tất quét toàn bộ!</b> ${ok} OK · ${fail} lỗi. Đã lưu vào lịch sử.`, true);
+      }
+      setTimeout(()=>{ location.href=`/seo/cwv?strategy=${_VIEW_STRATEGY}&sort=performance_score&order=asc`; }, 2000);
+    }
+  },2500);
+}
+
+async function startFullScan(){
+  const apiKey=document.getElementById('apiKey').value.trim();
+  setScanning(true);
+  showBanner('Đang khởi động...',false);
+  const d=await fetch('/api/seo/cwv/scan/start-all',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:apiKey})}).then(r=>r.json());
+  if(!d.ok){ alert(d.message||d.error||'Không khởi động được'); setScanning(false); showBanner(null); return; }
+  _poll();
+}
+
+async function stopScan(){
+  const b=document.getElementById('btnStop'); if(b){ b.textContent='⏳ Đang dừng...'; b.disabled=true; }
+  await fetch('/api/seo/cwv/scan/stop',{method:'POST'});
+}
+
+/* INIT — khôi phục trạng thái khi mở/refresh trang */
+(async()=>{
+  const d=await fetch('/api/seo/cwv/status').then(r=>r.json());
+  renderPass(d);
+  if(d.running){
+    setScanning(true);
+    if(d.chain_active && d.phase_label) showBanner(`Phase ${d.phase_idx}/${d.phase_total} · ${d.phase_label}`,false);
+    _poll();
+  }
+})();
+</script>
+
+{% endblock %}

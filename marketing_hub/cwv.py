@@ -9,10 +9,39 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from pathlib import Path
 
 import requests
 
 import db
+
+# File lưu mốc bắt đầu ĐỢT quét hiện tại (sống sót qua restart → resume được).
+_PASS_FILE = Path(__file__).parent / "data" / "cwv_pass.json"
+
+
+def current_pass() -> str | None:
+    """Mốc ISO bắt đầu đợt quét đang dở (None nếu không có đợt nào)."""
+    try:
+        return json.loads(_PASS_FILE.read_text(encoding="utf-8")).get("pass_start")
+    except Exception:
+        return None
+
+
+def _save_pass(ts: str):
+    try:
+        _PASS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _PASS_FILE.write_text(json.dumps({"pass_start": ts}), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _clear_pass():
+    try:
+        _PASS_FILE.unlink()
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
 
 PSI_API_URL = "https://www.googleapis.com/pagespeedonline/v5/runPagespeed"
 PSI_TIMEOUT = 60          # PSI mất 15-30s / request
@@ -235,9 +264,21 @@ ALL_PHASES = [
 ]
 
 
-def _run_chain(api_key: str):
-    """Quét tuần tự 8 phase: mobile→(product→collection→blog→page) rồi desktop→(...).
-    Mỗi phase skip_scanned=True. Nếu phase rỗng (đã quét hết) → next."""
+def _snapshot_completed_pass():
+    """Đợt quét xong → lưu kết quả vào seo_cwv_history (tuần ISO hiện tại, đè nếu trùng tuần)
+    để tab /seo/history so sánh đợt này với các đợt trước."""
+    try:
+        iso = datetime.now().isocalendar()
+        n = db.cwv_history_snapshot(iso.week, iso.year, replace=True)
+        return n
+    except Exception:
+        return 0
+
+
+def _run_chain(api_key: str, pass_start: str):
+    """Quét toàn bộ 1 ĐỢT: 8 phase mobile×(product→collection→blog→page) → desktop×(...).
+    Mỗi phase chỉ quét URL CHƯA quét trong đợt này (since=pass_start) → resume tự nhiên.
+    Xong sạch (không bị dừng) → snapshot history + xoá mốc đợt. Bị dừng → giữ mốc để quét tiếp."""
     n_phases = len(ALL_PHASES)
     _set(running=True, stop_requested=False, chain_active=True,
          phase_idx=0, phase_total=n_phases, phase_label="",
@@ -245,7 +286,7 @@ def _run_chain(api_key: str):
          total=0, done=0, ok=0, failed=0,
          started_at=datetime.now().isoformat(timespec="seconds"),
          finished_at=None,
-         message=f"🚀 Bắt đầu Quét All Batch — {n_phases} phase (mobile × 4 + desktop × 4)")
+         message=f"🚀 Bắt đầu quét toàn bộ — {n_phases} phase (mobile × 4 + desktop × 4)")
 
     chain_ok = chain_failed = 0
 
@@ -254,11 +295,11 @@ def _run_chain(api_key: str):
             break
 
         label = f"{strat}/{utype}"
-        urls = db.cwv_top_urls(limit=99999, url_type=utype, skip_scanned=True, strategy=strat)
+        urls = db.cwv_top_urls(limit=99999, url_type=utype, strategy=strat, since=pass_start)
 
         if not urls:
             _set(phase_idx=idx + 1, phase_label=label, strategy=strat,
-                 message=f"[Phase {idx + 1}/{n_phases}] {label} — đã đủ, bỏ qua")
+                 message=f"[Phase {idx + 1}/{n_phases}] {label} — đã quét xong, bỏ qua")
             continue
 
         _set(phase_idx=idx + 1, phase_label=label, strategy=strat,
@@ -270,15 +311,18 @@ def _run_chain(api_key: str):
         chain_failed += failed_n
         _set(chain_total_ok=chain_ok, chain_total_failed=chain_failed)
 
-    tail = f"{chain_ok} OK · {chain_failed} lỗi (tổng chain)"
+    tail = f"{chain_ok} OK · {chain_failed} lỗi (tổng đợt)"
     if _state["stop_requested"]:
+        # Giữ mốc đợt → lần sau bấm "Quét toàn bộ" sẽ quét tiếp phần còn lại.
         _set(running=False, chain_active=False, current_url="",
              finished_at=datetime.now().isoformat(timespec="seconds"),
-             message=f"⏹ Đã dừng Quét All Batch — {tail}")
+             message=f"⏹ Đã dừng — đã lưu tiến độ, bấm Quét toàn bộ để quét tiếp. {tail}")
     else:
+        snap_n = _snapshot_completed_pass()
+        _clear_pass()
         _set(running=False, chain_active=False, current_url="",
              finished_at=datetime.now().isoformat(timespec="seconds"),
-             message=f"✅ Hoàn tất Quét All Batch! {tail}")
+             message=f"✅ Hoàn tất quét toàn bộ! {tail} · đã lưu {snap_n} dòng vào lịch sử")
 
 
 def start_scan_async(urls: list, api_key: str = "", strategy: str = "mobile") -> bool:
@@ -289,13 +333,32 @@ def start_scan_async(urls: list, api_key: str = "", strategy: str = "mobile") ->
     return True
 
 
-def start_chain_async(api_key: str = "") -> bool:
-    """Kick chain Quét All Batch (8 phase)."""
+def start_full_scan_async(api_key: str = "", force_new: bool = False) -> dict:
+    """1 nút "Quét toàn bộ" — tự quyết RESUME hay ĐỢT MỚI:
+    - Có mốc đợt cũ + còn URL chưa quét → resume (quét tiếp phần dở).
+    - Không có mốc / đợt cũ đã xong → bắt đầu ĐỢT MỚI (quét lại tất cả, mobile→desktop).
+    - force_new=True → LUÔN bắt đầu đợt mới (crawl lại toàn bộ từ đầu), bỏ qua resume.
+    Trả {ok, mode, remaining}."""
     if _state["running"]:
-        return False
-    t = threading.Thread(target=_run_chain, args=(api_key,), daemon=True)
+        return {"ok": False, "mode": "running", "message": "Đang quét rồi"}
+
+    pass_start = current_pass()
+    mode = "resume"
+    if not force_new and pass_start and db.cwv_pass_stats(pass_start)["remaining"] > 0:
+        mode = "resume"          # đợt cũ còn dở → quét tiếp
+    else:
+        pass_start = datetime.now().isoformat(timespec="seconds")
+        _save_pass(pass_start)
+        mode = "new"             # đợt mới → quét lại toàn bộ
+
+    t = threading.Thread(target=_run_chain, args=(api_key, pass_start), daemon=True)
     t.start()
-    return True
+    return {"ok": True, "mode": mode}
+
+
+# Alias tương thích ngược (code/test cũ còn gọi tên này)
+def start_chain_async(api_key: str = "") -> bool:
+    return start_full_scan_async(api_key).get("ok", False)
 
 
 def stop_scan():

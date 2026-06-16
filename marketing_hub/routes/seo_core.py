@@ -109,7 +109,7 @@ def seo_dashboard():
             "q": f_search or "", "sort": f_sort,
         },
         page_num=page_num, total_pages=total_pages,
-        total_filtered=total_filtered,
+        total_filtered=total_filtered, active="seo_home",
     )
 
 
@@ -388,7 +388,7 @@ def seo_history_page():
         chart_data=chart_data,
         cwv_timeline=cwv_timeline,
         schema_timeline=schema_timeline,
-        regression=regression,
+        regression=regression, active="history",
     )
 
 

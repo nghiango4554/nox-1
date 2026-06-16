@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="vi" data-chrome="gradient" data-density="comfy"
+  style="--accent-from:#ff9966;--accent-to:#d75151;--accent-ink:#c2410c;--header-grad-from:#ff9966;--header-grad-to:#fa5d8f;--header-ink:#ffffff;--sb-ink:#2a2230;--r:18px;--r-sm:12px">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Sintech Hub{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='redesign/fonts.css') }}?v={{ now.timestamp()|int }}">
+{% block legacy_css %}{% endblock %}
+<link rel="stylesheet" href="{{ url_for('static', filename='redesign/sintech-hub.css') }}?v={{ now.timestamp()|int }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='redesign/bridge.css') }}?v={{ now.timestamp()|int }}">
+{% block head_extra %}{% endblock %}
+</head>
+<body>
+{% set a = active|default('') %}
+{% set analytics_keys = ['ga4','gsc','tracking','tasks','ops','cwv'] %}
+{% set seo_keys = ['seo_home','coverage','title_meta','h1','empty_desc','dup','broken','index','inlinks','eeat','schema'] %}
+{% set content_keys = ['content_jobs','collection','blog','products','alt'] %}
+{% set fb_keys = ['post_new','posts','calendar'] %}
+{% set hv_keys = ['hv_home','hv_products','hv_blogs','hv_audit'] %}
+<div class="app">
+<aside class="sidebar">
+  <div class="brand"><div class="brand-logo"><i class="ic" data-icon="hexagon"></i></div><div><div class="brand-name">Sintech Hub</div><div class="brand-sub">by Nox-1</div></div></div>
+  <div class="sb-search"><i class="ic" data-icon="search"></i><span>Tìm bài / SP / URL…</span><kbd>/</kbd></div>
+  <nav class="sb-scroll">
+    <div>
+      <div class="sb-group-label">Tổng quan</div>
+      <a href="{{ url_for('dashboard') }}" class="nav-item {{ 'active' if a=='dashboard' }}" data-tone="slate"><i class="ic" data-icon="layout-dashboard"></i><span>Dashboard</span></a>
+      <a href="{{ url_for('jobs_center_page') }}" class="nav-item {{ 'active' if a=='jobs' }}" data-tone="violet"><i class="ic" data-icon="list-checks"></i><span>Job Center</span></a>
+      <a href="{{ url_for('seo_history_page') }}" class="nav-item {{ 'active' if a=='history' }}" data-tone="slate"><i class="ic" data-icon="chart-area"></i><span>Lịch sử</span></a>
+    </div>
+
+    <div>
+      <button class="nav-item {{ 'has-active' if a in analytics_keys }}" data-group="analytics"><i class="ic" data-icon="chart-area"></i><span>Phân tích &amp; đo lường</span><i class="ic nav-chevron" data-icon="chevron-right"></i></button>
+      <div class="nav-children"><div class="nav-children-in">
+        <a href="{{ url_for('ga4_page') }}" class="nav-sub {{ 'active' if a=='ga4' }}"><span>GA4 Analytics</span></a>
+        <a href="{{ url_for('seo_gsc_page') }}" class="nav-sub {{ 'active' if a=='gsc' }}"><span>Search Console</span></a>
+        <a href="{{ url_for('tracking_page') }}" class="nav-sub {{ 'active' if a=='tracking' }}"><span>Tracking Audit</span></a>
+        <a href="{{ url_for('tasks_page') }}" class="nav-sub {{ 'active' if a=='tasks' }}"><span>Task Center</span></a>
+        <a href="{{ url_for('ops_page') }}" class="nav-sub {{ 'active' if a=='ops' }}"><span>Analytics Ops</span></a>
+        <a href="{{ url_for('seo_cwv_page') }}" class="nav-sub {{ 'active' if a=='cwv' }}"><span>Core Web Vitals</span></a>
+      </div></div>
+    </div>
+
+    <div>
+      <button class="nav-item {{ 'has-active' if a in seo_keys }}" data-group="seo"><i class="ic" data-icon="shield-check"></i><span>SEO</span><i class="ic nav-chevron" data-icon="chevron-right"></i></button>
+      <div class="nav-children"><div class="nav-children-in">
+        <a href="{{ url_for('seo_dashboard') }}" class="nav-sub {{ 'active' if a=='seo_home' }}"><span>Tổng quan SEO</span></a>
+        <a href="{{ url_for('seo_coverage_page') }}" class="nav-sub {{ 'active' if a=='coverage' }}"><span>Coverage</span></a>
+        <a href="{{ url_for('seo_title_meta_page') }}" class="nav-sub {{ 'active' if a=='title_meta' }}"><span>Title &amp; Meta</span></a>
+        <a href="{{ url_for('seo_h1_in_desc_page') }}" class="nav-sub {{ 'active' if a=='h1' }}"><span>H1 trong mô tả</span></a>
+        <a href="{{ url_for('seo_empty_desc_page') }}" class="nav-sub {{ 'active' if a=='empty_desc' }}"><span>SP thiếu mô tả</span></a>
+        <a href="{{ url_for('seo_duplicates') }}" class="nav-sub {{ 'active' if a=='dup' }}"><span>Trùng lặp</span></a>
+        <a href="{{ url_for('seo_broken_links_page') }}" class="nav-sub {{ 'active' if a=='broken' }}"><span>Link gãy</span></a>
+        <a href="{{ url_for('seo_indexability_page') }}" class="nav-sub {{ 'active' if a=='index' }}"><span>Indexability</span></a>
+        <a href="{{ url_for('seo_inlinks_page') }}" class="nav-sub {{ 'active' if a=='inlinks' }}"><span>Internal links</span></a>
+      </div></div>
+    </div>
+
+    <div>
+      <button class="nav-item {{ 'has-active' if a in content_keys }}" data-group="content"><i class="ic" data-icon="package"></i><span>Nội dung</span><i class="ic nav-chevron" data-icon="chevron-right"></i></button>
+      <div class="nav-children"><div class="nav-children-in">
+        <a href="{{ url_for('content_jobs_list_page') }}" class="nav-sub {{ 'active' if a=='content_jobs' }}"><span>Content Jobs</span></a>
+        <a href="{{ url_for('collection_content_page') }}" class="nav-sub {{ 'active' if a=='collection' }}"><span>Collection Content</span></a>
+        <a href="{{ url_for('blog_content_page') }}" class="nav-sub {{ 'active' if a=='blog' }}"><span>Blog Content</span></a>
+        <a href="{{ url_for('seo_blog_rewrite_page') }}" class="nav-sub {{ 'active' if a=='blog_rewrite' }}"><span>✍️ AI Viết Lại Blog</span></a>
+        <a href="{{ url_for('products_new_form') }}" class="nav-sub {{ 'active' if a=='products' }}"><span>SP mới</span></a>
+        <a href="{{ url_for('alt_manager_page') }}" class="nav-sub {{ 'active' if a=='alt' }}"><span>ALT ảnh</span></a>
+      </div></div>
+    </div>
+
+    <div>
+      <button class="nav-item {{ 'has-active' if a in fb_keys }}" data-group="facebook"><i class="ic" data-icon="thumbs-up"></i><span>Facebook</span><i class="ic nav-chevron" data-icon="chevron-right"></i></button>
+      <div class="nav-children"><div class="nav-children-in">
+        <a href="{{ url_for('post_new') }}" class="nav-sub {{ 'active' if a=='post_new' }}"><span>Bài mới</span></a>
+        <a href="{{ url_for('posts_page') }}" class="nav-sub {{ 'active' if a=='posts' }}"><span>Bài đã đăng</span></a>
+        <a href="{{ url_for('calendar_page') }}" class="nav-sub {{ 'active' if a=='calendar' }}"><span>Lịch đăng</span></a>
+      </div></div>
+    </div>
+
+    <div>
+      <button class="nav-item {{ 'has-active' if a in hv_keys }}" data-group="haravan"><i class="ic" data-icon="shopping-bag"></i><span>Haravan</span><i class="ic nav-chevron" data-icon="chevron-right"></i></button>
+      <div class="nav-children"><div class="nav-children-in">
+        <a href="{{ url_for('haravan_dashboard') }}" class="nav-sub {{ 'active' if a=='hv_home' }}"><span>Tổng quan Haravan</span></a>
+        <a href="{{ url_for('haravan_products_page') }}" class="nav-sub {{ 'active' if a=='hv_products' }}"><span>Sản phẩm</span></a>
+        <a href="{{ url_for('haravan_blogs') }}" class="nav-sub {{ 'active' if a=='hv_blogs' }}"><span>Blog &amp; News</span></a>
+        <a href="{{ url_for('haravan_audit_page') }}" class="nav-sub {{ 'active' if a=='hv_audit' }}"><span>Audit log</span></a>
+      </div></div>
+    </div>
+
+    <div>
+      <div class="sb-group-label">Khác</div>
+      <a href="{{ url_for('library_page') }}" class="nav-item {{ 'active' if a=='library' }}" data-tone="slate"><i class="ic" data-icon="images"></i><span>Thư viện ảnh</span></a>
+      <a href="{{ url_for('competitors_page') }}" class="nav-item {{ 'active' if a=='competitors' }}" data-tone="slate"><i class="ic" data-icon="swords"></i><span>Đối thủ</span></a>
+    </div>
+  </nav>
+  <div class="sb-foot"><div class="avatar">N</div><div style="min-width:0"><div style="font-size:13px;font-weight:700">Vợ yêu Nghĩa</div><div style="font-size:11.5px;color:var(--ink-3);font-weight:600">Marketing · Sintech</div></div><i class="ic" data-icon="chevrons-up-down" style="margin-left:auto;color:var(--ink-3);font-size:16px"></i></div>
+</aside>
+<div class="main">
+  <header class="topbar">
+    <div class="crumb">{% block page_title %}{% block crumb %}<i class="ic" data-icon="layout-dashboard" style="color:var(--accent-ink)"></i><span>Dashboard</span>{% endblock %}{% endblock %}</div>
+    <div class="top-actions">
+      {% block topbar_extra %}<div class="seg" role="tablist"><button class="on"><i class="ic" data-icon="sparkles"></i>Gradient</button><button><i class="ic" data-icon="feather"></i>Dịu</button><button><i class="ic" data-icon="droplet"></i>Đơn sắc</button></div>
+      <button class="icon-btn" aria-label="Thông báo"><i class="ic" data-icon="bell"></i><span class="dot"></span></button>{% endblock %}
+      {% block page_actions %}<a class="btn-primary" href="{{ url_for('post_new') }}"><i class="ic" data-icon="plus"></i>Bài mới</a>{% endblock %}
+    </div>
+  </header>
+  <div class="content">{% block content %}{% endblock %}</div>
+</div>
+</div>
+<script src="{{ url_for('static', filename='redesign/lib/sintech-icons.js') }}?v={{ now.timestamp()|int }}"></script>
+<script src="{{ url_for('static', filename='redesign/lib/sintech-icons-2.js') }}?v={{ now.timestamp()|int }}"></script>
+<script src="{{ url_for('static', filename='redesign/lib/sintech-icons-3.js') }}?v={{ now.timestamp()|int }}"></script>
+<script src="{{ url_for('static', filename='redesign/sintech-app.js') }}?v={{ now.timestamp()|int }}"></script>
+<script>
+/* Sidebar: giữ trạng thái mở nhóm + vị trí cuộn khi chuyển trang (localStorage) */
+(function(){
+  var K_OPEN='sb_open_groups', K_SCROLL='sb_scroll';
+  var nav=document.querySelector('.sb-scroll');
+  function groups(){ return Array.prototype.slice.call(document.querySelectorAll('.nav-item[data-group]')); }
+  // khôi phục nhóm đang mở
+  try{
+    var saved=JSON.parse(localStorage.getItem(K_OPEN)||'[]');
+    groups().forEach(function(b){
+      if(saved.indexOf(b.getAttribute('data-group'))>-1){
+        b.classList.add('open');
+        var kids=b.nextElementSibling;
+        if(kids&&kids.classList.contains('nav-children')) kids.classList.add('open');
+      }
+    });
+  }catch(e){}
+  // khôi phục vị trí cuộn (lặp lại sau animation sổ nhóm)
+  function restore(){ if(nav){ var s=parseInt(localStorage.getItem(K_SCROLL)||'0',10); if(s) nav.scrollTop=s; } }
+  restore(); setTimeout(restore,60); setTimeout(restore,360);
+  // lưu khi bấm toggle nhóm + khi điều hướng
+  document.addEventListener('click',function(e){
+    if(e.target.closest('.nav-item[data-group]')){
+      setTimeout(function(){
+        var open=groups().filter(function(b){return b.classList.contains('open');}).map(function(b){return b.getAttribute('data-group');});
+        localStorage.setItem(K_OPEN, JSON.stringify(open));
+      },0);
+    }
+    if(e.target.closest('a.nav-sub[href], a.nav-item[href]')){ if(nav) localStorage.setItem(K_SCROLL, nav.scrollTop); }
+  });
+  if(nav){ var t; nav.addEventListener('scroll',function(){ clearTimeout(t); t=setTimeout(function(){ localStorage.setItem(K_SCROLL, nav.scrollTop); },150); }); }
+})();
+</script>
+{% block legacy_js %}{% endblock %}
+{% block scripts %}{% endblock %}
+</body>
+</html>

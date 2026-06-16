@@ -1,0 +1,283 @@
+{% include 'breadcrumb' %}
+
+{%- capture _site -%}https://sintech.vn{%- endcapture -%}
+{%- assign _excerpt = article.excerpt | default: article.content | strip_html | strip_newlines | replace: '\', '\\' | replace: '"', '\"' | truncate: 500 -%}
+{%- if article.image.src != blank -%}
+  {%- capture _img -%}https:{{ article.image.src }}{%- endcapture -%}
+{%- else -%}
+  {%- capture _img -%}{{ _site }}{{ 'logo.png' | asset_url }}{%- endcapture -%}
+{%- endif -%}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "@id": "{{ _site }}{{ article.url }}#article",
+  "mainEntityOfPage": { "@type": "WebPage", "@id": "{{ _site }}{{ article.url }}" },
+  "headline": "{{ article.title | replace: '\', '\\' | replace: '"', '\"' | strip_newlines | truncate: 110 }}",
+  "description": "{{ _excerpt }}",
+  "image": ["{{ _img }}"],
+  "author": { "@type": "Person", "name": "{{ article.author | default: 'Sintech' | replace: '\', '\\' | replace: '"', '\"' }}" },
+  "publisher": { "@id": "{{ _site }}/#organization" },
+  "datePublished": "{{ article.published_on | date: '%Y-%m-%dT%H:%M:%S+07:00' }}",
+  "dateModified": "{{ article.created_on | date: '%Y-%m-%dT%H:%M:%S+07:00' }}"
+}
+</script>
+
+{%if article.content contains "<h2"%}
+{% assign mucluc = true %}
+{%endif%}
+<section class="blogpage">
+	<div class="container layout-article" itemscope itemtype="https://schema.org/Article">
+			<meta itemprop="mainEntityOfPage" content="{{ article.url }}">
+			<meta itemprop="description" content="{{ article.excerpt | strip_html }}">
+			<meta itemprop="author" content="{{ article.author }}">
+			<meta itemprop="headline" content="{{ article.title | truncate: 100}}">
+			<meta itemprop="image" content="https:{%if article.image.src == null %}{{ 'logo.png' | asset_url }}{%else%}{{ article.image.src }}{%endif%}">
+			<meta itemprop="datePublished" content="{{ article.published_on | date: 'dd-MM-yyyy' }}">
+			<meta itemprop="dateModified" content="{{ article.created_on | date: 'dd-MM-yyyy' }}">
+			<div itemprop="publisher" itemscope itemtype="https://schema.org/Organization">
+				<div itemprop="logo" itemscope itemtype="https://schema.org/ImageObject">
+					<img class="d-none" src="{{'logo.png'|asset_url}}" alt="{{ store.name }}"/>
+					<meta itemprop="url" content="https:{{'logo.png'|asset_url}}">
+					<meta itemprop="width" content="400">
+					<meta itemprop="height" content="60">
+				</div>
+				<meta itemprop="name" content="{{store.name}}">
+			</div>
+
+         <div class="menu-blog background-thumb">
+        <div class="title-head-col">
+          {{ settings.aside_category_blog_title }}
+        </div>
+        <ul>
+          {%- for link in linklists[settings.aside_category_blog_menu].links -%}
+            <li>
+              <a href="{{ link.url }}" title="{{ link.title }}">{{ link.title }}</a>
+
+            </li>
+          {%- endfor -%}
+        </ul>
+      </div>
+      
+			<article class="article-main">
+        <div class="background-thumb" style="margin-bottom: 30px">
+				<div class="row row-fix">
+          <div class="col-lg-5 col-xl-5 col-12 col-fix">
+             {% if article.image != null %}
+                      <a class="thumb" href="{{ article.url }}" title="{{ article.title }}">
+                        <img class="lazyload" src="{{ 'lazy.png' | asset_url}}" data-src="{{ article.image.src}}" alt="{{ article.title }}">
+                      </a>
+                    {% else %}
+                      <a class="thumb" href="{{ article.url }}">
+                        <img
+                          class="lazyload"
+                          src="{{ 'lazy.png' | asset_url}}"
+                          data-src="{{ 'no-image.jpg' | asset_url}}"
+                          alt="{{ article.title }}"
+                          title="{{ article.title }}" />
+                      </a>
+                    {% endif %}
+          </div>
+            <div class="col-lg-7 col-xl-7 col-12 col-fix">
+              <h1 class="article-title" style="margin-bottom: 10px">{{ article.title }}</h1>
+               <div class="rte"  style="margin-bottom: 10px">
+                 {{ article.excerpt }}
+               </div>
+              	<div class="time-post f">
+									{%assign th = article.published_at | date:'%a' %}
+									<svg aria-hidden="true" focusable="false" data-prefix="fal" data-icon="clock" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="svg-inline--fa fa-clock fa-w-16"><path fill="currentColor" d="M256 8C119 8 8 119 8 256s111 248 248 248 248-111 248-248S393 8 256 8zm216 248c0 118.7-96.1 216-216 216-118.7 0-216-96.1-216-216 0-118.7 96.1-216 216-216 118.7 0 216 96.1 216 216zm-148.9 88.3l-81.2-59c-3.1-2.3-4.9-5.9-4.9-9.7V116c0-6.6 5.4-12 12-12h14c6.6 0 12 5.4 12 12v146.3l70.5 51.3c5.4 3.9 6.5 11.4 2.6 16.8l-8.2 11.3c-3.9 5.3-11.4 6.5-16.8 2.6z" class=""></path></svg>
+									{{ article.published_at | date:'%a' }} {{ article.published_at | date:'%d/%m/%y' }}
+								</div>
+            </div>
+        </div>
+          </div>
+          <div class="background-thumb"  style="margin-bottom: 30px">
+        	<div class="row row-fix">
+            {%if settings.use_mucluc and mucluc == true%}
+          <div class="col-lg-4 col-xl-3 col-12 col-fix">
+           
+							<div class="goto-wrapper ftoc-head">
+
+								<a class="title-goto-wrapper" href="javascript:;">Nội dung chính
+								</a>
+								<div class="dola-toc"></div>
+							</div>
+						
+          </div>
+              		{%endif%}
+             <div class="{%if settings.use_mucluc and mucluc == true%}col-lg-8 col-xl-6 col-12{%else%}col-lg-9 col-xl-9 col-12{%endif%} col-fix">
+               <div class="rte article-content">
+								{%if article.content != null and  article.content != ''%}
+								{{article.content}}
+								{%else%}
+								Bài viết đang cập nhật nội dung ...
+								{%endif%}
+							</div>
+               {% if blog.comments_enabled %}
+
+						<div class="thump-comment">
+							<div class="block-background">
+								{% form "new_comment", article %}
+								{% if form.posted_successfully? %}
+								{% if blog.moderated? %}
+								<div class="alert alert-warning alert-dismissible fade in" role="alert">
+									<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">×</span></button>
+									Bình luận của bạn đã được gửi đi chờ kiểm duyệt
+								</div>
+								{% else %}
+								<div class="alert alert-success alert-dismissible fade in" role="alert">
+									<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">×</span></button>
+									Bình luận của bạn đã được gửi thành công
+								</div>
+								{% endif %}
+								{% endif %}
+								{% if form.errors.size > 0 %}
+								<p style="margin-top: 10px;">{{ form.errors | default_errors }}</p>
+								{% endif %}
+						<div class="form-coment margin-bottom-10">
+							<div class="">
+								<h5 class="title-form-coment">VIẾT BÌNH LUẬN CỦA BẠN:</h5>
+							</div>
+							<fieldset class="form-group">										
+								<input placeholder="Họ tên" type="text" class="form-control form-control-lg" value="{{ customer.name }}" id="full-name" name="comment[author]" Required data-validation-error-msg= "Không được để trống" data-validation="required" />
+							</fieldset>
+							<fieldset class="form-group">										
+								<input placeholder="Email" type="email" class="form-control form-control-lg" value="{{ customer.email }}" id="email" name="comment[email]" data-validation="email" pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,63}$" data-validation-error-msg= "Email sai định dạng" required />
+							</fieldset>
+							<fieldset class="form-group">										
+								<textarea placeholder="Nội dung" class="form-control form-control-lg" id="comment" name="comment[body]" rows="6" Required data-validation-error-msg= "Không được để trống" data-validation="required">{{ form.body }}</textarea>
+							</fieldset>
+							<div>
+								<button type="submit" class="btn btn-blues"><i class="fa fa-hand-o-right" aria-hidden="true"></i> Gửi bình luận</button>
+							</div>
+						</div> <!-- End form mail -->
+						{% endform %}
+								
+							</div>
+						</div>
+
+						{% endif %}
+
+             </div>
+             <div class="col-lg-12 col-xl-3 col-12 col-fix">
+                <div class="aside-content-menu-blog aside-content-blog block-background">
+				{% include 'aside-blog' %}
+        </div>
+              
+             </div>
+             </div>
+             </div>
+          	
+			</article>
+		</div>
+
+</section>
+<script>
+	var swiperwish = new Swiper('.blog-swiper', {
+		slidesPerView: 3,
+		loop: false,
+		grabCursor: true,
+		spaceBetween: 30,
+		roundLengths: true,
+		slideToClickedSlide: false,
+		navigation: {
+			nextEl: '.blog-lienquan .section-prev',
+			prevEl: '.blog-lienquan .section-next',
+		},
+		autoplay: false,
+		breakpoints: {
+			300: {
+				slidesPerView: 1,
+				spaceBetween: 20
+			},
+			500: {
+				slidesPerView: 1,
+				spaceBetween: 20
+			},
+			640: {
+				slidesPerView: 1,
+				spaceBetween: 20
+			},
+			768: {
+				slidesPerView: 2,
+				spaceBetween: 20
+			},
+			991: {
+				slidesPerView: 3,
+				spaceBetween: 20
+			},
+			1200: {
+				slidesPerView: 4,
+				spaceBetween: 20
+			}
+		}
+	});
+</script>
+{%if mucluc == true%}
+<script>
+	var $heading2 = $('.article-content h2');
+	$heading2.attr("id", function() {
+		return $(this)
+			.text() // get the h1 text
+			.trim() // remove spaces from start and the end
+			.toLowerCase() // optional
+			.replace(/\s/g, '_'); // convert all spaces to underscores
+	});
+	var $heading3 = $('.article-content h3');
+	$heading3.attr("id", function() {
+		return $(this)
+			.text() // get the h1 text
+			.trim() // remove spaces from start and the end
+			.toLowerCase() // optional
+			.replace(/\s/g, '_'); // convert all spaces to underscores
+	});
+
+	$('.title-goto-wrapper').click(function() {
+		$(this).find('.fa').toggleClass('fa-angle-up'); 
+		$(this).find('.fa').toggleClass('fa-angle-down'); 
+		$('.dola-toc').toggleClass('hidden');
+	});
+	$(document).ready(function (){
+		$('.setmenuclick.auto .tabClick').click(function() {
+			$(this).addClass('hidescroll'); 
+			$('.fixMenu').removeClass('hidescroll');
+		});
+		$('.fixMenu .closeftoc span').click( function(event) {
+			event.stopPropagation();
+			$('.setmenuclick.auto .tabClick').removeClass('hidescroll');
+			$('.fixMenu').addClass('hidescroll');
+		});
+		$(document).click( function(event){
+			if ( !$(event.target).closest('.setmenuclick.auto').length ) {
+				$('.setmenuclick.auto .tabClick').removeClass('hidescroll');
+				$('.setmenuclick.auto .fixMenu').addClass('hidescroll');
+			}
+		});
+
+		$(window).scroll(function() {
+			var khoan_cach_all = $('.product-content').height();
+			if ($(this).scrollTop() > 500 && $(this).scrollTop() < khoan_cach_all ){  
+				$('.setmenuclick').removeClass('hidescroll');
+			}
+			else{
+				$('.setmenuclick').addClass('hidescroll');
+			}
+		});
+	});
+</script>
+{{ 'https://cdnjs.cloudflare.com/ajax/libs/tocbot/4.4.2/tocbot.min.js' | script_tag }}
+<script>
+	$(document).ready(function ($) {
+		tocbot.init({
+			tocSelector: '.dola-toc',
+			contentSelector: '.article-content',
+			headingSelector: 'h2,h3'
+		});
+		tocbot.init({
+			tocSelector: '.dola-toc-bottom',
+			contentSelector: '.article-content',
+			headingSelector: 'h2,h3'
+		});
+	});
+</script>
+{%endif%}
