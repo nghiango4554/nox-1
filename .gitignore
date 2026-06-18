@@ -110,3 +110,11 @@ desktop.ini
 
 # Refactor verification artifacts — generated per batch, không cần track
 marketing_hub/route_map_after_*.txt
+
+# ─── Local trash / backups (không commit) ───
+_trash_*/
+marketing_hub/_trash_*/
+marketing_hub/_backup/
+marketing_hub/data/*_backup/
+marketing_hub/data/*backup*/
+marketing_hub/data/cc_img_backup/

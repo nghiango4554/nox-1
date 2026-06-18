@@ -71,6 +71,35 @@ function updateCompare(){const a=document.querySelector('input[name="cmp-a"]:che
 function goCompare(){const a=document.querySelector('input[name="cmp-a"]:checked'),b=document.querySelector('input[name="cmp-b"]:checked');if(a&&b&&a.value!==b.value)window.location.href='/seo/history/compare?a='+a.value+'&b='+b.value;}
 </script>
 {% endif %}
+
+<section class="tbl-wrap" style="margin-top:var(--gap)">
+  <div class="tbl-top"><h3><i class="ic" data-icon="target"></i>CTR Rescue Tracking</h3>
+    <div style="margin-left:auto"><span class="sec-meta">Baseline GSC sau khi apply title/meta · chỉ đọc DB, không gọi GSC khi render</span></div></div>
+  {% if ctr_tracking %}
+  <table>
+    <thead><tr><th>Query</th><th>URL</th><th>Applied</th><th>Clicks</th><th>Impr</th><th>CTR</th><th>Pos</th><th>Apply</th><th>Next check</th><th>Status</th><th>Report</th></tr></thead>
+    <tbody>
+    {% for t in ctr_tracking %}
+      <tr>
+        <td><b>{{ t.query }}</b><br><small style="color:var(--ink-3)">{{ t.landing_group }}</small></td>
+        <td><a href="https://sintech.vn{{ t.url }}" target="_blank"><small>{{ t.url }}</small></a></td>
+        <td><small>{{ t.applied_fields_json }}</small></td>
+        <td>{{ t.baseline_clicks }}</td>
+        <td>{{ t.baseline_impressions }}</td>
+        <td>{{ t.baseline_ctr }}</td>
+        <td>{{ t.baseline_position }}</td>
+        <td><small>{{ t.apply_date }}</small></td>
+        <td><small>{{ t.next_check_date }}</small></td>
+        <td><span class="pill dotty" data-tone="{{ 'amber' if 'waiting' in t.status else 'emerald' if t.status=='done' else 'slate' }}">{{ t.status }}</span></td>
+        <td>{% if t.report_path %}<a href="#" title="{{ t.report_path }}"><small>{{ t.report_path.split('/')[-1] }}</small></a>{% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="text-align:center;padding:40px 20px"><div style="font-size:36px">🎯</div><h3 style="margin:8px 0 4px">Chưa có tracking CTR</h3><p class="sec-meta">Baseline sẽ hiện ở đây sau khi apply title/meta cho trang đích GSC.</p></div>
+  {% endif %}
+</section>
 {% endblock %}
 
 {% block scripts %}

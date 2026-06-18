@@ -34,7 +34,10 @@ from routes import content_blog as routes_content_blog
 from routes import content_pillar as routes_content_pillar
 from routes import dashboard as routes_dashboard
 from routes import products as routes_products
-from routes import blog_rewrite as routes_blog_rewrite
+from routes import blog_content_center as routes_blog_content_center
+# ARCHIVED 2026-06-16: blog_rewrite (AI Viết Lại Blog) gỡ khỏi UI/nav.
+# Module + DB (blog_rewrite_*) GIỮ NGUYÊN, chỉ không register route nữa.
+# from routes import blog_rewrite as routes_blog_rewrite
 
 ROOT = Path(__file__).parent
 
@@ -70,7 +73,9 @@ routes_content_blog.register(app)
 routes_content_pillar.register(app)
 routes_dashboard.register(app)
 routes_products.register(app)
-routes_blog_rewrite.register(app)
+# content_blog đăng ký TRƯỚC (giữ sub-route legacy), center chiếm trang chính /blog-content
+routes_blog_content_center.register(app)
+# routes_blog_rewrite.register(app)  # ARCHIVED — xem ghi chú phần import
 
 
 @app.template_filter("from_json")

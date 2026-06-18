@@ -1,0 +1,207 @@
+{% extends "redesign_base.html" %}
+{% set active = 'blog' %}
+{% block title %}{{ it.title or it.roadmap_id }} · Soạn bài · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<a href="{{ url_for('blog_content_page') }}" class="muted" style="font-weight:500">📰 Blog Command Center</a>
+<span class="crumb"></span>
+<span style="font-weight:600">{{ it.roadmap_id }} · soạn bài</span>
+{% endblock %}
+
+{% block page_actions %}
+<a class="btn" href="{{ url_for('blog_content_page') }}">← Quay lại</a>
+{% if it.target_url %}<a class="btn" href="{{ it.target_url }}" target="_blank" rel="noopener">🔗 Target URL</a>{% endif %}
+{% endblock %}
+
+{% block content %}
+<style>
+  .be-grid{display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start}
+  @media(max-width:1100px){.be-grid{grid-template-columns:1fr}}
+  .be-sec{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+  .be-h{font-size:13px;font-weight:700;margin-bottom:8px;display:flex;justify-content:space-between;align-items:baseline}
+  .be-hint{font-size:11px;color:var(--ink-3);font-weight:500}
+  .be-input,.be-textarea{width:100%;padding:8px 10px;font-size:13px;border:1px solid var(--line);border-radius:6px;background:var(--surface-2);color:var(--ink);font-family:inherit}
+  .be-textarea{resize:vertical;line-height:1.5}
+  .be-meter{font-size:11px;color:var(--ink-3);text-align:right;margin-top:3px}
+  .be-meter.ok{color:#0f766e;font-weight:600}.be-meter.warn{color:#b45309}.be-meter.bad{color:#be123c;font-weight:600}
+  .rt-wrap{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface-2)}
+  .rt-tb{display:flex;gap:4px;padding:6px 8px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--line);background:var(--surface)}
+  .rt-btn{background:transparent;border:1px solid transparent;color:var(--ink);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px;min-width:28px;height:26px;display:inline-flex;align-items:center;justify-content:center}
+  .rt-btn:hover{background:var(--surface-2);border-color:var(--line)}
+  .rt-sep{width:1px;height:18px;background:var(--line);margin:0 4px}
+  .rt-body{padding:12px 14px;min-height:340px;max-height:620px;overflow-y:auto;font-size:14px;line-height:1.65;color:#1c2230;outline:none;font-family:Arial,sans-serif;background:#fff}
+  .rt-body h2{font-size:17pt;font-weight:700;margin:18px 0 6px}.rt-body h3{font-size:13pt;font-weight:700;margin:14px 0 5px}
+  .rt-body a{color:#e74c3c;text-decoration:underline;font-weight:700}.rt-body table{border-collapse:collapse;width:100%}
+  .rt-body td,.rt-body th{border:1px solid #999;padding:8px}
+  .be-ref{position:sticky;top:14px}
+  .be-ref .row{margin-bottom:10px}.be-ref .lbl{font-size:10.5px;color:var(--ink-3);font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+  .be-ref .val{font-size:12.5px;color:var(--ink);margin-top:2px;white-space:pre-wrap}
+  .be-tag{display:inline-block;background:var(--surface-2);border:1px solid var(--line);border-radius:7px;padding:2px 8px;font-size:11.5px;margin:2px 3px 0 0}
+  .be-actions{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 14px}
+  .src-toggle{font-size:11px;color:var(--ink-3);cursor:pointer;text-decoration:underline;margin-left:auto}
+</style>
+
+<div class="be-grid">
+  <div>
+    <div class="be-sec">
+      <div class="be-h"><span>📝 SEO Title <span class="be-hint">30–61 ký tự, chứa keyword</span></span></div>
+      <input class="be-input" id="f-title" value="{{ it.title_seo or '' }}" maxlength="90"
+             oninput="meter('f-title','m-title',30,61)">
+      <div class="be-meter" id="m-title">{{ (it.title_seo or '')|length }}c</div>
+    </div>
+    <div class="be-sec">
+      <div class="be-h"><span>📄 Meta description <span class="be-hint">140–160 ký tự, chứa keyword</span></span></div>
+      <textarea class="be-textarea" id="f-meta" rows="3" oninput="meter('f-meta','m-meta',140,160)">{{ it.meta_description or '' }}</textarea>
+      <div class="be-meter" id="m-meta">{{ (it.meta_description or '')|length }}c</div>
+    </div>
+    <div class="be-sec" style="display:flex;gap:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:200px"><div class="be-h"><span>H1</span></div>
+        <input class="be-input" id="f-h1" value="{{ it.h1 or '' }}"></div>
+      <div style="flex:1;min-width:200px"><div class="be-h"><span>Slug</span></div>
+        <input class="be-input" id="f-slug" value="{{ it.slug or '' }}" style="font-family:Consolas,monospace;font-size:12px"></div>
+    </div>
+
+    <div class="be-actions">
+      <button class="btn btn-primary" type="button" onclick="saveEdit(this)">💾 Lưu bài</button>
+      <button class="btn" type="button" onclick="applyFullFormat(this)" style="background:linear-gradient(135deg,#9b82ab,#b87a84);color:#fff;font-weight:700">🎨 Format full</button>
+      <button class="btn" type="button" onclick="copyPrompt(this)">📋 Copy prompt</button>
+      <span style="flex:1"></span>
+      <button class="btn" type="button" onclick="syncHaravan(this)" style="background:#bd6a5d;color:#fff;font-weight:700">🚀 Sync Haravan (ẩn)</button>
+    </div>
+
+    <div class="be-sec">
+      <div class="be-h"><span>📃 Nội dung bài (paste từ ChatGPT — giữ format)</span></div>
+      <div class="rt-wrap">
+        <div class="rt-tb">
+          <button type="button" class="rt-btn" onclick="cmd('bold')"><b>B</b></button>
+          <button type="button" class="rt-btn" onclick="cmd('italic')"><i>I</i></button>
+          <button type="button" class="rt-btn" onclick="cmd('underline')"><u>U</u></button>
+          <span class="rt-sep"></span>
+          <button type="button" class="rt-btn" onclick="cmd('formatBlock','H2')">H2</button>
+          <button type="button" class="rt-btn" onclick="cmd('formatBlock','H3')">H3</button>
+          <button type="button" class="rt-btn" onclick="cmd('formatBlock','P')">¶</button>
+          <span class="rt-sep"></span>
+          <button type="button" class="rt-btn" onclick="cmd('insertUnorderedList')">•—</button>
+          <button type="button" class="rt-btn" onclick="cmd('insertOrderedList')">1.</button>
+          <span class="rt-sep"></span>
+          <button type="button" class="rt-btn" onclick="insertLink()">🔗</button>
+          <button type="button" class="rt-btn" onclick="cmd('unlink')">✂️</button>
+          <button type="button" class="rt-btn" onclick="cmd('removeFormat')">🧹</button>
+          <a class="src-toggle" onclick="toggleSource()" id="src-toggle">&lt;/&gt; HTML</a>
+        </div>
+        <div class="rt-body" id="f-body" contenteditable="true" onpaste="setTimeout(function(){},30)">{{ it.draft_body_html|safe if it.draft_body_html else '' }}</div>
+        <textarea class="be-textarea" id="f-body-src" style="display:none;border:none;border-top:1px solid var(--line);border-radius:0;min-height:340px;font-family:Consolas,monospace;font-size:12px"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- BRIEF tham khảo -->
+  <div class="be-ref">
+    <div class="be-sec">
+      <div class="be-h"><span>🧭 Brief tham khảo</span></div>
+      <div class="row"><div class="lbl">Keyword chính</div><div class="val"><b>{{ it.main_keyword }}</b></div></div>
+      {% if brief.secondary %}<div class="row"><div class="lbl">Keyword phụ</div><div class="val">{% for k in brief.secondary %}<span class="be-tag">{{ k }}</span>{% endfor %}</div></div>{% endif %}
+      <div class="row"><div class="lbl">Cụm · Intent · Funnel</div><div class="val">{{ it.cluster }} · {{ it.intent }} · {{ it.funnel }}</div></div>
+      <div class="row"><div class="lbl">CTA</div><div class="val">{{ it.cta }}</div></div>
+      {% if brief.outline %}<div class="row"><div class="lbl">Outline H2/H3</div><div class="val">{% for o in brief.outline %}{{ loop.index }}. {{ o }}
+{% endfor %}</div></div>{% endif %}
+      {% if brief.internal %}<div class="row"><div class="lbl">Internal links</div><div class="val">{% for l in brief.internal %}• {{ l }}
+{% endfor %}</div></div>{% endif %}
+      {% if it.target_url %}<div class="row"><div class="lbl">Target URL</div><div class="val">{{ it.target_url }}</div></div>{% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+const ITEM_ID = {{ it.id }};
+const ITEM = {{ {
+  "titleSeo": it.title_seo, "meta": it.meta_description, "h1": it.h1, "slug": it.slug,
+  "kw": it.main_keyword, "secondary": brief.secondary, "cta": it.cta,
+  "internal": brief.internal, "outline": brief.outline
+}|tojson }};
+
+function meter(inp, mid, mn, mx){ var n=document.getElementById(inp).value.length; var el=document.getElementById(mid);
+  el.textContent=n+'c'; el.className='be-meter '+(n>=mn&&n<=mx?'ok':(n===0?'':(n>mx?'bad':'warn'))); }
+function cmd(c,a){ document.getElementById('f-body').focus(); document.execCommand(c,false,a||null); }
+function insertLink(){ var u=prompt('URL:','https://sintech.vn'); if(u) cmd('createLink',u); }
+function flashBtn(b,m){ var o=b.innerHTML,bg=b.style.background; b.innerHTML=m; b.style.background='rgba(95,155,139,.25)';
+  setTimeout(function(){b.innerHTML=o;b.style.background=bg;},1300); }
+function toggleSource(){ var e=document.getElementById('f-body'),s=document.getElementById('f-body-src'),t=document.getElementById('src-toggle');
+  if(s.style.display==='none'){ s.value=e.innerHTML; s.style.display='block'; e.style.display='none'; t.textContent='👁️ rich-text'; }
+  else{ e.innerHTML=s.value; s.style.display='none'; e.style.display='block'; t.textContent='</> HTML'; } }
+function getBody(){ var s=document.getElementById('f-body-src'); return s.style.display!=='none'?s.value:document.getElementById('f-body').innerHTML; }
+
+function stripPasteWrapper(ed){
+  ed.querySelectorAll('section').forEach(function(el){ var p=el.parentNode; while(el.firstChild)p.insertBefore(el.firstChild,el); p.removeChild(el); });
+  ['data-start','data-end','data-testid','data-message-id','data-message-author-role','data-turn-id-container'].forEach(function(a){
+    ed.querySelectorAll('['+a+']').forEach(function(el){ el.removeAttribute(a); }); });
+}
+function applyFullFormat(btn){
+  var ed=document.getElementById('f-body'); stripPasteWrapper(ed);
+  // gỡ class rác từ canvas ChatGPT (isSelectedEnd...) + style inline cũ
+  ed.querySelectorAll('[class]').forEach(function(el){ el.removeAttribute('class'); });
+  ed.style.fontFamily='Arial,sans-serif'; ed.style.color='#000';
+  var nH=0,nL=0,nT=0;
+  ed.querySelectorAll('h2').forEach(function(h){ h.style.cssText='font-size:17pt;font-weight:700;color:#000;margin:24px 0 6px;font-family:Arial,sans-serif;line-height:1.38'; nH++; });
+  ed.querySelectorAll('h3').forEach(function(h){ h.style.cssText='font-size:13pt;font-weight:700;color:#000;margin:18px 0 4px;font-family:Arial,sans-serif;line-height:1.38'; nH++; });
+  ed.querySelectorAll('p,li').forEach(function(p){ p.style.fontFamily='Arial,sans-serif'; p.style.fontSize='12pt'; p.style.fontWeight='500'; p.style.lineHeight='1.65'; p.style.color='#000'; p.style.margin='10px 0'; });
+  ed.querySelectorAll('ul,ol').forEach(function(l){ l.style.margin='10px 0'; l.style.paddingLeft='28px'; });
+  // link đỏ Sintech + con bên trong (canvas hay bọc <strong><a>)
+  ed.querySelectorAll('a').forEach(function(a){ a.style.color='#e74c3c'; a.style.textDecoration='underline'; a.style.fontWeight='700';
+    a.querySelectorAll('*').forEach(function(c){ c.style.color='#e74c3c'; c.style.textDecoration='underline'; c.style.fontWeight='700'; }); nL++; });
+  // bảng: viền đầy đủ + cell
+  ed.querySelectorAll('td,th').forEach(function(c){ c.style.border='1px solid #999'; c.style.padding='9px 12px'; c.style.verticalAlign='top'; c.style.lineHeight='1.55'; c.style.color='#000'; c.style.fontFamily='Arial,sans-serif'; });
+  ed.querySelectorAll('table').forEach(function(t){
+    t.style.borderCollapse='collapse'; t.style.width='100%'; t.style.margin='16px 0'; t.style.fontSize='11pt';
+    t.style.border='2px solid #555'; t.setAttribute('border','1'); t.removeAttribute('cellspacing'); t.removeAttribute('cellpadding');
+    // header: có <th> -> style th; KHÔNG có th -> ép hàng đầu (td) làm header
+    var ths=t.querySelectorAll('th');
+    if(ths.length){ ths.forEach(function(h){ h.style.fontWeight='700'; h.style.background='#eef0f2'; h.style.textAlign='left'; h.style.borderBottom='2px solid #555'; }); }
+    else if(t.rows.length){ Array.from(t.rows[0].cells).forEach(function(c){ c.style.fontWeight='700'; c.style.background='#eef0f2'; c.style.textAlign='left'; c.style.borderBottom='2px solid #555'; }); }
+    nT++;
+  });
+  if(btn) flashBtn(btn,'✓ '+nH+'H '+nL+'link '+nT+'table');
+}
+function buildPrompt(){
+  var sec=(ITEM.secondary||[]).join(', '); var links=(ITEM.internal||[]).join('\n');
+  var outline=(ITEM.outline||[]).map(function(o,i){return (i+1)+'. '+o;}).join('\n');
+  return ['Viết 1 bài blog chuẩn SEO bằng tiếng Việt theo brief dưới đây. Văn phong rõ ràng, hữu ích, đúng sự thật — KHÔNG bịa thông số, KHÔNG hướng dẫn crack/kích hoạt phần mềm lậu. Các thông số dữ liệu đều phải lấy data mới nhất, thực tế, hiện tại và có logic.',
+   '• H1: '+(ITEM.h1||''),
+   '• Slug: '+(ITEM.slug||''),'• Keyword chính: '+(ITEM.kw||''),'• Keyword phụ: '+sec,
+   '• CTA (đưa vào cuối bài): '+(ITEM.cta||''),
+   '• Dàn ý H2/H3 cần bám:',outline,
+   '• Internal links (chèn tự nhiên, đúng ngữ cảnh trong bài):',links].join('\n');
+}
+function copyPrompt(btn){
+  var txt=buildPrompt(), done=function(){ flashBtn(btn,'✅ Đã copy!'); };
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done,function(){fb();done();}); } else { fb(); done(); }
+  function fb(){ var ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} document.body.removeChild(ta); }
+}
+async function syncHaravan(btn){
+  if(!confirm('Sync bài này lên Haravan?\n• Lưu bản hiện tại trước\n• Tạo/Cập nhật bài ở dạng ẨN (chưa đăng, không lên Google)\n• KHÔNG kèm ảnh — ảnh tự set trong admin'))return;
+  var phrase=prompt('Gõ xác nhận để sync:\nPUBLISH BLOG ITEM'); if(phrase===null)return;
+  var o=btn.innerHTML; btn.innerHTML='⏳ Đang lưu + sync...'; btn.style.pointerEvents='none';
+  // 1) lưu bản hiện tại để sync đúng nội dung mới nhất
+  var payload={ title:document.getElementById('f-title').value, meta:document.getElementById('f-meta').value,
+    h1:document.getElementById('f-h1').value, slug:document.getElementById('f-slug').value, body:getBody() };
+  try{
+    await fetch('/blog-content/'+ITEM_ID+'/save-edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    var r=await fetch('/api/blog-content/items/'+ITEM_ID+'/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:phrase,publish:false})});
+    var d=await r.json();
+    btn.style.pointerEvents='';
+    if(d.ok){ btn.innerHTML='✅ '+(d.action==='create'?'Tạo':'Cập nhật')+' bài ẩn xong';
+      if(confirm('✅ Sync OK ('+d.action+', ẩn).\nMở admin để set ảnh + chọn Người viết?')) window.open(d.admin,'_blank'); }
+    else { btn.innerHTML='❌ '+(d.error||'lỗi').slice(0,40); }
+    setTimeout(function(){btn.innerHTML=o;},2600);
+  }catch(e){ btn.style.pointerEvents=''; btn.innerHTML='❌ lỗi mạng'; setTimeout(function(){btn.innerHTML=o;},2600); }
+}
+async function saveEdit(btn){
+  var payload={ title:document.getElementById('f-title').value, meta:document.getElementById('f-meta').value,
+    h1:document.getElementById('f-h1').value, slug:document.getElementById('f-slug').value, body:getBody() };
+  var o=btn.innerHTML; btn.innerHTML='⏳ Đang lưu...';
+  try{ var r=await fetch('/blog-content/'+ITEM_ID+'/save-edit',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    var d=await r.json(); btn.innerHTML=(d.ok?'✅ Đã lưu':'❌ '+(d.error||'lỗi')); setTimeout(function(){btn.innerHTML=o;},1800);
+  }catch(e){ btn.innerHTML='❌ lỗi mạng'; setTimeout(function(){btn.innerHTML=o;},1800); }
+}
+</script>
+{% endblock %}

@@ -2451,6 +2451,21 @@ def seo_history_list(limit: int = 200) -> list:
     return [dict(r) for r in rows]
 
 
+def gsc_ctr_tracking_list(limit: int = 200) -> list:
+    """CTR Rescue tracking records (đọc DB, KHÔNG gọi GSC API). [] nếu chưa có bảng."""
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM gsc_ctr_tracking ORDER BY landing_group, baseline_impressions DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
+    finally:
+        conn.close()
+
+
 def seo_history_chart_data(limit: int = 52) -> dict:
     """Data chuẩn cho Chart.js — sort tăng dần theo thời gian."""
     conn = get_conn()

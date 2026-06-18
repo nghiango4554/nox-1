@@ -79,11 +79,8 @@
   <a href="{{ url_for('collection_content_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('collection_content') %}active{% endif %}">
     <span class="sb-icon">🗂️</span><span>Collection Content</span>
   </a>
-  <a href="{{ url_for('blog_content_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('blog_content') %}active{% endif %}">
-    <span class="sb-icon">📰</span><span>Blog Content</span>
-  </a>
-  <a href="{{ url_for('seo_blog_rewrite_page') }}" class="sb-link {% if request.endpoint == 'seo_blog_rewrite_page' %}active{% endif %}">
-    <span class="sb-icon">✍️</span><span>AI Viết Lại Blog</span>
+  <a href="{{ url_for('blog_content_page') }}" class="sb-link {% if request.endpoint and (request.endpoint.startswith('blog_content') or request.endpoint.startswith('bcc_')) %}active{% endif %}">
+    <span class="sb-icon">📰</span><span>Blog Command Center</span>
   </a>
   <a href="{{ url_for('products_new_form') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('products_new') %}active{% endif %}">
     <span class="sb-icon">🛍️</span><span>SP mới (Haravan)</span>
@@ -110,7 +107,6 @@
       <a href="{{ url_for('seo_indexability_page') }}" class="sb-sublink {% if request.endpoint == 'seo_indexability_page' %}active{% endif %}">🚫 Indexability</a>
       <a href="{{ url_for('seo_inlinks_page') }}" class="sb-sublink {% if request.endpoint == 'seo_inlinks_page' %}active{% endif %}">🕸️ Internal links</a>
       <a href="{{ url_for('seo_history_page') }}" class="sb-sublink {% if request.endpoint == 'seo_history_page' %}active{% endif %}">📈 Lịch sử</a>
-      <a href="{{ url_for('seo_blog_rewrite_page') }}" class="sb-sublink {% if request.endpoint == 'seo_blog_rewrite_page' %}active{% endif %}">✍️ AI Viết Lại Blog</a>
     </div>
   </div>
 
