@@ -382,6 +382,7 @@ def seo_history_page():
     cwv_timeline = db.cwv_history_timeline(limit=52)
     schema_timeline = db.seo_schema_history_timeline(limit=52)
     regression = db.seo_history_regression_check()
+    ctr_tracking = db.gsc_ctr_tracking_list(limit=200)
     return render_template(
         "seo_history.html",
         history=history,
@@ -389,6 +390,7 @@ def seo_history_page():
         cwv_timeline=cwv_timeline,
         schema_timeline=schema_timeline,
         regression=regression,
+        ctr_tracking=ctr_tracking, active="history",
     )
 
 

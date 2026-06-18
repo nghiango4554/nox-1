@@ -1,0 +1,41 @@
+﻿roadmap_id,cluster,priority,week,title,status,seo_score,impact,effort,target_url,deadline_publish
+BLG-001,Build PC,A1,1,Build PC Online Là Gì? Cách Tự Xây Dựng Cấu Hình PC Tại Sintech,backlog,94.0,5,3,/pages/xay-dung-cau-hinh,2026-06-19
+BLG-002,Build PC,A1,1,Hướng Dẫn Xây Dựng Cấu Hình PC Theo Nhu Cầu Từ A-Z,backlog,83.0,5,4,/pages/xay-dung-cau-hinh,2026-06-21
+BLG-003,Build PC,A1,2,Tự Build PC Cần Lưu Ý Gì? 10 Lỗi Người Mới Thường Gặp,backlog,77.0,4,3,/pages/xay-dung-cau-hinh,2026-06-26
+BLG-004,Build PC,A1,2,"Build PC Gaming Theo Ngân Sách: 15, 20, 30, 40 Triệu Nên Chọn Gì?",backlog,91.0,5,4,/pages/xay-dung-cau-hinh,2026-06-28
+BLG-005,Build PC,A2,2,"Build PC 15 Triệu Chơi Game Mượt: Cấu Hình Tối Ưu Cho Học Sinh, Sinh Viên",backlog,85.0,4,3,/pages/xay-dung-cau-hinh,2026-06-30
+BLG-013,Linh kiện cũ,A1,3,"Có Nên Mua SSD Cũ Không? Kinh Nghiệm Chọn SSD Cũ Bền, Ít Lỗi",backlog,94.0,5,3,/collections/ssd-cu,2026-07-08
+BLG-006,Build PC,A2,3,"Build PC 20 Triệu: Cấu Hình Gaming Full HD, 2K Đáng Mua",backlog,85.0,4,3,/pages/xay-dung-cau-hinh,2026-07-03
+BLG-007,Build PC,A2,3,"Build PC 30 Triệu: Cấu Hình Gaming, Stream Và Đồ Họa Bán Chuyên",backlog,85.0,4,3,/pages/xay-dung-cau-hinh,2026-07-05
+BLG-008,Build PC,A2,3,"Build PC 40 Triệu: Cấu Hình Cao Cấp Cho Gaming 2K, Đồ Họa Và AI",backlog,85.0,4,3,/pages/xay-dung-cau-hinh,2026-07-07
+BLG-015,Linh kiện cũ,A1,4,"RTX 4060 Cũ Có Đáng Mua Không? Hiệu Năng, Giá Và Cách Test Trước Khi Mua",backlog,94.0,5,3,/collections/vga-cu,2026-07-15
+BLG-009,Build PC,A2,4,Build PC Văn Phòng Giá Rẻ: Cấu Hình Ổn Định Cho Học Tập Và Làm Việc,backlog,71.0,3,2,/pages/xay-dung-cau-hinh,2026-07-10
+BLG-010,Build PC,A2,4,"Build PC Đồ Họa: Cách Chọn CPU, VGA, RAM, SSD Cho Photoshop, Premiere, AutoCAD",backlog,91.0,5,4,/pages/xay-dung-cau-hinh,2026-07-12
+BLG-014,Linh kiện cũ,A2,4,"SSD SATA Cũ Hay SSD NVMe Cũ: Nên Chọn Loại Nào Cho PC, Laptop?",backlog,77.0,4,3,/collections/ssd-cu,2026-07-14
+BLG-016,Linh kiện cũ,A1,5,"RTX 3060 Cũ Có Còn Đáng Mua Không? So Sánh Bản 8GB, 12GB Và RTX 4060",backlog,94.0,5,3,/collections/vga-cu,2026-07-21
+BLG-018,Linh kiện cũ,A1,5,Mua VGA Cũ Cần Test Gì? Cách Kiểm Tra Card Màn Hình Trước Khi Mua,backlog,91.0,5,4,/collections/vga-cu,2026-07-17
+BLG-017,Linh kiện cũ,A2,5,RTX 4070 Cũ Có Đáng Mua Không? Khi Nào Nên Chọn Thay Vì RTX 4060?,backlog,85.0,4,3,/collections/vga-cu,2026-07-22
+BLG-011,Build PC,B,5,"Build PC AI Là Gì? Cấu Hình Máy Tính Cho AI, Render Và Data",backlog,65.0,3,4,/pages/xay-dung-cau-hinh,2026-07-17
+BLG-012,Build PC,B,5,"Build PC Chơi Game 2K: Nên Chọn RTX 4060 Ti, RTX 4070 Hay RTX 5060?",backlog,82.0,4,4,/pages/xay-dung-cau-hinh,2026-07-19
+BLG-019,Linh kiện cũ,A2,6,Linh Kiện PC Cũ TPHCM: Kinh Nghiệm Mua Hàng Có Test Và Bảo Hành,backlog,94.0,5,3,/collections/linh-kien-pc-cu,2026-07-24
+BLG-020,Linh kiện cũ,B,6,"CPU Cũ Có Đáng Mua Không? Kinh Nghiệm Chọn CPU Intel, AMD Cũ",backlog,77.0,4,3,/collections/cpu-cu,2026-07-26
+BLG-021,Linh kiện cũ,B,6,Thu Mua Linh Kiện PC Cũ TPHCM: Bảng Giá Tham Khảo Và Quy Trình Kiểm Tra,backlog,85.0,4,3,/pages/thu-mua-linh-kien-pc-cu,2026-07-28
+BLG-023,Phần mềm bản quyền,A1,7,Office 2021 Bản Quyền Khác Gì Office Crack Khi Làm Việc Hằng Ngày?,backlog,94.0,5,3,/collections/phan-mem-ban-quyen,2026-08-02
+BLG-024,Phần mềm bản quyền,A2,7,Office 2021 Crack Có An Toàn Không? Rủi Ro Khi Dùng Trong Công Việc,backlog,77.0,4,3,/collections/phan-mem-ban-quyen,2026-08-04
+BLG-022,Linh kiện cũ,B,7,"Bảng Mã Lỗi Main X99: AA, 60, 67, 73, BD, FF Là Gì Và Cách Xử Lý",backlog,66.0,4,4,/collections/mainboard-cu,2026-07-31
+BLG-027,Phần mềm bản quyền,A1,8,Hướng Dẫn Cài Đặt AutoCAD 2021 Hợp Lệ Trên Windows 10/11,backlog,91.0,5,4,/collections/phan-mem-ban-quyen,2026-08-11
+BLG-025,Phần mềm bản quyền,A2,8,Cài Office 2021 Cho Windows 11: Nên Dùng Bản Quyền Hay Bản Crack?,backlog,85.0,4,3,/collections/phan-mem-ban-quyen,2026-08-07
+BLG-026,Phần mềm bản quyền,A2,8,AutoCAD 2021 Crack Có Nên Dùng Không? Rủi Ro Cho Cá Nhân Và Doanh Nghiệp,backlog,77.0,4,3,/collections/phan-mem-ban-quyen,2026-08-09
+BLG-031,Dịch vụ Quận 7,A1,9,"Sửa Máy Tính Quận 7: Kiểm Tra, Cài Đặt, Nâng Cấp PC/Laptop Tại Sintech",backlog,94.0,5,3,/pages/sua-may-tinh-quan-7,2026-08-18
+BLG-032,Dịch vụ Quận 7,A2,9,Sửa Laptop Quận 7: Khi Nào Nên Mang Máy Đi Kiểm Tra?,backlog,85.0,4,3,/pages/sua-laptop-quan-7,2026-08-19
+BLG-028,Phần mềm bản quyền,B,9,AutoCAD 2021 Cần Cấu Hình Máy Tính Như Thế Nào Để Chạy Mượt?,backlog,82.0,4,4,/pages/xay-dung-cau-hinh,2026-08-14
+BLG-029,Phần mềm bản quyền,B,9,Adobe Acrobat Crack Có An Toàn Không? Rủi Ro Khi Xử Lý File PDF,backlog,60.0,3,3,/collections/phan-mem-ban-quyen,2026-08-16
+BLG-033,Dịch vụ Quận 7,A2,10,Vệ Sinh Laptop Quận 7: Bao Lâu Nên Vệ Sinh Và Thay Keo Tản Nhiệt?,backlog,88.0,4,2,/pages/ve-sinh-laptop,2026-08-23
+BLG-034,Dịch vụ Quận 7,A2,10,Vệ Sinh PC Tại Quận 7: Dấu Hiệu Máy Cần Bảo Dưỡng Ngay,backlog,88.0,4,2,/pages/ve-sinh-pc-tai-cua-hang,2026-08-25
+BLG-035,Dịch vụ Quận 7,B,10,Cài Windows Và Phần Mềm Tại Quận 7: Khi Nào Nên Cài Lại Máy?,backlog,85.0,4,3,/pages/cai-dat-windows-phan-mem,2026-08-26
+BLG-030,Phần mềm bản quyền,C,10,CorelDRAW 2019/2021 Crack Có Nên Dùng Không? Rủi Ro Và Lựa Chọn Hợp Lệ,backlog,51.0,2,3,/collections/phan-mem-ban-quyen,2026-08-21
+BLG-036,Kỹ thuật/Gaming hỗ trợ,B,11,Máy Tính Bị Rò Điện Có Nguy Hiểm Không? Nguyên Nhân Và Cách Xử Lý,backlog,71.0,3,2,/pages/sua-may-tinh-quan-7,2026-08-28
+BLG-037,Kỹ thuật/Gaming hỗ trợ,B,11,CS2 Là Gì? Cấu Hình Chơi Counter-Strike 2 Mượt Trên PC,backlog,68.0,3,3,/pages/xay-dung-cau-hinh,2026-08-30
+BLG-038,Kỹ thuật/Gaming hỗ trợ,B,11,"Cấu Hình Chơi Palworld Trên PC: Tối Thiểu, Đề Nghị Và Gợi Ý Nâng Cấp",backlog,68.0,3,3,/pages/xay-dung-cau-hinh,2026-09-01
+BLG-040,Dịch vụ Quận 7,B,12,"Thu Mua PC Cũ TPHCM: Quy Trình Kiểm Tra, Định Giá Và Nâng Cấp Lại Máy",backlog,85.0,4,3,/pages/thu-mua-pc-cu,2026-09-06
+BLG-039,Kỹ thuật/Gaming hỗ trợ,C,12,ZZZ Bao Nhiêu GB Trên PC? Cấu Hình Chơi Zenless Zone Zero Mượt,backlog,54.0,2,2,/pages/xay-dung-cau-hinh,2026-09-04

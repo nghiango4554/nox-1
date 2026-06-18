@@ -1,0 +1,4 @@
+adapter,enabled,proven,method,url_pattern,needs,priority,available_on_this_machine
+haravan_files_admin_session,OFF,no,Admin browser session (cookie) -> Files Manager UI upload,file.hstatic.net/200000860097/file/<name>,admin cookie/session dung store Sintech (chua co),1,NO
+haravan_theme_asset,ON,yes,Open API PUT apis.haravan.com/web/themes/<theme>/assets.json (base64),cdn.hstatic.net/themes/200000860097/assets/<name>,access_token (da co),2,YES
+haravan_product_image,OFF,yes,POST /products/<id>/images.json (base64),product.hstatic.net/200000860097/product/<name>,product id sandbox ro rang (chua cau hinh),3,YES

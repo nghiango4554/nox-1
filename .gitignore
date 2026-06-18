@@ -116,3 +116,9 @@ marketing_hub/data/cc_img_backup/
 marketing_hub/data/collection_coverage.json
 marketing_hub/data/cov.json
 marketing_hub/data/_backup_wifimesh_body.html
+# ─── Local trash / backups (không commit) ───
+_trash_*/
+marketing_hub/_trash_*/
+marketing_hub/_backup/
+marketing_hub/data/*_backup/
+marketing_hub/data/*backup*/

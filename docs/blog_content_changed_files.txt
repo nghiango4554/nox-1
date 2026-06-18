@@ -1,0 +1,31 @@
+BLOG SEO COMMAND CENTER — CHANGED FILES (2026-06-16)
+
+== FILE MỚI ==
+marketing_hub/blog_content_center.py            (logic: schema + import + queries + KPI + pipeline)
+marketing_hub/routes/blog_content_center.py     (route /blog-content + 15 API + redirect stub)
+marketing_hub/docs/ke_hoach_blog_seo_sintech_gsc_16m_3m.xlsx  (copy từ Downloads, nguồn import)
+
+== FILE SỬA ==
+marketing_hub/app.py                  (gỡ import+register blog_rewrite; thêm import+register blog_content_center)
+marketing_hub/routes/content_blog.py  (comment 1 dòng đăng ký trang chính /blog-content; giữ sub-route legacy)
+marketing_hub/templates/blog_content.html       (đập đi xây lại = Command Center 5 tab + drawer)
+marketing_hub/templates/base.html                (gỡ 2 nav link AI Viết Lại Blog; đổi nhãn Blog Command Center)
+marketing_hub/templates/redesign_base.html       (gỡ 1 nav link rewrite; đổi nhãn)
+
+== FILE TẠO BỞI RUNTIME (DB) ==
+bảng blog_content_items (40 dòng) + blog_content_events  — trong data/posts.db
+
+== GIỮ NGUYÊN (KHÔNG ĐỘNG) ==
+marketing_hub/blog_rewrite*.py (13 file)         — disabled (không import), không xóa
+marketing_hub/routes/blog_rewrite.py             — không register nữa, không xóa
+marketing_hub/templates/blog_rewrite_ai.html     — không xóa
+marketing_hub/templates/blog_content_detail.html — legacy detail (blog_jobs cũ), vẫn hoạt động
+DB: blog_rewrite_candidates/jobs/drafts/events + blog_jobs — KHÔNG drop
+
+== BACKUP ==
+marketing_hub/_backup/blog-content-command-center-all-in-one-20260616-170521/
+  (app.py, content_blog.py, blog_rewrite.py, base.html, blog_content*.html, blog_rewrite_ai.html,
+   DB_SCHEMA_SNAPSHOT.sql, Excel, CHANGED_FILES.txt)
+
+== KHÔNG LÀM ==
+commit / push / deploy / drop table / truncate / sửa theme Haravan / publish hàng loạt / bật scheduler

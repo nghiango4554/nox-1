@@ -648,8 +648,11 @@ def blog_content_image_url(job_id):
 # ─────────────────────── REGISTRATION ────────────────────────────
 
 def register(app):
-    """Đăng ký 19 route Blog Content."""
-    app.add_url_rule("/blog-content", "blog_content_page", blog_content_page)
+    """Đăng ký route Blog Content (legacy). Trang chính /blog-content do
+    blog_content_center (Command Center) đảm nhận — dòng dưới đã archive.
+    Các sub-route (detail/gen/sync/add-author...) GIỮ để blog_pillars + bài cũ không vỡ."""
+    # ARCHIVED 2026-06-16: /blog-content main page -> Blog SEO Command Center (blog_content_center)
+    # app.add_url_rule("/blog-content", "blog_content_page", blog_content_page)
     app.add_url_rule("/blog-content/<int:job_id>",
                      "blog_content_detail_page", blog_content_detail_page)
     app.add_url_rule("/blog-content/<int:job_id>/gen",
