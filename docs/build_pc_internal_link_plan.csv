@@ -1,0 +1,19 @@
+type,source,currently_links_to_build_page,suggested_anchor,target_url,note
+body_link,/pages/xay-dung-cau-hinh (thân bài),no (0 link collection trong body),PC Gaming theo giá,/collections/pc-gaming-theo-gia,Thêm link trong đoạn mở đầu / mục build mẫu
+body_link,/pages/xay-dung-cau-hinh (thân bài),no,PC đồ họa,/collections/pc-do-hoa,Thêm trong mục theo nhu cầu
+body_link,/pages/xay-dung-cau-hinh (thân bài),no,PC văn phòng,/collections/pc-van-phong,Thêm trong mục theo nhu cầu
+body_link,/pages/xay-dung-cau-hinh (thân bài),no,PC AI - Workstation,/collections/pc-ai-workstation,Thêm trong mục theo nhu cầu
+body_link,/pages/xay-dung-cau-hinh (thân bài),no,PC streaming livestream,/collections/pc-streaming-livestream,Tùy chọn
+body_link,/pages/xay-dung-cau-hinh (thân bài),no,build PC Gaming theo VGA,/collections/pc-gaming-theo-vga,Anchor chứa head term build pc
+inbound_link,pc-do-hoa,no,build PC đồ họa,/pages/xay-dung-cau-hinh,PC collection chưa trỏ về page build
+inbound_link,pc-streaming-livestream,no,xây dựng cấu hình PC streaming,/pages/xay-dung-cau-hinh,chưa trỏ
+inbound_link,pc-van-phong,no,build PC văn phòng,/pages/xay-dung-cau-hinh,chưa trỏ
+inbound_link,pc-esport,no,build PC eSport,/pages/xay-dung-cau-hinh,chưa trỏ
+inbound_link,pc-gaming-theo-gia,no,build PC Gaming theo giá,/pages/xay-dung-cau-hinh,chưa trỏ
+inbound_link,pc-gaming-theo-vga,no,build PC Gaming theo VGA,/pages/xay-dung-cau-hinh,chưa trỏ
+inbound_link,pc-hoc-tap-online,no,build PC học tập,/pages/xay-dung-cau-hinh,chưa trỏ
+inbound_link,pc-van-phong-may-bo,no,build PC văn phòng,/pages/xay-dung-cau-hinh,chưa trỏ
+inbound_link,pc-gaming-cao-cap,no,build PC Gaming cao cấp,/pages/xay-dung-cau-hinh,chưa trỏ
+inbound_link,pc-gaming-do-hoa-ai,no,build PC Gaming đồ họa AI,/pages/xay-dung-cau-hinh,chưa trỏ
+inbound_blog,/blogs/news/cau-hinh-choi-cs2-counter-strike-2-tren-pc-laptop,unknown,build PC chơi CS2,/pages/xay-dung-cau-hinh,Link từ bài CS2 (3936 impr) về page build
+anchor_standardize,82 collection đang trỏ (anchor cũ),yes,"chuẩn hóa anchor chứa ""build pc"" / ""build PC Gaming""",/pages/xay-dung-cau-hinh,"Hiện anchor chủ yếu ""xây dựng cấu hình"" — bổ sung biến thể head term build pc"

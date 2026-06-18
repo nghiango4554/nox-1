@@ -176,6 +176,40 @@
   </script>
 {% endif %}
 
+{# ─── CTR Rescue Tracking (port từ GSC CTR Rescue) — chỉ đọc DB gsc_ctr_tracking, không gọi GSC khi render ─── #}
+<section class="card" style="margin-top:14px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:12px;flex-wrap:wrap">
+    <h3 style="margin:0;font-size:15px">🎯 CTR Rescue Tracking</h3>
+    <span class="muted" style="font-size:12px">Baseline GSC sau khi apply title/meta · chỉ đọc DB, không gọi GSC khi render</span>
+  </div>
+  {% if ctr_tracking %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Query</th><th>URL</th><th>Applied</th><th>Clicks</th><th>Impr</th><th>CTR</th><th>Pos</th><th>Apply</th><th>Next check</th><th>Status</th><th>Report</th></tr></thead>
+    <tbody>
+      {% for t in ctr_tracking %}
+      <tr>
+        <td><strong>{{ t.query }}</strong><br><small class="muted">{{ t.landing_group }}</small></td>
+        <td><a href="https://sintech.vn{{ t.url }}" target="_blank"><small>{{ t.url }}</small></a></td>
+        <td><small>{{ t.applied_fields_json }}</small></td>
+        <td>{{ t.baseline_clicks }}</td>
+        <td>{{ t.baseline_impressions }}</td>
+        <td>{{ t.baseline_ctr }}</td>
+        <td>{{ t.baseline_position }}</td>
+        <td><small>{{ t.apply_date }}</small></td>
+        <td><small>{{ t.next_check_date }}</small></td>
+        <td><small>{{ t.status }}</small></td>
+        <td>{% if t.report_path %}<small title="{{ t.report_path }}">{{ t.report_path.split('/')[-1] }}</small>{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:40px 20px"><div style="font-size:36px">🎯</div><h3 style="margin:8px 0 4px">Chưa có tracking CTR</h3><p class="muted" style="font-size:13px">Baseline sẽ hiện ở đây sau khi apply title/meta cho trang đích GSC.</p></div>
+  {% endif %}
+</section>
+
 {% endblock %}
 
 {% block scripts %}

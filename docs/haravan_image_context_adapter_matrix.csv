@@ -1,0 +1,7 @@
+context,adapter,accepted_classification,files_manager_required,fallback_allowed,accepted_url_pattern
+product_main_image,haravan_product_image,SINTECH_PRODUCT_IMAGE,NO,YES,cdn.hstatic.net/products/200000860097/<name> (hoac product.hstatic.net/200000860097/product/<name>)
+product_gallery,haravan_product_image,SINTECH_PRODUCT_IMAGE,NO,YES,cdn.hstatic.net/products/200000860097/<name> (hoac product.hstatic.net/200000860097/product/<name>)
+blog_hero,haravan_article_image,SINTECH_ARTICLE_IMAGE|SINTECH_FILES,NO,YES,article/hero workflow (store 200000860097)
+product_description_inline,haravan_files_manager_admin_session,SINTECH_FILES,YES,NO,file.hstatic.net/200000860097/file/<name>
+blog_body_inline,haravan_files_manager_admin_session,SINTECH_FILES,YES,NO,file.hstatic.net/200000860097/file/<name>
+unknown,disabled,NONE,NO,NO,n/a

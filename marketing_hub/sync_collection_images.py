@@ -19,7 +19,26 @@ import collection_content_writer as ccw
 CFG = json.loads((Path(__file__).parent.parent / "state" / "haravan_token.json").read_text(encoding="utf-8"))
 H = {"Authorization": f"Bearer {CFG['access_token']}", "Content-Type": "application/json"}
 APIS = "https://apis.haravan.com"
-MAIN_THEME = 1001489132
+MAIN_THEME_FALLBACK = 1001494160  # theme live hiện tại (role=main) — fallback nếu query lỗi
+_MAIN_THEME_CACHE = None
+
+
+def get_main_theme_id():
+    """Lấy theme id đang chạy (role=main) ĐỘNG — tránh hardcode bị stale khi đổi/backup theme.
+    Cache 1 lần/process. Lỗi mạng → dùng fallback."""
+    global _MAIN_THEME_CACHE
+    if _MAIN_THEME_CACHE:
+        return _MAIN_THEME_CACHE
+    try:
+        themes = requests.get(f"{APIS}/web/themes.json", headers=H, timeout=30).json().get("themes", [])
+        for t in themes:
+            if t.get("role") == "main":
+                _MAIN_THEME_CACHE = t["id"]
+                return _MAIN_THEME_CACHE
+    except Exception:
+        pass
+    _MAIN_THEME_CACHE = MAIN_THEME_FALLBACK
+    return _MAIN_THEME_CACHE
 TARGET_W = 600
 EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 RESIZED_ROOT = Path(r"C:\Users\NGHIANGO\Desktop\Sintech-img\pic content carte\research _1200x675")
@@ -55,7 +74,7 @@ def upload_asset(img_bytes: bytes, key: str) -> str:
     payload = {"asset": {"key": f"assets/{key}", "attachment": base64.b64encode(img_bytes).decode("ascii")}}
     last = None
     for attempt in range(4):
-        r = requests.put(f"{APIS}/web/themes/{MAIN_THEME}/assets.json", headers=H, json=payload, timeout=90)
+        r = requests.put(f"{APIS}/web/themes/{get_main_theme_id()}/assets.json", headers=H, json=payload, timeout=90)
         if r.status_code in (200, 201):
             return r.json()["asset"]["public_url"]
         last = f"HTTP {r.status_code}"
