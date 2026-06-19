@@ -8,9 +8,12 @@ Dep:
 - content_writer._gen_alt_for_position (AI gen 1 ảnh SP)
 """
 
-from flask import render_template, request, jsonify
+import csv
+import io
+from flask import render_template, request, jsonify, Response
 
 import alt_manager
+import alt_issue_import
 import haravan_client as hv_client
 
 
@@ -35,13 +38,50 @@ def alt_manager_page():
         search=search, sort=sort,
     )
     options = alt_manager.list_filter_options()
+    try:
+        issue_counts = alt_issue_import.counts()
+    except Exception:
+        issue_counts = {"total": 0, "by_type": {}, "by_context": {}, "by_status": {}}
     return render_template(
         "alt_manager.html",
         summary=summary, page_data=page_data, options=options,
         only_missing=only_missing,
         filter_type=filter_type, filter_vendor=filter_vendor,
         search=search, sort=sort,
+        issue_counts=issue_counts,
     )
+
+
+# ─────────────────── IMAGE ISSUE QUEUE (import LibreCrawl/crawler) ───────────────────
+
+def api_alt_issues():
+    """List queue image issue + counts. Filter type/context/status, sort priority."""
+    rows = alt_issue_import.list_issues(
+        issue_type=(request.args.get("type") or "").strip() or None,
+        context=(request.args.get("context") or "").strip() or None,
+        status=(request.args.get("status") or "").strip() or None,
+        limit=int(request.args.get("limit", 200) or 200),
+        offset=int(request.args.get("offset", 0) or 0),
+    )
+    return jsonify({"counts": alt_issue_import.counts(), "items": rows})
+
+
+def api_alt_issues_mark():
+    """Mark 1 issue reviewed/ignored/pending. KHÔNG đụng live ảnh."""
+    data = request.get_json(silent=True) or {}
+    ok = alt_issue_import.mark(data.get("id"), (data.get("status") or "").strip())
+    return jsonify({"success": ok})
+
+
+def api_alt_issues_export():
+    """Export toàn bộ queue ra CSV."""
+    rows = alt_issue_import.export_rows()
+    buf = io.StringIO()
+    if rows:
+        w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
+        w.writeheader(); w.writerows(rows)
+    return Response(buf.getvalue(), mimetype="text/csv",
+                    headers={"Content-Disposition": "attachment; filename=alt_image_issues.csv"})
 
 
 def alt_manager_product_page(product_id):
@@ -224,3 +264,10 @@ def register(app):
 
     app.add_url_rule("/api/alt-manager/<int:product_id>/gen-save-all",
                      "alt_manager_gen_save_all", alt_manager_gen_save_all, methods=["POST"])
+
+    # Image issue queue (import LibreCrawl/crawler — review only, no live apply)
+    app.add_url_rule("/api/alt-manager/issues", "api_alt_issues", api_alt_issues)
+    app.add_url_rule("/api/alt-manager/issues/mark", "api_alt_issues_mark",
+                     api_alt_issues_mark, methods=["POST"])
+    app.add_url_rule("/api/alt-manager/issues/export.csv", "api_alt_issues_export",
+                     api_alt_issues_export)
