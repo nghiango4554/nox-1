@@ -21,6 +21,57 @@
   </p>
 </section>
 
+<!-- ─────────── IMAGE ISSUE QUEUE (import LibreCrawl/crawler — review only) ─────────── -->
+<section class="card" id="img-issue-queue" style="margin-top:14px">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <h3 style="margin:0;font-size:15px">🖼️ Image Issue Queue <span class="muted" style="font-size:12px;font-weight:400">(import LibreCrawl/crawler · chỉ review, KHÔNG auto apply live)</span></h3>
+    <a href="/api/alt-manager/issues/export.csv" class="btn" style="font-size:12px">⬇️ Export CSV</a>
+  </div>
+  <div style="margin:10px 0;font-size:13px">
+    Tổng <strong id="iq-total">{{ issue_counts.total }}</strong> issue ·
+    {% for t,n in issue_counts.by_type.items() %}<span style="margin-right:8px">{{ t }}: <strong>{{ n }}</strong></span>{% endfor %}
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+    <select id="iq-type" class="input" style="max-width:200px"><option value="">— Loại (type) —</option>
+      {% for t in issue_counts.by_type.keys() %}<option value="{{ t }}">{{ t }}</option>{% endfor %}</select>
+    <select id="iq-ctx" class="input" style="max-width:200px"><option value="">— Context —</option>
+      {% for cctx in issue_counts.by_context.keys() %}<option value="{{ cctx }}">{{ cctx }}</option>{% endfor %}</select>
+    <select id="iq-status" class="input" style="max-width:160px"><option value="">— Status —</option>
+      <option value="pending">pending</option><option value="reviewed">reviewed</option><option value="ignored">ignored</option></select>
+    <button class="btn" onclick="iqLoad()">Lọc</button>
+  </div>
+  <div class="table-wrap" style="max-height:520px;overflow:auto">
+    <table class="table" style="font-size:12px"><thead><tr>
+      <th>#</th><th>Type</th><th>Context</th><th>Ảnh</th><th>Trang</th><th>Status</th><th>Action</th>
+    </tr></thead><tbody id="iq-body"><tr><td colspan="7" class="muted">Bấm "Lọc" để tải...</td></tr></tbody></table>
+  </div>
+</section>
+<script>
+function iqEsc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+async function iqLoad(){
+  const p=new URLSearchParams();
+  const t=document.getElementById('iq-type').value, c=document.getElementById('iq-ctx').value, s=document.getElementById('iq-status').value;
+  if(t)p.set('type',t); if(c)p.set('context',c); if(s)p.set('status',s); p.set('limit','300');
+  const b=document.getElementById('iq-body'); b.innerHTML='<tr><td colspan="7" class="muted">Đang tải...</td></tr>';
+  const r=await fetch('/api/alt-manager/issues?'+p.toString()); const d=await r.json();
+  document.getElementById('iq-total').textContent=d.counts.total;
+  if(!d.items.length){b.innerHTML='<tr><td colspan="7" class="muted">Không có issue khớp.</td></tr>';return;}
+  b.innerHTML=d.items.map(it=>`<tr>
+    <td>${it.id}</td><td><span style="white-space:nowrap">${iqEsc(it.issue_type)}</span></td>
+    <td>${iqEsc(it.context)}</td>
+    <td><a href="${iqEsc(it.image_src)}" target="_blank">ảnh</a></td>
+    <td><a href="${iqEsc(it.page_url)}" target="_blank">${iqEsc(it.page_url.replace('https://sintech.vn','')).slice(0,40)}</a></td>
+    <td id="iq-st-${it.id}">${iqEsc(it.status)}</td>
+    <td><button class="btn" style="font-size:11px;padding:2px 6px" onclick="iqMark(${it.id},'reviewed')">✔</button>
+        <button class="btn" style="font-size:11px;padding:2px 6px" onclick="iqMark(${it.id},'ignored')">🚫</button></td>
+  </tr>`).join('');
+}
+async function iqMark(id,st){
+  await fetch('/api/alt-manager/issues/mark',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status:st})});
+  const el=document.getElementById('iq-st-'+id); if(el)el.textContent=st;
+}
+</script>
+
 {# ───── KPI ───── #}
 <div class="kpi-grid" style="margin-top:14px">
   <div class="kpi">
