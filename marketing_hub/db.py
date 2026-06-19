@@ -1043,6 +1043,8 @@ def seo_upsert_page(data: dict):
         "images_total", "images_no_alt",
         "internal_links", "external_links",
         "has_canonical", "canonical_url", "has_og", "has_schema",
+        "schema_types", "schema_count", "schema_has_product",
+        "schema_has_article", "schema_has_faq", "schema_errors", "schema_scanned_at",
         "indexable", "indexability_reason", "page_size_bytes",
         "h2_list", "redirect_chain",
         "desc_h1_count", "desc_h1_text", "desc_h1_scanned_at",
@@ -1073,6 +1075,8 @@ def seo_upsert_pages_batch(pairs: list):
         "images_total", "images_no_alt",
         "internal_links", "external_links",
         "has_canonical", "canonical_url", "has_og", "has_schema",
+        "schema_types", "schema_count", "schema_has_product",
+        "schema_has_article", "schema_has_faq", "schema_errors", "schema_scanned_at",
         "indexable", "indexability_reason", "page_size_bytes",
         "h2_list", "redirect_chain",
         "desc_h1_count", "desc_h1_text", "desc_h1_scanned_at",
@@ -1716,16 +1720,20 @@ def seo_reset_broken_links_for_recheck() -> int:
 
 
 def seo_links_to_check(limit: int = 0, only_targets: list = None) -> list:
-    """External link chưa check. Internal link KHÔNG check ở đây vì đã được
-    crawler chính verify (status trong seo_pages).
+    """Link cần check: TẤT CẢ external + internal link trỏ tới URL CHƯA được
+    crawler chính verify 200 (tức ngoài sitemap → có thể 404, vd collection chết).
+    Internal link đã là trang 200 trong seo_pages thì BỎ (khỏi check lại).
 
     `only_targets`: nếu có, chỉ check đúng các URL trong list (vd re-check broken).
     """
     conn = get_conn()
     args = []
+    # internal link ngoài tập trang 200 đã crawl → cần kiểm (bắt dead internal link)
     sql = """SELECT target_url, is_internal, COUNT(*) refs
              FROM seo_links
-             WHERE is_internal = 0 """
+             WHERE (is_internal = 0
+                    OR (is_internal = 1 AND target_url NOT IN
+                        (SELECT url FROM seo_pages WHERE status_code = 200))) """
     if only_targets:
         placeholders = ",".join("?" * len(only_targets))
         sql += f" AND target_url IN ({placeholders}) "
@@ -1777,7 +1785,7 @@ def _broken_where_clause(filters: dict) -> tuple:
     # broken — bọn này luôn trả 429/403 cho bot, không phải link gãy thật.
     # Nếu caller filter explicit error_kind thì cho qua để xem chi tiết.
     if not filters.get("error_kind"):
-        sql += " AND (error_kind IS NULL OR error_kind != 'social_share_skip') "
+        sql += " AND (error_kind IS NULL OR error_kind NOT IN ('social_share_skip', 'asset_cdn_skip')) "
     args = []
     kind = filters.get("kind")
     if kind == "4xx":
@@ -1935,13 +1943,13 @@ def seo_broken_link_summary() -> dict:
     ext = conn.execute(
         """SELECT
             COUNT(DISTINCT CASE WHEN (status_code >= 400 OR status_code = 0)
-                                 AND (error_kind IS NULL OR error_kind != 'social_share_skip')
+                                 AND (error_kind IS NULL OR error_kind NOT IN ('social_share_skip', 'asset_cdn_skip'))
                                 THEN target_url END) broken,
             COUNT(DISTINCT CASE WHEN status_code IS NULL
                                 THEN target_url END) unchecked,
             COUNT(DISTINCT CASE WHEN status_code IS NOT NULL
                                  AND ((status_code > 0 AND status_code < 400)
-                                      OR error_kind = 'social_share_skip')
+                                      OR error_kind IN ('social_share_skip', 'asset_cdn_skip'))
                                 THEN target_url END) ok,
             COUNT(DISTINCT target_url) total
            FROM seo_links
