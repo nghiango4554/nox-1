@@ -1,4 +1,5 @@
-{% extends "base.html" %}
+{% extends "redesign_base.html" %}
+{% set active = 'collection' %}
 {% block title %}Collection Content · Sintech Hub{% endblock %}
 
 {% block page_title %}
@@ -191,6 +192,20 @@
   </a>
 </div>
 
+{# ───── Tình trạng LIVE web (content/ảnh thật trên Haravan) ───── #}
+<div id="cov-panel" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <strong>🌐 Tình trạng LIVE web (content / ảnh)</strong>
+    <span id="cov-updated" style="font-size:11px;color:var(--text-muted)"></span>
+    <button class="btn" type="button" onclick="covRefresh(this)" id="cov-refresh-btn"
+      style="margin-left:auto;font-size:12px;padding:5px 12px">🔄 Quét lại live</button>
+  </div>
+  <div id="cov-badges" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+    <span style="font-size:12px;color:var(--text-muted)">Đang tải…</span>
+  </div>
+  <div id="cov-lists" style="display:none;margin-top:12px;gap:16px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));display:grid"></div>
+</div>
+
 <div class="view-toggle">
   <span style="font-size:12px;color:var(--text-muted);margin-right:4px">Xem:</span>
   <a href="{{ url_for('collection_content_page') }}{% if active_status %}?status={{ active_status }}&view=tier{% else %}?view=tier{% endif %}"
@@ -206,6 +221,12 @@
 <tr data-job-id="{{ j.id }}" data-status="{{ j.status }}">
   <td class="muted">{{ index }}</td>
   <td><span class="cc-status-pill cc-status-{{ j.status }}">{{ j.status }}</span></td>
+  <td style="text-align:center;white-space:nowrap;font-size:11px">
+    {% if j.cov == 'miss_content' %}<span title="Trống hẳn trên web live" style="color:#dc2626;font-weight:600">🔴 Trống</span>
+    {% elif j.cov == 'thin_content' %}<span title="Lấp liếm: chỉ intro suông, 0 heading — cần viết lại" style="color:#b91c1c;font-weight:600">⚠️ Thin</span>
+    {% elif j.cov == 'miss_image' %}<span title="Có content thật nhưng thiếu ảnh" style="color:#d97706;font-weight:600">🖼️ Ảnh</span>
+    {% else %}<span title="Đủ / dịch vụ" style="color:#16a34a">✅</span>{% endif %}
+  </td>
   <td style="font-weight:500">
     {% if j.tier3_name %}<span style="color:#64748b;font-size:10px">{{ j.tier3_name[:28] }}</span>
     {% elif j.tier2_name %}<span style="color:#64748b;font-size:10px">{{ j.tier2_name[:28] }}</span>
@@ -267,6 +288,7 @@
 <thead>
   <tr>
     <th>#</th><th>Status</th>
+    <th style="text-align:center" title="Tình trạng content/ảnh trên web live">🌐 Web</th>
     <th>Tên collection</th>
     <th class="num">Title</th><th class="num">Meta</th><th class="num">Body</th>
     <th class="num" title="SEO quality score 0-100">⭐ Q</th>
@@ -592,6 +614,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, 1000);
 });
+
+// ───── Coverage LIVE web (content/ảnh) ─────
+function covBadge(label, n, color){
+  return `<span style="font-size:12px;font-weight:600;padding:4px 10px;border-radius:8px;background:${color}1a;color:${color};border:1px solid ${color}55">${label}: ${n}</span>`;
+}
+function covList(title, items, color){
+  const li = (items||[]).map(i=>`<a href="https://sintech.vn/collections/${i.handle}" target="_blank" style="display:block;font-size:12px;padding:3px 0;color:var(--text);text-decoration:none">• ${i.title} <span style="color:var(--text-muted)">(${i.handle})</span></a>`).join('');
+  return `<div><div style="font-weight:700;color:${color};font-size:13px;margin-bottom:6px">${title} (${(items||[]).length})</div>${li||'<span style=\"font-size:12px;color:var(--text-muted)\">— không có —</span>'}</div>`;
+}
+function covRender(d){
+  if(!d){ document.getElementById('cov-badges').innerHTML='<span style="font-size:12px;color:var(--text-muted)">Chưa quét — bấm "Quét lại live".</span>'; return; }
+  const c=d.counts||{};
+  document.getElementById('cov-updated').textContent = d.updated_at ? ('· cập nhật '+d.updated_at+' · '+d.total+' collection') : '';
+  document.getElementById('cov-badges').innerHTML =
+    covBadge('✅ Đủ', c.ok||0, '#16a34a') + covBadge('🔴 Trống', c.miss_content||0, '#dc2626')
+    + covBadge('⚠️ Lấp liếm (thin)', c.thin_content||0, '#b91c1c')
+    + covBadge('🖼️ Thiếu ảnh', c.miss_image||0, '#d97706') + covBadge('🛠️ Dịch vụ', c.service||0, '#6b7280');
+  const lists=document.getElementById('cov-lists');
+  lists.style.display='grid';
+  lists.innerHTML = covList('🔴 Trống hẳn', d.miss_content, '#dc2626')
+    + covList('⚠️ Lấp liếm — cần viết lại (intro suông, 0 heading)', d.thin_content, '#b91c1c')
+    + covList('🖼️ Có content thật, thiếu ảnh', d.miss_image, '#d97706');
+}
+async function covLoad(){
+  try{ const r=await (await fetch('/collection-content/coverage')).json(); covRender(r.data); }catch(e){ covRender(null); }
+}
+async function covRefresh(btn){
+  const old=btn.textContent; btn.textContent='⏳ Đang quét live…'; btn.disabled=true;
+  document.getElementById('cov-badges').innerHTML='<span style="font-size:12px;color:var(--text-muted)">Đang fetch Haravan…</span>';
+  try{ const r=await (await fetch('/collection-content/coverage/refresh',{method:'POST'})).json();
+    if(r.ok) covRender(r.data); else document.getElementById('cov-badges').innerHTML='<span style="color:#f87171">Lỗi: '+(r.error||'')+'</span>';
+  }catch(e){ document.getElementById('cov-badges').innerHTML='<span style="color:#f87171">Lỗi kết nối</span>'; }
+  btn.textContent=old; btn.disabled=false;
+}
+covLoad();
 </script>
 
 {% endblock %}

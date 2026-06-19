@@ -1,4 +1,5 @@
-{% extends "base.html" %}
+{% extends "redesign_base.html" %}
+{% set active = 'alt' %}
 {% block title %}ALT Manager · Sintech Hub{% endblock %}
 
 {% block page_title %}
@@ -54,34 +55,56 @@
   </div>
 </div>
 
-{# ───── ACTION PANEL (TOP) ───── #}
-<section class="card" style="margin-top:14px;border:1.5px solid rgba(124,58,237,0.25);background:rgba(124,58,237,0.03)" id="bulk-gen-panel">
+{# ───── ACTION PANEL (TOP) — Fetch → AI gen / Dual AI gen ───── #}
+<section class="card" style="margin-top:14px;border:1.5px solid rgba(124,58,237,0.25);background:rgba(124,58,237,0.03)" id="alt-action-panel">
   <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
     <div>
-      <div style="font-weight:700;font-size:15px;color:var(--text)">🤖 Gen ALT toàn shop — SP + Mô tả</div>
-      <div class="muted" style="font-size:12px;margin-top:3px">Gen + lưu ALT cho <strong>tất cả ảnh SP</strong> và <strong>ảnh trong mô tả</strong> đang <code>none/weak</code></div>
+      <div style="font-weight:700;font-size:15px;color:var(--text)">🤖 ALT ảnh mô tả — Fetch → AI gen</div>
+      <div class="muted" style="font-size:12px;margin-top:3px">
+        <strong>1.</strong> Fetch live ảnh mô tả thiếu ALT từ Haravan → <strong>2.</strong> AI gen rồi lưu thẳng Haravan.
+        <span style="color:#b45309">Ảnh SP tạm chưa xử lý.</span>
+      </div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button id="btn-sync-gen" class="btn btn-primary" onclick="syncThenGen()" title="Sync SP mới → rồi tự động chạy Gen tất cả">🔄 Sync & Gen tất cả</button>
-      <button id="btn-bulk-start" class="btn btn-primary btn-sm" onclick="bulkStart()">▶ Gen tất cả (không sync)</button>
-      <button id="btn-bulk-stop" class="btn btn-sm" onclick="bulkStop()" disabled>⏹ Dừng</button>
+      <button id="btn-fetch" class="btn btn-primary" onclick="altFetch()" title="Quét live Haravan, gom ảnh mô tả thiếu ALT">🔍 Fetch ảnh</button>
+      <button id="btn-aigen" class="btn btn-primary btn-sm" onclick="altGen(false)" disabled title="Gen ALT bằng AI (Codex→Claude→Gemini)">🤖 AI gen</button>
+      <button id="btn-dualgen" class="btn btn-primary btn-sm" onclick="altGen(true)" disabled title="Gen ALT 2 luồng Codex ∥ Claude song song">⚡ Dual AI gen</button>
+      <button id="btn-altstop" class="btn btn-sm" onclick="altStop()" disabled>⏹ Dừng</button>
     </div>
   </div>
 
-  <div id="bulk-progress-wrap" style="display:none;margin-top:14px">
+  {# ── Fetch progress ── #}
+  <div id="fetch-wrap" style="display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
     <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
-      <span id="bulk-msg" class="muted">—</span>
-      <span id="bulk-pct" style="font-weight:700;color:#7c3aed">0%</span>
+      <span id="fetch-msg" class="muted">—</span>
+      <span id="fetch-pct" style="font-weight:700;color:#7c3aed">0%</span>
     </div>
     <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
-      <div id="bulk-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#ec4899);border-radius:4px;transition:width .3s"></div>
+      <div id="fetch-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#0ea5e9,#7c3aed);border-radius:4px;transition:width .3s"></div>
     </div>
     <div style="display:flex;gap:16px;margin-top:8px;font-size:12px;flex-wrap:wrap;color:var(--text)">
-      <span>Tổng ảnh: <b id="b-total">—</b></span>
-      <span>Đã xử lý: <b id="b-processed">—</b></span>
-      <span style="color:#15803d">Lưu OK: <b id="b-saved">—</b></span>
-      <span style="color:#dc2626">Lỗi: <b id="b-failed">—</b></span>
-      <span class="muted">SP: <i id="b-current">—</i></span>
+      <span>Quét: <b id="f-scanned">—</b>/<b id="f-total">—</b> SP</span>
+      <span style="color:#dc2626">SP thiếu ALT: <b id="f-fprod">—</b></span>
+      <span style="color:#b45309">Ảnh thiếu: <b id="f-fimg">—</b></span>
+      <span class="muted">SP: <i id="f-current">—</i></span>
+    </div>
+  </div>
+
+  {# ── Gen progress ── #}
+  <div id="gen-wrap" style="display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+      <span id="gen-msg" class="muted">—</span>
+      <span id="gen-pct" style="font-weight:700;color:#7c3aed">0%</span>
+    </div>
+    <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+      <div id="gen-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#7c3aed,#ec4899);border-radius:4px;transition:width .3s"></div>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:8px;font-size:12px;flex-wrap:wrap;color:var(--text)">
+      <span>SP: <b id="g-processed">—</b>/<b id="g-total">—</b></span>
+      <span style="color:#15803d">Lưu ảnh: <b id="g-saved">—</b></span>
+      <span style="color:#dc2626">Lỗi: <b id="g-failed">—</b></span>
+      <span class="muted" id="g-current-wrap">SP: <i id="g-current">—</i></span>
+      <span class="muted" id="g-dual-wrap" style="display:none">Codex: <i id="g-codex">—</i> · Claude: <i id="g-claude">—</i></span>
     </div>
   </div>
 </section>
@@ -181,9 +204,8 @@
         <td style="text-align:center">
           <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
             <button class="btn btn-sm btn-primary" id="gen-btn-{{ it.product_id }}"
-                    onclick="genSaveAll({{ it.product_id }}, this)"
-                    {% if it.none == 0 and it.weak == 0 %}disabled title="Ảnh SP đã đủ ALT — ảnh mô tả vẫn gen được"{% endif %}>
-              ⚡ Gen SP+Mô tả
+                    onclick="genSaveAll({{ it.product_id }}, this)" title="Gen ALT cho ảnh trong mô tả">
+              ⚡ Gen mô tả
             </button>
             <a class="btn btn-sm" href="{{ url_for('alt_manager_product_page', product_id=it.product_id) }}" style="font-size:11px">🖼️ Sửa</a>
             <a class="btn btn-sm" href="https://sintech.myharavan.com/admin/products/{{ it.product_id }}"
@@ -232,10 +254,14 @@ async function genSaveAll(productId, btn) {
   const orig = btn.textContent;
   btn.textContent = '⏳ Đang gen…';
   try {
-    const r = await fetch(`/api/alt-manager/${productId}/gen-save-all`, {method: 'POST'});
+    const r = await fetch(`/api/alt-manager/${productId}/gen-save-all`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({desc_only: true}),
+    });
     const d = await r.json();
     if (d.ok) {
-      btn.textContent = `✅ +${d.total}`;
+      btn.textContent = `✅ +${d.saved_desc ?? d.total}`;
       btn.style.background = 'rgba(22,163,74,0.12)';
       btn.style.color = '#15803d';
       btn.style.border = '1px solid rgba(22,163,74,0.3)';
@@ -257,110 +283,110 @@ async function genSaveAll(productId, btn) {
   }
 }
 
-// ── Sync (dùng chung) ─────────────────────────────────────────────
-async function _doSync(statusBtn, onDone) {
-  const r = await fetch('/api/haravan/sync-incremental/start', {method:'POST'});
-  const d = await r.json();
-  if (!d.ok) { alert(d.message || 'Sync thất bại'); onDone(false); return; }
-  const poll = setInterval(async () => {
-    const rs = await fetch('/api/haravan/sync/status');
-    const ds = await rs.json();
-    if (statusBtn) statusBtn.textContent = `⏳ Sync ${ds.fetched||0}/${ds.total||'?'}`;
-    if (ds.status !== 'fetching') {
-      clearInterval(poll);
-      onDone(true, ds.message);
-    }
-  }, 2000);
+// ════════ FETCH (live) → AI GEN / DUAL AI GEN ════════
+const $ = id => document.getElementById(id);
+let _fetchTimer = null, _genTimer = null;
+
+function _setGenBtns(enabled) {
+  $('btn-aigen').disabled = !enabled;
+  $('btn-dualgen').disabled = !enabled;
 }
 
-// ── Sync & Gen tất cả ─────────────────────────────────────────────
-async function syncThenGen() {
-  const btn = document.getElementById('btn-sync-gen');
-  btn.disabled = true;
-  btn.textContent = '⏳ Sync…';
-  try {
-    await new Promise((resolve) => {
-      _doSync(btn, (ok, msg) => {
-        resolve();
-      });
-    });
-    btn.textContent = '⏳ Đang gen…';
-    // Sau sync xong → start bulk gen
-    const r2 = await fetch('/api/alt-manager/bulk-gen/start', {method:'POST'});
-    const d2 = await r2.json();
-    if (!d2.ok) { btn.disabled = false; btn.textContent = '🔄 Sync & Gen tất cả'; alert(d2.error || 'Lỗi khi start gen'); return; }
-    document.getElementById('bulk-progress-wrap').style.display = 'block';
-    document.getElementById('btn-bulk-start').disabled = true;
-    document.getElementById('btn-bulk-stop').disabled = false;
-    startBulkPoll(() => {
-      btn.disabled = false;
-      btn.textContent = '🔄 Sync & Gen tất cả';
-    });
-  } catch(e) {
-    btn.disabled = false;
-    btn.textContent = '🔄 Sync & Gen tất cả';
-    alert('Lỗi: ' + e);
-  }
-}
-
-let _bulkPollTimer = null;
-
-async function bulkStart() {
-  const r = await fetch('/api/alt-manager/bulk-gen/start', {method:'POST'});
+// ── Fetch ảnh ──
+async function altFetch() {
+  const r = await fetch('/api/alt-manager/fetch/start', {method:'POST'});
   const d = await r.json();
   if (!d.ok) { alert(d.error || 'Lỗi'); return; }
-  document.getElementById('bulk-progress-wrap').style.display = 'block';
-  document.getElementById('btn-bulk-start').disabled = true;
-  document.getElementById('btn-bulk-stop').disabled = false;
-  startBulkPoll();
+  $('fetch-wrap').style.display = 'block';
+  $('btn-fetch').disabled = true;
+  _setGenBtns(false);
+  $('btn-altstop').disabled = false;
+  pollFetch();
 }
 
-async function bulkStop() {
-  await fetch('/api/alt-manager/bulk-gen/stop', {method:'POST'});
-}
-
-function startBulkPoll(onDone) {
-  if (_bulkPollTimer) return;
-  _bulkPollTimer = setInterval(async () => {
-    const r = await fetch('/api/alt-manager/bulk-gen/status');
-    const d = await r.json();
-    const total = d.total || 1;
-    const pct = total ? Math.round(d.processed / total * 100) : 0;
-    document.getElementById('bulk-bar').style.width = pct + '%';
-    document.getElementById('bulk-pct').textContent = pct + '%';
-    document.getElementById('bulk-msg').textContent = d.message || '—';
-    document.getElementById('b-total').textContent = d.total || 0;
-    document.getElementById('b-processed').textContent = d.processed || 0;
-    document.getElementById('b-saved').textContent = d.saved || 0;
-    document.getElementById('b-failed').textContent = d.failed || 0;
-    document.getElementById('b-current').textContent = d.current || '—';
+function pollFetch() {
+  if (_fetchTimer) return;
+  _fetchTimer = setInterval(async () => {
+    const d = await (await fetch('/api/alt-manager/fetch/status')).json();
+    const pct = d.total ? Math.round(d.scanned / d.total * 100) : 0;
+    $('fetch-bar').style.width = pct + '%';
+    $('fetch-pct').textContent = pct + '%';
+    $('fetch-msg').textContent = d.message || '—';
+    $('f-scanned').textContent = d.scanned || 0;
+    $('f-total').textContent = d.total || 0;
+    $('f-fprod').textContent = d.found_products || 0;
+    $('f-fimg').textContent = d.found_images || 0;
+    $('f-current').textContent = d.current || '—';
     if (!d.running) {
-      clearInterval(_bulkPollTimer); _bulkPollTimer = null;
-      document.getElementById('btn-bulk-start').disabled = false;
-      document.getElementById('btn-bulk-stop').disabled = true;
-      if (onDone) onDone();
+      clearInterval(_fetchTimer); _fetchTimer = null;
+      $('btn-fetch').disabled = false;
+      $('btn-altstop').disabled = true;
+      _setGenBtns((d.found_products || 0) > 0);
+    }
+  }, 1500);
+}
+
+// ── AI gen (dual=false) / Dual AI gen (dual=true) ──
+async function altGen(dual) {
+  const url = dual ? '/api/alt-manager/alt-gen/start-dual' : '/api/alt-manager/alt-gen/start';
+  const r = await fetch(url, {method:'POST'});
+  const d = await r.json();
+  if (!d.ok) { alert(d.error || 'Lỗi'); return; }
+  $('gen-wrap').style.display = 'block';
+  $('btn-fetch').disabled = true;
+  _setGenBtns(false);
+  $('btn-altstop').disabled = false;
+  $('g-dual-wrap').style.display = dual ? 'inline' : 'none';
+  $('g-current-wrap').style.display = dual ? 'none' : 'inline';
+  pollGen();
+}
+
+function pollGen() {
+  if (_genTimer) return;
+  _genTimer = setInterval(async () => {
+    const d = await (await fetch('/api/alt-manager/alt-gen/status')).json();
+    const pct = d.total ? Math.round(d.processed / d.total * 100) : 0;
+    $('gen-bar').style.width = pct + '%';
+    $('gen-pct').textContent = pct + '%';
+    $('gen-msg').textContent = d.message || '—';
+    $('g-processed').textContent = d.processed || 0;
+    $('g-total').textContent = d.total || 0;
+    $('g-saved').textContent = d.saved_imgs || 0;
+    $('g-failed').textContent = d.failed || 0;
+    $('g-current').textContent = d.current || '—';
+    $('g-codex').textContent = d.current_codex || '—';
+    $('g-claude').textContent = d.current_claude || '—';
+    if (!d.running) {
+      clearInterval(_genTimer); _genTimer = null;
+      $('btn-fetch').disabled = false;
+      $('btn-altstop').disabled = true;
+      _setGenBtns((d.worklist_count || 0) > 0);
     }
   }, 2000);
 }
 
+async function altStop() {
+  await fetch('/api/alt-manager/fetch/stop', {method:'POST'});
+  await fetch('/api/alt-manager/alt-gen/stop', {method:'POST'});
+}
+
+// ── Resume hiển thị khi load lại trang ──
 (async () => {
-  const r = await fetch('/api/alt-manager/bulk-gen/status');
-  const d = await r.json();
-  if (d.running) {
-    document.getElementById('bulk-progress-wrap').style.display = 'block';
-    document.getElementById('btn-bulk-start').disabled = true;
-    document.getElementById('btn-bulk-stop').disabled = false;
-    startBulkPoll();
-  } else if (d.message) {
-    document.getElementById('bulk-progress-wrap').style.display = 'block';
-    document.getElementById('bulk-msg').textContent = d.message;
-    const pct = d.total ? Math.round((d.processed||0)/d.total*100) : 0;
-    document.getElementById('bulk-bar').style.width = pct + '%';
-    document.getElementById('bulk-pct').textContent = pct + '%';
-    document.getElementById('b-total').textContent = d.total || 0;
-    document.getElementById('b-saved').textContent = d.saved || 0;
-    document.getElementById('b-failed').textContent = d.failed || 0;
+  const f = await (await fetch('/api/alt-manager/fetch/status')).json();
+  if (f.running) { $('fetch-wrap').style.display = 'block'; $('btn-fetch').disabled = true; $('btn-altstop').disabled = false; pollFetch(); }
+  else if (f.message) { $('fetch-wrap').style.display = 'block'; $('fetch-msg').textContent = f.message; $('f-fprod').textContent = f.found_products||0; $('f-fimg').textContent = f.found_images||0; }
+
+  const g = await (await fetch('/api/alt-manager/alt-gen/status')).json();
+  if (g.running) {
+    $('gen-wrap').style.display = 'block'; $('btn-fetch').disabled = true; $('btn-altstop').disabled = false;
+    $('g-dual-wrap').style.display = (g.mode === 'dual') ? 'inline' : 'none';
+    $('g-current-wrap').style.display = (g.mode === 'dual') ? 'none' : 'inline';
+    pollGen();
+  } else if (g.message) {
+    $('gen-wrap').style.display = 'block'; $('gen-msg').textContent = g.message;
+    $('g-saved').textContent = g.saved_imgs||0; $('g-failed').textContent = g.failed||0;
   }
+  if (!g.running && !f.running) _setGenBtns((g.worklist_count || 0) > 0);
 })();
 </script>
 

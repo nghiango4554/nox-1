@@ -1,11 +1,18 @@
-{% extends "base.html" %}
+{% extends "redesign_base.html" %}
 {% block title %}SEO · Sintech Hub{% endblock %}
-
-{% block page_title %}
-<span>🔍 SEO Audit</span>
-<span class="crumb"></span>
-<span class="muted" style="font-weight:400">sintech.vn</span>
-{% endblock %}
+{% block page_title %}<i class="ic" data-icon="shield-check" style="color:var(--accent-ink)"></i><span>SEO</span><i class="ic" data-icon="chevron-right"></i><b>Tổng quan · sintech.vn</b>{% endblock %}
+{% block head_extra %}<style>
+/* CSS-bridge cho nút header + class generic (body dùng .seo-* tự style) */
+:root{--border:rgba(28,34,48,.10);--text-muted:#98a0b3}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;transition:.14s;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-primary{background:linear-gradient(120deg,var(--accent-from),var(--accent-to));color:#fff;border-color:transparent}
+.btn-ghost{background:transparent}
+.muted{color:var(--ink-3)}
+select,input[type=text],input[type=number]{padding:7px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px;background:#fff;color:var(--ink)}
+</style>{% endblock %}
+{% block topbar_extra %}{% endblock %}
 
 {% block page_actions %}
 <form action="{{ url_for('seo_seed') }}" method="post" style="display:inline">
@@ -134,7 +141,7 @@
 {% set crawl_running = state.status in ('fetching_sitemap', 'crawling') %}
 {% set link_running = link_state.running %}
 {% set pipeline_visible = crawl_running or link_running %}
-<section class="seo-section seo-frame-emerald seo-progress-card{% if not pipeline_visible %} hidden{% endif %}"
+<section class="seo-section seo-frame-emerald seo-progress-card"
          id="seo-progress-card">
   <div class="seo-section-title">
     ⏳ Pipeline crawl SEO
@@ -440,15 +447,7 @@
             {% endif %}
           </td>
           <td class="col-action">
-            <div class="seo-action-grp">
-              <a href="{{ url_for('seo_url_detail', page_id=p.id) }}"
-                 class="seo-action-btn" title="Xem chi tiết URL">👁</a>
-              <button type="button" class="seo-action-btn seo-copy-btn"
-                      data-url="{{ p.url }}" title="Copy URL">📋</button>
-              <form action="{{ url_for('seo_url_recrawl', page_id=p.id) }}" method="post" style="display:inline">
-                <button type="submit" class="seo-action-btn" title="Re-crawl URL này">🔄</button>
-              </form>
-            </div>
+            <a href="{{ p.url }}" target="_blank" rel="noopener" class="seo-view-btn" title="Xem trên sintech.vn">👁 Xem</a>
           </td>
         </tr>
         {% endfor %}
@@ -844,11 +843,11 @@ a.seo-kpi-cell { cursor: pointer; }
 .seo-kpi-dist-bad  { background: linear-gradient(180deg, #ef4444, #dc2626); }
 
 /* Types modern pills - icon trong colored circle */
-.seo-kpi-types { padding: 14px 16px; align-items: stretch; }
+.seo-kpi-types { padding: 14px 16px; align-items: stretch; grid-column: 1 / -1; overflow: visible; }
 .seo-types-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
   position: relative; z-index: 1;
 }
 .seo-type-pill {
@@ -1280,7 +1279,16 @@ a.seo-kpi-cell { cursor: pointer; }
 .seo-issue-dot-ok   { background: #d1fae5; color: #047857; }
 
 /* Action quick buttons */
-.col-action { width: 130px; text-align: center; }
+.col-action { width: 92px; text-align: center; }
+.col-stt { width: 40px; text-align: center; color: var(--seo-slate); opacity: .65; }
+.seo-view-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 13px; border-radius: 8px;
+  background: #eef2ff; border: 1px solid #c7d2fe; color: #4f46e5;
+  font-size: 12px; font-weight: 700; text-decoration: none; white-space: nowrap;
+  transition: .15s ease;
+}
+.seo-view-btn:hover { background: #4f46e5; border-color: #4f46e5; color: #fff; transform: translateY(-1px); box-shadow: 0 4px 10px rgba(79,70,229,.25); }
 .seo-action-grp {
   display: inline-flex; gap: 4px;
   align-items: center;
@@ -1417,22 +1425,22 @@ html { scroll-behavior: smooth; }
 
 /* Priority variants */
 .seo-issue-prio-critical {
-  --prio-accent: #dc2626;
-  --prio-bg: #fef2f2;
-  --prio-border: #fca5a5;
-  --prio-shadow: rgba(220,38,38,.22);
+  --prio-accent: #ef4444;
+  --prio-bg: linear-gradient(135deg, #ffffff 32%, #fff1f2 100%);
+  --prio-border: #fecdd3;
+  --prio-shadow: rgba(239,68,68,.18);
 }
 .seo-issue-prio-high {
-  --prio-accent: #d97706;
-  --prio-bg: #fffbeb;
-  --prio-border: #fcd34d;
-  --prio-shadow: rgba(217,119,6,.22);
+  --prio-accent: #f59e0b;
+  --prio-bg: linear-gradient(135deg, #ffffff 32%, #fffaeb 100%);
+  --prio-border: #fde9b0;
+  --prio-shadow: rgba(245,158,11,.18);
 }
 .seo-issue-prio-medium {
-  --prio-accent: #2563eb;
-  --prio-bg: #eff6ff;
-  --prio-border: #93c5fd;
-  --prio-shadow: rgba(37,99,235,.18);
+  --prio-accent: #6366f1;
+  --prio-bg: linear-gradient(135deg, #ffffff 32%, #eef2ff 100%);
+  --prio-border: #d8def8;
+  --prio-shadow: rgba(99,102,241,.16);
 }
 
 .seo-issue-active {

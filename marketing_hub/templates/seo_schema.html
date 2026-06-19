@@ -1,15 +1,7 @@
-{% extends "base.html" %}
+{% extends "redesign_base.html" %}
 {% block title %}Schema audit · SEO · Sintech Hub{% endblock %}
-
-{% block page_title %}
-<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
-<span class="crumb"></span>
-<span style="font-weight:600">🔖 Schema audit (JSON-LD)</span>
-{% endblock %}
-
-{% block page_actions %}
-<a class="btn" href="{{ url_for('seo_dashboard') }}">← SEO dashboard</a>
-{% endblock %}
+{% block page_title %}<i class="ic" data-icon="search" style="color:var(--accent-ink)"></i><span>SEO</span><i class="ic" data-icon="chevron-right"></i><b>Schema (JSON-LD)</b>{% endblock %}
+{% block page_actions %}<a class="btn-primary" href="{{ url_for('seo_dashboard') }}"><i class="ic" data-icon="shield-check"></i>Tổng quan SEO</a>{% endblock %}
 
 {% block content %}
 <style>

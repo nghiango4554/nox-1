@@ -1,455 +1,120 @@
-{% extends "base.html" %}
+{% extends "redesign_base.html" %}
 {% block title %}Broken links · SEO · Sintech Hub{% endblock %}
-
-{% block page_title %}
-<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
-<span class="crumb"></span>
-<span style="font-weight:600">🔗 Broken link checker</span>
-{% endblock %}
-
+{% block page_title %}<i class="ic" data-icon="search" style="color:var(--accent-ink)"></i><span>SEO</span><i class="ic" data-icon="chevron-right"></i><b>Link gãy</b>{% endblock %}
 {% block page_actions %}
-<a class="btn" href="{{ url_for('seo_dashboard') }}">← Quay lại SEO</a>
-{% if summary.broken > 0 %}
-<form action="{{ url_for('seo_recheck_broken') }}" method="post" style="display:inline"
-      onsubmit="return confirm('Reset {{ summary.broken }} link đang broken và check lại? Có thể mất vài phút.');">
-  <button class="btn" type="submit"
-          {% if state.running %}disabled{% endif %}
-          title="Reset status các link broken và check lại — phân loại lỗi chi tiết">
-    🔄 Re-check link gãy ({{ summary.broken }})
-  </button>
-</form>
-{% endif %}
-<form action="{{ url_for('seo_check_links') }}" method="post" style="display:inline">
-  <button class="btn btn-primary" type="submit"
-          {% if state.running %}disabled{% endif %}
-          id="btn-start-check">
-    {% if state.running %}⏳ Đang check...{% else %}🚀 Check tất cả link{% endif %}
-  </button>
-</form>
+{% if summary.broken > 0 %}<form action="{{ url_for('seo_recheck_broken') }}" method="post" style="display:inline" onsubmit="return confirm('Reset {{ summary.broken }} link broken và check lại?');"><button class="chipf" type="submit" {% if state.running %}disabled{% endif %}>🔄 Re-check ({{ summary.broken }})</button></form>{% endif %}
+<form action="{{ url_for('seo_check_links') }}" method="post" style="display:inline"><button class="btn-primary" type="submit" {% if state.running %}disabled{% endif %} id="btn-start-check"><i class="ic" data-icon="play"></i>{% if state.running %}Đang check...{% else %}Check tất cả link{% endif %}</button></form>
 {% endblock %}
+{% block head_extra %}<style>
+.brk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--gap)}
+.brk-head{display:block;text-decoration:none;color:var(--ink);position:relative;padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:10px}
+.brk-head:hover{color:var(--accent-ink)}
+.brk-title{font-weight:700;font-size:14px;margin-top:2px}
+.brk-bigcount{position:absolute;top:0;right:0;font-size:24px;font-weight:800;font-family:var(--ff-num);color:var(--accent-ink)}
+.brk-sub{font-size:12px;color:var(--ink-3);margin-top:2px}
+.brk-pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;text-decoration:none;color:var(--ink);font-size:13px;transition:.12s}
+.brk-pill:hover{border-color:var(--accent-from);transform:translateX(2px)}
+.brk-pill.on{border-color:var(--accent-from);background:#fff}
+.brk-pill .pc{margin-left:auto;background:var(--surface-2);padding:1px 7px;border-radius:10px;font-size:12px;font-weight:700}
+.panel.hidden{display:none}
+</style>{% endblock %}
 
 {% block content %}
+{% set status_labels = {400:'Bad request',401:'Unauthorized',403:'Forbidden',404:'Not found',405:'Method not allowed',408:'Request timeout',410:'Gone',429:'Too many requests',500:'Server error',501:'Not implemented',502:'Bad gateway',503:'Unavailable',504:'Gateway timeout'} %}
+<div class="sec-head"><h2><i class="ic" data-icon="link"></i>Broken link checker</h2><div class="sec-meta">Chỉ check external link (sang domain khác). Internal đã verify ở crawler chính — không HEAD lại tránh false positive</div></div>
 
-{# ─── HTTP status code labels ─── #}
-{% set status_labels = {
-  400: 'Bad request', 401: 'Unauthorized', 403: 'Forbidden',
-  404: 'Not found', 405: 'Method not allowed', 408: 'Request timeout',
-  410: 'Gone', 429: 'Too many requests',
-  500: 'Server error', 501: 'Not implemented', 502: 'Bad gateway',
-  503: 'Unavailable', 504: 'Gateway timeout',
-} %}
-
-{# ───────── 1. KPI TỔNG ───────── #}
-<div class="kpi-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr))">
-  <div class="kpi">
-    <div class="kpi-row"><div class="kpi-icon accent">🔗</div></div>
-    <div class="kpi-num">{{ summary.total_all or summary.total }}</div>
-    <div class="kpi-label">Tổng link unique</div>
-  </div>
-  <div class="kpi" title="Internal link đã được crawler chính verify (status trong seo_pages) — không HEAD lại để tránh false positive do bot bị site chặn">
-    <div class="kpi-row"><div class="kpi-icon blue">🟦</div></div>
-    <div class="kpi-num" style="color:#93c5fd">{{ summary.internal_verified }}</div>
-    <div class="kpi-label">Internal (auto-verified)</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-row"><div class="kpi-icon">🟪</div></div>
-    <div class="kpi-num" id="sum-total">{{ summary.total }}</div>
-    <div class="kpi-label">External (phạm vi check)</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-row"><div class="kpi-icon">💀</div></div>
-    <div class="kpi-num" id="sum-broken" style="color:#f87171">{{ summary.broken }}</div>
-    <div class="kpi-label">External gãy</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-row"><div class="kpi-icon yellow">⏳</div></div>
-    <div class="kpi-num" id="sum-unchecked">{{ summary.unchecked }}</div>
-    <div class="kpi-label">External chưa check</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-row"><div class="kpi-icon green">✅</div></div>
-    <div class="kpi-num" id="sum-ok">{{ summary.ok or 0 }}</div>
-    <div class="kpi-label">External OK</div>
-  </div>
+<div class="stat-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+  <div class="stat is-grad" data-tone="indigo" data-grad="blue"><div class="stat-top"><div class="stat-ico" data-tone="indigo"><i class="ic" data-icon="link"></i></div></div><div><div class="stat-val">{{ summary.total_all or summary.total }}</div><div class="stat-title" style="margin-top:7px">Tổng link unique</div></div></div>
+  <div class="stat is-grad" data-tone="sky" data-grad="blue"><div class="stat-top"><div class="stat-ico" data-tone="sky"><i class="ic" data-icon="square-check-big"></i></div></div><div><div class="stat-val">{{ summary.internal_verified }}</div><div class="stat-title" style="margin-top:7px">Internal (auto-verified)</div></div></div>
+  <div class="stat is-grad" data-tone="violet" data-grad="violet"><div class="stat-top"><div class="stat-ico" data-tone="violet"><i class="ic" data-icon="globe"></i></div></div><div><div class="stat-val" id="sum-total">{{ summary.total }}</div><div class="stat-title" style="margin-top:7px">External (phạm vi check)</div></div></div>
+  <div class="stat is-grad" data-tone="rose" data-grad="red"><div class="stat-top"><div class="stat-ico" data-tone="rose"><i class="ic" data-icon="unlink"></i></div></div><div><div class="stat-val" id="sum-broken">{{ summary.broken }}</div><div class="stat-title" style="margin-top:7px">External gãy</div></div></div>
+  <div class="stat is-grad" data-tone="amber" data-grad="amber"><div class="stat-top"><div class="stat-ico" data-tone="amber"><i class="ic" data-icon="clock"></i></div></div><div><div class="stat-val" id="sum-unchecked">{{ summary.unchecked }}</div><div class="stat-title" style="margin-top:7px">External chưa check</div></div></div>
+  <div class="stat is-grad" data-tone="teal" data-grad="teal"><div class="stat-top"><div class="stat-ico" data-tone="teal"><i class="ic" data-icon="square-check-big"></i></div></div><div><div class="stat-val" id="sum-ok">{{ summary.ok or 0 }}</div><div class="stat-title" style="margin-top:7px">External OK</div></div></div>
 </div>
 
-<div class="muted" style="font-size:12px;margin-top:6px;padding:8px 12px;background:rgba(59,130,246,0.05);border-left:3px solid #93c5fd;border-radius:4px">
-  💡 <strong>Phạm vi check:</strong> chỉ external link (sang domain khác sintech.vn).
-  Internal link đã được crawler chính verify trong bảng <code>seo_pages</code> — không HEAD lại để tránh
-  false positive do server/Cloudflare chặn bot.
-</div>
-
-{# ───────── 2. PROGRESS (chỉ khi chạy) ───────── #}
-<section class="card seo-progress-card{% if not state.running %} hidden{% endif %}"
-         id="link-state-card" style="margin-top:14px">
+<section class="panel{% if not state.running %} hidden{% endif %}" id="link-state-card" style="margin-top:var(--gap)">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
-    <div>
-      <strong>⏳ <span id="link-status">{{ 'Đang chạy' if state.running else 'Idle' }}</span></strong>
-      <span class="muted" id="link-msg" style="font-size:13px;margin-left:8px">
-        {% if state.running %}
-          Đã check {{ state.checked }}/{{ state.total }} — {{ state.broken }} gãy.
-        {% endif %}
-      </span>
-    </div>
-    <div style="font-size:13px">
-      <strong id="link-checked">{{ state.checked }}</strong>/<span id="link-total">{{ state.total }}</span>
-      <span class="muted" style="margin-left:8px">
-        💀 <span id="link-broken">{{ state.broken }}</span> ·
-        <strong id="link-pct">{% if state.total %}{{ (state.checked * 100 // state.total) }}{% else %}0{% endif %}%</strong>
-      </span>
-    </div>
+    <div><strong>⏳ <span id="link-status">{{ 'Đang chạy' if state.running else 'Idle' }}</span></strong><span class="sec-meta" id="link-msg" style="margin-left:8px">{% if state.running %}Đã check {{ state.checked }}/{{ state.total }} — {{ state.broken }} gãy.{% endif %}</span></div>
+    <div style="font-size:13px"><strong id="link-checked">{{ state.checked }}</strong>/<span id="link-total">{{ state.total }}</span><span class="sec-meta" style="margin-left:8px">💀 <span id="link-broken">{{ state.broken }}</span> · <strong id="link-pct">{% if state.total %}{{ (state.checked * 100 // state.total) }}{% else %}0{% endif %}%</strong></span></div>
   </div>
-  <div class="seo-progress-bar">
-    <div id="link-progress-fill" class="seo-progress-fill"
-         style="width: {% if state.total %}{{ (state.checked * 100 // state.total) }}{% else %}0{% endif %}%"></div>
-  </div>
+  <div class="progress" style="height:10px"><i id="link-progress-fill" style="width:{% if state.total %}{{ (state.checked * 100 // state.total) }}{% else %}0{% endif %}%"></i></div>
 </section>
 
-{# ───────── 3. PHÂN LOẠI LỖI (clickable filters) ───────── #}
 {% if summary.broken > 0 %}
-<section class="card" style="margin-top:14px">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-    <div>
-      <h3 style="margin:0;font-size:15px">🎯 Phân loại lỗi — click để filter</h3>
-      <small class="muted">{{ summary.broken }} link gãy chia theo nguyên nhân</small>
-    </div>
-    {% if filters.kind or filters.status_code or filters.error_kind %}
-      <a href="{{ url_for('seo_broken_links_page') }}" class="btn btn-sm">✕ Bỏ filter</a>
-    {% endif %}
-  </div>
-
-  <div class="brk-bucket-grid">
-    {# ── Bucket: 4xx ── #}
-    <div class="brk-bucket {% if filters.kind == '4xx' or filters.status_code and filters.status_code < 500 %}brk-bucket-active{% endif %}">
-      <a href="?kind=4xx" class="brk-bucket-head" style="--accent:#fde68a">
-        <span class="brk-bucket-icon">🟡</span>
-        <div class="brk-bucket-title">HTTP 4xx</div>
-        <div class="brk-bucket-count">{{ breakdown.bucket_4xx }}</div>
-        <div class="brk-bucket-sub">Client error — link sai/đã xoá</div>
-      </a>
-      {% set codes_4xx = breakdown.by_status | selectattr('status', 'lt', 500) | list %}
-      {% if codes_4xx %}
-        <div class="brk-bucket-body">
-          {% for s in codes_4xx %}
-            <a href="?status={{ s.status }}"
-               class="brk-pill {% if filters.status_code == s.status %}brk-pill-active{% endif %}"
-               title="{{ status_labels.get(s.status, '') }}">
-              <strong>{{ s.status }}</strong>
-              <span class="muted">{{ status_labels.get(s.status, '') }}</span>
-              <span class="brk-pill-count">{{ s.count }}</span>
-            </a>
-          {% endfor %}
-        </div>
-      {% endif %}
-    </div>
-
-    {# ── Bucket: 5xx ── #}
-    <div class="brk-bucket {% if filters.kind == '5xx' or filters.status_code and filters.status_code >= 500 %}brk-bucket-active{% endif %}">
-      <a href="?kind=5xx" class="brk-bucket-head" style="--accent:#fca5a5">
-        <span class="brk-bucket-icon">🔴</span>
-        <div class="brk-bucket-title">HTTP 5xx</div>
-        <div class="brk-bucket-count">{{ breakdown.bucket_5xx }}</div>
-        <div class="brk-bucket-sub">Server error — đối tác crash</div>
-      </a>
-      {% set codes_5xx = breakdown.by_status | selectattr('status', 'ge', 500) | list %}
-      {% if codes_5xx %}
-        <div class="brk-bucket-body">
-          {% for s in codes_5xx %}
-            <a href="?status={{ s.status }}"
-               class="brk-pill {% if filters.status_code == s.status %}brk-pill-active{% endif %}"
-               title="{{ status_labels.get(s.status, '') }}">
-              <strong>{{ s.status }}</strong>
-              <span class="muted">{{ status_labels.get(s.status, '') }}</span>
-              <span class="brk-pill-count">{{ s.count }}</span>
-            </a>
-          {% endfor %}
-        </div>
-      {% endif %}
-    </div>
-
-    {# ── Bucket: Timeout/Network ── #}
-    <div class="brk-bucket {% if filters.kind == 'timeout' or filters.error_kind %}brk-bucket-active{% endif %}">
-      <a href="?kind=timeout" class="brk-bucket-head" style="--accent:#93c5fd">
-        <span class="brk-bucket-icon">📡</span>
-        <div class="brk-bucket-title">Timeout / Network</div>
-        <div class="brk-bucket-count">{{ breakdown.bucket_timeout }}</div>
-        <div class="brk-bucket-sub">Không kết nối / SSL / DNS lỗi</div>
-      </a>
-      {% if breakdown.by_error_kind %}
-        <div class="brk-bucket-body">
-          {% for ek in breakdown.by_error_kind %}
-            {% set einfo = error_labels.get(ek.kind, ('⚠️', ek.kind, '')) %}
-            <a href="?error_kind={{ ek.kind }}"
-               class="brk-pill {% if filters.error_kind == ek.kind %}brk-pill-active{% endif %}"
-               title="{{ einfo[2] }}">
-              <span>{{ einfo[0] }}</span>
-              <span>{{ einfo[1] }}</span>
-              <span class="brk-pill-count">{{ ek.count }}</span>
-            </a>
-          {% endfor %}
-        </div>
-      {% endif %}
-    </div>
-  </div>
-
-</section>
+<div class="sec-head" style="margin-top:var(--gap)"><h2><i class="ic" data-icon="target"></i>Phân loại lỗi — click để filter</h2><div class="sec-meta">{{ summary.broken }} link gãy theo nguyên nhân{% if filters.kind or filters.status_code or filters.error_kind %} · <a href="{{ url_for('seo_broken_links_page') }}" style="color:var(--accent-ink)">✕ Bỏ filter</a>{% endif %}</div></div>
+<div class="brk-grid">
+  <section class="panel">
+    <a href="?kind=4xx" class="brk-head"><span style="font-size:18px">🟡</span><div class="brk-title">HTTP 4xx</div><div class="brk-bigcount">{{ breakdown.bucket_4xx }}</div><div class="brk-sub">Client error — link sai/đã xoá</div></a>
+    {% set codes_4xx = breakdown.by_status | selectattr('status','lt',500) | list %}
+    {% for s in codes_4xx %}<a href="?status={{ s.status }}" class="brk-pill {{ 'on' if filters.status_code == s.status }}"><strong>{{ s.status }}</strong><span class="sec-meta">{{ status_labels.get(s.status,'') }}</span><span class="pc">{{ s.count }}</span></a>{% endfor %}
+  </section>
+  <section class="panel">
+    <a href="?kind=5xx" class="brk-head"><span style="font-size:18px">🔴</span><div class="brk-title">HTTP 5xx</div><div class="brk-bigcount">{{ breakdown.bucket_5xx }}</div><div class="brk-sub">Server error — đối tác crash</div></a>
+    {% set codes_5xx = breakdown.by_status | selectattr('status','ge',500) | list %}
+    {% for s in codes_5xx %}<a href="?status={{ s.status }}" class="brk-pill {{ 'on' if filters.status_code == s.status }}"><strong>{{ s.status }}</strong><span class="sec-meta">{{ status_labels.get(s.status,'') }}</span><span class="pc">{{ s.count }}</span></a>{% endfor %}
+  </section>
+  <section class="panel">
+    <a href="?kind=timeout" class="brk-head"><span style="font-size:18px">📡</span><div class="brk-title">Timeout / Network</div><div class="brk-bigcount">{{ breakdown.bucket_timeout }}</div><div class="brk-sub">Không kết nối / SSL / DNS lỗi</div></a>
+    {% for ek in breakdown.by_error_kind %}{% set einfo = error_labels.get(ek.kind, ('⚠️', ek.kind, '')) %}<a href="?error_kind={{ ek.kind }}" class="brk-pill {{ 'on' if filters.error_kind == ek.kind }}"><span>{{ einfo[0] }}</span><span>{{ einfo[1] }}</span><span class="pc">{{ ek.count }}</span></a>{% endfor %}
+  </section>
+</div>
 {% endif %}
 
-{# ───────── 4. FILTER + LIST ───────── #}
-<section class="card seo-list-section" style="margin-top:14px">
-  <div class="seo-list-head">
-    <h3 style="margin:0;font-size:15px">
-      📋 Danh sách link gãy
-      <span class="muted" style="font-weight:400;font-size:13px">
-        — {{ total_filtered }} kết quả{% if total_pages > 1 %} · trang {{ page_num }}/{{ total_pages }}{% endif %}
-      </span>
-    </h3>
-  </div>
-
-  <form method="get" class="seo-filter-form seo-filter-sticky">
-    <input type="text" name="q" value="{{ filters.q }}"
-           placeholder="🔍 Tìm theo URL link đích..." class="seo-filter-input">
-
-    {# Preserve các filter từ panel khi user submit search/sort #}
+<section class="tbl-wrap" style="margin-top:var(--gap)">
+  <div class="tbl-top"><h3><i class="ic" data-icon="list-checks"></i>Danh sách link gãy</h3><div class="sec-meta" style="margin-left:auto">{{ total_filtered }} kết quả{% if total_pages > 1 %} · trang {{ page_num }}/{{ total_pages }}{% endif %}</div></div>
+  <form method="get" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line)">
+    <input type="text" name="q" value="{{ filters.q }}" placeholder="🔍 Tìm URL đích..." style="flex:1;min-width:180px;padding:7px 11px;border:1px solid var(--line);border-radius:8px">
     {% if filters.kind %}<input type="hidden" name="kind" value="{{ filters.kind }}">{% endif %}
     {% if filters.status_code %}<input type="hidden" name="status" value="{{ filters.status_code }}">{% endif %}
     {% if filters.error_kind %}<input type="hidden" name="error_kind" value="{{ filters.error_kind }}">{% endif %}
-    {% if filters.internal %}<input type="hidden" name="internal" value="{{ filters.internal }}">{% endif %}
-
-    <select name="sort" class="seo-filter-select">
-      <option value="refs_desc" {% if filters.sort == 'refs_desc' %}selected{% endif %}>↓ Số trang dùng (nhiều→ít)</option>
-      <option value="refs_asc"  {% if filters.sort == 'refs_asc'  %}selected{% endif %}>↑ Số trang dùng (ít→nhiều)</option>
-      <option value="status"    {% if filters.sort == 'status'    %}selected{% endif %}>Status code</option>
-      <option value="url"       {% if filters.sort == 'url'       %}selected{% endif %}>🔤 URL A→Z</option>
-    </select>
-
-    <button class="btn btn-primary btn-sm" type="submit">Lọc</button>
-    <a href="{{ url_for('seo_broken_links_page') }}" class="btn btn-sm btn-ghost">Reset</a>
+    <select name="sort" style="padding:7px 10px;border:1px solid var(--line);border-radius:8px"><option value="refs_desc" {% if filters.sort == 'refs_desc' %}selected{% endif %}>↓ Số trang dùng</option><option value="refs_asc" {% if filters.sort == 'refs_asc' %}selected{% endif %}>↑ Số trang dùng</option><option value="status" {% if filters.sort == 'status' %}selected{% endif %}>Status code</option><option value="url" {% if filters.sort == 'url' %}selected{% endif %}>🔤 URL A→Z</option></select>
+    <button class="btn-primary" type="submit"><i class="ic" data-icon="filter"></i>Lọc</button>
+    <a href="{{ url_for('seo_broken_links_page') }}" class="chipf">Reset</a>
   </form>
-
   {% if broken %}
-    <div class="table-wrap">
-    <table class="table seo-table">
-      <thead>
-        <tr>
-          <th class="col-stt">STT</th>
-          <th>Link đích</th>
-          <th>Loại</th>
-          <th>Status / Lỗi</th>
-          <th>Số trang dùng</th>
-          <th>Trang nguồn (sample)</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for b in broken %}
-        <tr>
-          <td class="col-stt">{{ (page_num - 1) * per_page + loop.index }}</td>
-          <td class="seo-url-cell">
-            <a href="{{ b.target }}" target="_blank" rel="noopener"
-               class="seo-url-link" style="word-break:break-all">{{ b.target }}</a>
-          </td>
-          <td>
-            {% if b.is_internal %}
-              <span class="seo-type seo-type-product">internal</span>
-            {% else %}
-              <span class="seo-type seo-type-other">external</span>
-            {% endif %}
-          </td>
-          <td>
-            {% if b.status_code == 0 %}
-              {% set ek = b.error_kind or 'other_error' %}
-              {% set einfo = error_labels.get(ek, ('⚠️', ek, '')) %}
-              <span class="pill pill-error" title="{{ einfo[2] }}">
-                <span style="margin-right:4px">{{ einfo[0] }}</span>{{ einfo[1] }}
-              </span>
-            {% elif b.status_code >= 500 %}
-              <span class="pill pill-error" title="{{ status_labels.get(b.status_code, '') }}">
-                {{ b.status_code }} {{ status_labels.get(b.status_code, '') }}
-              </span>
-            {% else %}
-              <span class="pill pill-warn" title="{{ status_labels.get(b.status_code, '') }}">
-                {{ b.status_code }} {{ status_labels.get(b.status_code, '') }}
-              </span>
-            {% endif %}
-          </td>
-          <td>
-            <span class="pill">{{ b.refs }}</span>
-          </td>
-          <td>
-            <details>
-              <summary class="muted" style="cursor:pointer;font-size:13px">{{ b.sources|length }} trang nguồn</summary>
-              <ul style="margin:6px 0 0 0;padding-left:18px;font-size:12px">
-                {% for s in b.sources %}
-                  <li><a href="{{ s }}" target="_blank" rel="noopener" class="seo-url-link">{{ s }}</a></li>
-                {% endfor %}
-              </ul>
-            </details>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    </div>
-
-    {% if total_pages > 1 %}
-      {% set qs = request.args.to_dict() %}
-      <div class="seo-pagination">
-        {% if page_num > 1 %}
-          {% set _ = qs.update({'page': page_num - 1}) %}
-          <a class="btn btn-sm" href="?{{ qs|urlencode }}">← Trước</a>
-        {% endif %}
-        <span class="muted">Trang {{ page_num }}/{{ total_pages }}</span>
-        {% if page_num < total_pages %}
-          {% set _ = qs.update({'page': page_num + 1}) %}
-          <a class="btn btn-sm" href="?{{ qs|urlencode }}">Sau →</a>
-        {% endif %}
-      </div>
-    {% endif %}
+  <table>
+    <thead><tr><th style="width:44px">STT</th><th>Link đích</th><th>Loại</th><th>Status / Lỗi</th><th>Số trang dùng</th><th>Trang nguồn</th></tr></thead>
+    <tbody>
+    {% for b in broken %}
+      <tr>
+        <td style="color:var(--ink-3)">{{ (page_num - 1) * per_page + loop.index }}</td>
+        <td><a href="{{ b.target }}" target="_blank" rel="noopener" class="td-title" style="color:var(--accent-ink);word-break:break-all">{{ b.target }}</a></td>
+        <td><span class="pill" data-tone="{{ 'sky' if b.is_internal else 'slate' }}">{{ 'internal' if b.is_internal else 'external' }}</span></td>
+        <td>{% if b.status_code == 0 %}{% set ek = b.error_kind or 'other_error' %}{% set einfo = error_labels.get(ek, ('⚠️', ek, '')) %}<span class="pill" data-tone="rose">{{ einfo[0] }} {{ einfo[1] }}</span>{% elif b.status_code >= 500 %}<span class="pill" data-tone="rose">{{ b.status_code }} {{ status_labels.get(b.status_code,'') }}</span>{% else %}<span class="pill" data-tone="amber">{{ b.status_code }} {{ status_labels.get(b.status_code,'') }}</span>{% endif %}</td>
+        <td><span class="pill" data-tone="slate">{{ b.refs }}</span></td>
+        <td><details><summary style="cursor:pointer;font-size:13px;color:var(--ink-3)">{{ b.sources|length }} trang nguồn</summary><ul style="margin:6px 0 0;padding-left:18px;font-size:12px">{% for s in b.sources %}<li><a href="{{ s }}" target="_blank" rel="noopener" style="color:var(--accent-ink)">{{ s }}</a></li>{% endfor %}</ul></details></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if total_pages > 1 %}{% set qs = request.args.to_dict() %}<div style="display:flex;justify-content:center;gap:10px;padding:14px">{% if page_num > 1 %}{% set _ = qs.update({'page': page_num - 1}) %}<a class="chipf" href="?{{ qs|urlencode }}">‹ Trước</a>{% endif %}<span style="color:var(--ink-3);font-size:12.5px;align-self:center">Trang {{ page_num }}/{{ total_pages }}</span>{% if page_num < total_pages %}{% set _ = qs.update({'page': page_num + 1}) %}<a class="chipf" href="?{{ qs|urlencode }}">Sau ›</a>{% endif %}</div>{% endif %}
   {% else %}
-    <div style="padding:40px 12px;text-align:center">
-      <div style="font-size:36px;margin-bottom:8px">
-        {% if summary.broken == 0 and summary.unchecked == summary.total %}🪶
-        {% elif summary.broken == 0 %}🎉
-        {% else %}🪶{% endif %}
-      </div>
-      <p class="muted">
-        {% if summary.broken == 0 and summary.unchecked == summary.total %}
-          Chưa có link nào được check. Bấm <strong>"🚀 Check tất cả link"</strong> phía trên để bắt đầu.
-        {% elif summary.broken == 0 %}
-          Không phát hiện link gãy nào — tuyệt vời!
-        {% else %}
-          Không có link khớp filter. <a href="{{ url_for('seo_broken_links_page') }}">Reset filter</a> để xem tất cả.
-        {% endif %}
-      </p>
-    </div>
+  <div style="text-align:center;color:var(--ink-3);padding:40px">{% if summary.broken == 0 and summary.unchecked == summary.total %}Chưa có link nào được check. Bấm "Check tất cả link" phía trên.{% elif summary.broken == 0 %}🎉 Không phát hiện link gãy nào — tuyệt vời!{% else %}Không có link khớp filter. <a href="{{ url_for('seo_broken_links_page') }}" style="color:var(--accent-ink)">Reset</a>.{% endif %}</div>
   {% endif %}
 </section>
-
 {% endblock %}
 
 {% block scripts %}
-<style>
-.brk-bucket-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 12px;
-}
-.brk-bucket {
-  background: rgba(255,255,255,0.02);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px;
-}
-.brk-bucket-active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-.brk-bucket-head {
-  display: block;
-  text-decoration: none;
-  color: inherit;
-  position: relative;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border-soft, rgba(255,255,255,0.04));
-  margin-bottom: 10px;
-}
-.brk-bucket-head:hover { color: var(--accent); }
-.brk-bucket-icon { font-size: 18px; }
-.brk-bucket-title { font-weight: 600; font-size: 14px; margin-top: 2px; }
-.brk-bucket-count {
-  position: absolute;
-  top: 0; right: 0;
-  font-size: 24px; font-weight: 700;
-  color: var(--accent, #fda4af);
-}
-.brk-bucket-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
-
-.brk-bucket-body {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.brk-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  text-decoration: none;
-  color: inherit;
-  font-size: 13px;
-  transition: all .12s;
-}
-.brk-pill:hover { border-color: var(--accent); transform: translateX(2px); }
-.brk-pill-active { border-color: var(--accent); background: var(--accent-soft); }
-.brk-pill .muted { font-size: 12px; }
-.brk-pill-count {
-  margin-left: auto;
-  background: rgba(255,255,255,0.06);
-  padding: 1px 7px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-}
-
-.seo-progress-card.hidden { display: none; }
-</style>
-
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
-  let timer = null;
-  let lastBroken = -1;
-
+  let timer = null, lastBroken = -1;
   async function tick() {
     try {
       const r = await fetch("{{ url_for('seo_link_check_status') }}", { cache: "no-store" });
-      const data = await r.json();
-      const s = data.state || {};
-      const sum = data.summary || {};
-
+      const data = await r.json(); const s = data.state || {}, sum = data.summary || {};
       $("link-status").textContent = s.running ? "Đang chạy" : "Hoàn tất";
-      $("link-checked").textContent = s.checked || 0;
-      $("link-total").textContent = s.total || 0;
-      $("link-broken").textContent = s.broken || 0;
-
-      const total = s.total || 0;
-      const checked = s.checked || 0;
-      const pct = total > 0 ? Math.floor((checked * 100) / total) : 0;
-      $("link-progress-fill").style.width = pct + "%";
-      $("link-pct").textContent = pct + "%";
-
-      if (sum.total !== undefined) {
-        $("sum-total").textContent = sum.total;
-        $("sum-broken").textContent = sum.broken;
-        $("sum-unchecked").textContent = sum.unchecked;
-        $("sum-ok").textContent = sum.ok || 0;
-      }
-
-      $("link-msg").textContent = s.running
-        ? `Đã check ${checked}/${total} — ${s.broken || 0} gãy.`
-        : `Hoàn tất: ${checked}/${total}, ${s.broken || 0} gãy.`;
-
-      const card = $("link-state-card");
-      if (card && s.running) card.classList.remove("hidden");
-
-      if (!s.running && checked > 0) {
-        clearInterval(timer);
-        if (lastBroken !== -1 && s.broken !== lastBroken) {
-          setTimeout(() => location.reload(), 800);
-        }
-      }
+      $("link-checked").textContent = s.checked || 0; $("link-total").textContent = s.total || 0; $("link-broken").textContent = s.broken || 0;
+      const total = s.total || 0, checked = s.checked || 0, pct = total > 0 ? Math.floor((checked * 100) / total) : 0;
+      $("link-progress-fill").style.width = pct + "%"; $("link-pct").textContent = pct + "%";
+      if (sum.total !== undefined) { $("sum-total").textContent = sum.total; $("sum-broken").textContent = sum.broken; $("sum-unchecked").textContent = sum.unchecked; $("sum-ok").textContent = sum.ok || 0; }
+      $("link-msg").textContent = s.running ? `Đã check ${checked}/${total} — ${s.broken || 0} gãy.` : `Hoàn tất: ${checked}/${total}, ${s.broken || 0} gãy.`;
+      const card = $("link-state-card"); if (card && s.running) card.classList.remove("hidden");
+      if (!s.running && checked > 0) { clearInterval(timer); if (lastBroken !== -1 && s.broken !== lastBroken) setTimeout(() => location.reload(), 800); }
       lastBroken = s.broken;
-    } catch (e) { /* ignore */ }
+    } catch (e) {}
   }
-
-  const initialRunning = {{ 'true' if state.running else 'false' }};
-  if (initialRunning) {
-    timer = setInterval(tick, 1500);
-  }
+  if ({{ 'true' if state.running else 'false' }}) timer = setInterval(tick, 1500);
 })();
 </script>
 {% endblock %}

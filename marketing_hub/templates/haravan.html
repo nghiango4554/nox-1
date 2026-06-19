@@ -1,191 +1,100 @@
-{% extends "base.html" %}
+{% extends "redesign_base.html" %}
 {% block title %}Haravan · Sintech Hub{% endblock %}
-
-{% block page_title %}
-<span>🛒 Haravan Audit</span>
-<span class="crumb"></span>
-<span class="muted" style="font-weight:400">Sync &amp; chấm điểm sản phẩm Haravan</span>
-{% endblock %}
-
+{% block page_title %}<i class="ic" data-icon="shopping-bag" style="color:var(--accent-ink)"></i><span>Haravan</span><i class="ic" data-icon="chevron-right"></i><b>Tổng quan</b>{% endblock %}
 {% block page_actions %}
-<form action="{{ url_for('haravan_sync_start') }}" method="post" style="display:inline">
-  <input type="hidden" name="limit_pages" value="2">
-  <button class="btn" type="submit"
-          {% if state.status == 'fetching' %}disabled{% endif %}>
-    🧪 Sync 2 trang test
-  </button>
-</form>
-<form action="{{ url_for('haravan_sync_start') }}" method="post" style="display:inline">
-  <button class="btn btn-primary" type="submit"
-          {% if state.status == 'fetching' %}disabled{% endif %}>
-    🚀 Sync toàn bộ
-  </button>
-</form>
-<a class="btn" href="{{ url_for('haravan_products_page') }}">📦 Danh sách SP →</a>
-<a class="btn" href="{{ url_for('haravan_blogs') }}">📝 Blog &amp; News →</a>
+<form action="{{ url_for('haravan_sync_start') }}" method="post" style="display:inline"><input type="hidden" name="limit_pages" value="2"><button class="chipf" type="submit" {% if state.status == 'fetching' %}disabled{% endif %}>🧪 Sync 2 trang</button></form>
+<form action="{{ url_for('haravan_sync_start') }}" method="post" style="display:inline"><button class="btn-primary" type="submit" {% if state.status == 'fetching' %}disabled{% endif %}><i class="ic" data-icon="refresh-cw"></i>Sync toàn bộ</button></form>
+<button class="chipf" type="button" id="prune-btn" onclick="pruneStale()" title="Xóa khỏi DB local SP đã bị xóa trên Haravan live">🧹 Dọn SP chết</button>
 {% endblock %}
 
 {% block content %}
+<div class="sec-head"><h2><i class="ic" data-icon="shopping-bag"></i>Haravan Audit</h2><div class="sec-meta">Sync &amp; chấm điểm SEO sản phẩm Haravan</div></div>
 
-{# ───── KPI ───── #}
-<div class="kpi-grid">
-  <div class="kpi">
-    <div class="kpi-row"><div class="kpi-icon accent">📦</div></div>
-    <div class="kpi-num">{{ stats.total }}</div>
-    <div class="kpi-label">SP đã sync vào DB</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-row"><div class="kpi-icon yellow">📊</div></div>
-    <div class="kpi-num">{{ stats.avg_score }}</div>
-    <div class="kpi-label">Điểm SEO trung bình</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-row"><div class="kpi-icon green">✅</div></div>
-    <div class="kpi-num">{{ stats.good }}</div>
-    <div class="kpi-label">SP tốt (≥80đ)</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-row"><div class="kpi-icon">⚠️</div></div>
-    <div class="kpi-num">{{ stats.bad }}</div>
-    <div class="kpi-label">Cần sửa (&lt;60đ)</div>
-  </div>
+<div class="stat-grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+  <div class="stat is-grad" data-tone="indigo" data-grad="blue"><div class="stat-top"><div class="stat-ico" data-tone="indigo"><i class="ic" data-icon="package"></i></div></div><div><div class="stat-val">{{ stats.total }}</div><div class="stat-title" style="margin-top:7px">SP đã sync vào DB</div></div></div>
+  <div class="stat is-grad" data-tone="amber" data-grad="amber"><div class="stat-top"><div class="stat-ico" data-tone="amber"><i class="ic" data-icon="gauge"></i></div></div><div><div class="stat-val">{{ stats.avg_score }}</div><div class="stat-title" style="margin-top:7px">Điểm SEO trung bình</div></div></div>
+  <div class="stat is-grad" data-tone="teal" data-grad="teal"><div class="stat-top"><div class="stat-ico" data-tone="teal"><i class="ic" data-icon="square-check-big"></i></div></div><div><div class="stat-val">{{ stats.good }}</div><div class="stat-title" style="margin-top:7px">SP tốt (≥80đ)</div></div></div>
+  <div class="stat is-grad" data-tone="rose" data-grad="red"><div class="stat-top"><div class="stat-ico" data-tone="rose"><i class="ic" data-icon="triangle-alert"></i></div></div><div><div class="stat-val">{{ stats.bad }}</div><div class="stat-title" style="margin-top:7px">Cần sửa (&lt;60đ)</div></div></div>
 </div>
 
-{# ───── BREAKDOWN ───── #}
-{% if stats.by_status %}
-<section class="card" style="margin-top:16px">
-  <h3 style="margin-top:0">Trạng thái</h3>
-  <div class="subline">
-    {% for k, v in stats.by_status.items() %}
-      <a href="{{ url_for('haravan_products_page', status=k) }}" class="pill">{{ k or '—' }}: {{ v }}</a>
-    {% endfor %}
+<section class="panel" style="margin-top:var(--gap)">
+  <div class="panel-head"><i class="ic lead" data-icon="refresh-cw"></i><h3>Trạng thái sync</h3></div>
+  <div id="hv-state">
+    <p style="margin:0 0 10px"><strong id="hv-state-status">{{ state.status }}</strong> — <span id="hv-state-msg" style="color:var(--ink-2)">{{ state.message or 'Chưa có run nào đang chạy.' }}</span></p>
+    <div class="progress" style="height:10px"><i id="hv-progress-fill" style="width: {% if state.total %}{{ (state.fetched * 100 // state.total) }}{% else %}0{% endif %}%"></i></div>
+    <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:12.5px;color:var(--ink-3)">
+      <span><strong id="hv-state-fetched">{{ state.fetched }}</strong>/<span id="hv-state-total">{{ state.total }}</span></span>
+      <span>❌ <span id="hv-state-failed">{{ state.failed }}</span> · <span id="hv-progress-pct">{% if state.total %}{{ (state.fetched * 100 // state.total) }}{% else %}0{% endif %}%</span></span>
+    </div>
   </div>
+  {% if latest %}<small class="sec-meta">Run gần nhất #{{ latest.id }} — {{ latest.status }} — {{ latest.fetched or 0 }}/{{ latest.total or 0 }} OK — {{ latest.started_at }}{% if latest.finished_at %} → {{ latest.finished_at }}{% endif %}</small>{% endif %}
+</section>
+
+{% if stats.by_status %}
+<section class="panel" style="margin-top:var(--gap)"><div class="panel-head"><i class="ic lead" data-icon="list-checks"></i><h3>Trạng thái</h3></div>
+  <div class="tbl-filter" style="margin-left:0;flex-wrap:wrap">{% for k, v in stats.by_status.items() %}<a class="chipf" href="{{ url_for('haravan_products_page', status=k) }}">{{ k or '—' }}: {{ v }}</a>{% endfor %}</div>
 </section>
 {% endif %}
 
 {% if stats.by_vendor %}
-<section class="card" style="margin-top:16px">
-  <h3 style="margin-top:0">Top vendor (thương hiệu)</h3>
-  <div class="seo-issue-chips">
-    {% for k, v in stats.by_vendor.items() %}
-      <a href="{{ url_for('haravan_products_page', vendor=k) }}" class="seo-issue-chip seo-issue-info">
-        <span>🏷️</span><span>{{ k }}</span><span class="seo-issue-count">{{ v }}</span>
-      </a>
-    {% endfor %}
-  </div>
+<section class="panel" style="margin-top:var(--gap)"><div class="panel-head"><i class="ic lead" data-icon="tag"></i><h3>Top vendor (thương hiệu)</h3></div>
+  <div class="tbl-filter" style="margin-left:0;flex-wrap:wrap">{% for k, v in stats.by_vendor.items() %}<a class="chipf" href="{{ url_for('haravan_products_page', vendor=k) }}">🏷️ {{ k }} · {{ v }}</a>{% endfor %}</div>
 </section>
 {% endif %}
 
 {% if stats.by_type %}
-<section class="card" style="margin-top:16px">
-  <h3 style="margin-top:0">Top product type</h3>
-  <div class="seo-issue-chips">
-    {% for k, v in stats.by_type.items() %}
-      <a href="{{ url_for('haravan_products_page', type=k) }}" class="seo-issue-chip seo-issue-info">
-        <span>📂</span><span>{{ k }}</span><span class="seo-issue-count">{{ v }}</span>
-      </a>
-    {% endfor %}
-  </div>
+<section class="panel" style="margin-top:var(--gap)"><div class="panel-head"><i class="ic lead" data-icon="folder-tree"></i><h3>Top product type</h3></div>
+  <div class="tbl-filter" style="margin-left:0;flex-wrap:wrap">{% for k, v in stats.by_type.items() %}<a class="chipf" href="{{ url_for('haravan_products_page', type=k) }}">📂 {{ k }} · {{ v }}</a>{% endfor %}</div>
 </section>
 {% endif %}
 
-{# ───── RUN STATE ───── #}
-<section class="card" style="margin-top:16px">
-  <h3 style="margin-top:0">Trạng thái sync</h3>
-  <div id="hv-state">
-    <p>
-      <strong id="hv-state-status">{{ state.status }}</strong>
-      — <span id="hv-state-msg">{{ state.message or 'Chưa có run nào đang chạy.' }}</span>
-    </p>
-    <div class="seo-progress-wrap">
-      <div class="seo-progress-bar">
-        <div id="hv-progress-fill" class="seo-progress-fill"
-             style="width: {% if state.total %}{{ (state.fetched * 100 // state.total) }}{% else %}0{% endif %}%"></div>
-      </div>
-      <div class="seo-progress-meta">
-        <span><strong id="hv-state-fetched">{{ state.fetched }}</strong>/<span id="hv-state-total">{{ state.total }}</span></span>
-        <span class="muted">
-          ❌ <span id="hv-state-failed">{{ state.failed }}</span> ·
-          <span id="hv-progress-pct">{% if state.total %}{{ (state.fetched * 100 // state.total) }}{% else %}0{% endif %}%</span>
-        </span>
-      </div>
-    </div>
-  </div>
-  {% if latest %}
-    <small class="muted">
-      Run gần nhất #{{ latest.id }} — {{ latest.status }} —
-      {{ latest.fetched or 0 }}/{{ latest.total or 0 }} OK —
-      {{ latest.started_at }}
-      {% if latest.finished_at %}→ {{ latest.finished_at }}{% endif %}
-    </small>
-  {% endif %}
-</section>
-
-{# ───── TOP ISSUES ───── #}
 {% if top_issues %}
-<section class="card" style="margin-top:16px">
-  <h3 style="margin-top:0">Top vấn đề SEO trên sản phẩm Haravan</h3>
-  <p class="muted" style="margin:0 0 10px 0;font-size:13px">Click 1 vấn đề để filter SP có lỗi đó.</p>
-  <div class="seo-issue-chips">
-    {% for it in top_issues %}
-      <a href="{{ url_for('haravan_products_page', issue=it.code) }}"
-         class="seo-issue-chip seo-issue-{{ it.level }}">
-        <span>{{ it.icon }}</span>
-        <span>{{ it.label }}</span>
-        <span class="seo-issue-count">{{ it.count }}</span>
-      </a>
-    {% endfor %}
-  </div>
+<section class="panel" style="margin-top:var(--gap)"><div class="panel-head"><i class="ic lead" data-icon="triangle-alert"></i><h3>Top vấn đề SEO trên SP Haravan</h3></div>
+  <div class="tbl-filter" style="margin-left:0;flex-wrap:wrap">{% for it in top_issues %}<a class="chipf" href="{{ url_for('haravan_products_page', issue=it.code) }}">{{ it.icon }} {{ it.label }} · {{ it.count }}</a>{% endfor %}</div>
 </section>
 {% endif %}
 
-{# ───── EMPTY STATE ───── #}
 {% if stats.total == 0 %}
-<section class="card" style="margin-top:16px">
-  <h3 style="margin-top:0">Chưa có dữ liệu</h3>
-  <p class="muted">
-    Bấm <strong>"🧪 Sync 2 trang test"</strong> để load thử ~100 SP đầu, hoặc
-    <strong>"🚀 Sync toàn bộ"</strong> để load full 2123 SP từ Haravan.
-  </p>
-</section>
+<section class="panel" style="margin-top:var(--gap)"><div style="text-align:center;color:var(--ink-3);padding:20px">Chưa có dữ liệu. Bấm "🧪 Sync 2 trang" để load thử, hoặc "🚀 Sync toàn bộ" để load full.</div></section>
 {% endif %}
-
 {% endblock %}
 
 {% block scripts %}
 <script>
+async function pruneStale() {
+  const btn = document.getElementById('prune-btn');
+  btn.disabled = true; const old = btn.textContent; btn.textContent = '⏳ Đang kiểm tra...';
+  try {
+    let r = await (await fetch('{{ url_for("haravan_prune_stale") }}?dry=1', {method:'POST'})).json();
+    if (!r.ok) { alert('Lỗi: ' + (r.error || '')); return; }
+    if (!r.stale) { alert('✅ Cache sạch — không có SP chết nào.'); return; }
+    if (!confirm(`Tìm thấy ${r.stale} SP đã xóa trên Haravan (còn sót DB local).\nLive: ${r.live} · Cache: ${r.cache_before}\n\nXóa ${r.stale} SP chết này?`)) return;
+    btn.textContent = '🧹 Đang dọn...';
+    r = await (await fetch('{{ url_for("haravan_prune_stale") }}', {method:'POST'})).json();
+    if (!r.ok) { alert('Lỗi: ' + (r.error || '')); return; }
+    alert('✅ ' + r.message); location.reload();
+  } catch (e) { alert('Lỗi: ' + e); }
+  finally { btn.disabled = false; btn.textContent = old; }
+}
 (function () {
   const $ = (id) => document.getElementById(id);
   let timer = null;
-
   async function tick() {
     try {
       const r = await fetch("{{ url_for('haravan_status_api') }}", { cache: "no-store" });
-      const data = await r.json();
-      const s = data.state || {};
+      const data = await r.json(); const s = data.state || {};
       if ($("hv-state-status")) $("hv-state-status").textContent = s.status || "—";
       if ($("hv-state-msg")) $("hv-state-msg").textContent = s.message || "";
       if ($("hv-state-fetched")) $("hv-state-fetched").textContent = s.fetched || 0;
       if ($("hv-state-total")) $("hv-state-total").textContent = s.total || 0;
       if ($("hv-state-failed")) $("hv-state-failed").textContent = s.failed || 0;
-
-      const total = s.total || 0;
-      const done = s.fetched || 0;
-      const pct = total > 0 ? Math.floor((done * 100) / total) : 0;
+      const total = s.total || 0, done = s.fetched || 0, pct = total > 0 ? Math.floor((done * 100) / total) : 0;
       if ($("hv-progress-fill")) $("hv-progress-fill").style.width = pct + "%";
       if ($("hv-progress-pct")) $("hv-progress-pct").textContent = pct + "%";
-
-      if (s.status === "done" || s.status === "failed") {
-        clearInterval(timer);
-        setTimeout(() => location.reload(), 800);
-      }
-    } catch (e) { /* ignore */ }
+      if (s.status === "done" || s.status === "failed") { clearInterval(timer); setTimeout(() => location.reload(), 800); }
+    } catch (e) {}
   }
-
-  const initial = "{{ state.status }}";
-  if (initial === "fetching") {
-    timer = setInterval(tick, 1500);
-  }
+  if ("{{ state.status }}" === "fetching") timer = setInterval(tick, 1500);
 })();
 </script>
 {% endblock %}

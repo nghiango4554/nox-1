@@ -9,6 +9,9 @@
 <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ now.timestamp()|int }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing-hub-theme.css') }}?v={{ now.timestamp()|int }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing-hub-components.css') }}?v={{ now.timestamp()|int }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing-hub-responsive.css') }}?v={{ now.timestamp()|int }}">
 </head>
 <body>
 
@@ -76,8 +79,8 @@
   <a href="{{ url_for('collection_content_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('collection_content') %}active{% endif %}">
     <span class="sb-icon">🗂️</span><span>Collection Content</span>
   </a>
-  <a href="{{ url_for('blog_content_page') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('blog_content') %}active{% endif %}">
-    <span class="sb-icon">📰</span><span>Blog Content</span>
+  <a href="{{ url_for('blog_content_page') }}" class="sb-link {% if request.endpoint and (request.endpoint.startswith('blog_content') or request.endpoint.startswith('bcc_')) %}active{% endif %}">
+    <span class="sb-icon">📰</span><span>Blog Command Center</span>
   </a>
   <a href="{{ url_for('products_new_form') }}" class="sb-link {% if request.endpoint and request.endpoint.startswith('products_new') %}active{% endif %}">
     <span class="sb-icon">🛍️</span><span>SP mới (Haravan)</span>

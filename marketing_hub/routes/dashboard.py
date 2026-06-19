@@ -241,8 +241,9 @@ def _provider_health():
     return {"primary": av[0] if av else None, "available": av}
 
 
-def _dashboard_health():
-    """Gộp toàn bộ chỉ số sức khỏe (data thật + fallback). Không bao giờ raise."""
+def _dashboard_health(with_probes=True):
+    """Gộp toàn bộ chỉ số sức khỏe (data thật + fallback). Không bao giờ raise.
+    with_probes=False → BỎ git/bot/provider (subprocess+HTTP ~2s) để render nhanh; nạp sau qua AJAX."""
     out = {"ts": datetime.now().isoformat(timespec="seconds"), "flask": {"status": "up"}}
 
     try:
@@ -367,9 +368,16 @@ def _dashboard_health():
         out["schema"] = {"error": str(e)[:100]}
 
     out["backups"] = {"db": _backup_info("posts_*.db.zip"), "secrets": _backup_info("secrets_*.zip")}
-    out["git"] = _health_cached("git", 30, _git_health)
-    out["bot"] = _health_cached("bot", 120, _bot_health)
-    out["provider"] = _health_cached("provider", 120, _provider_health)
+    if with_probes:
+        out["git"] = _health_cached("git", 30, _git_health)
+        out["bot"] = _health_cached("bot", 120, _bot_health)
+        out["provider"] = _health_cached("provider", 120, _provider_health)
+    else:
+        # Lấy cache nếu có (không block); cold → pending, JS sẽ nạp sau
+        now_t = _time.time()
+        for k in ("git", "bot", "provider"):
+            hit = _HEALTH_CACHE.get(k)
+            out[k] = hit[1] if (hit and hit[0] > now_t) else {"pending": True}
     return out
 
 
@@ -477,6 +485,201 @@ def dashboard():
     )
 
 
+def _num(x, d=0):
+    try:
+        return int(x)
+    except (TypeError, ValueError):
+        return d
+
+
+def _fmt1(x):
+    try:
+        return f"{float(x):.1f}"
+    except (TypeError, ValueError):
+        return "—"
+
+
+# icon theo key job (khớp bộ icon sintech-icons*.js)
+_JOB_ICON = {
+    "crawl": "search", "links": "link", "title_meta": "file-text",
+    "h1_scan": "search", "h1_fix": "wrench", "empty_desc": "file-text",
+    "content_queue": "package", "collection_gen": "folder-tree",
+    "competitors": "swords", "cwv_scan": "gauge",
+}
+_JOB_TONE = {
+    "crawl": "emerald", "links": "rose", "title_meta": "violet",
+    "h1_scan": "amber", "h1_fix": "amber", "empty_desc": "amber",
+    "content_queue": "sky", "collection_gen": "indigo",
+    "competitors": "slate", "cwv_scan": "amber",
+}
+
+
+def _v2_dashboard_ctx():
+    """Gộp data thật cho dashboard redesign — list sạch để template chỉ loop.
+    BỎ probe chậm (git/bot/provider) → render nhanh; JS nạp 3 row đó sau qua /api/dashboard/health."""
+    h = _dashboard_health(with_probes=False)
+    jobs = _collect_jobs()
+
+    cj = h.get("content_jobs") or {}
+    cj_by = cj.get("by_status") or {}
+    seo = h.get("seo") or {}
+    hv = h.get("haravan") or {}
+    rq = h.get("review_queue") or {}
+    alt = h.get("alt") or {}
+    cwv = h.get("cwv") or {}
+    pillar = h.get("pillar") or {}
+    git = h.get("git") or {}
+    bot = h.get("bot") or {}
+    prov = h.get("provider") or {}
+    bk = h.get("backups") or {}
+
+    cwv_bad = _num(cwv.get("mobile_bad")) + _num(cwv.get("desktop_bad"))
+    alt_good = _num(alt.get("good"))
+    alt_bad = _num(alt.get("none")) + _num(alt.get("weak"))
+
+    kpis = [
+        {"tone": "sky", "grad": "coral", "icon": "package", "pill_tone": "sky", "pill": "jobs",
+         "val": _num(cj.get("total")), "title": "Content jobs",
+         "sub": f"synced {_num(cj_by.get('synced'))} · chờ {_num(cj_by.get('queued'))}"},
+        {"tone": "teal", "grad": "teal", "icon": "search", "pill_tone": "teal",
+         "pill": f"TB {_fmt1(seo.get('avg_score'))}",
+         "val": _num(seo.get("bad")), "title": "SEO trang điểm kém",
+         "sub": f"{_num(seo.get('total'))} trang · tốt {_num(seo.get('good'))}"},
+        {"tone": "violet", "grad": "violet", "icon": "square-check-big", "pill_tone": "amber",
+         "pill": "chờ duyệt", "val": _num(rq.get("total")), "title": "Bài chờ duyệt",
+         "sub": f"blog {_num(rq.get('blog_draft'))} · content {_num(rq.get('content_review'))}"},
+        {"tone": "indigo", "grad": "blue", "icon": "shopping-bag", "pill_tone": "indigo",
+         "pill": f"audit {_fmt1(hv.get('avg_score'))}",
+         "val": _num(hv.get("total")), "title": "SP Haravan",
+         "sub": f"điểm audit TB {_fmt1(hv.get('avg_score'))}"},
+        {"tone": "rose", "grad": "red", "icon": "image", "pill_tone": "rose", "pill": "cần sửa",
+         "val": _fmt1(alt.get("coverage_percent")), "unit": "%", "title": "Alt coverage",
+         "sub": f"{alt_good} good · {alt_bad} cần sửa"},
+        {"tone": "amber", "grad": "amber", "icon": "gauge", "pill_tone": "rose", "pill": "cần fix",
+         "val": cwv_bad, "title": "CWV perf kém",
+         "sub": f"{_num(cwv.get('total'))} URL · TB {_fmt1(cwv.get('mobile_avg'))}"},
+    ]
+
+    alerts = []
+    if bot.get("status") and bot.get("status") != "ok":
+        d = "chưa có token" if bot.get("status") == "no_token" else (bot.get("detail") or "down")
+        alerts.append({"tone": "rose", "icon": "wifi-off", "text": "Telegram bot lỗi", "small": d})
+    bdb = bk.get("db") or {}
+    if not bdb.get("ok"):
+        alerts.append({"tone": "rose", "icon": "database-backup", "text": "Backup DB chưa có", "small": ""})
+    elif _num(bdb.get("age_hours")) > 72:
+        alerts.append({"tone": "rose", "icon": "database-backup", "text": "Backup DB quá cũ",
+                       "small": f"{_num(bdb.get('age_hours'))}h"})
+    if cwv_bad > 0:
+        alerts.append({"tone": "amber", "icon": "gauge", "text": f"{cwv_bad} URL CWV kém", "small": "cần fix"})
+    if _num(git.get("uncommitted")) > 0:
+        alerts.append({"tone": "amber", "icon": "git-branch",
+                       "text": f"{_num(git.get('uncommitted'))} chưa commit",
+                       "small": f"Git {git.get('branch', '')}"})
+
+    health_rows = [
+        {"tone": "emerald", "icon": "server", "name": "Flask web", "desc": "ứng dụng chính",
+         "pill": "Up", "pill_tone": "emerald"},
+    ]
+    if prov.get("pending"):
+        health_rows.append({"hk": "provider", "tone": "slate", "icon": "bot", "name": "AI provider",
+                            "desc": "đang kiểm tra…", "pill": "…", "pill_tone": "slate"})
+    else:
+        prim = prov.get("primary")
+        health_rows.append({"hk": "provider", "tone": "emerald" if prim else "amber", "icon": "bot", "name": "AI provider",
+                            "desc": prim or "chưa cấu hình", "pill": "sẵn sàng" if prim else "thiếu",
+                            "pill_tone": "emerald" if prim else "amber"})
+    if bot.get("pending"):
+        health_rows.append({"hk": "bot", "tone": "slate", "icon": "send", "name": "Telegram bot",
+                            "desc": "đang kiểm tra…", "pill": "…", "pill_tone": "slate"})
+    else:
+        bot_ok = bot.get("status") == "ok"
+        health_rows.append({"hk": "bot", "tone": "emerald" if bot_ok else "rose", "icon": "send", "name": "Telegram bot",
+                            "desc": bot.get("username") or "thông báo",
+                            "pill": "Up" if bot_ok else (bot.get("detail") or "down"),
+                            "pill_tone": "emerald" if bot_ok else "rose"})
+    if git.get("pending"):
+        health_rows.append({"hk": "git", "tone": "slate", "icon": "git-branch", "name": "Git",
+                            "desc": "đang kiểm tra…", "pill": "…", "pill_tone": "slate"})
+    elif git.get("available"):
+        unc = _num(git.get("uncommitted"))
+        health_rows.append({"hk": "git", "tone": "amber" if unc else "emerald", "icon": "git-branch",
+                            "name": f"Git ({git.get('branch', '')})",
+                            "desc": f"↑{_num(git.get('ahead'))} · {unc} chưa commit",
+                            "pill": "lệch" if unc else "sạch",
+                            "pill_tone": "amber" if unc else "emerald"})
+    db_age = _num(bdb.get("age_hours")) if bdb.get("ok") else None
+    health_rows.append({"tone": "rose" if (db_age is None or db_age > 72) else "emerald",
+                        "icon": "database-backup", "name": "Backup DB",
+                        "desc": f"{db_age}h trước" if db_age is not None else "chưa có",
+                        "pill": f"{db_age}h" if db_age is not None else "thiếu",
+                        "pill_tone": "rose" if (db_age is None or db_age > 72) else "emerald"})
+    p_total = _num(pillar.get("total"))
+    p_done = _num(pillar.get("done"))
+    health_rows.append({"tone": "amber", "icon": "layers", "name": "Pillar gen",
+                        "desc": f"{p_done} / {p_total} · {_num(pillar.get('pending'))} chờ",
+                        "pill": f"{int(p_done * 100 / p_total) if p_total else 0}%",
+                        "pill_tone": "amber",
+                        "progress": int(p_done * 100 / p_total) if p_total else 0})
+
+    # Hàng đợi xử lý — running trước, cap 6
+    jobs_sorted = sorted(jobs, key=lambda j: (not j.get("running"), -(j.get("done") or 0)))
+    queue = []
+    for j in jobs_sorted[:6]:
+        total = _num(j.get("total"))
+        done = _num(j.get("done"))
+        pct = int(done * 100 / total) if total else (100 if done else 0)
+        run = j.get("running")
+        queue.append({
+            "icon": _JOB_ICON.get(j.get("key"), "inbox"),
+            "tone": _JOB_TONE.get(j.get("key"), "slate"),
+            "title": j.get("name"), "sub": (j.get("extra") or j.get("message") or "")[:70],
+            "status": "đang chạy" if run else ("xong" if done and not total else "nghỉ"),
+            "status_tone": "sky" if run else ("emerald" if done else "slate"),
+            "pulse": bool(run), "pct": pct,
+        })
+
+    # GA4 — lưu lượng 7 ngày thật (sessions + organic)
+    ga4_series = {"labels": [], "sessions": [], "organic": [], "has": False}
+    try:
+        gconn = db.get_conn()
+        grows = list(reversed(gconn.execute(
+            "SELECT date, sessions, engaged_sessions FROM ga4_daily_summary ORDER BY date DESC LIMIT 7").fetchall()))
+        gdates = [r["date"] for r in grows]
+        org = {}
+        if gdates:
+            qm = ",".join("?" * len(gdates))
+            for r in gconn.execute(
+                f"SELECT date, SUM(sessions) s FROM ga4_channels_daily WHERE date IN ({qm}) "
+                f"AND session_default_channel_group='Organic Search' GROUP BY date", gdates).fetchall():
+                org[r["date"]] = r["s"] or 0
+        gconn.close()
+        for r in grows:
+            ga4_series["labels"].append((r["date"] or "")[5:].replace("-", "/"))
+            ga4_series["sessions"].append(_num(r["sessions"]))
+            ga4_series["organic"].append(org.get(r["date"], 0))
+        ga4_series["has"] = bool(grows)
+    except Exception:
+        pass
+
+    # Data cho các chart (đúng loại: donut = thành phần, bar = so sánh)
+    cj_by_top = sorted(((k, v) for k, v in cj_by.items() if v), key=lambda x: -x[1])[:5]
+    charts = {
+        "ga4": ga4_series,
+        "seo_dist": {"good": _num(seo.get("good")), "ok": _num(seo.get("ok")), "bad": _num(seo.get("bad"))},
+        "cj_status": {"labels": [k for k, _ in cj_by_top], "values": [v for _, v in cj_by_top]},
+        "cwv": {"mobile": cwv.get("mobile_avg") or 0, "desktop": cwv.get("desktop_avg") or 0},
+    }
+
+    return {"kpis": kpis, "alerts": alerts, "health_rows": health_rows, "queue": queue,
+            "charts": charts, "updated": datetime.now().strftime("%H:%M")}
+
+
+def dashboard_v2():
+    ctx = _v2_dashboard_ctx()
+    return render_template("redesign_dashboard.html", active="dashboard", **ctx)
+
+
 def jobs_center_page():
     return render_template("jobs_center.html")
 
@@ -522,7 +725,9 @@ def api_dashboard_health():
 
 def register(app):
     """Đăng ký 4 route Dashboard."""
-    app.add_url_rule("/", "dashboard", dashboard)
+    app.add_url_rule("/", "dashboard", dashboard_v2)          # giao diện mới = trang chủ
+    app.add_url_rule("/v2", "dashboard_v2", dashboard_v2)     # alias
+    app.add_url_rule("/old", "dashboard_old", dashboard)      # dashboard cũ (backup)
     app.add_url_rule("/jobs", "jobs_center_page", jobs_center_page)
     app.add_url_rule("/api/jobs", "api_jobs", api_jobs)
     app.add_url_rule("/api/dashboard/health", "api_dashboard_health", api_dashboard_health)

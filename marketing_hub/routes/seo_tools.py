@@ -645,7 +645,7 @@ def seo_cwv_diff_page():
 
 def api_cwv_status():
     st = cwv_mod.state_snapshot()
-    pass_start = cwv_mod.current_pass()
+    pass_start = st.get("started_at")  # mốc bắt đầu đợt quét hiện tại (current_pass() không tồn tại)
     stats = db.cwv_pass_stats(pass_start)
     st["pass"] = {
         "active": bool(pass_start),                 # có đợt đang dở (đã dừng giữa chừng)

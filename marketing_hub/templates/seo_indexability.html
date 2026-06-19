@@ -1,139 +1,57 @@
-{% extends "base.html" %}
+{% extends "redesign_base.html" %}
 {% block title %}Indexability · SEO · Sintech Hub{% endblock %}
-
-{% block page_title %}
-<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
-<span class="crumb"></span>
-<span style="font-weight:600">🚫 Indexability check</span>
-{% endblock %}
-
-{% block page_actions %}
-<a class="btn" href="{{ url_for('seo_dashboard') }}">← Quay lại SEO</a>
-{% endblock %}
+{% block page_title %}<i class="ic" data-icon="search" style="color:var(--accent-ink)"></i><span>SEO</span><i class="ic" data-icon="chevron-right"></i><b>Indexability</b>{% endblock %}
+{% block page_actions %}<a class="btn-primary" href="{{ url_for('seo_dashboard') }}"><i class="ic" data-icon="shield-check"></i>Tổng quan SEO</a>{% endblock %}
 
 {% block content %}
+<div class="sec-head"><h2><i class="ic" data-icon="ban"></i>Indexability check</h2><div class="sec-meta">Trang non-indexable = trả 200 nhưng Google KHÔNG đưa vào kết quả (noindex / redirect / lỗi)</div></div>
 
-{# ───── KPI ───── #}
-<div class="kpi-grid">
-  <div class="kpi">
-    <div class="kpi-row"><div class="kpi-icon green">✅</div></div>
-    <div class="kpi-num" style="color:#4ade80">{{ stats.indexable }}</div>
-    <div class="kpi-label">Trang Google sẽ index</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(239,68,68,0.15);color:#f87171">🚫</div></div>
-    <div class="kpi-num" style="color:#f87171">{{ stats.non_indexable }}</div>
-    <div class="kpi-label">Trang BỊ chặn index</div>
-  </div>
-  <div class="kpi">
-    <div class="kpi-row"><div class="kpi-icon yellow">⏳</div></div>
-    <div class="kpi-num">{{ stats.not_crawled }}</div>
-    <div class="kpi-label">Chưa crawl</div>
-  </div>
+<div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+  <div class="stat is-grad" data-tone="teal" data-grad="teal"><div class="stat-top"><div class="stat-ico" data-tone="teal"><i class="ic" data-icon="square-check-big"></i></div></div><div><div class="stat-val">{{ stats.indexable }}</div><div class="stat-title" style="margin-top:7px">Trang Google sẽ index</div></div></div>
+  <div class="stat is-grad" data-tone="rose" data-grad="red"><div class="stat-top"><div class="stat-ico" data-tone="rose"><i class="ic" data-icon="ban"></i></div></div><div><div class="stat-val">{{ stats.non_indexable }}</div><div class="stat-title" style="margin-top:7px">Trang BỊ chặn index</div></div></div>
+  <div class="stat is-grad" data-tone="amber" data-grad="amber"><div class="stat-top"><div class="stat-ico" data-tone="amber"><i class="ic" data-icon="clock"></i></div></div><div><div class="stat-val">{{ stats.not_crawled }}</div><div class="stat-title" style="margin-top:7px">Chưa crawl</div></div></div>
 </div>
 
-<section class="card" style="margin-top:16px">
-  <p class="muted" style="margin:0">
-    Trang <strong>non-indexable</strong> = trả status 200 nhưng Google sẽ KHÔNG đưa vào search results.
-    Lý do thường gặp: <code>meta robots noindex</code>, <code>X-Robots-Tag noindex</code>, redirect, hoặc HTTP error.
-  </p>
-</section>
-
-{# ───── BY REASON ───── #}
 {% if stats.by_reason %}
-<section class="card" style="margin-top:16px">
-  <h3 style="margin-top:0">Phân loại theo lý do</h3>
-  <p class="muted" style="margin:0 0 10px 0;font-size:13px">Click 1 lý do để filter danh sách bên dưới.</p>
-  <div class="seo-issue-chips">
-    <a href="{{ url_for('seo_indexability_page') }}"
-       class="seo-issue-chip {% if not active_reason %}seo-issue-error{% else %}seo-issue-info{% endif %}">
-      <span>📋</span><span>Tất cả</span>
-      <span class="seo-issue-count">{{ stats.non_indexable }}</span>
-    </a>
+<section class="panel" style="margin-top:var(--gap)">
+  <div class="panel-head"><i class="ic lead" data-icon="filter"></i><h3>Phân loại theo lý do</h3></div>
+  <div class="tbl-filter" style="margin-left:0;flex-wrap:wrap">
+    <a href="{{ url_for('seo_indexability_page') }}" class="chipf {{ 'on' if not active_reason }}">📋 Tất cả · {{ stats.non_indexable }}</a>
     {% for reason, n in stats.by_reason.items() %}
-      <a href="?reason={{ reason|urlencode }}"
-         class="seo-issue-chip {% if active_reason == reason %}seo-issue-error{% else %}seo-issue-warn{% endif %}">
-        <span>{% if 'noindex' in reason %}🚫{% elif 'redirect' in reason %}↪️{% elif 'HTTP' in reason %}💥{% else %}❓{% endif %}</span>
-        <span>{{ reason }}</span>
-        <span class="seo-issue-count">{{ n }}</span>
-      </a>
+      <a href="?reason={{ reason|urlencode }}" class="chipf {{ 'on' if active_reason == reason }}">{% if 'noindex' in reason %}🚫{% elif 'redirect' in reason %}↪️{% elif 'HTTP' in reason %}💥{% else %}❓{% endif %} {{ reason }} · {{ n }}</a>
     {% endfor %}
   </div>
 </section>
 {% endif %}
 
-{# ───── PAGE LIST ───── #}
-<section class="card" style="margin-top:16px">
-  <h3 style="margin-top:0">
-    Danh sách trang bị chặn
-    <span class="muted" style="font-weight:400;font-size:14px">
-      — {{ pages|length }} trang
-      {% if active_reason %} · lý do: <code>{{ active_reason }}</code>{% endif %}
-    </span>
-  </h3>
-
+<section class="tbl-wrap" style="margin-top:var(--gap)">
+  <div class="tbl-top"><h3><i class="ic" data-icon="list-checks"></i>Danh sách trang bị chặn</h3>
+    <div class="sec-meta" style="margin-left:auto">{{ pages|length }} trang{% if active_reason %} · {{ active_reason }}{% endif %}</div></div>
   {% if pages %}
-    <div class="table-wrap">
-    <table class="table seo-table">
-      <thead>
-        <tr>
-          <th class="col-stt">STT</th>
-          <th>URL</th>
-          <th>Loại</th>
-          <th>Status</th>
-          <th>Lý do</th>
-          <th>Crawl gần nhất</th>
-          <th>Hành động</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for p in pages %}
-        <tr>
-          <td class="col-stt">{{ loop.index }}</td>
-          <td class="seo-url-cell">
-            <a href="{{ p.url }}" target="_blank" rel="noopener" class="seo-url-link">{{ p.url }}</a>
-            {% if p.title %}<div class="seo-url-title">{{ p.title }}</div>{% endif %}
-            {% if p.canonical_url and p.canonical_url != p.url %}
-              <div class="muted" style="font-size:12px;margin-top:2px">
-                ↪ canonical: <a href="{{ p.canonical_url }}" target="_blank" rel="noopener" class="seo-url-link">{{ p.canonical_url }}</a>
-              </div>
-            {% endif %}
-          </td>
-          <td><span class="seo-type seo-type-{{ p.url_type or 'other' }}">{{ p.url_type or '—' }}</span></td>
-          <td>
-            {% if p.status_code %}
-              {% if p.status_code < 400 %}
-                <span class="pill" style="background:rgba(34,197,94,0.15)">{{ p.status_code }}</span>
-              {% else %}
-                <span class="pill pill-error">{{ p.status_code }}</span>
-              {% endif %}
-            {% else %}
-              <span class="muted">—</span>
-            {% endif %}
-          </td>
-          <td>
-            <span class="pill pill-warn">{{ p.indexability_reason or 'unknown' }}</span>
-          </td>
-          <td><small class="muted">{{ p.last_crawled or '—' }}</small></td>
-          <td>
-            <a href="{{ url_for('seo_url_detail', page_id=p.id) }}" class="btn btn-sm">Chi tiết →</a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    </div>
+  <table>
+    <thead><tr><th style="width:48px">STT</th><th>URL</th><th>Loại</th><th>Status</th><th>Lý do</th><th>Crawl gần nhất</th><th></th></tr></thead>
+    <tbody>
+    {% for p in pages %}
+      <tr>
+        <td style="color:var(--ink-3)">{{ loop.index }}</td>
+        <td><a href="{{ p.url }}" target="_blank" rel="noopener" class="td-title" style="color:var(--accent-ink)">{{ p.url }}</a>
+          {% if p.title %}<div class="td-sub">{{ p.title }}</div>{% endif %}
+          {% if p.canonical_url and p.canonical_url != p.url %}<div class="td-sub">↪ canonical: {{ p.canonical_url }}</div>{% endif %}</td>
+        <td><span class="pill" data-tone="slate">{{ p.url_type or '—' }}</span></td>
+        <td>{% if p.status_code %}<span class="pill dotty" data-tone="{{ 'emerald' if p.status_code < 400 else 'rose' }}">{{ p.status_code }}</span>{% else %}<span style="color:var(--ink-3)">—</span>{% endif %}</td>
+        <td><span class="pill" data-tone="amber">{{ p.indexability_reason or 'unknown' }}</span></td>
+        <td><small style="color:var(--ink-3)">{{ p.last_crawled or '—' }}</small></td>
+        <td><a class="row-act" href="{{ url_for('seo_url_detail', page_id=p.id) }}" aria-label="Chi tiết"><i class="ic" data-icon="arrow-up-right"></i></a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
   {% else %}
-    <p class="muted">
-      {% if stats.non_indexable == 0 and stats.indexable > 0 %}
-        🎉 Không có trang nào bị chặn index. Tuyệt vời!
-      {% elif stats.indexable == 0 and stats.non_indexable == 0 %}
-        Chưa có trang nào được crawl. Bấm <strong>"🚀 Crawl toàn bộ"</strong> ở dashboard SEO để bắt đầu.
-      {% else %}
-        Không có trang nào khớp lý do <code>{{ active_reason }}</code>.
-      {% endif %}
-    </p>
+  <div style="text-align:center;color:var(--ink-3);padding:24px">
+    {% if stats.non_indexable == 0 and stats.indexable > 0 %}🎉 Không có trang nào bị chặn index. Tuyệt vời!
+    {% elif stats.indexable == 0 and stats.non_indexable == 0 %}Chưa crawl trang nào — bấm "Crawl toàn bộ" ở dashboard SEO.
+    {% else %}Không có trang nào khớp lý do {{ active_reason }}.{% endif %}
+  </div>
   {% endif %}
 </section>
-
 {% endblock %}
