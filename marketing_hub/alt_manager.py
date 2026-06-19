@@ -42,7 +42,8 @@ def classify_alt(alt: str | None) -> AltStatus:
     if _RE_ONLY_NON_LETTER.match(s):
         return "weak"
     words = [w for w in re.split(r"\s+", s) if w]
-    if len(words) < 5:
+    # weak chỉ khi vừa ít từ VỪA ngắn — tên SP ngắn (≥20 ký tự hoặc ≥4 từ) vẫn good
+    if len(words) < 4 and len(s) < 20:
         return "weak"
     return "good"
 

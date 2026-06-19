@@ -248,25 +248,26 @@ def _clean_product_name(name: str, max_len: int = 70) -> str:
 
 
 # ALT templates theo vị trí ảnh trong bài (rules section 18)
+# ALT mô tả-trung tính (mô tả nội dung ảnh, KHÔNG marketing/brand-stuffing — chuẩn ALT Google)
 _ALT_TEMPLATES = {
-    1: "{name}",  # hero shot
-    2: "{name} cận cảnh chi tiết",
-    3: "{name} trên setup PC gọn",
-    4: "{name} cổng kết nối và spec",
-    5: "{name} cho dân build PC gaming",
-    6: "{name} chính hãng tại Sintech",
+    1: "{name}",                              # hero shot
+    2: "{name} — góc nghiêng",
+    3: "{name} — cận cảnh chi tiết",
+    4: "{name} — góc nhìn khác",
+    5: "{name} — chi tiết thiết kế",
+    6: "{name} — ảnh tổng thể",               # closing (vị trí cuối)
 }
 
 
 def _gen_alt_for_position(product_name_clean: str, position: int, total: int) -> str:
     """Gen alt cho ảnh vị trí thứ N (1-indexed). Tổng ảnh = total.
 
-    Position 1 = hero, Position cuối = closing Sintech (nếu total ≥ 2).
-    Length 50-125c — truncate nếu dài, pad nếu ngắn.
+    Position 1 = hero, Position cuối = ảnh tổng thể (nếu total ≥ 2).
+    Length tối đa 125c — truncate nếu dài. Mô tả-trung tính, không marketing.
     """
     if not product_name_clean:
         return f"Sản phẩm tại Sintech ảnh {position}"
-    # Closing image luôn có "chính hãng tại Sintech" (vị trí cuối)
+    # Closing image (vị trí cuối) = "ảnh tổng thể"
     if position == total and total >= 2:
         tpl = _ALT_TEMPLATES[6]
     elif position in _ALT_TEMPLATES:
