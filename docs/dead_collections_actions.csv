@@ -1,0 +1,8 @@
+﻿dead_url,source_count,anchor,recommended_target,action,confidence
+/collections/man-hinh,30,Màn hình,/collections/man-hinh-may-tinh-pc,301_redirect,high
+/collections/vga-asus,1,VGA ASUS,/collections/vga,301_redirect,high
+/collections/mainboard-asus,1,mainboard ASUS,/collections/mainboard,301_redirect,high
+/collections/case-may-tinh,1,case máy tính,/collections/vo-case,301_redirect,high
+/collections/ban-phim-co-aula,0,(none),/collections/ban-phim-co,301_redirect_or_remove_link,medium
+/collections/o-cung-hdd,1,ổ cứng HDD,(VERIFY: /collections/o-cung hoặc /collections/hdd),verify_target_then_301,low
+/collections/ban-chu-z,1,Bàn chữ Z,(VERIFY: collection bàn gaming),verify_target_then_301,low
