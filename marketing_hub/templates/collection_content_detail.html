@@ -1,4 +1,5 @@
-{% extends "base.html" %}
+{% extends "redesign_base.html" %}
+{% set active = 'collection' %}
 {% block title %}{{ job.collection_title or job.handle }} · Collection Content · Sintech Hub{% endblock %}
 
 {% block page_title %}
@@ -119,17 +120,40 @@
     <span>⭐ Quality breakdown — {{ qb.tier or '' }}</span>
     <span class="cd-section-hint">Click vào category để xem chi tiết · auto-recompute khi Save</span>
   </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px">
+  <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center">
+    <div style="width:230px;height:210px;flex:0 0 auto"><canvas id="cd-radar"></canvas></div>
+    <div style="flex:1;min-width:260px;display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px">
     {% for cat, b in qb.breakdown.items() %}
     {% set pct = (b.score * 100 / b.max)|round|int %}
-    <div style="padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,.02)">
-      <div style="font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px">{{ cat }}</div>
-      <div style="font-size:18px;font-weight:700;margin-top:2px;color:{% if pct >= 80 %}#34d399{% elif pct >= 60 %}#facc15{% elif pct >= 40 %}#f59e0b{% else %}#f87171{% endif %}">
-        {{ b.score }}<span style="font-size:11px;color:var(--text-muted)">/{{ b.max }}</span>
+    <div style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2)">
+      <div style="font-size:10.5px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.4px">{{ cat }}</div>
+      <div style="font-size:18px;font-weight:700;margin-top:2px;color:{% if pct >= 80 %}#0f766e{% elif pct >= 60 %}#b45309{% elif pct >= 40 %}#d97706{% else %}#be123c{% endif %}">
+        {{ b.score }}<span style="font-size:11px;color:var(--ink-3)">/{{ b.max }}</span>
       </div>
     </div>
     {% endfor %}
+    </div>
   </div>
+  <script id="cd-radar-data" type="application/json">{{ qb.breakdown|tojson }}</script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script>
+  (function(){
+    var raw = document.getElementById('cd-radar-data'); if(!raw || typeof Chart==='undefined') return;
+    var bd; try{ bd = JSON.parse(raw.textContent); }catch(e){ return; }
+    var labels = Object.keys(bd), data = labels.map(function(k){ var b=bd[k]; return b.max ? Math.round(b.score*100/b.max) : 0; });
+    new Chart(document.getElementById('cd-radar'), {
+      type:'radar',
+      data:{ labels:labels, datasets:[{ label:'% đạt', data:data, fill:true,
+        backgroundColor:'rgba(255,153,102,.20)', borderColor:'#ff7a4d', borderWidth:2,
+        pointBackgroundColor:'#ff7a4d', pointRadius:3 }] },
+      options:{ responsive:true, maintainAspectRatio:false,
+        scales:{ r:{ min:0, max:100, ticks:{ display:false, stepSize:25 },
+          grid:{ color:'rgba(28,34,48,.08)' }, angleLines:{ color:'rgba(28,34,48,.08)' },
+          pointLabels:{ font:{ size:11, weight:'700' }, color:'#5b647a' } } },
+        plugins:{ legend:{ display:false } } }
+    });
+  })();
+  </script>
   {% if qb.issues_high %}
   <div style="margin-top:10px;padding:8px 10px;background:rgba(239,68,68,.08);border-radius:6px;font-size:12px">
     <strong style="color:#fca5a5">🚨 Critical ({{ qb.issues_high|length }}):</strong>

@@ -1,15 +1,43 @@
-{% extends "base.html" %}
+{% extends "redesign_base.html" %}
 {% block title %}Title & Meta · SEO · Sintech Hub{% endblock %}
-
-{% block page_title %}
-<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
-<span class="crumb"></span>
-<span style="font-weight:600">📝 Title &amp; Meta</span>
-{% endblock %}
-
-{% block page_actions %}
-<a class="btn" href="{{ url_for('seo_dashboard') }}">← Quay lại SEO</a>
-{% endblock %}
+{% block page_title %}<i class="ic" data-icon="search" style="color:var(--accent-ink)"></i><span>SEO</span><i class="ic" data-icon="chevron-right"></i><b>Title &amp; Meta</b>{% endblock %}
+{% block page_actions %}<a class="btn-primary" href="{{ url_for('seo_dashboard') }}"><i class="ic" data-icon="shield-check"></i>Tổng quan SEO</a>{% endblock %}
+{% block head_extra %}<style>
+/* CSS-bridge: map class cũ của trang này sang giao diện mới (không đụng markup/JS) */
+:root{--border:rgba(28,34,48,.10);--text-muted:#98a0b3;--text:#1c2230}
+.card{background:var(--card-bg);border:var(--card-border);border-radius:var(--r);box-shadow:var(--card-shadow);padding:var(--pad);margin-bottom:0}
+.muted{color:var(--ink-3)}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:var(--gap)}
+.kpi{background:var(--card-bg);border:var(--card-border);border-radius:var(--r);box-shadow:var(--card-shadow);padding:15px 17px;display:block;text-decoration:none;color:var(--ink);transition:.14s}
+a.kpi:hover{box-shadow:var(--card-shadow-hover);transform:translateY(-2px)}
+.kpi-row{margin-bottom:7px}
+.kpi-icon{width:36px;height:36px;border-radius:11px;display:inline-grid;place-items:center;font-size:17px}
+.kpi-num{font-size:28px;font-weight:800;font-family:var(--ff-num);line-height:1}
+.kpi-label{font-size:11.5px;color:var(--ink-3);margin-top:6px;font-weight:600}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;transition:.14s;white-space:nowrap}
+.btn:hover{background:var(--surface-2)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-primary{background:linear-gradient(120deg,var(--accent-from),var(--accent-to));color:#fff;border-color:transparent}
+.btn-ghost{background:transparent}
+select,input[type=text],input[type=number]{padding:7px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px;background:#fff;color:var(--ink)}
+.tm-table thead th{color:var(--ink-3)}
+.tm-table tbody tr{border-bottom:1px solid var(--line)}
+.tm-table tbody tr:hover{background:var(--surface-2)}
+.tm-chip{color:var(--ink-2)!important}
+/* intro text: giãn dòng + font code dễ đọc */
+.card p{line-height:1.65;margin:0}
+.card p .muted{color:var(--ink-2)}
+code{font-family:ui-monospace,'Cascadia Code',Consolas,monospace;background:var(--surface-2);padding:1px 6px;border-radius:5px;font-size:.88em;color:var(--accent-ink)}
+/* nút Auto-fix (Codex) màu riêng nổi bật, không trùng nền */
+#fix-all-btn{background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border-color:transparent}
+#fix-all-btn:hover{filter:brightness(1.06)}
+/* bảng dày: cuộn ngang để không tràn cột "Gen lại" */
+#tm-table-section{overflow-x:auto}
+.tm-table{min-width:1180px}
+/* hàng thao tác giàn đều */
+.tm-act-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+.tm-act-row.split{padding-top:12px;border-top:1px solid var(--line)}
+</style>{% endblock %}
 
 {% block content %}
 
@@ -118,50 +146,22 @@
 </section>
 
 {# ───── KPI ───── #}
-<div class="kpi-grid" style="margin-top:14px">
-  <div class="kpi">
-    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(239,68,68,0.15);color:#f87171">📝</div></div>
-    <div class="kpi-num" style="color:#f87171">{{ summary.total }}</div>
-    <div class="kpi-label">URL có lỗi title/meta</div>
-  </div>
+<div class="stat-grid" style="margin-top:var(--gap);grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+  <div class="stat is-grad" data-tone="rose" data-grad="red"><div class="stat-top"><div class="stat-ico" data-tone="rose">📝</div></div><div><div class="stat-val">{{ summary.total }}</div><div class="stat-title" style="margin-top:7px">URL có lỗi title/meta</div></div></div>
 
-  {# Tiến độ gen BỀN VỮNG (đọc file backup — không mất khi restart) #}
   {% if summary.product_synced is defined %}
-  <a class="kpi" style="text-decoration:none;color:inherit"
-     href="{{ url_for('seo_title_meta_page', type='product', sync='synced') }}"
-     title="SP product đã từng gen+sync title/meta (căn cứ file backup local)">
-    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(34,197,94,0.18);color:#34d399">✅</div></div>
-    <div class="kpi-num" style="color:#34d399">{{ summary.product_synced }}</div>
-    <div class="kpi-label">SP đã gen+sync
-      {% if summary.product_total %}<span class="muted" style="font-size:11px">({{ (summary.product_synced * 100 // summary.product_total) }}%)</span>{% endif %}
-    </div>
-  </a>
-  <a class="kpi" style="text-decoration:none;color:inherit"
-     href="{{ url_for('seo_title_meta_page', type='product', sync='unsynced') }}"
-     title="SP product có lỗi nhưng CHƯA gen lần nào">
-    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(148,163,184,0.18);color:#94a3b8">⬜</div></div>
-    <div class="kpi-num">{{ summary.product_unsynced }}</div>
-    <div class="kpi-label">SP chưa gen (còn lại)</div>
-  </a>
+  <a class="stat is-grad" data-tone="teal" data-grad="teal" style="text-decoration:none" href="{{ url_for('seo_title_meta_page', type='product', sync='synced') }}"><div class="stat-top"><div class="stat-ico" data-tone="teal">✅</div></div><div><div class="stat-val">{{ summary.product_synced }}</div><div class="stat-title" style="margin-top:7px">SP đã gen+sync{% if summary.product_total %} ({{ (summary.product_synced * 100 // summary.product_total) }}%){% endif %}</div></div></a>
+  <a class="stat is-grad" data-tone="sky" data-grad="blue" style="text-decoration:none" href="{{ url_for('seo_title_meta_page', type='product', sync='unsynced') }}"><div class="stat-top"><div class="stat-ico" data-tone="sky">⬜</div></div><div><div class="stat-val">{{ summary.product_unsynced }}</div><div class="stat-title" style="margin-top:7px">SP chưa gen (còn lại)</div></div></a>
   {% if summary.product_error %}
-  <a class="kpi" style="text-decoration:none;color:inherit"
-     href="{{ url_for('seo_title_meta_page', type='product', sync='error') }}"
-     title="SP product gen+sync title/meta đã FAIL (đọc từ log lỗi bền vững)">
-    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(248,113,113,0.18);color:#f87171">⚠️</div></div>
-    <div class="kpi-num" style="color:#f87171">{{ summary.product_error }}</div>
-    <div class="kpi-label">SP gen lỗi</div>
-  </a>
+  <a class="stat is-grad" data-tone="rose" data-grad="red" style="text-decoration:none" href="{{ url_for('seo_title_meta_page', type='product', sync='error') }}"><div class="stat-top"><div class="stat-ico" data-tone="rose">⚠️</div></div><div><div class="stat-val">{{ summary.product_error }}</div><div class="stat-title" style="margin-top:7px">SP gen lỗi</div></div></a>
   {% endif %}
   {% endif %}
 
   {% for code, count in summary.by_code.items() %}
   {% set lbl = issue_labels.get(code, ('❓', code)) %}
-  <a class="kpi" style="text-decoration:none;color:inherit"
-     href="{{ url_for('seo_title_meta_page', type=url_type, issue=code, sort=sort) }}">
-    <div class="kpi-row"><div class="kpi-icon" style="background:rgba(250,204,21,0.18);color:#facc15">{{ lbl[0] }}</div></div>
-    <div class="kpi-num">{{ count }}</div>
-    <div class="kpi-label">{{ lbl[1] }}</div>
-  </a>
+  {% set tone = 'violet' if 'duplicate' in code or 'trùng' in lbl[1] else ('coral' if 'sintech' in code or 'brand' in code or 'Sintech' in lbl[1] else 'amber') %}
+  {% set grad = 'violet' if tone=='violet' else ('coral' if tone=='coral' else 'amber') %}
+  <a class="stat is-grad" data-tone="{{ tone }}" data-grad="{{ grad }}" style="text-decoration:none" href="{{ url_for('seo_title_meta_page', type=url_type, issue=code, sort=sort) }}"><div class="stat-top"><div class="stat-ico" data-tone="{{ tone }}">{{ lbl[0] }}</div></div><div><div class="stat-val">{{ count }}</div><div class="stat-title" style="margin-top:7px">{{ lbl[1] }}</div></div></a>
   {% endfor %}
 </div>
 
@@ -211,8 +211,10 @@
       {% endif %}
     </span>
 
-    <span style="flex:1"></span>
-    <button type="button" class="btn btn-primary" onclick="startFixAllJob()" id="fix-all-btn">
+  </form>
+  <div class="tm-act-row split">
+    <strong style="font-size:13px;color:var(--ink-2);margin-right:2px">⚡ Thao tác AI:</strong>
+    <button type="button" class="btn" onclick="startFixAllJob()" id="fix-all-btn">
       🚀 Auto-fix tất cả (Codex AI)
     </button>
     <button type="button" class="btn" onclick="stopFixAllJob()" id="fix-stop-btn"
@@ -224,27 +226,16 @@
             title="Chỉ gen các SP CHƯA gen lần nào (bỏ qua SP đã sync) — dùng để gen tiếp sau khi quota dừng.">
       ▶️ Gen tiếp SP chưa gen
     </button>
-    <button type="button" class="btn" onclick="startRegenAllJob()" id="regen-all-btn"
-            style="background:#7c3aed;color:white"
-            title="Gen lại toàn bộ SP có lỗi title/meta — GỒM cả SP đã sync. Áp prompt spec mới, tự dừng khi hết quota.">
-      ♻️ Gen lại TẤT CẢ (gồm đã sync)
-    </button>
     <button type="button" class="btn" onclick="startDualAIJob()" id="dual-ai-btn"
             style="background:linear-gradient(135deg,#7c3aed,#0ea5e9);color:white;font-weight:600"
             title="Codex + Claude gen SONG SONG (~2x tốc độ) trên các SP CHƯA gen. ⚠️ Đốt 2 quota cùng lúc — chỉ bấm khi cả 2 provider đang rảnh.">
       ⚡⚡ Dual-AI Gen (Codex + Claude)
     </button>
-    <button type="button" class="btn" onclick="copyTitleMetaTable()" id="copy-btn">
-      📋 Copy bảng
-    </button>
-    <a class="btn btn-sm btn-ghost" target="_blank" rel="noopener"
-       href="https://docs.google.com/spreadsheets/d/13IDYcE2ZEUd64xK6dIN-P_3_4gIVyFcwdBjb8W8e-uU/edit?gid=971701509"
-       title="Báo cáo real-time: mỗi SP up Haravan xong tự ghi cột F/G/H + trạng thái">
-      📊 Mở Sheet báo cáo
-    </a>
 
-    {# ── Re-crawl RIÊNG trang này: refresh seo_pages cho nhóm SP title/meta ── #}
-    <span style="width:1px;height:24px;background:var(--border);margin:0 4px"></span>
+  </div>
+  {# ── Re-crawl RIÊNG trang này: refresh seo_pages cho nhóm SP title/meta ── #}
+  <div class="tm-act-row split">
+    <strong style="font-size:13px;color:var(--ink-2);margin-right:2px">🔄 Re-crawl trang này:</strong>
     <select id="recrawl-scope" class="btn-sm" style="padding:5px 8px"
             title="Phạm vi crawl lại — full theo loại hoặc nhóm SP title/meta">
       <option value="full_sp_col">Full SP + Full collection</option>
@@ -269,7 +260,7 @@
             style="display:none;background:#dc2626;color:white">
       ⏹️ Dừng crawl
     </button>
-  </form>
+  </div>
 
   {# Hàng báo cáo realtime RE-CRAWL riêng trang title-meta #}
   <div id="recrawl-report" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(8,145,178,0.08);border-radius:8px;font-size:13px;border:1px solid rgba(8,145,178,0.3)">

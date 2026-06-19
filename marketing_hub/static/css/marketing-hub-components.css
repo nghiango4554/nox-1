@@ -1,0 +1,197 @@
+/* ════════════════════════════════════════════════════════════════
+   Marketing Hub — COMPONENTS
+   Phần 1: thư viện .mh-* (KPI/report/chart/table/badge/alert/state…)
+   Phần 2: lớp ADOPT — refresh card/KPI/badge/bảng của dashboard hiện có
+            (scoped theo container dashboard, dùng !important để thắng
+             style inline trong template; rollback = xoá file này).
+   Học cách trình bày từ Nalika, màu từ AdminPro. KHÔNG đụng JS/HTML.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ───────────────────────── PHẦN 1 · .mh-* LIBRARY ───────────────────────── */
+.mh-page { padding: 4px 2px 24px; }
+.mh-page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.mh-page-title { font-size: 19px; font-weight: 700; color: var(--mh-text-primary); letter-spacing: -0.01em; }
+.mh-page-subtitle { font-size: 12.5px; color: var(--mh-text-muted); margin-top: 3px; }
+
+.mh-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mh-toolbar-group { display: inline-flex; gap: 6px; align-items: center; }
+
+.mh-section { margin-bottom: 18px; }
+.mh-section-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 0 9px; }
+.mh-section-title { font-size: 13px; font-weight: 700; color: var(--mh-text-primary); }
+.mh-section-actions { display: inline-flex; gap: 6px; }
+
+.mh-grid { display: grid; gap: 14px; }
+.mh-grid-kpi { grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); }
+.mh-grid-report { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+
+.mh-card { background: var(--mh-bg-card); border: 1px solid var(--mh-border-soft); border-radius: var(--mh-radius-md); box-shadow: var(--mh-shadow-sm); padding: 16px 18px; }
+.mh-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.mh-card-title { font-size: var(--mh-fs-title); font-weight: 700; color: var(--mh-text-primary); }
+.mh-card-subtitle { font-size: 12px; color: var(--mh-text-muted); }
+.mh-card-body { font-size: var(--mh-fs-body); color: var(--mh-text-secondary); }
+.mh-card-footer { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--mh-border-soft); font-size: 12px; color: var(--mh-text-muted); }
+
+/* KPI card — Nalika tile: icon + label + value + meta */
+.mh-kpi-card { position: relative; background: var(--mh-bg-card); border: 1px solid var(--mh-border-soft); border-radius: var(--mh-radius-md); box-shadow: var(--mh-shadow-sm); padding: 15px 16px; overflow: hidden; transition: transform .16s ease, box-shadow .16s ease; }
+.mh-kpi-card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--mh-gradient-orange); }
+.mh-kpi-card:hover { transform: translateY(-2px); box-shadow: var(--mh-shadow-md); }
+.mh-kpi-icon { width: 38px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #fff; background: var(--mh-gradient-orange); margin-bottom: 10px; box-shadow: var(--mh-shadow-warm); }
+.mh-kpi-label { font-size: var(--mh-fs-meta); text-transform: uppercase; letter-spacing: .4px; color: var(--mh-text-muted); font-weight: 600; }
+.mh-kpi-value { font-size: var(--mh-fs-kpi); font-weight: 800; color: var(--mh-text-primary); line-height: 1.1; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.mh-kpi-meta { font-size: 11.5px; color: var(--mh-text-muted); margin-top: 4px; }
+.mh-kpi-trend { font-size: 11.5px; font-weight: 600; }
+.mh-kpi-trend.up { color: var(--mh-status-success); }
+.mh-kpi-trend.down { color: var(--mh-status-danger); }
+/* gradient KPI hero variant (opt-in) */
+.mh-kpi-card.mh-kpi--gradient { color: #fff; border: none; background: var(--mh-gradient-orange); }
+.mh-kpi-card.mh-kpi--gradient::before { display: none; }
+.mh-kpi-card.mh-kpi--gradient .mh-kpi-label,
+.mh-kpi-card.mh-kpi--gradient .mh-kpi-value,
+.mh-kpi-card.mh-kpi--gradient .mh-kpi-meta { color: rgba(255,255,255,.95); }
+.mh-kpi-card.mh-kpi--pink::before { background: var(--mh-gradient-pink); }
+.mh-kpi-card.mh-kpi--pink .mh-kpi-icon { background: var(--mh-gradient-pink); box-shadow: 0 8px 22px rgba(231,60,126,.22); }
+.mh-kpi-card.mh-kpi--yellow::before { background: var(--mh-gradient-yellow); }
+.mh-kpi-card.mh-kpi--yellow .mh-kpi-icon { background: var(--mh-gradient-yellow); box-shadow: 0 8px 22px rgba(245,151,31,.22); }
+.mh-kpi-card.mh-kpi--mint::before { background: var(--mh-gradient-mint); }
+.mh-kpi-card.mh-kpi--mint .mh-kpi-icon { background: var(--mh-gradient-mint); box-shadow: 0 8px 22px rgba(26,179,148,.22); }
+.mh-kpi-card.mh-kpi--info::before { background: var(--mh-gradient-info); }
+.mh-kpi-card.mh-kpi--info .mh-kpi-icon { background: var(--mh-gradient-info); box-shadow: 0 8px 22px rgba(42,125,225,.22); }
+
+/* report / chart card */
+.mh-report-card, .mh-chart-card { background: var(--mh-bg-card); border: 1px solid var(--mh-border-soft); border-radius: var(--mh-radius-md); box-shadow: var(--mh-shadow-sm); padding: 16px 18px; }
+.mh-chart-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.mh-chart-body { min-height: 60px; }
+.mh-chart-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--mh-text-secondary); margin-top: 10px; }
+.mh-chart-legend > span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; background: var(--mh-accent-orange); vertical-align: middle; }
+.mh-chart-toolbar { display: inline-flex; gap: 6px; }
+
+/* table wrapper */
+.mh-table-wrap { background: var(--mh-bg-card); border: 1px solid var(--mh-border-soft); border-radius: var(--mh-radius-md); box-shadow: var(--mh-shadow-sm); overflow-x: auto; }
+.mh-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.mh-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; color: var(--mh-text-muted); font-weight: 700; padding: 11px 12px; background: var(--mh-bg-soft); border-bottom: 1px solid var(--mh-border-strong); white-space: nowrap; }
+.mh-table td { padding: 10px 12px; border-bottom: 1px solid var(--mh-border-soft); color: var(--mh-text-secondary); }
+.mh-table tbody tr:hover { background: var(--mh-bg-soft); }
+.mh-table-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--mh-border-soft); }
+.mh-table-empty { padding: 28px; text-align: center; color: var(--mh-text-muted); font-size: 13px; }
+
+/* badge */
+.mh-badge { display: inline-block; padding: 3px 10px; border-radius: var(--mh-radius-pill); font-size: 11px; font-weight: 700; line-height: 1.5; }
+.mh-badge-success { background: var(--mh-status-success-bg); color: var(--mh-status-success); }
+.mh-badge-warning { background: var(--mh-status-warning-bg); color: var(--mh-status-warning); }
+.mh-badge-danger { background: var(--mh-status-danger-bg); color: var(--mh-status-danger); }
+.mh-badge-info { background: var(--mh-status-info-bg); color: var(--mh-status-info); }
+.mh-badge-neutral { background: var(--mh-status-neutral-bg); color: var(--mh-status-neutral); }
+
+/* progress */
+.mh-progress { height: 8px; background: var(--mh-bg-soft); border-radius: var(--mh-radius-pill); overflow: hidden; }
+.mh-progress-bar { height: 100%; border-radius: var(--mh-radius-pill); background: var(--mh-gradient-orange); }
+
+/* tabs */
+.mh-tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--mh-border-soft); }
+.mh-tab { padding: 8px 13px; font-size: 12.5px; font-weight: 600; color: var(--mh-text-secondary); border-radius: 8px 8px 0 0; cursor: pointer; border-bottom: 2px solid transparent; }
+.mh-tab:hover { color: var(--mh-text-primary); background: var(--mh-bg-soft); }
+.mh-tab-active { color: var(--mh-accent-orange); border-bottom-color: var(--mh-accent-orange); }
+
+/* alert */
+.mh-alert { padding: 11px 14px; border-radius: var(--mh-radius-sm); font-size: 12.5px; border-left: 3px solid; margin-bottom: 10px; }
+.mh-alert-success { background: var(--mh-status-success-bg); border-color: var(--mh-status-success); color: #0f7a5b; }
+.mh-alert-warning { background: var(--mh-status-warning-bg); border-color: var(--mh-status-warning); color: #9a6212; }
+.mh-alert-danger { background: var(--mh-status-danger-bg); border-color: var(--mh-status-danger); color: #b32a3c; }
+.mh-alert-info { background: var(--mh-status-info-bg); border-color: var(--mh-status-info); color: #0c6fa0; }
+
+/* states */
+.mh-state { padding: 30px 18px; text-align: center; color: var(--mh-text-muted); font-size: 13px; }
+.mh-state-error { color: var(--mh-status-danger); }
+.mh-skeleton { background: linear-gradient(90deg, #eef0f4 25%, #f6f7fa 37%, #eef0f4 63%); background-size: 400% 100%; animation: mh-shimmer 1.3s ease infinite; border-radius: var(--mh-radius-sm); }
+@keyframes mh-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+.mh-spinner { width: 18px; height: 18px; border: 2px solid var(--mh-border-strong); border-top-color: var(--mh-accent-orange); border-radius: 50%; animation: mh-spin .7s linear infinite; display: inline-block; }
+@keyframes mh-spin { to { transform: rotate(360deg); } }
+
+/* data health rows */
+.mh-data-health-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--mh-border-soft); font-size: 12.5px; }
+.mh-data-health-row:last-child { border-bottom: none; }
+.mh-data-health-label { color: var(--mh-text-muted); }
+.mh-data-health-value { color: var(--mh-text-primary); font-weight: 600; }
+
+/* ───────────────────────── PHẦN 2 · ADOPT dashboard hiện có ─────────────────────────
+   Scope: container của từng dashboard. Refresh card/KPI/badge/bảng bằng token mới.
+   Dùng !important để thắng style inline trong template (rollback = xoá 3 file CSS). */
+
+/* Khối bao quát — KPI/card của gsc(#gsc-health), tracking(#trk-app), tasks(#tc-app), ops(#ops-app), ga4(.g4-card) */
+#gsc-health .gh-card,
+#trk-app .trk-card,
+#tc-app .tc-card,
+#ops-app .ops-card,
+.content .g4-card {
+  background: var(--mh-bg-card) !important;
+  border: 1px solid var(--mh-border-soft) !important;
+  border-radius: var(--mh-radius-md) !important;
+  box-shadow: var(--mh-shadow-sm) !important;
+}
+
+/* KPI tiles → tile sáng có viền accent warm + value đậm */
+#gsc-health .gh-kpi,
+#trk-app .trk-kpi,
+.content .g4-kpi {
+  position: relative !important;
+  background: var(--mh-bg-card) !important;
+  border: 1px solid var(--mh-border-soft) !important;
+  border-radius: var(--mh-radius-md) !important;
+  box-shadow: var(--mh-shadow-xs) !important;
+  overflow: hidden;
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+#gsc-health .gh-kpi:hover,
+#trk-app .trk-kpi:hover,
+.content .g4-kpi:hover { transform: translateY(-2px); box-shadow: var(--mh-shadow-md) !important; }
+#gsc-health .gh-kpi::after,
+#trk-app .trk-kpi::after,
+.content .g4-kpi::after {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--mh-gradient-orange);
+}
+/* xoay màu accent KPI cho sinh động nhưng có kiểm soát */
+#trk-app .trk-kpi:nth-child(4n+2)::after,
+.content .g4-kpi:nth-child(4n+2)::after,
+#gsc-health .gh-kpi:nth-child(4n+2)::after { background: var(--mh-gradient-pink); }
+#trk-app .trk-kpi:nth-child(4n+3)::after,
+.content .g4-kpi:nth-child(4n+3)::after,
+#gsc-health .gh-kpi:nth-child(4n+3)::after { background: var(--mh-gradient-yellow); }
+#trk-app .trk-kpi:nth-child(4n)::after,
+.content .g4-kpi:nth-child(4n)::after,
+#gsc-health .gh-kpi:nth-child(4n)::after { background: var(--mh-gradient-mint); }
+/* value đậm, label muted */
+#trk-app .trk-kpi .v, #gsc-health .gh-kpi .v { color: var(--mh-text-primary) !important; font-weight: 800 !important; }
+#trk-app .trk-kpi .l, #gsc-health .gh-kpi .l { color: var(--mh-text-muted) !important; }
+
+/* Status badge shared (b-*) → màu AdminPro, dùng trong mọi dashboard */
+#gsc-health .b-ok, #trk-app .b-ok, #tc-app .b-ok, #ops-app .b-ok, .content .g4-pill.b-ok {
+  background: var(--mh-status-success-bg) !important; color: var(--mh-status-success) !important; }
+#gsc-health .b-warn, #trk-app .b-warn, #tc-app .b-warn, #ops-app .b-warn, .content .g4-pill.b-warn {
+  background: var(--mh-status-warning-bg) !important; color: var(--mh-status-warning) !important; }
+#gsc-health .b-err, #trk-app .b-err, #tc-app .b-err, #ops-app .b-err, .content .g4-pill.b-err {
+  background: var(--mh-status-danger-bg) !important; color: var(--mh-status-danger) !important; }
+#gsc-health .b-info, #trk-app .b-info, #tc-app .b-info, #ops-app .b-info, .content .g4-pill.b-info {
+  background: var(--mh-status-info-bg) !important; color: var(--mh-status-info) !important; }
+#gsc-health .b-gray, #trk-app .b-gray, #tc-app .b-gray, #ops-app .b-gray, .content .g4-pill.b-gray {
+  background: var(--mh-status-neutral-bg) !important; color: var(--mh-status-neutral) !important; }
+
+/* Bảng dashboard → header nền nhạt, hover hàng (Nalika static-table style) */
+#trk-app .trk-tbl thead th, .content .g4-tbl thead th {
+  background: var(--mh-bg-soft) !important; color: var(--mh-text-muted) !important;
+  border-bottom: 1px solid var(--mh-border-strong) !important;
+}
+#trk-app .trk-tbl tbody tr:hover td, .content .g4-tbl tbody tr:hover { background: var(--mh-bg-soft) !important; }
+
+/* Task card + ops step → bề mặt sáng, viền mềm */
+#tc-app .tc-task, #ops-app .ops-step {
+  background: var(--mh-bg-card) !important; border: 1px solid var(--mh-border-soft) !important;
+  border-radius: var(--mh-radius-sm) !important; box-shadow: var(--mh-shadow-xs) !important;
+}
+#tc-app .tc-task:hover { box-shadow: var(--mh-shadow-sm) !important; }
+
+/* Progress/coverage bar trong gsc → gradient warm */
+#gsc-health .gh-bar-fill { background: var(--mh-gradient-info) !important; }
+
+/* Tab toggle (mode) + nút primary trong dashboard giữ tông tím cũ — không đụng để tránh lệch */

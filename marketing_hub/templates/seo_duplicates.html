@@ -1,99 +1,50 @@
-{% extends "base.html" %}
+{% extends "redesign_base.html" %}
 {% block title %}Duplicate detection · SEO · Sintech Hub{% endblock %}
-
-{% block page_title %}
-<a href="{{ url_for('seo_dashboard') }}" class="muted" style="font-weight:500">🔍 SEO</a>
-<span class="crumb"></span>
-<span style="font-weight:600">🔁 Duplicate detection</span>
-{% endblock %}
-
-{% block page_actions %}
-<a class="btn" href="{{ url_for('seo_dashboard') }}">← Quay lại SEO</a>
-{% endblock %}
+{% block page_title %}<i class="ic" data-icon="search" style="color:var(--accent-ink)"></i><span>SEO</span><i class="ic" data-icon="chevron-right"></i><b>Trùng lặp</b>{% endblock %}
+{% block page_actions %}<a class="btn-primary" href="{{ url_for('seo_dashboard') }}"><i class="ic" data-icon="shield-check"></i>Tổng quan SEO</a>{% endblock %}
 
 {% block content %}
+{% set field_labels = {'title': ('🏷️','Title trùng'), 'meta_desc': ('📝','Meta description trùng'), 'h1': ('🔠','H1 trùng')} %}
+<div class="sec-head"><h2><i class="ic" data-icon="copy"></i>Phát hiện trùng lặp</h2><div class="sec-meta">Trang dùng chung title / meta / H1 — Google chỉ index 1, còn lại "cạnh tranh nội bộ"</div></div>
 
-{% set field_labels = {
-  'title': ('🏷️', 'Title trùng'),
-  'meta_desc': ('📝', 'Meta description trùng'),
-  'h1': ('🔠', 'H1 trùng'),
-} %}
-
-<section class="card">
-  <p class="muted" style="margin:0 0 12px 0">
-    Phát hiện các trang đang dùng cùng <strong>title</strong>, <strong>meta description</strong>, hoặc <strong>H1</strong>.
-    Trùng nội dung là vấn đề SEO lớn — Google sẽ chọn 1 trang để index, các trang còn lại bị "cạnh tranh nội bộ".
-  </p>
-  <div class="seo-issue-chips">
+<section class="panel" style="margin-bottom:var(--gap)">
+  <div class="tbl-filter" style="margin-left:0;flex-wrap:wrap">
     {% for f, info in field_labels.items() %}
       {% set icon, label = info %}
-      <a href="?field={{ f }}"
-         class="seo-issue-chip {% if field == f %}seo-issue-error{% else %}seo-issue-info{% endif %}"
-         style="{% if field == f %}border-color:#f87171;{% endif %}">
-        <span>{{ icon }}</span>
-        <span>{{ label }}</span>
-        <span class="seo-issue-count">{{ counts[f] }}</span>
-      </a>
+      <a href="?field={{ f }}" class="chipf {{ 'on' if field == f }}">{{ icon }} {{ label }} · {{ counts[f] }}</a>
     {% endfor %}
   </div>
 </section>
 
-<section class="card" style="margin-top:16px">
-  {% set _icon, _label = field_labels[field] %}
-  <h3 style="margin-top:0">
-    {{ _icon }} {{ _label }}
-    <span class="muted" style="font-weight:400;font-size:14px">
-      — {{ groups|length }} nhóm trùng
-    </span>
-  </h3>
+{% set _icon, _label = field_labels[field] %}
+<div class="sec-head"><h2>{{ _icon }} {{ _label }}</h2><div class="sec-meta">{{ groups|length }} nhóm trùng</div></div>
 
-  {% if groups %}
-    <div class="seo-issue-list">
-      {% for g in groups %}
-        <div class="seo-issue-row seo-issue-warn" style="flex-direction:column;align-items:stretch">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-            <div style="flex:1;min-width:0">
-              <div class="seo-issue-label" style="word-break:break-word">
-                {{ g.value or '(rỗng)' }}
-              </div>
-              <div class="muted" style="margin-top:4px;font-size:13px">
-                Xuất hiện trên <strong>{{ g.count }} trang</strong>
-              </div>
-            </div>
-            <span class="pill pill-warn" style="flex-shrink:0">{{ g.count }}× trùng</span>
-          </div>
-          <ul style="margin:10px 0 0 0;padding-left:18px">
-            {% for u in g.urls %}
-              {% set pid = g.ids[loop.index0] if loop.index0 < g.ids|length else None %}
-              <li style="margin:4px 0">
-                <a href="{{ u }}" target="_blank" rel="noopener" class="seo-url-link">{{ u }}</a>
-                {% if pid %}
-                  <a href="{{ url_for('seo_url_detail', page_id=pid) }}" class="btn btn-sm" style="margin-left:8px">Chi tiết →</a>
-                {% endif %}
-              </li>
-            {% endfor %}
-          </ul>
-          <div class="seo-issue-fix" style="margin-top:10px">
-            💡 <strong>Cách sửa:</strong>
-            {% if field == 'title' %}
-              Mỗi trang nên có title riêng, mô tả đúng nội dung. Với sản phẩm Shopify, đừng để auto-gen — viết tay theo công thức "[Tên SP] - [USP] | Sintech".
-            {% elif field == 'meta_desc' %}
-              Viết meta riêng cho từng trang (140-160 ký tự, có CTA viết HOA). Tránh để Shopify auto-gen từ description.
-            {% else %}
-              H1 phải khớp với tiêu đề thực tế của trang. Sửa H1 để mô tả đúng nội dung từng trang.
-            {% endif %}
-          </div>
-        </div>
-      {% endfor %}
+{% if groups %}
+<div style="display:flex;flex-direction:column;gap:var(--gap)">
+  {% for g in groups %}
+  <section class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div style="flex:1;min-width:0"><div style="font-weight:700;word-break:break-word">{{ g.value or '(rỗng)' }}</div>
+        <div class="sec-meta" style="margin-top:4px">Xuất hiện trên {{ g.count }} trang</div></div>
+      <span class="pill" data-tone="amber" style="flex-shrink:0">{{ g.count }}× trùng</span>
     </div>
-  {% else %}
-    <p class="muted" style="margin:0">
-      🎉 Không phát hiện {{ _label|lower }} nào.
-      {% if counts.title == 0 and counts.meta_desc == 0 and counts.h1 == 0 %}
-        <br><small>Nếu chưa crawl trang nào, bấm <strong>"🚀 Crawl toàn bộ"</strong> ở dashboard SEO để bắt đầu.</small>
-      {% endif %}
-    </p>
-  {% endif %}
-</section>
-
+    <ul style="margin:12px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:5px">
+      {% for u in g.urls %}
+        {% set pid = g.ids[loop.index0] if loop.index0 < g.ids|length else None %}
+        <li><a href="{{ u }}" target="_blank" rel="noopener" style="color:var(--accent-ink);font-weight:600">{{ u }}</a>
+          {% if pid %}<a href="{{ url_for('seo_url_detail', page_id=pid) }}" class="chipf" style="margin-left:8px;padding:2px 9px">Chi tiết →</a>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    <div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);font-size:12.5px;color:var(--ink-2)">💡 <strong>Cách sửa:</strong>
+      {% if field == 'title' %}Mỗi trang một title riêng theo công thức "[Tên SP] - [USP] | Sintech", đừng auto-gen.
+      {% elif field == 'meta_desc' %}Viết meta riêng từng trang (140-160 ký tự, CTA viết HOA), tránh auto-gen.
+      {% else %}H1 phải khớp tiêu đề thực của từng trang.{% endif %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% else %}
+<section class="panel"><div style="text-align:center;color:var(--ink-3);padding:20px">🎉 Không phát hiện {{ _label|lower }} nào.
+{% if counts.title == 0 and counts.meta_desc == 0 and counts.h1 == 0 %}<br><small>Chưa crawl trang nào? Bấm "Crawl toàn bộ" ở dashboard SEO.</small>{% endif %}</div></section>
+{% endif %}
 {% endblock %}
