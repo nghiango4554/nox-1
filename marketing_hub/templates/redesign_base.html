@@ -14,7 +14,7 @@
 <body>
 {% set a = active|default('') %}
 {% set analytics_keys = ['ga4','gsc','tracking','tasks','ops','cwv'] %}
-{% set seo_keys = ['seo_home','coverage','title_meta','h1','empty_desc','dup','broken','index','inlinks','eeat','schema'] %}
+{% set seo_keys = ['seo_home','coverage','title_meta','h1','empty_desc','dup','broken','index','inlinks','eeat','schema','opp','serp'] %}
 {% set content_keys = ['content_jobs','collection','blog','products','alt'] %}
 {% set fb_keys = ['post_new','posts','calendar'] %}
 {% set hv_keys = ['hv_home','hv_products','hv_blogs','hv_audit'] %}
@@ -54,6 +54,8 @@
         <a href="{{ url_for('seo_broken_links_page') }}" class="nav-sub {{ 'active' if a=='broken' }}"><span>Link gãy</span></a>
         <a href="{{ url_for('seo_indexability_page') }}" class="nav-sub {{ 'active' if a=='index' }}"><span>Indexability</span></a>
         <a href="{{ url_for('seo_inlinks_page') }}" class="nav-sub {{ 'active' if a=='inlinks' }}"><span>Internal links</span></a>
+        <a href="{{ url_for('seo_opportunities_page') }}" class="nav-sub {{ 'active' if a=='opp' }}"><span>🎯 Keyword Opportunities</span></a>
+        <a href="{{ url_for('seo_serp_briefs_page') }}" class="nav-sub {{ 'active' if a=='serp' }}"><span>🔍 SERP Brief Builder</span></a>
       </div></div>
     </div>
 

@@ -1,0 +1,264 @@
+{% extends "redesign_base.html" %}
+{% block title %}Keyword Opportunities · SEO · Sintech Hub{% endblock %}
+{% block page_title %}
+  <i class="ic" data-icon="shield-check"></i><span>SEO</span>
+  <i class="ic" data-icon="chevron-right"></i><b>🎯 Keyword Opportunities</b>
+{% endblock %}
+{% block page_actions %}
+  <a class="btn-primary" href="{{ url_for('seo_serp_briefs_page') }}"><i class="ic" data-icon="search"></i>SERP Brief Builder</a>
+{% endblock %}
+{% block head_extra %}
+<style>
+  .opp-grid{display:grid;gap:16px}
+  .opp-cards{display:flex;gap:12px;flex-wrap:wrap}
+  .opp-cards .card{flex:1;min-width:150px;padding:14px 16px}
+  .opp-cards .v{font-size:24px;font-weight:800}
+  .opp-cards .l{font-size:12px;color:var(--ink-3);font-weight:600}
+  .panel{background:#fff;border:1px solid var(--line,#eadfe6);border-radius:14px;padding:16px;margin-bottom:14px}
+  .panel h3{margin:0 0 10px;font-size:15px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .row > *{flex:0 0 auto}
+  input,select,textarea{padding:7px 10px;border:1px solid #d9cdd6;border-radius:9px;font:inherit}
+  textarea{width:100%;min-height:70px}
+  .btn{padding:7px 13px;border:1px solid #d9cdd6;border-radius:9px;background:#fff;cursor:pointer;font:inherit;font-weight:600}
+  .btn:hover{background:#faf5f8}
+  .btn.pri{background:linear-gradient(135deg,#ff9966,#d75151);color:#fff;border:0}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:7px 8px;border-bottom:1px solid #f0e8ee;text-align:left;vertical-align:top}
+  th{font-size:11.5px;text-transform:uppercase;color:var(--ink-3);cursor:pointer;white-space:nowrap}
+  td.kw{font-weight:600;max-width:280px}
+  .score{font-weight:800}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+  .muted{color:var(--ink-3)}
+  .src{font-size:11px;background:#f3eef2;padding:1px 7px;border-radius:6px}
+  .acts button{font-size:11px;padding:3px 7px;margin:1px}
+  .modal-bg{position:fixed;inset:0;background:rgba(20,10,20,.45);display:none;align-items:center;justify-content:center;z-index:50}
+  .modal{background:#fff;border-radius:14px;padding:18px;max-width:560px;width:92%;max-height:86vh;overflow:auto}
+  .toast{position:fixed;bottom:18px;right:18px;background:#222;color:#fff;padding:10px 14px;border-radius:10px;display:none;z-index:60;font-size:13px}
+  .note{font-size:12px;color:var(--ink-3);margin-top:4px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="opp-grid">
+
+  <div class="opp-cards">
+    <div class="card"><div class="v" id="st-total">{{ stats.total }}</div><div class="l">Tổng keyword</div></div>
+    <div class="card"><div class="v" id="st-new">{{ stats.by_status.get('new',0) }}</div><div class="l">Mới (new)</div></div>
+    <div class="card"><div class="v" id="st-approved">{{ stats.by_status.get('approved',0) }}</div><div class="l">Approved</div></div>
+    <div class="card"><div class="v" id="st-brief">{{ stats.by_status.get('brief_ready',0) }}</div><div class="l">Brief ready</div></div>
+  </div>
+
+  <div class="panel">
+    <h3>📥 Nạp dữ liệu (an toàn — không gọi API trả phí)</h3>
+    <div class="row">
+      <button class="btn pri" onclick="syncGsc()">⟳ Sync từ GSC (data thật)</button>
+      <label>ngày: <input type="number" id="gsc-days" value="90" style="width:70px"></label>
+      <label>min impressions: <input type="number" id="gsc-minimp" value="30" style="width:70px"></label>
+      <span class="muted">|</span>
+      <button class="btn" onclick="document.getElementById('mImport').style.display='flex'">⇪ Import CSV (SEMrush/Ahrefs/KWP/manual)</button>
+      <a class="btn" href="{{ url_for('api_opp_export') }}">⤓ Export CSV</a>
+    </div>
+    <div class="note">GSC = keyword đã rank thật. CSV = volume/KD/CPC từ tool ngoài (thiếu cột vẫn import được). Không bịa KD/volume — thiếu để trống.</div>
+  </div>
+
+  <div class="panel">
+    <h3>🔎 Lọc</h3>
+    <div class="row">
+      <input id="f-q" placeholder="tìm keyword…" oninput="debLoad()">
+      <select id="f-source" onchange="load()"><option value="">— source —</option></select>
+      <select id="f-intent" onchange="load()"><option value="">— intent —</option>{% for i in intents %}<option>{{ i }}</option>{% endfor %}</select>
+      <select id="f-status" onchange="load()"><option value="">— status —</option>{% for s in statuses %}<option>{{ s }}</option>{% endfor %}</select>
+      <select id="f-ptype" onchange="load()"><option value="">— page type —</option>{% for p in page_types %}<option>{{ p }}</option>{% endfor %}</select>
+      <select id="f-sort" onchange="load()">
+        <option value="score">sort: score</option>
+        <option value="volume">volume</option>
+        <option value="impressions">impressions</option>
+        <option value="position">position</option>
+        <option value="keyword">keyword A-Z</option>
+      </select>
+      <span class="muted" id="count"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <table>
+      <thead><tr>
+        <th>Keyword</th><th>Score</th><th>Intent</th><th>Vol</th><th>KD</th>
+        <th>Imp</th><th>CTR</th><th>Pos</th><th>Page type</th><th>Status</th><th>Hành động</th>
+      </tr></thead>
+      <tbody id="tbody"><tr><td colspan="11" class="muted">Đang tải…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Import modal -->
+<div class="modal-bg" id="mImport">
+  <div class="modal">
+    <h3>Import CSV keyword</h3>
+    <div class="row" style="margin-bottom:8px">
+      <label>source: <input id="imp-source" value="semrush" style="width:120px"></label>
+      <label>country: <input id="imp-country" value="VN" style="width:60px"></label>
+      <label>language: <input id="imp-lang" value="vi" style="width:60px"></label>
+    </div>
+    <p class="note">Chọn file .csv hoặc dán nội dung. Cột nhận diện: keyword/query, volume, keyword_difficulty, cpc, intent, topic, note…</p>
+    <input type="file" id="imp-file" accept=".csv,.tsv,text/csv"><br><br>
+    <textarea id="imp-text" placeholder="hoặc dán CSV ở đây (dòng đầu là header)…"></textarea>
+    <div class="row" style="margin-top:10px;justify-content:flex-end">
+      <button class="btn" onclick="document.getElementById('mImport').style.display='none'">Huỷ</button>
+      <button class="btn pri" onclick="doImport()">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- Brief modal -->
+<div class="modal-bg" id="mBrief">
+  <div class="modal">
+    <h3>Tạo SERP Brief</h3>
+    <p class="note">Nhập 1-5 URL top SERP (mỗi dòng 1 URL). Hệ thống chỉ fetch đúng các URL này, không crawl site.</p>
+    <div id="brief-kw" style="font-weight:700;margin-bottom:6px"></div>
+    <textarea id="brief-urls" placeholder="https://...&#10;https://..."></textarea>
+    <div class="row" style="margin-top:10px;justify-content:flex-end">
+      <button class="btn" onclick="document.getElementById('mBrief').style.display='none'">Huỷ</button>
+      <button class="btn pri" id="brief-go" onclick="doBrief()">Phân tích</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const PAGE_TYPES = {{ page_types|tojson }};
+const STATUSES = {{ statuses|tojson }};
+let _briefKid = null, _briefKw = "";
+
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.style.display='block'; setTimeout(()=>t.style.display='none',3200); }
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+let _deb;
+function debLoad(){ clearTimeout(_deb); _deb=setTimeout(load,300); }
+
+async function load(){
+  const p = new URLSearchParams();
+  const q=document.getElementById('f-q').value.trim(); if(q) p.set('q',q);
+  for(const [id,key] of [['f-source','source'],['f-intent','intent'],['f-status','status'],['f-ptype','page_type'],['f-sort','sort']]){
+    const v=document.getElementById(id).value; if(v) p.set(key,v);
+  }
+  const r = await fetch('/api/seo/opportunities?'+p.toString());
+  const j = await r.json();
+  document.getElementById('count').textContent = j.count+' keyword';
+  const tb=document.getElementById('tbody');
+  if(!j.rows.length){ tb.innerHTML='<tr><td colspan="11" class="muted">Chưa có keyword. Sync GSC hoặc Import CSV.</td></tr>'; return; }
+  tb.innerHTML = j.rows.map(rowHtml).join('');
+}
+
+function selHtml(opts, cur, kid, field){
+  return '<select onchange="upd('+kid+',\''+field+'\',this.value)">'+
+    opts.map(o=>'<option'+(o===cur?' selected':'')+'>'+o+'</option>').join('')+'</select>';
+}
+function scoreColor(s){ return s>=60?'#16a34a':(s>=35?'#d97706':'#9ca3af'); }
+
+function rowHtml(r){
+  const ctr = r.gsc_ctr!=null ? (r.gsc_ctr*100).toFixed(1)+'%' : '<span class="muted">—</span>';
+  return '<tr>'+
+    '<td class="kw">'+esc(r.keyword)+' <span class="src">'+esc(r.source||'')+'</span></td>'+
+    '<td class="score" style="color:'+scoreColor(r.opportunity_score)+'" title="bấm xem breakdown"><a href="#" onclick="scoreDetail('+r.id+');return false" style="color:inherit">'+(r.opportunity_score??0)+'</a></td>'+
+    '<td>'+esc(r.intent||'<span class="muted">—</span>')+'</td>'+
+    '<td>'+(r.volume??'<span class="muted">—</span>')+'</td>'+
+    '<td>'+(r.keyword_difficulty??'<span class="muted">—</span>')+'</td>'+
+    '<td>'+(r.gsc_impressions??'<span class="muted">—</span>')+'</td>'+
+    '<td>'+ctr+'</td>'+
+    '<td>'+(r.gsc_position??'<span class="muted">—</span>')+'</td>'+
+    '<td>'+selHtml(PAGE_TYPES, r.suggested_page_type, r.id, 'suggested_page_type')+'</td>'+
+    '<td>'+selHtml(STATUSES, r.status, r.id, 'status')+'</td>'+
+    '<td class="acts">'+
+      '<button class="btn" onclick="openBrief('+r.id+',\''+esc(r.keyword).replace(/'/g,"\\'")+'\')">Brief</button>'+
+      '<button class="btn" onclick="sendBlog('+r.id+')">→Blog</button>'+
+    '</td></tr>';
+}
+
+async function upd(kid, field, val){
+  const body={}; body[field]=val;
+  await fetch('/api/seo/opportunities/'+kid+'/update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  toast('Đã lưu '+field);
+  load();
+}
+
+async function scoreDetail(kid){
+  const r=await fetch('/api/seo/opportunities/'+kid+'/score'); const j=await r.json();
+  if(!j.ok){ toast('Lỗi'); return; }
+  const bd=j.breakdown;
+  let s='Score = '+j.score+'\n\n';
+  for(const k in bd){ s+= k+': '+bd[k]+'\n'; }
+  alert(s);
+}
+
+function openBrief(kid, kw){ _briefKid=kid; _briefKw=kw; document.getElementById('brief-kw').textContent='Keyword: '+kw;
+  document.getElementById('brief-urls').value=''; document.getElementById('mBrief').style.display='flex'; }
+
+async function doBrief(){
+  const urls=document.getElementById('brief-urls').value;
+  if(!urls.trim()){ toast('Nhập ít nhất 1 URL'); return; }
+  const btn=document.getElementById('brief-go'); btn.disabled=true; btn.textContent='Đang fetch…';
+  try{
+    const r=await fetch('/api/seo/serp-briefs/create',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({keyword:_briefKw, keyword_id:_briefKid, urls})});
+    const j=await r.json();
+    if(j.ok){ toast('Brief #'+j.id+' xong ('+j.fetched+' ok / '+j.failed+' fail)');
+      document.getElementById('mBrief').style.display='none';
+      setTimeout(()=>location.href='{{ url_for("seo_serp_briefs_page") }}#brief-'+j.id,600);
+    } else { toast('Lỗi: '+(j.error||'')); }
+  }catch(e){ toast('Lỗi mạng'); }
+  btn.disabled=false; btn.textContent='Phân tích';
+}
+
+async function sendBlog(kid){
+  const r=await fetch('/api/seo/opportunities/'+kid+'/send-to-blog',{method:'POST'});
+  const j=await r.json(); toast(j.message||(j.ok?'OK':'Lỗi')); load();
+}
+
+async function syncGsc(){
+  const days=document.getElementById('gsc-days').value, mi=document.getElementById('gsc-minimp').value;
+  toast('Đang sync GSC…');
+  const fd=new FormData(); fd.set('days',days); fd.set('min_impressions',mi);
+  const r=await fetch('/api/seo/opportunities/sync-gsc',{method:'POST',body:fd});
+  const j=await r.json();
+  if(j.ok){ toast('GSC: +'+j.imported+' mới, '+j.updated+' cập nhật ('+j.scanned+' query)'); load(); refreshStats(); }
+  else toast('Lỗi: '+(j.error||''));
+}
+
+async function doImport(){
+  const fd=new FormData();
+  const f=document.getElementById('imp-file').files[0];
+  if(f) fd.set('file',f); else fd.set('text', document.getElementById('imp-text').value);
+  fd.set('source', document.getElementById('imp-source').value||'csv');
+  fd.set('country', document.getElementById('imp-country').value||'VN');
+  fd.set('language', document.getElementById('imp-lang').value||'vi');
+  const r=await fetch('/api/seo/opportunities/import-csv',{method:'POST',body:fd});
+  const j=await r.json();
+  if(j.ok){ toast('Import: +'+j.imported+' mới, '+j.updated+' cập nhật, '+j.skipped+' bỏ');
+    document.getElementById('mImport').style.display='none'; load(); refreshStats();
+  } else toast('Lỗi: '+(j.error||''));
+}
+
+async function refreshStats(){
+  const r=await fetch('/api/seo/opportunities?limit=1'); // cheap; stats reload via full
+  // reload stat cards via a tiny dedicated path: reuse list count + statuses
+  const all=await (await fetch('/api/seo/opportunities?limit=100000')).json();
+  const rows=all.rows||[];
+  document.getElementById('st-total').textContent=rows.length;
+  const c=s=>rows.filter(x=>x.status===s).length;
+  document.getElementById('st-new').textContent=c('new');
+  document.getElementById('st-approved').textContent=c('approved');
+  document.getElementById('st-brief').textContent=c('brief_ready');
+}
+
+// populate source filter
+(async()=>{
+  const all=await (await fetch('/api/seo/opportunities?limit=100000')).json();
+  const srcs=[...new Set((all.rows||[]).map(r=>r.source).filter(Boolean))];
+  const sel=document.getElementById('f-source');
+  srcs.forEach(s=>{ const o=document.createElement('option'); o.textContent=s; sel.appendChild(o); });
+  load();
+})();
+</script>
+{% endblock %}

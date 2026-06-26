@@ -35,6 +35,7 @@ from routes import content_pillar as routes_content_pillar
 from routes import dashboard as routes_dashboard
 from routes import products as routes_products
 from routes import blog_content_center as routes_blog_content_center
+from routes import seo_opportunity as routes_seo_opportunity
 
 ROOT = Path(__file__).parent
 
@@ -71,6 +72,7 @@ routes_content_pillar.register(app)
 routes_dashboard.register(app)
 routes_products.register(app)
 routes_blog_content_center.register(app)
+routes_seo_opportunity.register(app)
 
 
 @app.template_filter("from_json")
