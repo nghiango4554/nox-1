@@ -1,0 +1,162 @@
+{% extends "redesign_base.html" %}
+{% block title %}SERP Brief Builder · SEO · Sintech Hub{% endblock %}
+{% block page_title %}
+  <i class="ic" data-icon="shield-check"></i><span>SEO</span>
+  <i class="ic" data-icon="chevron-right"></i><b>🔍 SERP Brief Builder</b>
+{% endblock %}
+{% block page_actions %}
+  <a class="btn-primary" href="{{ url_for('seo_opportunities_page') }}"><i class="ic" data-icon="search"></i>Keyword Opportunities</a>
+{% endblock %}
+{% block head_extra %}
+<style>
+  .wrap{display:grid;grid-template-columns:340px 1fr;gap:16px;align-items:start}
+  .panel{background:#fff;border:1px solid var(--line,#eadfe6);border-radius:14px;padding:16px;margin-bottom:14px}
+  .panel h3{margin:0 0 10px;font-size:15px}
+  input,textarea,select{padding:7px 10px;border:1px solid #d9cdd6;border-radius:9px;font:inherit;width:100%;box-sizing:border-box}
+  textarea{min-height:120px}
+  .btn{padding:7px 13px;border:1px solid #d9cdd6;border-radius:9px;background:#fff;cursor:pointer;font:inherit;font-weight:600}
+  .btn:hover{background:#faf5f8}
+  .btn.pri{background:linear-gradient(135deg,#ff9966,#d75151);color:#fff;border:0}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .muted{color:var(--ink-3)}
+  .note{font-size:12px;color:var(--ink-3);margin-top:6px}
+  .blist a{display:block;padding:8px 10px;border-bottom:1px solid #f0e8ee;text-decoration:none;color:inherit;font-size:13px}
+  .blist a:hover{background:#faf5f8}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:6px 8px;border-bottom:1px solid #f0e8ee;text-align:left;vertical-align:top}
+  th{font-size:11px;text-transform:uppercase;color:var(--ink-3)}
+  .chips span{display:inline-block;background:#f3eef2;padding:2px 8px;border-radius:999px;font-size:11.5px;margin:2px}
+  .opt{padding:6px 8px;background:#faf6f9;border-radius:8px;margin:4px 0;font-size:13px}
+  .len{color:var(--ink-3);font-size:11px}
+  .disabled-box{opacity:.6}
+  .toast{position:fixed;bottom:18px;right:18px;background:#222;color:#fff;padding:10px 14px;border-radius:10px;display:none;z-index:60;font-size:13px}
+  h4{margin:14px 0 6px;font-size:13px;text-transform:uppercase;color:var(--ink-3)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="wrap">
+  <div>
+    <div class="panel">
+      <h3>Mode A — Manual URLs ✅</h3>
+      <label class="muted">Keyword chính</label>
+      <input id="kw" placeholder="vd: ram ddr5 là gì">
+      <label class="muted" style="margin-top:8px;display:block">3-5 URL top SERP (mỗi dòng 1)</label>
+      <textarea id="urls" placeholder="https://...&#10;https://...&#10;https://..."></textarea>
+      <div class="note">Chỉ fetch đúng URL bạn nhập (timeout 12s, không crawl site). Lấy cấu trúc/heading/độ dài — KHÔNG copy nội dung.</div>
+      <button class="btn pri" id="go" style="margin-top:10px" onclick="create()">Phân tích SERP</button>
+    </div>
+
+    <div class="panel disabled-box">
+      <h3>Mode B — Provider (DataForSEO/SerpAPI) 🔒</h3>
+      <p class="note">Tự động lấy top SERP qua API. <b>Chưa có credential & chưa được duyệt</b> → tắt. Không gọi API trả phí.</p>
+      <button class="btn" disabled>API key required</button>
+    </div>
+
+    <div class="panel">
+      <h3>Brief đã tạo</h3>
+      <div class="blist" id="blist">
+        {% for b in briefs %}
+        <a href="#brief-{{ b.id }}" onclick="openBrief({{ b.id }})">#{{ b.id }} · <b>{{ b.keyword }}</b><br>
+          <span class="muted">{{ b.avg_word_count }} từ · {{ b.avg_h2_count }} H2 · {{ b.status }} · {{ b.created_at }}</span></a>
+        {% else %}
+        <div class="muted" style="padding:8px">Chưa có brief nào.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="detail">
+    <div class="muted">← Tạo brief mới hoặc chọn brief bên trái để xem chi tiết.</div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';setTimeout(()=>t.style.display='none',3200);}
+function esc(s){return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function J(s){try{return JSON.parse(s||'[]')}catch(e){return []}}
+
+async function create(){
+  const kw=document.getElementById('kw').value.trim(), urls=document.getElementById('urls').value;
+  if(!kw){toast('Nhập keyword');return;}
+  if(!urls.trim()){toast('Nhập ít nhất 1 URL');return;}
+  const btn=document.getElementById('go'); btn.disabled=true; btn.textContent='Đang fetch…';
+  try{
+    const r=await fetch('/api/seo/serp-briefs/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({keyword:kw,urls})});
+    const j=await r.json();
+    if(j.ok){ toast('Brief #'+j.id+' ('+j.fetched+' ok/'+j.failed+' fail)'); renderDetail(j); prependList(j); }
+    else toast('Lỗi: '+(j.error||''));
+  }catch(e){toast('Lỗi mạng');}
+  btn.disabled=false; btn.textContent='Phân tích SERP';
+}
+
+function prependList(b){
+  const list=document.getElementById('blist');
+  const a=document.createElement('a'); a.href='#brief-'+b.id; a.onclick=()=>openBrief(b.id);
+  a.innerHTML='#'+b.id+' · <b>'+esc(b.keyword)+'</b><br><span class="muted">'+b.avg_word_count+' từ · '+b.avg_h2_count+' H2 · '+b.status+'</span>';
+  list.insertBefore(a, list.firstChild);
+}
+
+async function openBrief(id){
+  const r=await fetch('/api/seo/serp-briefs/'+id); const j=await r.json();
+  if(j.ok) renderDetail(j.brief); else toast('Không tìm thấy');
+}
+
+function renderDetail(b){
+  const pages=b.pages||[];
+  const summary = J(b.competitor_summary_json);
+  let html = '<div style="display:flex;justify-content:space-between;align-items:center">'+
+    '<h3 style="margin:0">Brief #'+b.id+' — '+esc(b.keyword)+'</h3>'+
+    '<div><button class="btn" onclick="aiEnhance('+b.id+')">✨ AI enhance</button> '+
+    '<a class="btn" href="/api/seo/serp-briefs/'+b.id+'/export.md">⤓ Export .md</a></div></div>';
+  html += '<p class="muted">Avg đối thủ: <b>'+b.avg_word_count+'</b> từ · <b>'+b.avg_h2_count+'</b> H2 · <b>'+b.avg_image_count+'</b> ảnh · status: '+b.status+'</p>';
+
+  html += '<h4>Đối thủ (cấu trúc, không copy nội dung)</h4><table><thead><tr><th>URL</th><th>Title</th><th>Từ</th><th>H2</th><th>Ảnh</th><th>Schema</th><th>Fetch</th></tr></thead><tbody>';
+  (summary.length?summary:pages).forEach(p=>{
+    html+='<tr><td style="max-width:220px;word-break:break-all"><a href="'+esc(p.url)+'" target="_blank" rel="noopener">'+esc((p.url||'').replace(/^https?:\/\//,'').slice(0,40))+'</a></td>'+
+      '<td style="max-width:240px">'+esc(p.title||'—')+'</td>'+
+      '<td>'+(p.word_count||0)+'</td><td>'+(p.h2_count!=null?p.h2_count:(J(p.h2_json).length))+'</td>'+
+      '<td>'+(p.image_count||0)+'</td><td style="font-size:11px">'+esc((p.schema_types||J(p.schema_types_json)).join(', '))+'</td>'+
+      '<td style="font-size:11px">'+esc(p.fetch_status||'')+'</td></tr>';
+  });
+  html+='</tbody></table>';
+
+  const common=J(b.common_headings_json);
+  html+='<h4>Chủ đề lặp trên SERP (≥2 trang) — inspired-by</h4><div class="chips">'+
+    (common.length?common.map(c=>'<span>'+esc(c.topic)+' ('+c.pages+')</span>').join(''):'<span class="muted">không đủ dữ liệu</span>')+'</div>';
+
+  const outline=J(b.recommended_outline_json);
+  html+='<h4>Outline đề xuất</h4><ul>'+
+    (outline.length?outline.map(o=>'<li><b>'+esc(o.h2||'')+'</b>'+((o.h3&&o.h3.length)?'<ul>'+o.h3.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+'</li>').join(''):'<li class="muted">—</li>')+'</ul>';
+
+  const titles=J(b.recommended_title_options_json);
+  html+='<h4>3 Title options (≤60 ký tự, KHÔNG "Sintech")</h4>'+
+    titles.map(t=>'<div class="opt">'+esc(t)+' <span class="len">'+t.length+' ký tự</span></div>').join('');
+
+  const metas=J(b.recommended_meta_options_json);
+  html+='<h4>3 Meta options (140-160 ký tự)</h4>'+
+    metas.map(m=>'<div class="opt">'+esc(m)+' <span class="len">'+m.length+' ký tự</span></div>').join('');
+
+  const angles=J(b.missing_angles_json);
+  html+='<h4>Góc khác biệt / FAQ nên có</h4><ul>'+angles.map(a=>'<li>'+esc(a)+'</li>').join('')+'</ul>';
+
+  const links=J(b.internal_link_suggestions_json);
+  html+='<h4>Internal link gợi ý</h4><ul>'+links.map(l=>'<li><code>'+esc(l.anchor||'')+'</code> — '+esc(l.note||'')+'</li>').join('')+'</ul>';
+
+  html+='<h4>Risk notes</h4><p class="note">'+esc(b.risk_notes||'')+'</p>';
+  document.getElementById('detail').innerHTML=html;
+  document.getElementById('detail').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+async function aiEnhance(id){
+  toast('AI đang viết outline/title/meta…');
+  const r=await fetch('/api/seo/serp-briefs/'+id+'/ai-enhance',{method:'POST'});
+  const j=await r.json();
+  if(j.ok){ toast('AI enhance xong'); renderDetail(j); }
+  else toast(j.quota?'AI hết quota — giữ bản heuristic':('Lỗi: '+(j.error||'')));
+}
+
+// auto-open từ hash #brief-<id>
+(function(){ const m=(location.hash||'').match(/brief-(\d+)/); if(m) openBrief(parseInt(m[1])); })();
+</script>
+{% endblock %}
