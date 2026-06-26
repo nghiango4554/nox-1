@@ -271,7 +271,8 @@
   <td style="text-align:center;font-size:11px;white-space:nowrap">
     {% if j.synced_at_disp %}<span style="color:#22c55e">{{ j.synced_at_disp }}</span>{% else %}<span class="cc-len-empty">—</span>{% endif %}
   </td>
-  <td style="text-align:center">
+  <td style="text-align:center;white-space:nowrap">
+    <a href="{{ j.collection_url }}" target="_blank" rel="noopener" class="btn btn-sm" title="Xem trang live">👁 Xem</a>
     <a href="{{ url_for('collection_content_detail_page', job_id=j.id) }}" class="btn btn-sm">✏️ Sửa</a>
     <button class="btn btn-sm btn-primary" onclick="genAIInline({{ j.id }}, this)">🤖 AI gen</button>
   </td>
@@ -280,10 +281,10 @@
 
 {% macro render_table_head(compact=false) %}
 <colgroup>
-  <col style="width:36px"><col style="width:74px">
+  <col style="width:36px"><col style="width:74px"><col style="width:54px">
   <col style="width:21%"><col style="width:58px"><col style="width:58px"><col style="width:58px">
   <col style="width:62px"><col style="width:58px">
-  <col><col style="width:88px"><col style="width:170px">
+  <col><col style="width:88px"><col style="width:190px">
 </colgroup>
 <thead>
   <tr>
@@ -326,7 +327,7 @@
     <span class="tier1-pct">{{ t1.stats.done }}/{{ t1.stats.total }} ({{ t1.stats.pct }}%)</span>
     <span class="tier1-toggle-icon" id="t1-icon-{{ t1.handle }}">▼</span>
   </div>
-  <div class="tier1-body{% if t1.stats.done == t1.stats.total and t1.stats.total > 0 %} collapsed{% endif %}" id="t1-body-{{ t1.handle }}">
+  <div class="tier1-body{% if t1.stats.done == t1.stats.total and t1.stats.total > 0 and t1.handle != '_pages' %} collapsed{% endif %}" id="t1-body-{{ t1.handle }}">
     {% for t2 in t1.tier2_groups %}
     {% set t2id = t1.handle ~ '-' ~ t2.handle %}
     <div class="tier2-section">
@@ -340,9 +341,9 @@
           {% if t2.stats.failed %}<span style="color:#f87171">❌{{ t2.stats.failed }}</span>{% endif %}
           <span style="color:var(--text-muted)">· {{ t2.stats.total }} bài</span>
         </span>
-        <span class="tier2-toggle-icon" id="t2-icon-{{ t2id }}">▶</span>
+        <span class="tier2-toggle-icon" id="t2-icon-{{ t2id }}">{% if t1.handle == '_pages' %}▼{% else %}▶{% endif %}</span>
       </div>
-      <div class="tier2-jobs" id="t2-jobs-{{ t2id }}">
+      <div class="tier2-jobs{% if t1.handle == '_pages' %} expanded{% endif %}" id="t2-jobs-{{ t2id }}">
         <table class="tier2-table">
           {{ render_table_head() }}
           <tbody>

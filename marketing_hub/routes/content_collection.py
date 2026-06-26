@@ -20,14 +20,16 @@ Dep:
 
 import json
 import os
+import re
 import threading
 import time
 from datetime import datetime
 
 from flask import (
     render_template, request, jsonify,
-    redirect, url_for, flash,
+    redirect, url_for, flash, Response,
 )
+import requests
 
 import db
 import job_sync
@@ -115,6 +117,8 @@ def _build_tier_groups(all_jobs):
         t2_map[t2h]["jobs"].append(j)
 
     def t1_sort_key(h):
+        if h == "_pages":
+            return -1  # 📄 Trang tĩnh luôn lên đầu cho dễ thấy/sửa
         try:
             return t1_order.index(h)
         except ValueError:
@@ -296,6 +300,30 @@ def collection_content_detail_page(job_id):
     return render_template("collection_content_detail.html", job=job)
 
 
+def collection_content_preview_live(job_id):
+    """Proxy trang LIVE Sintech về cùng origin để iframe được (sintech.vn chặn
+    frame-ancestors 'self'). Preview khớp 100% theme Haravan thật.
+    Hiển thị bản ĐÃ sync (live), không phải nội dung đang sửa chưa lưu.
+    """
+    job = _collection_jobs_get(job_id)
+    if not job or not job.get("collection_url"):
+        return Response("<p style='font-family:sans-serif;padding:20px'>Không có URL live.</p>",
+                        mimetype="text/html")
+    try:
+        r = requests.get(job["collection_url"],
+                         headers={"User-Agent": "Mozilla/5.0 (preview-proxy)"},
+                         timeout=20)
+        html = r.text
+        # inject <base> để URL tương đối resolve về sintech.vn
+        if "<base " not in html.lower():
+            html = re.sub(r"(<head[^>]*>)", r"\1<base href='https://sintech.vn/'>",
+                          html, count=1, flags=re.I)
+    except Exception as e:
+        html = f"<p style='font-family:sans-serif;padding:20px;color:#b91c1c'>Lỗi tải trang live: {e}</p>"
+    # KHÔNG đặt X-Frame-Options → cùng origin localhost iframe được
+    return Response(html, mimetype="text/html")
+
+
 def collection_content_gen_bg():
     payload = request.get_json(silent=True) or {}
     ids = payload.get("ids") or []
@@ -389,13 +417,22 @@ def collection_content_sync(job_id):
     if not job.get("edited_title") or not job.get("edited_body_html"):
         return jsonify({"ok": False, "error": "Chưa có title/body — gen AI trước"}), 400
     import collection_content_writer as ccw
+    is_page = "/pages/" in (job.get("collection_url") or "")
     try:
-        res = ccw.sync_collection_to_haravan(
-            int(job["haravan_id"]),
-            job["edited_title"],
-            job.get("edited_meta") or "",
-            job["edited_body_html"],
-        )
+        if is_page:
+            res = ccw.sync_page_to_haravan(
+                int(job["haravan_id"]),
+                job["edited_title"],
+                job.get("edited_meta") or "",
+                job["edited_body_html"],
+            )
+        else:
+            res = ccw.sync_collection_to_haravan(
+                int(job["haravan_id"]),
+                job["edited_title"],
+                job.get("edited_meta") or "",
+                job["edited_body_html"],
+            )
         if job_sync.apply_sync_result(_collection_jobs_update, job_id, res):
             return jsonify({"ok": True})
         return jsonify(res), 500
@@ -415,11 +452,18 @@ def collection_content_sync_all():
             errors.append(f"#{job['id']}: thiếu data")
             continue
         try:
-            res = ccw.sync_collection_to_haravan(
-                int(job["haravan_id"]),
-                job["edited_title"], job.get("edited_meta") or "",
-                job["edited_body_html"],
-            )
+            if "/pages/" in (job.get("collection_url") or ""):
+                res = ccw.sync_page_to_haravan(
+                    int(job["haravan_id"]),
+                    job["edited_title"], job.get("edited_meta") or "",
+                    job["edited_body_html"],
+                )
+            else:
+                res = ccw.sync_collection_to_haravan(
+                    int(job["haravan_id"]),
+                    job["edited_title"], job.get("edited_meta") or "",
+                    job["edited_body_html"],
+                )
             if job_sync.apply_sync_result(_collection_jobs_update, job["id"], res):
                 ok += 1
             else:
@@ -441,6 +485,8 @@ def register(app):
     app.add_url_rule("/collection-content", "collection_content_page", collection_content_page)
     app.add_url_rule("/collection-content/<int:job_id>",
                      "collection_content_detail_page", collection_content_detail_page)
+    app.add_url_rule("/collection-content/<int:job_id>/preview-live",
+                     "collection_content_preview_live", collection_content_preview_live)
     app.add_url_rule("/collection-content/gen-bg",
                      "collection_content_gen_bg", collection_content_gen_bg, methods=["POST"])
     app.add_url_rule("/collection-content/gen-status",
