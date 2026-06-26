@@ -1,0 +1,62 @@
+{% extends "redesign_base.html" %}
+{% set active = 'fb_posted' %}
+{% block title %}SP đã đăng FB · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span>✅ SP đã đăng FB</span>
+<span class="muted" style="font-weight:400">chống trùng lặp</span>
+{% endblock %}
+
+{% block content %}
+<div class="section-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+  <h2 class="muted" style="font-size:13px;font-weight:500">
+    Tổng <b>{{ total }}</b> SP đã lên Facebook{% if updated_at %} · cập nhật {{ updated_at }}{% endif %}
+  </h2>
+  <input id="fbq" type="search" placeholder="Tìm tên sản phẩm…"
+    style="padding:8px 12px;border:1px solid var(--line);border-radius:8px;min-width:240px;font-size:13px">
+</div>
+
+<div class="card" style="overflow:auto">
+  <table class="data-table" id="fbtbl">
+    <thead>
+      <tr>
+        <th style="width:56px">STT</th>
+        <th>Tên sản phẩm</th>
+        <th style="width:120px">Link</th>
+        <th style="width:130px">Date up face</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ r.name }}</td>
+        <td>
+          {% if r.link %}<a href="{{ r.link }}" target="_blank" rel="noreferrer">Xem SP ↗</a>{% else %}—{% endif %}
+        </td>
+        <td>{{ r.date }}</td>
+      </tr>
+      {% endfor %}
+      {% if not rows %}
+      <tr><td colspan="4" class="muted" style="text-align:center;padding:24px">Chưa có SP nào trong DB.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  // Lọc client-side theo tên SP
+  (function () {
+    var q = document.getElementById('fbq');
+    var rows = Array.prototype.slice.call(document.querySelectorAll('#fbtbl tbody tr'));
+    if (!q) return;
+    q.addEventListener('input', function () {
+      var v = this.value.trim().toLowerCase();
+      rows.forEach(function (tr) {
+        var name = (tr.children[1] && tr.children[1].textContent || '').toLowerCase();
+        tr.style.display = (!v || name.indexOf(v) !== -1) ? '' : 'none';
+      });
+    });
+  })();
+</script>
+{% endblock %}

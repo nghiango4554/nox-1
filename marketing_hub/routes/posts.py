@@ -295,6 +295,33 @@ def calendar_page():
     )
 
 
+def fb_posted_page():
+    """Bảng SP đã đăng FB — đọc từ file chống trùng fb_posted_products.json (dò ngược lên tìm)."""
+    here = Path(__file__).resolve()
+    db_path = next(
+        (p / "fb_posted_products.json" for p in here.parents
+         if (p / "fb_posted_products.json").exists()),
+        here.parents[3] / "fb_posted_products.json",
+    )
+    try:
+        data = json.loads(db_path.read_text(encoding="utf-8"))
+    except Exception:
+        data = {"updated_at": None, "products": []}
+    rows = []
+    for p in data.get("products", []):
+        link = p.get("sintech_link") or (
+            "https://sintech.vn/products/" + p["handle"] if p.get("handle") else ""
+        )
+        rows.append({
+            "name": p.get("name", ""),
+            "link": link,
+            "date": p.get("posted_date", "") or "—",
+        })
+    return render_template(
+        "fb_posted.html", rows=rows, total=len(rows), updated_at=data.get("updated_at"),
+    )
+
+
 # ─────────────────────── POST CRUD ───────────────────────────────
 
 def post_new():
@@ -725,6 +752,7 @@ def register(app):
     # Posts list + calendar
     app.add_url_rule("/posts", "posts_page", posts_page)
     app.add_url_rule("/calendar", "calendar_page", calendar_page)
+    app.add_url_rule("/fb-posted", "fb_posted_page", fb_posted_page)
 
     # Post CRUD
     app.add_url_rule("/posts/new", "post_new", post_new, methods=["GET", "POST"])
