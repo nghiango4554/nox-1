@@ -967,3 +967,49 @@ def sync_collection_to_haravan(haravan_id: int, title: str, meta: str, body_html
             return {"ok": True, "type": "custom_collections"}
         except Exception as e_custom:
             return {"ok": False, "error": f"smart fail: {e_smart} | custom fail: {e_custom}"}
+
+
+def sync_page_to_haravan(page_id: int, title: str, meta: str, body_html: str,
+                         confirm: str = None) -> dict:
+    """Sync 1 Haravan Page tĩnh qua Open API (admin pages bị 502 cứng).
+
+    🔒 GUARD LIVE (2026-06-26): PUT Haravan CHỈ chạy khi `confirm == "LIVE_HARAVAN"`.
+    Mặc định (confirm=None) → TỪ CHỐI, KHÔNG gọi Haravan. Caller muốn sync thật
+    phải truyền confirm="LIVE_HARAVAN" có chủ đích (tránh sync live ngoài ý muốn).
+
+    LƯU Ý: Open API page object KHÔNG expose field SEO title/meta → chỉ ghi
+    được body_html. SEO `<title>`/meta description phải set TAY trong admin
+    Haravan. (title/meta vẫn lưu trong tool để tham chiếu/gen.)
+    """
+    if confirm != "LIVE_HARAVAN":
+        return {
+            "ok": False, "blocked": True,
+            "error": ("Sync Haravan Page bị KHÓA an toàn: cần confirm='LIVE_HARAVAN' "
+                      "để PUT live. ĐÃ KHÔNG gọi Haravan."),
+        }
+    body_compressed = compress_html(sanitize_pasted_html(body_html))
+    # Backup body sắp đẩy (audit/rollback) TRƯỚC khi PUT
+    try:
+        from pathlib import Path as _P
+        _bk = _P(__file__).parent.parent / "nox-outputs"
+        _bk.mkdir(parents=True, exist_ok=True)
+        (_bk / f"_page_sync_{int(page_id)}.html").write_text(body_compressed, encoding="utf-8")
+    except Exception:
+        pass
+    cfg = haravan_client.load_config()
+    url = f"https://apis.haravan.com/web/pages/{page_id}.json"
+    headers = {
+        "Authorization": f"Bearer {cfg['access_token']}",
+        "Content-Type": "application/json",
+    }
+    try:
+        r = requests.put(
+            url, headers=headers,
+            json={"page": {"id": int(page_id), "body_html": body_compressed}},
+            timeout=120,
+        )
+        if r.status_code in (200, 201):
+            return {"ok": True, "type": "web_page"}
+        return {"ok": False, "error": f"PUT page {r.status_code}: {r.text[:200]}"}
+    except Exception as e:
+        return {"ok": False, "error": f"PUT page exc: {e}"}
