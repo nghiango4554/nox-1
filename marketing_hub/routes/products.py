@@ -159,6 +159,7 @@ def products_new_create():
         "product_type": parsed.get("loai") or "",
         "tags": ", ".join(tags_list),
         "published_at": datetime.now(timezone.utc).isoformat(),
+        "published_scope": "web",  # chỉ lên web store, KHÔNG tick Haravan POS (vợ dặn 23/6)
         "summary_html": excerpt,
         "options": [{"name": "Kích thước", "values": [variant_title]}],
         "variants": [variant],

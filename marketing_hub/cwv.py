@@ -298,6 +298,24 @@ def start_chain_async(api_key: str = "") -> bool:
     return True
 
 
+def start_full_scan_async(api_key: str = "") -> dict:
+    """Quét toàn bộ 1 đợt (chain 8 phase: mobile×4 + desktop×4).
+
+    - Đang chạy → mode=running (không kick trùng).
+    - Còn URL đã quét trong data → mode=resume (chain tự skip_scanned, quét tiếp URL còn thiếu).
+    - Data trống (vừa reset) → mode=new (quét lại từ đầu).
+    """
+    if _state["running"]:
+        return {"ok": False, "mode": "running"}
+    try:
+        scanned = int(db.cwv_pass_stats().get("scanned", 0) or 0)
+    except Exception:
+        scanned = 0
+    mode = "resume" if scanned > 0 else "new"
+    ok = start_chain_async(api_key=api_key)
+    return {"ok": bool(ok), "mode": mode if ok else "running"}
+
+
 def stop_scan():
     _set(stop_requested=True)
 

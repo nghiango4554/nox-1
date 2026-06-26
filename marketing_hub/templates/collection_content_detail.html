@@ -258,6 +258,16 @@
   </div>
 </div>
 
+<div style="margin-top:16px;border:1px solid var(--border);border-radius:8px;padding:12px;background:rgba(255,255,255,.02)">
+  <div class="cd-section-h">
+    <span>👁 Preview giống Live (theme Haravan thật)</span>
+    <button type="button" class="btn btn-sm" onclick="loadLivePreview(this)">🔄 Tải / Làm mới</button>
+  </div>
+  <p class="muted" style="font-size:11px;margin:0 0 8px">Hiện bản <strong>ĐÃ sync</strong> trên sintech.vn (không phải nội dung đang sửa chưa lưu). Sync xong bấm Làm mới để đối chiếu đúng live.</p>
+  <iframe id="live-preview-frame" title="Live preview" style="display:none;width:100%;height:680px;border:1px solid var(--border);border-radius:8px;background:#fff"></iframe>
+  <div id="live-preview-placeholder" class="muted" style="padding:24px;text-align:center;font-size:13px">Bấm "🔄 Tải / Làm mới" để xem trang y hệt live (render trong theme Haravan).</div>
+</div>
+
 <div class="cd-actions">
   <a class="btn" href="{{ url_for('collection_content_page') }}" style="margin-left:auto">← Danh sách</a>
 </div>
@@ -266,6 +276,18 @@
 
 <script>
 const JOB_ID = {{ job.id }};
+
+function loadLivePreview(btn) {
+  const f = document.getElementById('live-preview-frame');
+  const ph = document.getElementById('live-preview-placeholder');
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '⏳ Đang tải...';
+  ph.style.display = 'none'; f.style.display = 'block';
+  f.src = '/collection-content/' + JOB_ID + '/preview-live?t=' + Date.now();
+  const done = () => { btn.disabled = false; btn.innerHTML = orig; };
+  f.onload = done;
+  setTimeout(done, 9000);
+}
 
 function updateMeter(inputId, meterId, min, max) {
   const v = document.getElementById(inputId).value;

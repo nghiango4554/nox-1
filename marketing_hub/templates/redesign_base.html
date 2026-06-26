@@ -16,7 +16,7 @@
 {% set analytics_keys = ['ga4','gsc','tracking','tasks','ops','cwv'] %}
 {% set seo_keys = ['seo_home','coverage','title_meta','h1','empty_desc','dup','broken','index','inlinks','eeat','schema','opp','serp'] %}
 {% set content_keys = ['content_jobs','collection','blog','products','alt'] %}
-{% set fb_keys = ['post_new','posts','calendar'] %}
+{% set fb_keys = ['post_new','posts','calendar','fb_posted'] %}
 {% set hv_keys = ['hv_home','hv_products','hv_blogs','hv_audit'] %}
 <div class="app">
 <aside class="sidebar">
@@ -76,6 +76,7 @@
         <a href="{{ url_for('post_new') }}" class="nav-sub {{ 'active' if a=='post_new' }}"><span>Bài mới</span></a>
         <a href="{{ url_for('posts_page') }}" class="nav-sub {{ 'active' if a=='posts' }}"><span>Bài đã đăng</span></a>
         <a href="{{ url_for('calendar_page') }}" class="nav-sub {{ 'active' if a=='calendar' }}"><span>Lịch đăng</span></a>
+        <a href="{{ url_for('fb_posted_page') }}" class="nav-sub {{ 'active' if a=='fb_posted' }}"><span>SP đã đăng</span></a>
       </div></div>
     </div>
 

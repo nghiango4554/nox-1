@@ -2467,6 +2467,33 @@ def hv_get_product(haravan_id: int):
     return dict(row) if row else None
 
 
+def hv_all_product_ids() -> set:
+    """Tập tất cả haravan_id đang có trong cache (dùng cho prune SP chết)."""
+    conn = get_conn()
+    rows = conn.execute("SELECT haravan_id FROM haravan_products").fetchall()
+    conn.close()
+    return {r[0] for r in rows}
+
+
+def hv_delete_products(haravan_ids) -> int:
+    """Xóa SP khỏi cache theo list haravan_id. Trả số dòng xóa."""
+    ids = [int(x) for x in haravan_ids]
+    if not ids:
+        return 0
+    conn = get_conn()
+    n = 0
+    for i in range(0, len(ids), 500):
+        chunk = ids[i:i + 500]
+        ph = ",".join("?" * len(chunk))
+        cur = conn.execute(
+            f"DELETE FROM haravan_products WHERE haravan_id IN ({ph})", chunk
+        )
+        n += cur.rowcount
+    conn.commit()
+    conn.close()
+    return n
+
+
 def hv_get_product_by_handle(handle: str):
     conn = get_conn()
     row = conn.execute(
