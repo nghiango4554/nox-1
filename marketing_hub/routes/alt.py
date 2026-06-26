@@ -203,6 +203,18 @@ def alt_manager_bulk_gen_start():
     return jsonify({"ok": True, "message": "Đã bắt đầu bulk gen"})
 
 
+def alt_manager_bulk_gen_start_dual():
+    """Bulk gen ALT bằng AI, chạy song song Codex×N + Claude×N (workers mỗi provider)."""
+    try:
+        workers = int(request.args.get("workers") or (request.get_json(silent=True) or {}).get("workers") or 3)
+    except Exception:
+        workers = 3
+    ok = alt_manager.start_bulk_gen_dual_async(workers)
+    if not ok:
+        return jsonify({"ok": False, "error": "Job đang chạy rồi"}), 409
+    return jsonify({"ok": True, "message": f"Đã bắt đầu Dual AI (Codex×{workers} + Claude×{workers})"})
+
+
 def alt_manager_bulk_gen_start_desc():
     """Bulk gen chỉ ảnh mô tả (body_html) — API image ALT không hỗ trợ."""
     ok = alt_manager.start_bulk_gen_async(desc_only=True)
@@ -215,6 +227,19 @@ def alt_manager_bulk_gen_stop():
     """P4 — gửi tín hiệu dừng bulk gen job."""
     stopped = alt_manager.stop_bulk_gen()
     return jsonify({"ok": stopped, "message": "Đang dừng..." if stopped else "Job không chạy"})
+
+
+def alt_manager_fetch_status():
+    """Stub: hệ gen mới tự build worklist trong job, không cần bước fetch riêng."""
+    return jsonify({"running": False, "found_products": 0, "found_images": 0, "message": ""})
+
+
+def alt_manager_fetch_stop():
+    return jsonify({"ok": True})
+
+
+def alt_manager_fetch_start():
+    return jsonify({"ok": False, "error": "Không cần Fetch — bấm 'Dual AI (Codex+Claude)' để gen trực tiếp."})
 
 
 def alt_manager_bulk_gen_status():
@@ -255,6 +280,21 @@ def register(app):
 
     app.add_url_rule("/api/alt-manager/bulk-gen/start",
                      "alt_manager_bulk_gen_start", alt_manager_bulk_gen_start, methods=["POST"])
+    app.add_url_rule("/api/alt-manager/bulk-gen/start-dual",
+                     "alt_manager_bulk_gen_start_dual", alt_manager_bulk_gen_start_dual, methods=["POST"])
+    # Alias khớp UI template (alt-gen/*) + stub fetch/*
+    app.add_url_rule("/api/alt-manager/alt-gen/start",
+                     "alt_gen_start", alt_manager_bulk_gen_start, methods=["POST"])
+    app.add_url_rule("/api/alt-manager/alt-gen/start-dual",
+                     "alt_gen_start_dual", alt_manager_bulk_gen_start_dual, methods=["POST"])
+    app.add_url_rule("/api/alt-manager/alt-gen/status", "alt_gen_status", alt_manager_bulk_gen_status)
+    app.add_url_rule("/api/alt-manager/alt-gen/stop",
+                     "alt_gen_stop", alt_manager_bulk_gen_stop, methods=["POST"])
+    app.add_url_rule("/api/alt-manager/fetch/status", "alt_fetch_status", alt_manager_fetch_status)
+    app.add_url_rule("/api/alt-manager/fetch/stop",
+                     "alt_fetch_stop", alt_manager_fetch_stop, methods=["POST"])
+    app.add_url_rule("/api/alt-manager/fetch/start",
+                     "alt_fetch_start", alt_manager_fetch_start, methods=["POST"])
     app.add_url_rule("/api/alt-manager/bulk-gen/start-desc",
                      "alt_manager_bulk_gen_start_desc", alt_manager_bulk_gen_start_desc, methods=["POST"])
     app.add_url_rule("/api/alt-manager/bulk-gen/stop",
