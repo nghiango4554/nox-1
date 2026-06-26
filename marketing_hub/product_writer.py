@@ -49,34 +49,29 @@ _ANGLE_META_PATTERN = {
 # đúng trên theme (không bị plain text). Mẫu rút từ bài cũ vợ đã làm.
 # ═══════════════════════════════════════════════════════════════
 
-_SINTECH_RED = "rgb(231, 76, 60)"
-_BLACK = "rgb(0, 0, 0)"
-_GREY_BORDER = "rgb(204, 204, 204)"
-_GREY_HEADER = "rgb(244, 244, 244)"
-_GREY_MUTED = "rgb(107, 114, 128)"
-
-# Style rút từ bài cũ vợ Nghĩa cung cấp (sample 2026-05-19). KHÔNG đổi tự ý
-# trừ khi vợ confirm — các giá trị này phải match style đã dùng trong store.
+# CHUẨN MỚI 23/6/2026 (vợ chốt theo bài mẫu Laptop ThinkBook 16 G9):
+# style NHẸ — chỉ inline h2/h3/a/table/img; p/ul/li để THEME lo (không Arial
+# nặng). h2 18px, h3 16px (px-based), link đỏ #dc2626, ảnh max 500px, bảng viền
+# ngang nhẹ. Đồng bộ với reformat_product_desc.py + preview trong products_new.
+# (Lý do bỏ style cũ Arial 17pt/bảng viền xám: xem memory reference_haravan_strips_style_block.)
 _SINTECH_STYLES = {
-    "p":      f"font-family: Arial, sans-serif; font-size: 12pt; font-weight: 500; line-height: 1.65; margin: 10px 0px; color: {_BLACK};",
-    "h2":     f"font-size: 17pt; font-weight: 700; color: {_BLACK}; margin: 24px 0px 5px; line-height: 1.38; font-family: Arial, sans-serif; font-style: normal; text-decoration: none;",
-    "h3":     f"font-size: 14pt; font-weight: 700; color: {_BLACK}; margin: 20px 0px 6px; line-height: 1.4; font-family: Arial, sans-serif; font-style: normal;",
-    "ul":     f"font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.65; margin: 10px 0px 10px 20px; color: {_BLACK};",
-    "ol":     f"font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.65; margin: 10px 0px 10px 20px; color: {_BLACK};",
-    "li":     "margin: 4px 0px;",
-    "table":  "border-collapse: collapse; width: 100%; margin: 14px 0px; font-size: 11pt; font-family: Arial, sans-serif;",
-    "th":     f"border: 1px solid {_GREY_BORDER}; padding: 8px 10px; vertical-align: top; color: {_BLACK}; font-family: Arial, sans-serif; font-weight: 700; background: {_GREY_HEADER}; text-align: left;",
-    "td":     f"border: 1px solid {_GREY_BORDER}; padding: 8px 10px; vertical-align: top; color: {_BLACK}; font-family: Arial, sans-serif;",
-    "a":      f"color: {_SINTECH_RED}; text-decoration: underline; font-weight: 700;",
-    "em":     f"font-family: Arial, sans-serif; font-size: 11pt; font-style: italic; color: {_GREY_MUTED};",
+    "h2":    "font-size: 18px; font-weight: 700; margin: 18px 0 8px; line-height: 1.35;",
+    "h3":    "font-size: 16px; font-weight: 600; margin: 12px 0 6px; line-height: 1.4;",
+    "a":     "color:#dc2626;",
+    "table": "border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; line-height: 1.55; border: 1px solid #d1d5db;",
+    "th":    "border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; font-weight: 600; background: #f9fafb;",
+    "td":    "border: 1px solid #e5e7eb; padding: 8px 10px; vertical-align: top;",
+    "img":   "max-width: 500px; width: 100%; height: auto; display: block; margin: 0 auto;",
 }
+_IMG_WRAP_P = "text-align: center; margin: 16px 0;"
 
 
 def inject_sintech_styles(html: str) -> str:
-    """Áp dụng inline style chuẩn Sintech cho từng tag trong body_html.
+    """Áp inline style CHUẨN MỚI (bài mẫu ThinkBook) cho body_html.
 
-    Mục đích: body render đúng trên Haravan/Sintech theme thay vì plain text
-    (theme không có default style cho h2/h3/table/a inside product description).
+    Style nhẹ: h2/h3/a/table/th/td/img có inline; p/ul/li/strong để theme render
+    (Haravan chỉ giữ inline style — xem memory reference_haravan_strips_style_block).
+    Overwrite style cũ để bài cũ format lại cũng về đúng chuẩn.
     """
     if not html or "<" not in html:
         return html
@@ -89,15 +84,27 @@ def inject_sintech_styles(html: str) -> str:
 
     for tag_name, style in _SINTECH_STYLES.items():
         for tag in soup.find_all(tag_name):
-            existing = tag.get("style", "")
-            if not existing:
-                tag["style"] = style
+            tag["style"] = style
 
-    # <strong> bên trong <a> → áp đồng style với <a> (link đỏ bold)
-    for a_tag in soup.find_all("a"):
-        for strong in a_tag.find_all("strong"):
-            if not strong.get("style"):
-                strong["style"] = _SINTECH_STYLES["a"]
+    # Hàng đầu mỗi bảng = HEADER (nền + đậm) khi bảng toàn <td> (từ Google Docs)
+    for table in soup.find_all("table"):
+        first_row = table.find("tr")
+        if first_row and not first_row.find("th"):
+            for cell in first_row.find_all("td"):
+                cell["style"] = ("border: 1px solid #d1d5db; padding: 8px 10px; "
+                                 "text-align: left; font-weight: 600; background: #f9fafb;")
+
+    # <p> bọc ảnh → căn giữa; <p> chữ thường → bỏ style (theme lo)
+    for p in soup.find_all("p"):
+        if p.find("img"):
+            p["style"] = _IMG_WRAP_P
+        elif p.has_attr("style"):
+            del p["style"]
+
+    # bỏ inline style rác trên list/inline tag → theme lo
+    for tag in soup.find_all(["ul", "ol", "li", "strong", "em", "span"]):
+        if tag.has_attr("style"):
+            del tag["style"]
 
     return str(soup)
 
