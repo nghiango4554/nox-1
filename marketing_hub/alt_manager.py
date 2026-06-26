@@ -547,7 +547,18 @@ _bulk_gen_lock = threading.Lock()
 
 def bulk_gen_job_state() -> dict[str, Any]:
     with _bulk_gen_lock:
-        return dict(_bulk_gen_state)
+        out = dict(_bulk_gen_state)
+    # Alias cho UI template (đọc saved_imgs/worklist_count)
+    out["saved_imgs"] = out.get("saved", 0)
+    if not out.get("running"):
+        try:
+            row = db.get_conn().execute("SELECT COALESCE(SUM(images_no_alt),0) FROM haravan_products").fetchone()
+            out["worklist_count"] = row[0] if row else 0
+        except Exception:
+            out["worklist_count"] = 0
+    else:
+        out["worklist_count"] = out.get("total", 0)
+    return out
 
 
 def stop_bulk_gen() -> bool:
@@ -683,4 +694,171 @@ def start_bulk_gen_async() -> bool:
             return False
     t = threading.Thread(target=run_bulk_gen, daemon=True)
     t.start()
+    return True
+
+
+# ─────────────────── DUAL AI BULK GEN (Codex + Claude song song) ───────────────────
+
+def _gen_alts_ai_for_product(title: str, n: int, provider: str) -> list:
+    """1 AI call (codex hoặc claude) → list n câu ALT cho n ảnh SP. Có thể trả < n (caller fallback)."""
+    import re as _re
+    sys_p = ("Bạn là chuyên gia SEO ảnh. Viết ALT text tiếng Việt cho ảnh sản phẩm máy tính/linh kiện. "
+             "Mô tả trung tính, rõ ràng, KHÔNG marketing, KHÔNG giá, KHÔNG emoji. Mỗi ALT tối đa 125 ký tự.")
+    user_p = (f"Sản phẩm: {title}\n"
+              f"Viết đúng {n} câu ALT KHÁC NHAU cho {n} ảnh của sản phẩm này "
+              f"(ảnh 1 = ảnh chính/hero, ảnh cuối = ảnh tổng thể, các ảnh giữa = góc/chi tiết khác). "
+              f"CHỈ trả về {n} dòng, mỗi dòng 1 ALT, KHÔNG đánh số, KHÔNG giải thích, KHÔNG ký tự thừa.")
+    try:
+        if provider == "codex":
+            raw = codex_provider.call_codex(sys_p, user_p, timeout=120, reasoning_effort="low")
+        else:
+            raw = claude_provider.call_claude(sys_p, user_p, timeout=120)
+    except Exception:
+        return []
+    out = []
+    for ln in (raw or "").splitlines():
+        s = _re.sub(r'^\s*[\d\-\*\.\)\:]+\s*', '', ln).strip().strip('"').strip("'").strip()
+        if s:
+            out.append(s[:125])
+    return out
+
+
+def _process_product_ai(pt: dict, provider: str):
+    """Gen + PUT ALT cho 1 SP bằng provider chỉ định. Cập nhật _bulk_gen_state (locked)."""
+    from content_writer import _gen_alt_for_position
+    import haravan_client as hv_client
+    title = pt["title"]
+    product_id = pt["product_id"]
+    total_sp = len(pt["images"])
+    missing = pt["missing_sp"]
+    skey = "codex_saved" if provider == "codex" else "claude_saved"
+
+    ai_lines = _gen_alts_ai_for_product(title, len(missing), provider)
+
+    # Part 1: ảnh SP gallery
+    for k, (i, im) in enumerate(missing):
+        with _bulk_gen_lock:
+            if _bulk_gen_state["stop_requested"]:
+                return
+        image_id = im.get("id")
+        if not image_id:
+            with _bulk_gen_lock:
+                _bulk_gen_state["skipped"] += 1
+                _bulk_gen_state["processed"] += 1
+            continue
+        alt = ai_lines[k] if k < len(ai_lines) and ai_lines[k] else _gen_alt_for_position(title, i + 1, total_sp)
+        ok = False
+        for attempt in range(2):  # 1 retry (giảm fail do rate-limit nhất thời)
+            try:
+                res = hv_client.put_image_alt(product_id, image_id, alt)
+                if res.get("ok"):
+                    ok = True
+                    break
+            except Exception:
+                pass
+            time.sleep(0.8 * (attempt + 1))
+        if ok:
+            update_image_alt_local(product_id, image_id, alt)
+            with _bulk_gen_lock:
+                _bulk_gen_state["saved"] += 1
+                _bulk_gen_state[skey] = _bulk_gen_state.get(skey, 0) + 1
+        else:
+            with _bulk_gen_lock:
+                _bulk_gen_state["failed"] += 1
+        with _bulk_gen_lock:
+            _bulk_gen_state["processed"] += 1
+        time.sleep(0.3)
+
+    # Part 2: ảnh mô tả (giữ template — nhẹ, đa số đã good)
+    try:
+        desc_imgs, live_html = get_product_desc_images(product_id)
+        updates = [{"index": im["index"], "alt": gen_alt_for_desc_image(title, im["index"])}
+                   for im in desc_imgs if classify_alt(im.get("alt")) != "good"]
+        if updates and live_html:
+            new_html = save_desc_image_alts(product_id, updates, live_html)
+            hv_client.update_product(product_id, {"body_html": new_html})
+            db.mark_alt_synced(product_id)
+            with _bulk_gen_lock:
+                _bulk_gen_state["saved"] += len(updates)
+                _bulk_gen_state[skey] = _bulk_gen_state.get(skey, 0) + len(updates)
+                _bulk_gen_state["total"] += len(updates)
+                _bulk_gen_state["processed"] += len(updates)
+    except Exception:
+        pass
+
+
+def run_bulk_gen_dual(workers_per: int = 3):
+    """N worker/provider song song (Codex + Claude) chia hàng đợi chung. Gen ALT bằng AI."""
+    import queue as _q
+    workers_per = max(1, min(int(workers_per or 3), 8))
+    products = _iter_product_images()
+    tasks, sp_count = [], 0
+    for p in products:
+        missing = [(i, im) for i, im in enumerate(p["images"]) if classify_alt(im.get("alt")) != "good"]
+        if missing:
+            sp_count += len(missing)
+            tasks.append({"product_id": p["product_id"],
+                          "title": (p["title"] or p["handle"] or "").strip(),
+                          "images": p["images"], "missing_sp": missing})
+
+    with _bulk_gen_lock:
+        _bulk_gen_state.update({
+            "running": True, "stop_requested": False, "total": sp_count,
+            "processed": 0, "saved": 0, "failed": 0, "skipped": 0,
+            "codex_saved": 0, "claude_saved": 0, "current": "",
+            "current_codex": "", "current_claude": "", "mode": "dual",
+            "workers_per": workers_per,
+            "started_at": datetime.now().isoformat(timespec="seconds"), "finished_at": None,
+            "message": f"⚡ Dual AI (Codex×{workers_per} + Claude×{workers_per}) — {len(tasks)} SP / {sp_count} ảnh gallery...",
+        })
+
+    q = _q.Queue()
+    for t in tasks:
+        q.put(t)
+
+    def worker(provider):
+        while True:
+            with _bulk_gen_lock:
+                if _bulk_gen_state["stop_requested"]:
+                    return
+            try:
+                pt = q.get_nowait()
+            except _q.Empty:
+                return
+            ckey = "current_codex" if provider == "codex" else "current_claude"
+            with _bulk_gen_lock:
+                _bulk_gen_state[ckey] = pt["title"][:50]
+                _bulk_gen_state["current"] = f"[{provider}] {pt['title'][:50]}"
+            _process_product_ai(pt, provider)
+
+    threads = []
+    for _ in range(workers_per):
+        threads.append(threading.Thread(target=worker, args=("codex",), daemon=True))
+        threads.append(threading.Thread(target=worker, args=("claude",), daemon=True))
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+
+    with _bulk_gen_lock:
+        stop_req = _bulk_gen_state["stop_requested"]
+        done = _bulk_gen_state["saved"]
+        fail = _bulk_gen_state["failed"]
+        cx = _bulk_gen_state.get("codex_saved", 0)
+        cl = _bulk_gen_state.get("claude_saved", 0)
+        _bulk_gen_state.update({
+            "running": False,
+            "finished_at": datetime.now().isoformat(timespec="seconds"),
+            "message": (f"⏹️ Đã dừng — lưu {done} ảnh (Codex {cx} · Claude {cl})"
+                        if stop_req else
+                        f"✅ Xong! Lưu {done} ảnh (Codex {cx} · Claude {cl}) · lỗi {fail}"),
+        })
+
+
+def start_bulk_gen_dual_async(workers_per: int = 3) -> bool:
+    """Khởi chạy dual AI bulk gen (Codex×N + Claude×N). False nếu đang chạy."""
+    with _bulk_gen_lock:
+        if _bulk_gen_state["running"]:
+            return False
+    threading.Thread(target=run_bulk_gen_dual, args=(workers_per,), daemon=True).start()
     return True
