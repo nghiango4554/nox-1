@@ -2,6 +2,14 @@
 
 > File anh (Claude) tự update sau mỗi milestone. Sau /clear, anh đọc file này là biết task tuần này tới đâu, file nào đã edit, bug đang debug. Vợ Nghia có thể scan nhanh để xem anh đang làm gì.
 
+## 🏁 MILESTONE 3/7/2026 — SEO History Command Center LIVE (5055)
+Rebuild `/seo/history` từ bảng thô → **SEO Command Center** hoàn chỉnh, đã **merge master `c834e55`** + **live 5055** (PID 8288, restart từ 1760; 5056 không đụng; 0 Haravan call).
+- **Sửa "link broken ảo"**: dashboard tách link-health 10 bucket → **broken THẬT = 1** (4xx/5xx), 8443 external_unknown/circuit-breaker + timeout/CDN tách riêng KHÔNG tính gãy. Vá `seo_capture_history` lưu `broken_links` = real broken (khớp dashboard, hết spike ảo).
+- **Insights tự động** (5, severity+action) · **Action queue** Dev/Content/SEO/Review · **drilldown drawer** per-URL · **issue-group + link-bucket bấm để lọc** · **per-URL snapshot foundation** (`seo_history_url_issues` additive, populate khi capture — snapshot #34 = per-URL đầu tiên; cần thêm 1 lần chụp nữa để so new/fixed) · **export lỗi/link CSV + copy báo cáo** · **data-quality banner** · health score 0-100.
+- Additive DB migration: bảng `seo_history_url_issues` + index `idx_seo_links_target` (idempotent, 0 mất data).
+- Merge gồm: `ee6ef6b`→`351dc27` (spec/view-model/UI/insights/export/dọn) + fix capture broken. WIP products-new lưu riêng `c43fde2` nhánh `wip-products-new-full-workflow`.
+- ⏭️ Next: chụp snapshot lần 2 (sau crawl mới) để per-URL compare có data · push origin master · gỡ worktree seo-history sau push.
+
 ## 📌 TASK 3/7/2026 — Rebuild dashboard `/seo/history` (branch `wip-seo-history-dashboard`, worktree `nox-1-seo-history`)
 
 Nâng cấp `/seo/history` thành dashboard lịch sử SEO hiện đại. Base origin/master `64e02ce`. KHÔNG đụng Haravan live. Workflow Spec→Plan→Build→Test→Review→Ship, phase nhỏ.

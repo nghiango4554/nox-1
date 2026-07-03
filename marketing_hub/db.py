@@ -2257,8 +2257,14 @@ def seo_capture_history(note: str = "") -> int:
     Lưu cả per url_type avg score (product/blog/collection) cho timeline chart.
     """
     stats = seo_stats()
-    bsum = seo_broken_link_summary()
     conn = get_conn()
+    # broken_links = link GÃY THẬT (4xx trừ 403/429 + 5xx) — KHÔNG gộp
+    # blocked/timeout/circuit-breaker (để khớp broken_true của dashboard).
+    real_broken = conn.execute(
+        """SELECT COUNT(DISTINCT target_url) c FROM seo_links
+           WHERE status_code >= 500
+              OR (status_code BETWEEN 400 AND 499 AND status_code NOT IN (403, 429))"""
+    ).fetchone()["c"]
     per_type_rows = conn.execute(
         """SELECT url_type, ROUND(AVG(score), 1) avg_s
            FROM seo_pages
@@ -2275,7 +2281,7 @@ def seo_capture_history(note: str = "") -> int:
             datetime.now().isoformat(timespec="seconds"),
             stats["total"], stats["avg_score"],
             stats["good"], stats["ok"], stats["bad"],
-            bsum.get("broken", 0),
+            real_broken,
             note,
             per_type.get("product") or 0,
             per_type.get("blog") or 0,
