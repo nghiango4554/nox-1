@@ -28,6 +28,15 @@ Nâng cấp `/seo/history` thành dashboard lịch sử SEO hiện đại. Base 
 - Restart 5055: KHÔNG (thay đổi ở worktree branch, chờ duyệt merge) · Haravan: KHÔNG · 5056: vẫn listening.
 - Next: Phase D (per-URL new/fixed/regressed — bảng additive populate going-forward) · Phase E (export lỗi CSV + copy summary + action list) · Phase F (polish thêm nếu cần).
 
+**Phase D–L — Command Center (insights + action queue + drilldown + per-URL compare + export + polish) ✅**
+- Files: `seo_history_view.py` (insights/action-queue/report/export/owner-classify) · `db.py` (bảng `seo_history_url_issues` + `seo_capture_url_issues` + `seo_history_url_compare` + hook capture + cleanup) · `routes/seo_core.py` (2 route export CSV + issue_labels) · `templates/seo_history.html` (dựng lại full).
+- UI mới: **Tóm tắt nhanh** (5 insight tự động severity+action) · **Hàng đợi xử lý** 4 tab Dev/Content/SEO/Review (owner classify từ issue code + link bucket) · **drilldown drawer** (click URL → panel phải) · issue-group + link-bucket **bấm để lọc** bảng · **so sánh per-URL** (new/fixed/regressed/improved, empty-state khi <2 snapshot) · **data-quality banner** (external_unknown lớn / snapshot cũ 0 broken / chưa có per-URL) · bảng URL thêm filter owner + "chỉ lỗi thật" + sort + empty-state · nút **Export lỗi CSV / Export link CSV / Copy báo cáo**.
+- Backend logic: `build_insights`, `build_action_queue`, `data_quality_flags`, `summary_report_text`, `issues_export_rows`, `links_export_rows`; owner map dev/content/seo + `SUGGESTED_ACTION`/`ISSUE_LABEL_VI`. Per-URL snapshot **additive** (populate going-forward khi capture; idempotent; cleanup theo snapshot).
+- Verify: compileall exit 0 · test_client **12/12 route 200** (gồm 2 export mới) · export issues 2661 rows / links 30000 rows (BOM Excel) · per-URL capture 2661 rows idempotent + compare OK.
+- Browser CDP (5057 worktree, DB copy): insights 5 · action-queue 4 tab switch · group filter 500→478→500 · drawer mở · copy report OK · desktop + **mobile 390 no-overflow** · console chỉ favicon 404 pre-existing.
+- Restart 5055: KHÔNG · Haravan: KHÔNG · 5056: LISTENING nguyên.
+- Commit: `478c88c` (backend) · `cec32e5` (UI). Next: chờ vợ duyệt → merge master → restart 5055.
+
 ## 🚧 Đang dở (active) — snapshot trước /clear LẦN 2 (16/5 21:00)
 
 ### 🔴 Active — có thể trigger NGAY (anh hoặc vợ 1-click)
