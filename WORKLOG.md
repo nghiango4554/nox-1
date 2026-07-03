@@ -2,6 +2,18 @@
 
 > File anh (Claude) tự update sau mỗi milestone. Sau /clear, anh đọc file này là biết task tuần này tới đâu, file nào đã edit, bug đang debug. Vợ Nghia có thể scan nhanh để xem anh đang làm gì.
 
+## 📌 TASK 3/7/2026 — Rebuild dashboard `/seo/history` (branch `wip-seo-history-dashboard`, worktree `nox-1-seo-history`)
+
+Nâng cấp `/seo/history` thành dashboard lịch sử SEO hiện đại. Base origin/master `64e02ce`. KHÔNG đụng Haravan live. Workflow Spec→Plan→Build→Test→Review→Ship, phase nhỏ.
+
+**Phase A — Spec + Audit ✅ (no behavior change)**
+- Files changed: `marketing_hub/docs/SEO_HISTORY_DASHBOARD_SPEC.md` (mới) · `WORKLOG.md`.
+- Audit xong 10 câu: data từ `seo_history`/`seo_cwv_history`/`seo_schema_history` + `seo_pages`/`seo_links`. Lỗi phát hiện: cột "Gãy"=0 mọi snapshot (chụp trước link-check) · `seo_stats.broken` đếm NULL · `seo_broken_link_summary` vẫn tính `circuit_breaker_skip` là broken · thiếu index `seo_links.target_url` · không filter/drilldown/per-URL compare.
+- Verify: `compileall marketing_hub` sẽ chạy ở cuối phase build (Phase A chỉ thêm doc).
+- Commit: (Phase A) — chờ.
+- Server 5055 restart: KHÔNG (chưa đụng code). Haravan live: KHÔNG đụng. Worker 5056: KHÔNG đụng.
+- Next: Phase B — backend view-model (`seo_history_view.py`) + link-health 10 bucket + health score helper + index migration.
+
 ## 🚧 Đang dở (active) — snapshot trước /clear LẦN 2 (16/5 21:00)
 
 ### 🔴 Active — có thể trigger NGAY (anh hoặc vợ 1-click)
