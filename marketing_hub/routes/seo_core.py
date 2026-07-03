@@ -29,6 +29,7 @@ from werkzeug.utils import secure_filename
 
 import db
 import seo as seo_mod
+import seo_history_view
 from routes.state import SEO_SNAPSHOT_DIR
 
 
@@ -383,6 +384,12 @@ def seo_history_page():
     schema_timeline = db.seo_schema_history_timeline(limit=52)
     regression = db.seo_history_regression_check()
     ctr_tracking = db.gsc_ctr_tracking_list(limit=200)
+    try:
+        dash = seo_history_view.dashboard_context()
+    except Exception as e:
+        dash = {"error": f"{e.__class__.__name__}: {e}"}
+    issue_labels = {c: (v[1] if v and len(v) > 1 else c)
+                    for c, v in seo_mod.ISSUE_LABELS.items()}
     return render_template(
         "seo_history.html",
         history=history,
@@ -391,7 +398,16 @@ def seo_history_page():
         schema_timeline=schema_timeline,
         regression=regression,
         ctr_tracking=ctr_tracking, active="history",
+        dash=dash, issue_labels=issue_labels,
     )
+
+
+def seo_history_data():
+    """JSON view-model cho dashboard /seo/history (đọc DB thuần, không API live)."""
+    try:
+        return jsonify({"ok": True, **seo_history_view.dashboard_context()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{e.__class__.__name__}: {e}"}), 500
 
 
 def seo_history_export_csv():
@@ -416,6 +432,38 @@ def seo_history_export_csv():
         mimetype="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'},
     )
+
+
+def seo_history_export_issues():
+    """CSV các URL có vấn đề: url, page_type, severity, score, status, issues, action, owner."""
+    rows = seo_history_view.issues_export_rows(limit=5000)
+    keys = ["url", "page_type", "severity", "score", "status_code",
+            "issues", "suggested_action", "owner"]
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=keys, extrasaction="ignore")
+    w.writeheader()
+    for r in rows:
+        w.writerow({k: r.get(k) if r.get(k) is not None else "" for k in keys})
+    fname = f"seo_url_issues_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(buf.getvalue().encode("utf-8-sig"),
+                    mimetype="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
+def seo_history_export_links():
+    """CSV link health: source_url, target_url, bucket, status, reason, action."""
+    rows = seo_history_view.links_export_rows(limit=30000)
+    keys = ["source_url", "target_url", "bucket", "status_code",
+            "reason", "suggested_action"]
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=keys, extrasaction="ignore")
+    w.writeheader()
+    for r in rows:
+        w.writerow({k: r.get(k) if r.get(k) is not None else "" for k in keys})
+    fname = f"seo_link_health_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return Response(buf.getvalue().encode("utf-8-sig"),
+                    mimetype="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 def seo_history_compare_page():
@@ -550,7 +598,10 @@ def register(app):
 
     # History
     app.add_url_rule("/seo/history", "seo_history_page", seo_history_page)
+    app.add_url_rule("/seo/history/data.json", "seo_history_data", seo_history_data)
     app.add_url_rule("/seo/history/export.csv", "seo_history_export_csv", seo_history_export_csv)
+    app.add_url_rule("/seo/history/export-issues.csv", "seo_history_export_issues", seo_history_export_issues)
+    app.add_url_rule("/seo/history/export-links.csv", "seo_history_export_links", seo_history_export_links)
     app.add_url_rule("/seo/history/compare", "seo_history_compare_page", seo_history_compare_page)
     app.add_url_rule("/seo/history/capture", "seo_history_capture", seo_history_capture, methods=["POST"])
 

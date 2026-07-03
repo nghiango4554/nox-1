@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS seo_links (
 
 CREATE INDEX IF NOT EXISTS idx_seo_links_source ON seo_links(source_url);
 CREATE INDEX IF NOT EXISTS idx_seo_links_status ON seo_links(status_code);
+CREATE INDEX IF NOT EXISTS idx_seo_links_target ON seo_links(target_url);
 
 CREATE TABLE IF NOT EXISTS activity_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -132,6 +133,20 @@ CREATE TABLE IF NOT EXISTS seo_history (
     note TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_seo_history_at ON seo_history(captured_at);
+
+CREATE TABLE IF NOT EXISTS seo_history_url_issues (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    snapshot_id INTEGER NOT NULL,
+    url TEXT NOT NULL,
+    url_type TEXT,
+    score INTEGER,
+    status_code INTEGER,
+    issue_codes_json TEXT,
+    severity TEXT,
+    captured_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_seo_hui_snap ON seo_history_url_issues(snapshot_id);
+CREATE INDEX IF NOT EXISTS idx_seo_hui_url ON seo_history_url_issues(url);
 
 CREATE TABLE IF NOT EXISTS haravan_products (
     id INTEGER PRIMARY KEY,
@@ -2270,12 +2285,122 @@ def seo_capture_history(note: str = "") -> int:
     rid = cur.lastrowid
     conn.commit()
     conn.close()
+    # Per-URL issue snapshot (going-forward; phục vụ so sánh new/fixed).
+    try:
+        seo_capture_url_issues(rid)
+    except Exception:
+        pass
     # Auto-cleanup giữ 52 snapshot mới nhất (1 năm nếu weekly)
     try:
         seo_history_cleanup(keep=52)
     except Exception:
         pass
     return rid
+
+
+def seo_capture_url_issues(snapshot_id: int) -> int:
+    """Lưu trạng thái issue per-URL của snapshot (từ seo_pages). Idempotent theo snapshot_id."""
+    conn = get_conn()
+    exists = conn.execute(
+        "SELECT 1 FROM seo_history_url_issues WHERE snapshot_id=? LIMIT 1", (snapshot_id,)
+    ).fetchone()
+    if exists:
+        conn.close()
+        return 0
+    cap = datetime.now().isoformat(timespec="seconds")
+    rows = conn.execute(
+        """SELECT url, url_type, score, status_code, issues
+           FROM seo_pages
+           WHERE last_crawled IS NOT NULL
+             AND issues IS NOT NULL AND issues != '' AND issues != '[]'"""
+    ).fetchall()
+    payload = []
+    for r in rows:
+        try:
+            arr = json.loads(r["issues"]) or []
+        except (ValueError, TypeError):
+            arr = []
+        codes = sorted({it.get("code") for it in arr if it.get("code")})
+        has_err = any(it.get("level") == "error" for it in arr)
+        sc = r["score"] if r["score"] is not None else 0
+        severity = "critical" if (has_err or sc < 50) else ("warning" if sc < 65 else "ok")
+        payload.append((snapshot_id, r["url"], r["url_type"], r["score"],
+                        r["status_code"], json.dumps(codes), severity, cap))
+    conn.executemany(
+        """INSERT INTO seo_history_url_issues
+           (snapshot_id, url, url_type, score, status_code, issue_codes_json, severity, captured_at)
+           VALUES (?,?,?,?,?,?,?,?)""",
+        payload,
+    )
+    conn.commit()
+    conn.close()
+    return len(payload)
+
+
+def seo_history_url_compare() -> dict:
+    """So per-URL 2 snapshot mới nhất trong seo_history_url_issues.
+    Return available=False nếu <2 snapshot. Ngược lại: new_issue_urls, fixed_urls,
+    regressed, improved (mỗi cái list dict + count)."""
+    conn = get_conn()
+    snaps = conn.execute(
+        "SELECT DISTINCT snapshot_id FROM seo_history_url_issues ORDER BY snapshot_id DESC LIMIT 2"
+    ).fetchall()
+    if len(snaps) < 2:
+        conn.close()
+        return {"available": False, "snapshots": len(snaps)}
+    latest_id, prev_id = snaps[0]["snapshot_id"], snaps[1]["snapshot_id"]
+
+    def _load(sid):
+        return {r["url"]: r for r in conn.execute(
+            "SELECT url, url_type, score, status_code, issue_codes_json, severity "
+            "FROM seo_history_url_issues WHERE snapshot_id=?", (sid,)).fetchall()}
+
+    cur, prev = _load(latest_id), _load(prev_id)
+    conn.close()
+
+    def _codes(row):
+        try:
+            return set(json.loads(row["issue_codes_json"]) or [])
+        except (ValueError, TypeError):
+            return set()
+
+    new_issue, fixed, regressed, improved = [], [], [], []
+    for url, cr in cur.items():
+        pr = prev.get(url)
+        cc = _codes(cr)
+        pc = _codes(pr) if pr else set()
+        if pr is None:
+            if cc:
+                new_issue.append({"url": url, "url_type": cr["url_type"],
+                                  "new_codes": sorted(cc), "severity": cr["severity"]})
+            continue
+        added = cc - pc
+        if added:
+            new_issue.append({"url": url, "url_type": cr["url_type"],
+                              "new_codes": sorted(added), "severity": cr["severity"]})
+        cs = cr["score"] if cr["score"] is not None else 0
+        ps = pr["score"] if pr["score"] is not None else 0
+        if cs < ps - 2:
+            regressed.append({"url": url, "url_type": cr["url_type"],
+                              "from": ps, "to": cs})
+        elif cs > ps + 2:
+            improved.append({"url": url, "url_type": cr["url_type"],
+                             "from": ps, "to": cs})
+    for url, pr in prev.items():
+        cr = cur.get(url)
+        pc = _codes(pr)
+        cc = _codes(cr) if cr else set()
+        removed = pc - cc
+        if removed:
+            fixed.append({"url": url, "url_type": pr["url_type"],
+                          "fixed_codes": sorted(removed)})
+    return {
+        "available": True, "latest_id": latest_id, "prev_id": prev_id,
+        "new_issue": new_issue[:200], "new_issue_count": len(new_issue),
+        "fixed": fixed[:200], "fixed_count": len(fixed),
+        "regressed": regressed[:200], "regressed_count": len(regressed),
+        "improved": improved[:200], "improved_count": len(improved),
+    }
 
 
 def seo_history_cleanup(keep: int = 52) -> int:
@@ -2289,6 +2414,7 @@ def seo_history_cleanup(keep: int = 52) -> int:
         return 0
     cutoff = row["id"]
     cur = conn.execute("DELETE FROM seo_history WHERE id <= ?", (cutoff,))
+    conn.execute("DELETE FROM seo_history_url_issues WHERE snapshot_id <= ?", (cutoff,))
     n = cur.rowcount
     conn.commit()
     conn.close()

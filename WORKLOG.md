@@ -2,6 +2,41 @@
 
 > File anh (Claude) tự update sau mỗi milestone. Sau /clear, anh đọc file này là biết task tuần này tới đâu, file nào đã edit, bug đang debug. Vợ Nghia có thể scan nhanh để xem anh đang làm gì.
 
+## 📌 TASK 3/7/2026 — Rebuild dashboard `/seo/history` (branch `wip-seo-history-dashboard`, worktree `nox-1-seo-history`)
+
+Nâng cấp `/seo/history` thành dashboard lịch sử SEO hiện đại. Base origin/master `64e02ce`. KHÔNG đụng Haravan live. Workflow Spec→Plan→Build→Test→Review→Ship, phase nhỏ.
+
+**Phase A — Spec + Audit ✅ (no behavior change)**
+- Files changed: `marketing_hub/docs/SEO_HISTORY_DASHBOARD_SPEC.md` (mới) · `WORKLOG.md`.
+- Audit xong 10 câu: data từ `seo_history`/`seo_cwv_history`/`seo_schema_history` + `seo_pages`/`seo_links`. Lỗi phát hiện: cột "Gãy"=0 mọi snapshot (chụp trước link-check) · `seo_stats.broken` đếm NULL · `seo_broken_link_summary` vẫn tính `circuit_breaker_skip` là broken · thiếu index `seo_links.target_url` · không filter/drilldown/per-URL compare.
+- Verify: `compileall marketing_hub` sẽ chạy ở cuối phase build (Phase A chỉ thêm doc).
+- Commit: (Phase A) — chờ.
+- Server 5055 restart: KHÔNG (chưa đụng code). Haravan live: KHÔNG đụng. Worker 5056: KHÔNG đụng.
+- Next: Phase B — backend view-model (`seo_history_view.py`) + link-health 10 bucket + health score helper + index migration.
+
+**Phase B — Backend view-model ✅ (commit `d52461a`)**
+- Files: `marketing_hub/seo_history_view.py` (mới) · `db.py` (index `idx_seo_links_target`) · `routes/seo_core.py` (wire context + `/seo/history/data.json`).
+- Verify: compileall exit 0 · test_client 8/8 route 200 · data.json ok.
+- 🎯 Phá án "66% broken": link buckets thật = broken_4xx **1** + server_5xx 0 → **broken_true = 1** (8443 là `external_unknown`/circuit-breaker skip bị đếm nhầm). Health score 98.
+- Restart 5055: KHÔNG · Haravan: KHÔNG · 5056: KHÔNG.
+
+**Phase C — UI rebuild ✅ (commit `362aca8`)**
+- Files: `marketing_hub/templates/seo_history.html` (dựng lại) · `routes/seo_core.py` (pass `issue_labels`).
+- UI mới: health score card (badge + delta), KPI grid 8 ô, panel link-health 10 bucket (tách gãy-thật vs blocked/timeout/CDN), compare panel vs snapshot trước, issue breakdown 8 nhóm (bar), bảng "URL cần ưu tiên" 500 dòng + filter/search client-side + sticky header + copy URL, giữ 4 chart timeline + CWV + schema, empty/error states.
+- Verify: compileall exit 0 · test_client render 200 (509KB, đủ marker, 0 Jinja error) · 8/8 route 200.
+- Browser CDP (server tạm 5057 từ worktree, DB copy read-only, KHÔNG đụng 5055): desktop 500 rows + health + 10 bucket, **no h-overflow**; filter 500→233→500 **PASS**; mobile 390 **no-overflow PASS**; console error = chỉ `/favicon.ico` 404 (pre-existing mọi trang, không phải bug template).
+- Restart 5055: KHÔNG (thay đổi ở worktree branch, chờ duyệt merge) · Haravan: KHÔNG · 5056: vẫn listening.
+- Next: Phase D (per-URL new/fixed/regressed — bảng additive populate going-forward) · Phase E (export lỗi CSV + copy summary + action list) · Phase F (polish thêm nếu cần).
+
+**Phase D–L — Command Center (insights + action queue + drilldown + per-URL compare + export + polish) ✅**
+- Files: `seo_history_view.py` (insights/action-queue/report/export/owner-classify) · `db.py` (bảng `seo_history_url_issues` + `seo_capture_url_issues` + `seo_history_url_compare` + hook capture + cleanup) · `routes/seo_core.py` (2 route export CSV + issue_labels) · `templates/seo_history.html` (dựng lại full).
+- UI mới: **Tóm tắt nhanh** (5 insight tự động severity+action) · **Hàng đợi xử lý** 4 tab Dev/Content/SEO/Review (owner classify từ issue code + link bucket) · **drilldown drawer** (click URL → panel phải) · issue-group + link-bucket **bấm để lọc** bảng · **so sánh per-URL** (new/fixed/regressed/improved, empty-state khi <2 snapshot) · **data-quality banner** (external_unknown lớn / snapshot cũ 0 broken / chưa có per-URL) · bảng URL thêm filter owner + "chỉ lỗi thật" + sort + empty-state · nút **Export lỗi CSV / Export link CSV / Copy báo cáo**.
+- Backend logic: `build_insights`, `build_action_queue`, `data_quality_flags`, `summary_report_text`, `issues_export_rows`, `links_export_rows`; owner map dev/content/seo + `SUGGESTED_ACTION`/`ISSUE_LABEL_VI`. Per-URL snapshot **additive** (populate going-forward khi capture; idempotent; cleanup theo snapshot).
+- Verify: compileall exit 0 · test_client **12/12 route 200** (gồm 2 export mới) · export issues 2661 rows / links 30000 rows (BOM Excel) · per-URL capture 2661 rows idempotent + compare OK.
+- Browser CDP (5057 worktree, DB copy): insights 5 · action-queue 4 tab switch · group filter 500→478→500 · drawer mở · copy report OK · desktop + **mobile 390 no-overflow** · console chỉ favicon 404 pre-existing.
+- Restart 5055: KHÔNG · Haravan: KHÔNG · 5056: LISTENING nguyên.
+- Commit: `478c88c` (backend) · `cec32e5` (UI). Next: chờ vợ duyệt → merge master → restart 5055.
+
 ## 🚧 Đang dở (active) — snapshot trước /clear LẦN 2 (16/5 21:00)
 
 ### 🔴 Active — có thể trigger NGAY (anh hoặc vợ 1-click)
