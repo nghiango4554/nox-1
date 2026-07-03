@@ -388,6 +388,8 @@ def seo_history_page():
         dash = seo_history_view.dashboard_context()
     except Exception as e:
         dash = {"error": f"{e.__class__.__name__}: {e}"}
+    issue_labels = {c: (v[1] if v and len(v) > 1 else c)
+                    for c, v in seo_mod.ISSUE_LABELS.items()}
     return render_template(
         "seo_history.html",
         history=history,
@@ -396,7 +398,7 @@ def seo_history_page():
         schema_timeline=schema_timeline,
         regression=regression,
         ctr_tracking=ctr_tracking, active="history",
-        dash=dash,
+        dash=dash, issue_labels=issue_labels,
     )
 
 

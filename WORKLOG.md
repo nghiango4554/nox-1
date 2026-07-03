@@ -14,6 +14,20 @@ Nâng cấp `/seo/history` thành dashboard lịch sử SEO hiện đại. Base 
 - Server 5055 restart: KHÔNG (chưa đụng code). Haravan live: KHÔNG đụng. Worker 5056: KHÔNG đụng.
 - Next: Phase B — backend view-model (`seo_history_view.py`) + link-health 10 bucket + health score helper + index migration.
 
+**Phase B — Backend view-model ✅ (commit `d52461a`)**
+- Files: `marketing_hub/seo_history_view.py` (mới) · `db.py` (index `idx_seo_links_target`) · `routes/seo_core.py` (wire context + `/seo/history/data.json`).
+- Verify: compileall exit 0 · test_client 8/8 route 200 · data.json ok.
+- 🎯 Phá án "66% broken": link buckets thật = broken_4xx **1** + server_5xx 0 → **broken_true = 1** (8443 là `external_unknown`/circuit-breaker skip bị đếm nhầm). Health score 98.
+- Restart 5055: KHÔNG · Haravan: KHÔNG · 5056: KHÔNG.
+
+**Phase C — UI rebuild ✅ (commit `362aca8`)**
+- Files: `marketing_hub/templates/seo_history.html` (dựng lại) · `routes/seo_core.py` (pass `issue_labels`).
+- UI mới: health score card (badge + delta), KPI grid 8 ô, panel link-health 10 bucket (tách gãy-thật vs blocked/timeout/CDN), compare panel vs snapshot trước, issue breakdown 8 nhóm (bar), bảng "URL cần ưu tiên" 500 dòng + filter/search client-side + sticky header + copy URL, giữ 4 chart timeline + CWV + schema, empty/error states.
+- Verify: compileall exit 0 · test_client render 200 (509KB, đủ marker, 0 Jinja error) · 8/8 route 200.
+- Browser CDP (server tạm 5057 từ worktree, DB copy read-only, KHÔNG đụng 5055): desktop 500 rows + health + 10 bucket, **no h-overflow**; filter 500→233→500 **PASS**; mobile 390 **no-overflow PASS**; console error = chỉ `/favicon.ico` 404 (pre-existing mọi trang, không phải bug template).
+- Restart 5055: KHÔNG (thay đổi ở worktree branch, chờ duyệt merge) · Haravan: KHÔNG · 5056: vẫn listening.
+- Next: Phase D (per-URL new/fixed/regressed — bảng additive populate going-forward) · Phase E (export lỗi CSV + copy summary + action list) · Phase F (polish thêm nếu cần).
+
 ## 🚧 Đang dở (active) — snapshot trước /clear LẦN 2 (16/5 21:00)
 
 ### 🔴 Active — có thể trigger NGAY (anh hoặc vợ 1-click)
