@@ -29,6 +29,7 @@ from werkzeug.utils import secure_filename
 
 import db
 import seo as seo_mod
+import seo_history_view
 from routes.state import SEO_SNAPSHOT_DIR
 
 
@@ -383,6 +384,10 @@ def seo_history_page():
     schema_timeline = db.seo_schema_history_timeline(limit=52)
     regression = db.seo_history_regression_check()
     ctr_tracking = db.gsc_ctr_tracking_list(limit=200)
+    try:
+        dash = seo_history_view.dashboard_context()
+    except Exception as e:
+        dash = {"error": f"{e.__class__.__name__}: {e}"}
     return render_template(
         "seo_history.html",
         history=history,
@@ -391,7 +396,16 @@ def seo_history_page():
         schema_timeline=schema_timeline,
         regression=regression,
         ctr_tracking=ctr_tracking, active="history",
+        dash=dash,
     )
+
+
+def seo_history_data():
+    """JSON view-model cho dashboard /seo/history (đọc DB thuần, không API live)."""
+    try:
+        return jsonify({"ok": True, **seo_history_view.dashboard_context()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"{e.__class__.__name__}: {e}"}), 500
 
 
 def seo_history_export_csv():
@@ -550,6 +564,7 @@ def register(app):
 
     # History
     app.add_url_rule("/seo/history", "seo_history_page", seo_history_page)
+    app.add_url_rule("/seo/history/data.json", "seo_history_data", seo_history_data)
     app.add_url_rule("/seo/history/export.csv", "seo_history_export_csv", seo_history_export_csv)
     app.add_url_rule("/seo/history/compare", "seo_history_compare_page", seo_history_compare_page)
     app.add_url_rule("/seo/history/capture", "seo_history_capture", seo_history_capture, methods=["POST"])

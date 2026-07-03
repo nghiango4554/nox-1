@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS seo_links (
 
 CREATE INDEX IF NOT EXISTS idx_seo_links_source ON seo_links(source_url);
 CREATE INDEX IF NOT EXISTS idx_seo_links_status ON seo_links(status_code);
+CREATE INDEX IF NOT EXISTS idx_seo_links_target ON seo_links(target_url);
 
 CREATE TABLE IF NOT EXISTS activity_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
