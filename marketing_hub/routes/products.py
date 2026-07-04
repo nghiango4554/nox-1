@@ -190,6 +190,21 @@ def products_new_create():
             except Exception as e:
                 errors.append(f"upsert SEO meta fail: {e}")
 
+        # Flat-field SEO — theme Sintech CHỈ đọc metafields_global_* set qua PUT
+        # product; KHÔNG đọc /metafields endpoint (metafield lưu OK nhưng <title> +
+        # meta description trang live bị tự sinh từ body). Set thêm để SEO lên đúng.
+        if seo_title or seo_meta:
+            flat = {"id": product_id}
+            if seo_title:
+                flat["metafields_global_title_tag"] = seo_title
+            if seo_meta:
+                flat["metafields_global_description_tag"] = seo_meta
+            try:
+                with hv_client.allow_blocked_operations("ui_form:/products/new"):
+                    hv_client.update_product(product_id, flat)
+            except Exception as e:
+                errors.append(f"flat SEO PUT fail: {e}")
+
         body_check = {}
         try:
             with hv_client.allow_blocked_operations("ui_form:/products/new"):

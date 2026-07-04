@@ -289,13 +289,29 @@ INTERNAL LINKS (body):
 - CẤM anchor "tại đây" / "xem thêm" / "click here" / full tên SP
 
 ═══════════════════════════════════════════════════════════════
+TÊN SP TRONG BODY — GỌN + đúng hoa/thường (QUAN TRỌNG, hay sai):
+═══════════════════════════════════════════════════════════════
+- KHÔNG lặp full tên SP dài trong heading/câu văn. Dùng **tên gọn = Loại + Hãng + Model**,
+  BỎ đuôi mô tả (màu / kích thước / công suất / chiều dài / "1m" / "LED" / "Đen"...).
+  • full "Cáp sạc BWOO BO-X323CC Type-C to Type-C 65W màn hình LED đen 1m" → gọn "cáp BWOO BO-X323CC"
+  • full "Fan case VSP SF-1225M12S LED Rainbow" → gọn "quạt VSP SF-1225M12S"
+  • full "Hub ARGB Leopard remote 5V" → gọn "hub Leopard ARGB"
+- Áp ĐÚNG **CASE RULE** (giống phần seo_title) cho CẢ body: Loại SP sentence-case
+  ("cáp sạc", "màn hình", "vỏ case"), CHỈ HOA brand/model/acronym (BWOO, VSP, Type-C,
+  LED, ARGB, RTX, RGB...). CẤM Title-Case mọi từ ("Màn Hình LED Đen" SAI).
+- Tên gọn ĐỨNG ĐẦU câu/heading → hoa chữ cái đầu ("Cáp BWOO BO-X323CC..."); nằm GIỮA
+  câu → thường ("...của cáp BWOO BO-X323CC"). Heading dạng "Điểm nổi bật của {tên gọn}"
+  → "của" + tên gọn viết THƯỜNG.
+- H2 trên cùng = tên SP gọn sentence-case (chữ đầu hoa), có thể kèm 1 đặc điểm chính.
+
+═══════════════════════════════════════════════════════════════
 BODY_HTML — CẤU TRÚC BẮT BUỘC (theo đúng thứ tự):
 ═══════════════════════════════════════════════════════════════
 
-<h2>{Tên SP}</h2>
+<h2>{Tên SP gọn — sentence-case, có thể kèm 1 đặc điểm chính}</h2>
 <p>Hook 2-4 câu giới thiệu SP, đa dạng câu mở (định nghĩa khô / trải nghiệm / nhu cầu khách / so sánh / tình huống dùng). Có 1 link <strong>Sintech</strong> homepage.</p>
 
-<h2>Điểm nổi bật của {Tên SP}</h2>
+<h2>Điểm nổi bật của {tên SP gọn}</h2>
 <p>Đoạn dẫn 2 câu trước khi vào H3 con.</p>
 <h3>Thiết kế và cảm giác sử dụng</h3>
 <p>2-3 câu.</p>
@@ -335,7 +351,7 @@ BODY_HTML — CẤU TRÚC BẮT BUỘC (theo đúng thứ tự):
 <p>Đoạn 1 (đúng 2 câu): kinh nghiệm tư vấn + build PC + uy tín thực tế.</p>
 <p>Đoạn 2 (đúng 2 câu): BẮT BUỘC chèn NGUYÊN VĂN câu sau như câu đầu của đoạn: "Sintech hiện công bố chính sách bán hàng, kiểm hàng, vận chuyển và trả góp 0% qua thẻ tín dụng đối với 1 số sản phẩm." + 1 câu chốt.</p>
 
-<h2>Câu hỏi thường gặp về {Tên SP}</h2>
+<h2>Câu hỏi thường gặp về {tên SP gọn}</h2>
 <p>1 câu dẫn.</p>
 <h3>Câu hỏi 1?</h3>
 <p>Trả lời 2-4 câu.</p>
@@ -506,6 +522,8 @@ ANGLE PICK = {angle}
 
 [body_html]
 - HTML thuần (không Markdown, không backslash)
+- TÊN SP trong heading/câu: dùng TÊN GỌN (Loại+Hãng+Model), KHÔNG full tên dài;
+  áp case rule (chỉ hoa brand/model/acronym, KHÔNG Title-Case)
 - Đầy đủ 7 section + outro + signature theo SYSTEM
 - 3-6 internal link (`<a href="..."><strong>...</strong></a>`)
 - ~800-1500 từ tổng (SP đơn giản 800-1200, mid-tier 1300-1500)
