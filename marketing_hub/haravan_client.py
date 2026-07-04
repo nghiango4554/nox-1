@@ -214,6 +214,15 @@ def get_product(product_id: int) -> dict:
     return data.get("product", {})
 
 
+def get_product_id_by_handle(handle: str):
+    """Resolve product handle → haravan_id qua admin API. None nếu SP không tồn tại.
+    Dùng khi cache local miss (SP mới chưa sync / race gen⨯sync)."""
+    data = _request("GET", "/products.json",
+                    params={"handle": handle, "fields": "id,handle"})
+    prods = data.get("products", [])
+    return prods[0]["id"] if prods else None
+
+
 def list_products_in_collection(collection_id: int, fields: str = "id,handle,title",
                                 max_pages: int = 60) -> list:
     """Tất cả SP thuộc 1 collection (custom hoặc smart) qua /products.json?collection_id=.

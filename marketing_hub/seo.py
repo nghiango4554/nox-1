@@ -2597,9 +2597,17 @@ def _resolve_product_for_url(url: str) -> dict:
         return {"ok": False, "error": "URL không match pattern /products/<handle>."}
     handle = m.group(1)
     row = db.hv_get_product_by_handle(handle)
-    if not row:
-        return {"ok": False, "error": "Không tìm thấy SP trong DB local. Sync Haravan products trước."}
-    haravan_id = row["haravan_id"]
+    if row:
+        haravan_id = row["haravan_id"]
+    else:
+        # Cache miss: SP mới chưa sync HOẶC race gen⨯sync (cache chưa nạp xong lúc gen).
+        # Resolve thẳng từ Haravan thay vì fail (bug batch gen 08:42 sáng 4/7).
+        try:
+            haravan_id = haravan_client.get_product_id_by_handle(handle)
+        except Exception as e:
+            return {"ok": False, "error": f"Resolve handle từ Haravan lỗi: {e}"}
+        if not haravan_id:
+            return {"ok": False, "error": "SP không có trên Haravan (handle sai hoặc đã xóa)."}
     try:
         product = haravan_client.get_product(haravan_id)
     except Exception as e:
