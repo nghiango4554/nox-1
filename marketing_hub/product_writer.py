@@ -18,10 +18,68 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 
 import ai_provider
 import sintech_rules
+
+
+# ── Collection CÓ THẬT — chống AI bịa slug collection → link chết ──
+_COLLECTIONS_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 "data", "haravan_collections.json")
+
+
+def _load_collections() -> list:
+    """List (handle, title) collection thật từ cache. [] nếu lỗi."""
+    try:
+        with open(_COLLECTIONS_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return [(c["handle"], c.get("title", "")) for c in data if c.get("handle")]
+    except Exception:
+        return []
+
+
+def _valid_collection_handles() -> set:
+    return {h for h, _ in _load_collections()}
+
+
+def _relevant_collections(name: str, parsed: dict, limit: int = 35) -> list:
+    """Chọn collection liên quan nhất (keyword khớp tên/loại/hãng) để gợi ý AI."""
+    cols = _load_collections()
+    if not cols:
+        return []
+    text = f"{name} {parsed.get('loai','')} {parsed.get('hang','')}".lower()
+    words = {w for w in re.findall(r"\w+", text, re.UNICODE) if len(w) > 2}
+    scored = []
+    for h, t in cols:
+        hay = f"{h} {t}".lower()
+        score = sum(1 for w in words if w in hay)
+        if score:
+            scored.append((score, h, t))
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    return [(h, t) for _, h, t in scored[:limit]]
+
+
+def _sanitize_collection_links(body: str) -> tuple:
+    """Gỡ <a> tới /collections/<slug> KHÔNG tồn tại (giữ text). Trả (body, n_fixed)."""
+    valid = _valid_collection_handles()
+    if not valid:
+        return body, 0
+    n = 0
+
+    def repl(m):
+        nonlocal n
+        href, inner = m.group(1), m.group(2)
+        cm = re.search(r"/collections/([a-z0-9\-]+)", href, re.I)
+        if cm and cm.group(1).lower() not in valid:
+            n += 1
+            return inner  # bỏ link chết, giữ nội dung (thường <strong>...)
+        return m.group(0)
+
+    body = re.sub(r'<a\s+[^>]*href="([^"]*)"[^>]*>(.*?)</a>', repl, body,
+                  flags=re.S | re.I)
+    return body, n
 
 
 ANGLES = ["SPEC", "USE_CASE", "AUDIENCE", "PAIN_POINT", "COMPARISON"]
@@ -285,7 +343,8 @@ INTERNAL LINKS (body):
 - Anchor là cụm danh từ NGẮN, **≤30 ký tự** (vd "chuột gaming", "màn hình 2K 27 inch", "PC gaming phổ thông")
 - 3-6 link trong body + 1 ở intro + 1 ở outro (tổng 5-8)
 - Link homepage: `<a href="https://sintech.vn"><strong>Sintech</strong></a>`
-- Link category: `<a href="https://sintech.vn/collections/{slug-category-phù-hợp}"><strong>{anchor}</strong></a>`
+- Link category: `<a href="https://sintech.vn/collections/{slug}"><strong>{anchor}</strong></a>`
+  ⚠️ **{slug} PHẢI là 1 slug trong danh sách "COLLECTION CÓ THẬT" ở user prompt — TUYỆT ĐỐI KHÔNG bịa slug.** Không có slug phù hợp → link homepage Sintech.
 - CẤM anchor "tại đây" / "xem thêm" / "click here" / full tên SP
 
 ═══════════════════════════════════════════════════════════════
@@ -490,6 +549,20 @@ def _user_prompt(name: str, parsed: dict, warranty_months: str, angle: str, orga
     tags_text = ", ".join(tags) if tags else "(không có)"
     organized_block = _format_organized_spec(organized_spec)
 
+    _rel = _relevant_collections(name, parsed, limit=35)
+    if _rel:
+        _col_lines = "\n".join(f"  - {h}  ({t})" for h, t in _rel)
+        col_block = (
+            "\n═══════════════════════════════════════════════════════════════\n"
+            "COLLECTION CÓ THẬT (internal link category CHỈ chọn slug từ đây):\n"
+            "═══════════════════════════════════════════════════════════════\n"
+            f"{_col_lines}\n"
+            "⚠️ Link category PHẢI dùng 1 slug ở trên: href=\"https://sintech.vn/collections/<slug>\".\n"
+            "CẤM bịa slug. Không có slug hợp → link homepage https://sintech.vn thay vì bịa.\n"
+        )
+    else:
+        col_block = ""
+
     # CỐ Ý không pass price vào prompt — rule cấm đề cập giá trong content.
 
     return f"""SP cần gen content:
@@ -500,7 +573,7 @@ def _user_prompt(name: str, parsed: dict, warranty_months: str, angle: str, orga
 - Tags auto đã parse: {tags_text}
 - Bảo hành: {warranty_text}
 {organized_block}
-
+{col_block}
 ═══════════════════════════════════════════════════════════════
 ANGLE PICK = {angle}
 ═══════════════════════════════════════════════════════════════
@@ -560,6 +633,8 @@ def generate(name: str, parsed: dict, price: str = "", warranty_months: str = ""
     pattern, cta = _ANGLE_META_PATTERN[angle]
     body_raw = data.get("body_html") or ""
     body_styled = inject_sintech_styles(body_raw)
+    # Safety net: gỡ mọi link /collections/<slug> KHÔNG tồn tại (AI hay bịa slug)
+    body_styled, _bad_links = _sanitize_collection_links(body_styled)
     return {
         "body_html": body_styled,
         "excerpt":   data.get("excerpt") or "",
