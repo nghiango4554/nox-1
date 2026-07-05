@@ -1,0 +1,694 @@
+"""Routes: Chuẩn hóa ảnh Thumbnail — xem preview (contact sheet + before/after).
+
+Trang:
+  /thumbs            — tổng quan theo wave/collection (đã gen preview chưa, bao nhiêu SP)
+  /thumbs/c/<handle> — chi tiết 1 collection: contact sheet lưới + before/after từng SP
+  /thumbs/img/<kind>/<name> — phục vụ file ảnh từ Desktop\\Sintech-img\\thumb_chuan
+
+AN TOÀN: read-only, KHÔNG up Haravan (chỉ GET list SP + đọc ảnh local).
+Ảnh do scripts workspace (standardize_all.py) gen ra, KHÔNG sinh trong web.
+"""
+import base64
+import csv
+import io
+import json
+import threading
+import time
+import unicodedata
+import urllib.request
+from datetime import datetime
+from pathlib import Path
+
+from flask import render_template, send_from_directory, abort, request, jsonify, make_response
+from PIL import Image, ImageChops
+
+import haravan_client as hc
+
+WS = Path(r"C:\Users\NGHIANGO\.openclaw\workspace")
+NOXOUT = WS / "nox-outputs"
+THUMB_ROOT = Path(r"C:\Users\NGHIANGO\Desktop\Sintech-img\thumb_chuan")
+KINDS = {"std", "_contact"}
+STATUS_FILE = NOXOUT / "thumb_status.json"   # {handle: {status: da_duyet|da_sync, at: ...}}
+DOWNLOADS = Path.home() / "Downloads"
+ADDED_ARCHIVE = Path(r"C:\Users\NGHIANGO\Desktop\Sintech-img\anh_them_da_dung")
+SYNCED_FILE = NOXOUT / "thumb_synced_products.json"   # list handle SP đã sync (dedup chống up trùng)
+BACKUP_ORIG = THUMB_ROOT / "_backup_orig"
+
+# tiến độ sync (chạy nền)
+SYNC_STATE = {"running": False, "finished": False, "total": 0, "done": 0,
+              "ok": 0, "fail": 0, "current": "", "msg": ""}
+SYNC_LOCK = threading.Lock()
+
+
+def _load_synced():
+    if SYNCED_FILE.exists():
+        try:
+            return set(json.loads(SYNCED_FILE.read_text(encoding="utf-8")))
+        except Exception:
+            return set()
+    return set()
+
+
+def _save_synced(s):
+    SYNCED_FILE.write_text(json.dumps(sorted(s), ensure_ascii=False), encoding="utf-8")
+
+
+def _load_status():
+    if STATUS_FILE.exists():
+        try:
+            return json.loads(STATUS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_status(d):
+    STATUS_FILE.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _now():
+    return datetime.now().strftime("%Y-%m-%d %H:%M")
+
+TARGET = 1000
+FILL = 0.85
+PAD = int(TARGET * (1 - FILL) / 2)
+INNER = TARGET - 2 * PAD
+
+
+def _flatten_white(img):
+    if img.mode in ("RGBA", "LA", "P"):
+        img = img.convert("RGBA")
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        bg.paste(img, mask=img.split()[-1])
+        return bg
+    return img.convert("RGB")
+
+
+def _trim_white(img, thresh=12):
+    bg = Image.new("RGB", img.size, (255, 255, 255))
+    mask = ImageChops.difference(img, bg).convert("L").point(lambda p: 255 if p > thresh else 0)
+    bbox = mask.getbbox()
+    if not bbox:
+        return img
+    l, t, r, b = bbox
+    return img.crop((max(0, l - 4), max(0, t - 4),
+                     min(img.width, r + 4), min(img.height, b + 4)))
+
+
+def _standardize_no_rembg(img):
+    """Chuẩn hóa 1000² nền trắng, fill 85%, căn giữa — KHÔNG xóa nền (chỉ cắt mép trắng)."""
+    img = _trim_white(_flatten_white(img))
+    s = min(INNER / img.width, INNER / img.height)
+    nw, nh = max(1, round(img.width * s)), max(1, round(img.height * s))
+    r = img.resize((nw, nh), Image.LANCZOS)
+    cv = Image.new("RGB", (TARGET, TARGET), (255, 255, 255))
+    cv.paste(r, ((TARGET - nw) // 2, (TARGET - nh) // 2))
+    return cv
+
+_COL_CACHE = {}   # handle -> collection_id (nạp 1 lần)
+
+
+def _collections():
+    if not _COL_CACHE:
+        for c in (hc.list_smart_collections(limit=250) + hc.list_custom_collections(limit=250)):
+            if c.get("handle"):
+                _COL_CACHE[c["handle"]] = c["id"]
+    return _COL_CACHE
+
+
+def _products_in(cid):
+    """Pager ĐÚNG (API Haravan cap 50/trang)."""
+    out, page = [], 1
+    while page <= 200:
+        b = hc._request("GET", "/products.json",
+                        params={"collection_id": cid, "limit": 50, "page": page,
+                                "fields": "id,handle,title,images"}).get("products", [])
+        out.extend(b)
+        if len(b) < 50:
+            break
+        page += 1
+    return out
+
+
+def _read_tracking():
+    p = NOXOUT / "thumb_tracking.csv"
+    if not p.exists():
+        return []
+    return list(csv.DictReader(open(p, encoding="utf-8-sig")))
+
+
+def _preview_log():
+    """handle -> dict(...) từ log gen preview. Chịu được thiếu header / dòng rách
+    (file bị ghi đồng thời lúc đang gen)."""
+    p = NOXOUT / "thumb_preview_log.csv"
+    cols = ["wave", "handle", "so_sp", "so_anh", "noimg", "rembg", "loi"]
+    out = {}
+    if not p.exists():
+        return out
+    try:
+        with open(p, encoding="utf-8-sig", newline="") as f:
+            for row in csv.reader(f):
+                if not row or row[0] == "wave":   # bỏ header nếu có
+                    continue
+                d = dict(zip(cols, row))
+                h = d.get("handle")
+                if h:
+                    out[h] = d
+    except Exception:
+        pass
+    return out
+
+
+def _collection_map():
+    """handle collection -> [handle SP] (để đếm ảnh đã gen / tổng)."""
+    p = NOXOUT / "thumb_collection_map.json"
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+
+# Collection TỔNG/CHA (catch-all) — KHÔNG cho làm 'collection chính' của SP, để trang
+# tổng được dọn gọn còn SP lấy collection CỤ THỂ làm nhà. Sửa/bổ sung tự do.
+AGGREGATE_HANDLES = {
+    "linh-kien-may-tinh", "phu-kien-may-tinh", "gaming-gear", "man-hinh-may-tinh",
+    "man-hinh-may-tinh-pc", "laptop", "hang-cu", "thiet-bi-mang", "may-tinh-bo",
+    "pc-gaming-do-hoa-ai", "pc-van-phong", "camera-giam-sat",
+}
+
+
+def _primary_map():
+    """handle SP -> handle collection 'CHÍNH' (nơi SP hiện đầy đủ 1 lần; các collection
+    khác đánh dấu 'đã xem' + ẩn). Ưu tiên collection CỤ THỂ (theo thứ tự tracking),
+    né các collection tổng/cha trong AGGREGATE_HANDLES; nếu SP CHỈ nằm ở collection
+    tổng thì mới lấy collection tổng làm chính."""
+    cmap = _collection_map()
+    order = [r["handle"] for r in _read_tracking()]
+    seen_order = set(order)
+    for ch in cmap:                       # collection có trong map nhưng không có trong tracking -> nối đuôi
+        if ch not in seen_order:
+            order.append(ch)
+    primary = {}
+    # lượt 1: chỉ collection CỤ THỂ
+    for ch in order:
+        if ch in AGGREGATE_HANDLES:
+            continue
+        for ph in (cmap.get(ch) or []):
+            primary.setdefault(ph, ch)
+    # lượt 2: SP còn sót (chỉ nằm ở collection tổng) -> lấy tổng làm chính
+    for ch in order:
+        for ph in (cmap.get(ch) or []):
+            primary.setdefault(ph, ch)
+    return primary
+
+
+def _std_done():
+    """Tập handle SP đã có ảnh chuẩn (mỗi SP = 1 thư mục std/<handle>/)."""
+    d = THUMB_ROOT / "std"
+    return {p.name for p in d.iterdir() if p.is_dir()} if d.exists() else set()
+
+
+def _manifest(handle):
+    p = THUMB_ROOT / "std" / handle / "manifest.json"
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+    return None
+
+
+def _sp_images(handle, kind="std"):
+    """idx ảnh chuẩn của 1 SP, theo THỨ TỰ trong manifest (đã kéo-thả). Fallback: theo số."""
+    d = THUMB_ROOT / kind / handle
+    if not d.exists():
+        return []
+    files = {int(p.stem) for p in d.glob("*.jpg") if p.stem.isdigit()}
+    man = _manifest(handle)
+    if man:
+        order = [e["idx"] for e in man if isinstance(e, dict) and e.get("idx") in files]
+        order += [i for i in sorted(files) if i not in order]
+        return order
+    return sorted(files)
+
+
+# ───────────── pages ─────────────
+
+def thumbs_page():
+    track = _read_tracking()
+    log = _preview_log()
+    cmap = _collection_map()
+    primary = _primary_map()          # SP -> collection 'nhà'
+    done_set = _std_done()
+    status = _load_status()
+    waves = {}
+    tot = {"sp": 0, "col_done": 0, "approved": 0, "synced": 0, "to_sync": 0}
+    for r in track:
+        h = r["handle"]
+        lg = log.get(h)
+        total = int(r["so_sp"])
+        # đã gen = số SP của collection đã có thư mục ảnh chuẩn (theo map). Fallback: dùng log.
+        sp_handles = cmap.get(h)
+        if sp_handles is not None:
+            gen = sum(1 for ph in sp_handles if ph in done_set)
+        else:
+            gen = total if lg else 0
+        pct = round(gen * 100 / total) if total else 0
+
+        def _int(v):
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                return 0
+        rembg = _int(lg.get("rembg")) if lg else 0
+        noimg = _int(lg.get("noimg")) if lg else 0
+        gstatus = "done" if (total and gen >= total) else ("partial" if gen else "pending")
+        review = (status.get(h) or {}).get("status", "")   # '' | da_duyet | da_sync
+        # 'nhà' của bao nhiêu SP nằm ở chính collection này. own==0 mà vẫn có SP
+        # => toàn bộ SP đã có nhà ở collection khác -> làm MỜ card (không xóa/ẩn).
+        sp_list = cmap.get(h) or []
+        own = sum(1 for ph in sp_list if primary.get(ph) == h)
+        all_seen = bool(sp_list) and own == 0
+        w = waves.setdefault(r["wave"], {"nhom": r["nhom"], "cols": [], "gen": 0, "total": 0})
+        w["cols"].append({
+            "handle": h, "so_sp": total, "gen": gen, "pct": pct,
+            "rembg": rembg, "noimg": noimg, "status": gstatus, "review": review,
+            "own": own, "all_seen": all_seen,
+        })
+        w["gen"] += gen
+        w["total"] += total
+        tot["sp"] += total
+        if gstatus == "done":
+            tot["col_done"] += 1
+        if review == "da_duyet":
+            tot["approved"] += 1
+            tot["to_sync"] += 1
+        elif review == "da_sync":
+            tot["synced"] += 1
+    for w in waves.values():
+        w["pct"] = round(w["gen"] * 100 / w["total"]) if w["total"] else 0
+    n_std = len(done_set)
+    resp = make_response(render_template("thumbs.html", active="thumbs", waves=waves,
+                                         tot=tot, n_std=n_std, n_col=len(track)))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return resp
+
+
+def thumbs_collection(handle):
+    track = {r["handle"]: r for r in _read_tracking()}
+    row = track.get(handle)
+    wave = row["wave"] if row else ""
+    # contact sheets
+    cdir = THUMB_ROOT / "_contact"
+    sheets = sorted(p.name for p in cdir.glob(f"{wave}__{handle}__p*.jpg")) if cdir.exists() else []
+    # gom ảnh theo TỪNG SP (query live lấy SP trong collection, theo thứ tự collection)
+    items, missing = [], []
+    n_img = 0
+    primary = _primary_map()           # SP -> collection chính
+    cid = _collections().get(handle)
+    if cid:
+        for p in _products_in(cid):
+            ph = p.get("handle")
+            # SP có collection chính KHÁC collection đang xem -> đánh dấu 'đã xem ở đó'
+            prim = primary.get(ph)
+            seen_at = prim if (prim and prim != handle) else None
+            idxs = _sp_images(ph, "std")
+            if idxs:
+                items.append({"handle": ph, "title": p.get("title"), "imgs": idxs, "seen_at": seen_at})
+                n_img += len(idxs)
+            elif (p.get("images") or []) or (THUMB_ROOT / "std" / ph).exists():
+                # SP còn trong tool nhưng hết ảnh chuẩn (vợ xóa hết) -> hiện hàng trống để thêm lại
+                items.append({"handle": ph, "title": p.get("title"), "imgs": [], "seen_at": seen_at})
+            else:
+                missing.append({"handle": ph, "title": p.get("title")})
+    n_seen = sum(1 for it in items if it.get("seen_at"))
+    review = (_load_status().get(handle) or {}).get("status", "")
+    return render_template("thumbs_collection.html", active="thumbs",
+                           handle=handle, wave=wave,
+                           sheets=sheets, items=items, missing=missing,
+                           n_img=n_img, n_seen=n_seen, row=row, review=review)
+
+
+def thumbs_img(kind, name):
+    if kind not in KINDS:
+        abort(404)
+    d = THUMB_ROOT / kind
+    if not (d / name).exists():
+        abort(404)
+    return send_from_directory(str(d), name)
+
+
+def thumbs_reorder():
+    """Lưu thứ tự ảnh mới (kéo-thả) vào manifest. body: {handle, order:[idx,...]}."""
+    data = request.get_json(force=True, silent=True) or {}
+    handle = data.get("handle", "")
+    order = data.get("order")
+    d = THUMB_ROOT / "std" / handle
+    if not d.exists() or not isinstance(order, list):
+        return jsonify(ok=False, error="tham số sai"), 400
+    files = {int(p.stem) for p in d.glob("*.jpg") if p.stem.isdigit()}
+    order = [int(i) for i in order if int(i) in files]
+    man = _manifest(handle) or [{"idx": i} for i in sorted(files)]
+    by_idx = {e.get("idx"): e for e in man if isinstance(e, dict)}
+    new_man = [by_idx.get(i, {"idx": i}) for i in order]
+    new_man += [by_idx[i] for i in by_idx if i not in order and i in files]  # giữ sót
+    (d / "manifest.json").write_text(json.dumps(new_man, ensure_ascii=False), encoding="utf-8")
+    return jsonify(ok=True, order=[e["idx"] for e in new_man])
+
+
+def thumbs_redo():
+    """Làm lại CHỈ các ảnh ĐANG HIỂN THỊ của 1 SP — KHÔNG xóa nền (cắt mép + căn giữa).
+    Giữ nguyên bộ ảnh hiện tại (gồm ảnh đã thêm), thứ tự, ảnh đã xóa. body: {handle}.
+    - Ảnh gốc từ Haravan: chuẩn hóa lại từ nguồn gốc (theo image_id).
+    - Ảnh tự thêm / không có nguồn: chuẩn hóa lại tại chỗ từ ảnh hiện có."""
+    data = request.get_json(force=True, silent=True) or {}
+    handle = data.get("handle", "")
+    d = THUMB_ROOT / "std" / handle
+    if not d.exists():
+        return jsonify(ok=False, error="SP chưa có ảnh chuẩn"), 404
+    order = _sp_images(handle)   # idx đang hiển thị, theo thứ tự
+    man = _manifest(handle) or []
+    id_by_idx = {e["idx"]: e.get("image_id") for e in man
+                 if isinstance(e, dict) and "idx" in e}
+    # map image_id -> src từ Haravan (best-effort, để làm lại từ ảnh gốc)
+    src_map = {}
+    try:
+        prods = hc._request("GET", "/products.json",
+                            params={"handle": handle, "limit": 1}).get("products", [])
+        if prods:
+            for im in prods[0].get("images") or []:
+                src_map[im["id"]] = im["src"]
+    except Exception:
+        pass
+    n = 0
+    for idx in order:
+        fp = d / f"{idx}.jpg"
+        iid = id_by_idx.get(idx)
+        try:
+            if iid and iid in src_map:                       # làm lại từ ảnh gốc Haravan
+                raw = urllib.request.urlopen(src_map[iid], timeout=25).read()
+                src_img = Image.open(io.BytesIO(raw))
+            elif fp.exists():                                # ảnh thêm / không có nguồn -> tại chỗ
+                src_img = Image.open(io.BytesIO(fp.read_bytes()))
+            else:
+                continue
+            _standardize_no_rembg(src_img).save(fp, quality=92)
+            n += 1
+        except Exception:
+            continue
+    return jsonify(ok=True, n=n)
+
+
+def thumbs_add_image():
+    """Chèn NHIỀU ảnh từ máy (Downloads…) vào cuối bộ ảnh 1 SP — chuẩn hóa 1000² không xóa nền.
+    multipart: handle + file (1 hoặc nhiều)."""
+    handle = request.form.get("handle", "")
+    files = request.files.getlist("file")
+    if not handle or not files:
+        return jsonify(ok=False, error="thiếu handle/ảnh"), 400
+    d = THUMB_ROOT / "std" / handle
+    d.mkdir(parents=True, exist_ok=True)
+    existing = [int(p.stem) for p in d.glob("*.jpg") if p.stem.isdigit()]
+    man = _manifest(handle) or [{"idx": i} for i in sorted(existing)]
+    nidx = (max(existing) + 1) if existing else 0
+    added, errs = [], 0
+    for f in files:
+        if not f or not f.filename:
+            continue
+        try:
+            std = _standardize_no_rembg(Image.open(io.BytesIO(f.read())))
+        except Exception:
+            errs += 1
+            continue
+        std.save(d / f"{nidx}.jpg", quality=92)
+        man.append({"idx": nidx, "image_id": None, "position": None,
+                    "note": "added-local", "src_name": (f.filename or "")})
+        added.append(nidx)
+        nidx += 1
+    (d / "manifest.json").write_text(json.dumps(man, ensure_ascii=False), encoding="utf-8")
+    if not added:
+        return jsonify(ok=False, error="không ảnh nào hợp lệ"), 400
+    return jsonify(ok=True, added=len(added), idxs=added, errors=errs)
+
+
+def thumbs_delete_image():
+    """Xóa 1 ảnh khỏi bộ ảnh chuẩn của 1 SP. body: {handle, idx}."""
+    data = request.get_json(force=True, silent=True) or {}
+    handle = data.get("handle", "")
+    idx = data.get("idx")
+    d = THUMB_ROOT / "std" / handle
+    if not d.exists() or idx is None:
+        return jsonify(ok=False, error="tham số sai"), 400
+    idx = int(idx)
+    fp = d / f"{idx}.jpg"
+    if fp.exists():
+        fp.unlink()
+    man = _manifest(handle)
+    if man is not None:
+        man = [e for e in man if not (isinstance(e, dict) and e.get("idx") == idx)]
+        (d / "manifest.json").write_text(json.dumps(man, ensure_ascii=False), encoding="utf-8")
+    return jsonify(ok=True)
+
+
+def _cleanup_added_from_downloads(collection_handle):
+    """Gom file ảnh gốc (vợ thêm từ Downloads) của collection ra khỏi Downloads.
+    Tìm theo tên file đã lưu lúc add. Trả số file đã chuyển. KHÔNG đụng std/ (web+sync giữ nguyên)."""
+    prod_handles = _collection_map().get(collection_handle) or []
+    moved = 0
+    for ph in prod_handles:
+        man = _manifest(ph)
+        if not man:
+            continue
+        for e in man:
+            if not (isinstance(e, dict) and e.get("note") == "added-local"):
+                continue
+            name = e.get("src_name")
+            if not name:
+                continue
+            src = DOWNLOADS / name
+            if not src.exists():
+                continue
+            dest_dir = ADDED_ARCHIVE / ph
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / name
+            try:
+                if dest.exists():
+                    dest = dest_dir / f"{src.stem}_{e.get('idx')}{src.suffix}"
+                src.replace(dest)
+                moved += 1
+            except Exception:
+                pass
+    return moved
+
+
+def thumbs_approve():
+    """Duyệt 1 collection (sau khi vợ xem hết SP). body: {handle, value: true/false}.
+    Khi duyệt: gom ảnh gốc đã thêm (từ Downloads) sang folder gom."""
+    data = request.get_json(force=True, silent=True) or {}
+    handle = data.get("handle", "")
+    value = data.get("value", True)
+    if not handle:
+        return jsonify(ok=False, error="thiếu handle"), 400
+    st = _load_status()
+    moved = 0
+    if value:
+        st[handle] = {"status": "da_duyet", "at": _now()}
+        moved = _cleanup_added_from_downloads(handle)
+    else:
+        st.pop(handle, None)
+    _save_status(st)
+    return jsonify(ok=True, status=(st.get(handle) or {}).get("status", ""), moved=moved)
+
+
+def _sync_one_product(handle):
+    """Thay ảnh 1 SP trên Haravan bằng bộ ảnh chuẩn local — GIỮ ảnh local (chỉ đọc).
+    Backup ảnh gốc -> up ảnh chuẩn -> xóa ảnh gốc -> set vị trí 1..n."""
+    d = THUMB_ROOT / "std" / handle
+    order = _sp_images(handle)
+    if not order:
+        return {"ok": False, "error": "không có ảnh chuẩn local"}
+    prods = hc._request("GET", "/products.json",
+                        params={"handle": handle, "limit": 1}).get("products", [])
+    if not prods:
+        return {"ok": False, "error": "không tìm thấy SP"}
+    pid = prods[0]["id"]
+    imgs = sorted(prods[0].get("images") or [], key=lambda x: x.get("position") or 0)
+    # backup ảnh gốc (local)
+    bdir = BACKUP_ORIG / handle
+    bdir.mkdir(parents=True, exist_ok=True)
+    meta = []
+    for im in imgs:
+        try:
+            raw = urllib.request.urlopen(im["src"], timeout=30).read()
+            fn = f"{im.get('position') or 0}_{im['id']}.jpg"
+            (bdir / fn).write_bytes(raw)
+            meta.append({"id": im["id"], "position": im.get("position"),
+                         "src": im["src"], "file": fn})
+        except Exception:
+            pass
+    (bdir / "orig_manifest.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1),
+                                             encoding="utf-8")
+    # up ảnh chuẩn (đọc local, KHÔNG xóa local) — có retry, đảm bảo đủ bộ
+    new_ids = []
+    for i, idx in enumerate(order):
+        iid = None
+        for attempt in range(3):
+            try:
+                b64 = base64.b64encode((d / f"{idx}.jpg").read_bytes()).decode()
+                img = hc.add_product_image(pid, b64, filename=f"{handle}-{i + 1}.jpg")
+                if img.get("id"):
+                    iid = img["id"]
+                    break
+            except Exception:
+                pass
+            time.sleep(1.0)
+        new_ids.append(iid)
+        time.sleep(0.25)
+    # GATE: chỉ xóa ảnh gốc khi up ĐỦ bộ (up trước, xóa sau) — tránh mất ảnh mà vẫn báo synced
+    if not all(new_ids):
+        # dọn ảnh mới up dở để không để lại rác
+        for iid in new_ids:
+            if iid:
+                try:
+                    hc._request("DELETE", f"/products/{pid}/images/{iid}.json")
+                except Exception:
+                    pass
+        return {"ok": False, "error": "up thiếu ảnh %d/%d (giữ nguyên ảnh gốc)"
+                % (sum(1 for x in new_ids if x), len(order))}
+    # xóa ảnh gốc
+    for im in imgs:
+        try:
+            hc._request("DELETE", f"/products/{pid}/images/{im['id']}.json")
+            time.sleep(0.2)
+        except Exception:
+            pass
+    # set vị trí 1..n
+    for i, iid in enumerate(new_ids):
+        if iid:
+            try:
+                hc._request("PUT", f"/products/{pid}/images/{iid}.json",
+                            payload={"image": {"id": iid, "position": i + 1}})
+                time.sleep(0.15)
+            except Exception:
+                pass
+    return {"ok": True, "n": len(new_ids)}
+
+
+def _sync_worker(coll_list):
+    cmap = _collection_map()
+    synced = _load_synced()
+    # gom SP (dedup): bỏ SP đã sync trước đó
+    prod_order, seen = [], set()
+    for c in coll_list:
+        for ph in cmap.get(c, []):
+            if ph in seen or ph in synced:
+                continue
+            seen.add(ph)
+            prod_order.append(ph)
+    failed = set()
+    SYNC_STATE.update(running=True, finished=False, total=len(prod_order),
+                      done=0, ok=0, fail=0, current="", msg="")
+    for ph in prod_order:
+        SYNC_STATE["current"] = ph
+        try:
+            r = _sync_one_product(ph)
+            if r.get("ok"):
+                SYNC_STATE["ok"] += 1
+                synced.add(ph)
+                _save_synced(synced)
+            else:
+                SYNC_STATE["fail"] += 1
+                failed.add(ph)
+        except Exception:
+            SYNC_STATE["fail"] += 1
+            failed.add(ph)
+        SYNC_STATE["done"] += 1
+    # đánh dấu collection da_sync nếu KHÔNG có SP nào của nó lỗi
+    st = _load_status()
+    for c in coll_list:
+        phs = cmap.get(c, [])
+        if any(p in failed for p in phs):
+            continue
+        if (st.get(c) or {}).get("status") in ("da_duyet", "da_sync"):
+            st[c] = {"status": "da_sync", "at": _now()}
+    _save_status(st)
+    SYNC_STATE.update(running=False, finished=True, current="",
+                      msg=f"Xong: {SYNC_STATE['ok']} SP ok, {SYNC_STATE['fail']} lỗi")
+
+
+def thumbs_sync():
+    """Sync TẤT CẢ collection đã duyệt lên live (chạy nền). Dedup theo SP, giữ ảnh local."""
+    with SYNC_LOCK:
+        if SYNC_STATE["running"]:
+            return jsonify(ok=False, error="Đang sync, đợi xong đã"), 409
+        st = _load_status()
+        coll = [h for h, v in st.items() if (v or {}).get("status") == "da_duyet"]
+        if not coll:
+            return jsonify(ok=False, error="Chưa có collection nào đã duyệt"), 400
+        t = threading.Thread(target=_sync_worker, args=(coll,), daemon=True)
+        t.start()
+    return jsonify(ok=True, started=True, collections=len(coll))
+
+
+def thumbs_sync_status():
+    return jsonify(SYNC_STATE)
+
+
+def _norm(s):
+    """Bỏ dấu tiếng Việt + thường hóa + coi '-' như khoảng trắng (để tìm gần đúng)."""
+    s = unicodedata.normalize("NFD", s or "")
+    s = "".join(c for c in s if unicodedata.category(c) != "Mn")
+    return s.lower().replace("-", " ").replace("đ", "d")
+
+
+def _titles():
+    p = NOXOUT / "thumb_product_titles.json"
+    if p.exists():
+        try:
+            return json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+
+def thumbs_search():
+    """Tìm SP theo tên. SP ở nhiều collection -> mỗi collection 1 dòng kết quả."""
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 2:
+        return jsonify(results=[])
+    toks = [t for t in _norm(q).split() if t]
+    titles = _titles()
+    cmap = _collection_map()
+    done = _std_done()
+    coll_by_prod = {}
+    for c, phs in cmap.items():
+        for ph in phs:
+            coll_by_prod.setdefault(ph, []).append(c)
+    res = []
+    for h, title in titles.items():
+        if h not in done:
+            continue
+        hay = _norm(title) + " " + _norm(h)
+        if all(t in hay for t in toks):
+            for c in sorted(coll_by_prod.get(h, [])):
+                res.append({"title": title, "handle": h, "collection": c})
+        if len(res) > 300:
+            break
+    res.sort(key=lambda r: (r["title"], r["collection"]))
+    return jsonify(results=res[:80])
+
+
+def register(app):
+    app.add_url_rule("/thumbs/sync", "thumbs_sync", thumbs_sync, methods=["POST"])
+    app.add_url_rule("/thumbs/sync-status", "thumbs_sync_status", thumbs_sync_status)
+    app.add_url_rule("/thumbs/search", "thumbs_search", thumbs_search)
+    app.add_url_rule("/thumbs", "thumbs_page", thumbs_page)
+    app.add_url_rule("/thumbs/c/<handle>", "thumbs_collection", thumbs_collection)
+    app.add_url_rule("/thumbs/img/<kind>/<path:name>", "thumbs_img", thumbs_img)
+    app.add_url_rule("/thumbs/reorder", "thumbs_reorder", thumbs_reorder, methods=["POST"])
+    app.add_url_rule("/thumbs/redo", "thumbs_redo", thumbs_redo, methods=["POST"])
+    app.add_url_rule("/thumbs/approve", "thumbs_approve", thumbs_approve, methods=["POST"])
+    app.add_url_rule("/thumbs/add-image", "thumbs_add_image", thumbs_add_image, methods=["POST"])
+    app.add_url_rule("/thumbs/delete-image", "thumbs_delete_image", thumbs_delete_image, methods=["POST"])

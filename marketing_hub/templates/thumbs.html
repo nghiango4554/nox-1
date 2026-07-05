@@ -1,0 +1,162 @@
+{% extends "redesign_base.html" %}
+{% block title %}Chuẩn hóa ảnh Thumbnail · Sintech Hub{% endblock %}
+{% block page_title %}
+  <i class="ic" data-icon="images"></i><span>Chuẩn hóa ảnh</span>
+  <i class="ic" data-icon="chevron-right"></i><b>Thumbnail SP</b>
+{% endblock %}
+{% block page_actions %}<span></span>{% endblock %}
+{% block head_extra %}
+<style>
+  .kpis{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+  .kpi{background:#fff;border:1px solid var(--line,#eadfe6);border-radius:14px;padding:14px 18px;min-width:150px}
+  .kpi b{display:block;font-size:26px;line-height:1.1}
+  .kpi span{font-size:12.5px;color:var(--ink-3)}
+  .wave{background:#fff;border:1px solid var(--line,#eadfe6);border-radius:14px;padding:16px;margin-bottom:16px}
+  .wave h3{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+  .card{border:1px solid #eadfe6;border-radius:11px;padding:11px 13px;text-decoration:none;color:inherit;display:block;transition:.12s}
+  .card:hover{background:#faf5f8;border-color:#d75151}
+  .card .h{font-weight:600;font-size:13.5px;word-break:break-word}
+  .card .m{font-size:12px;color:var(--ink-3);margin-top:5px;display:flex;gap:10px;flex-wrap:wrap}
+  .pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600}
+  .ready{background:#e7f7ec;color:#1c7a3e}
+  .pending{background:#f3eef2;color:#8a7d87}
+  .warn{background:#fff3e0;color:#b25a00}
+  .legend{font-size:12.5px;color:var(--ink-3);margin:-6px 0 14px}
+  .wpct{margin-left:auto;font-weight:700;font-size:14px;color:#1c7a3e}
+  .wbar{height:7px;background:#f0e8ee;border-radius:999px;overflow:hidden;margin:-4px 0 14px}
+  .wbar>i{display:block;height:100%;background:linear-gradient(90deg,#ff9966,#d75151);border-radius:999px}
+  .card .frac{font-weight:700}
+  .pbar{height:5px;background:#f0e8ee;border-radius:999px;overflow:hidden;margin-top:7px}
+  .pbar>i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#ff9966,#d75151)}
+  .pbar.full>i{background:#2a9d5a}
+  .card{position:relative}
+  .tick{position:absolute;top:9px;right:10px;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px}
+  .tick.duyet{background:#e7f7ec;color:#1c7a3e}
+  .tick.sync{background:#e3f0ff;color:#1457b8}
+  .card.approved{border-color:#2a9d5a}
+  .card.synced{border-color:#1457b8}
+  .card.allseen{opacity:.42;filter:grayscale(.5)}
+  .card.allseen:hover{opacity:.85;filter:none}
+  .tick.allseen{background:#6b7280}
+  .syncbar{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--line,#eadfe6);border-radius:14px;padding:12px 16px;margin-bottom:16px;flex-wrap:wrap}
+  .syncbar .info{font-size:13px;color:var(--ink-2)}
+  .syncbar b{color:#1c7a3e}
+  .syncbtn{margin-left:auto;padding:9px 16px;border:0;border-radius:10px;background:linear-gradient(135deg,#2a9d5a,#1457b8);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+  .syncbtn:disabled{opacity:.5;cursor:not-allowed}
+  .searchwrap{position:relative;margin-bottom:16px;max-width:560px}
+  .searchwrap input{width:100%;padding:11px 14px;border:1px solid #d9cdd6;border-radius:11px;font:inherit;box-sizing:border-box}
+  .searchwrap input:focus{outline:none;border-color:#d75151}
+  .sresults{position:absolute;z-index:30;left:0;right:0;top:46px;background:#fff;border:1px solid #eadfe6;border-radius:11px;box-shadow:0 8px 24px rgba(0,0,0,.12);max-height:380px;overflow:auto;display:none}
+  .sresults a{display:flex;align-items:center;gap:8px;padding:9px 13px;border-bottom:1px solid #f3eef2;text-decoration:none;color:inherit;font-size:13px}
+  .sresults a:hover{background:#faf5f8}
+  .sresults .ct{margin-left:auto;font-size:11.5px;color:#a06a8c;background:#fdf8fb;border:1px solid #f0dfe9;padding:1px 8px;border-radius:999px;white-space:nowrap}
+  .sresults .empty{padding:11px 13px;color:var(--ink-3);font-size:13px}
+</style>
+{% endblock %}
+{% block content %}
+  <div class="kpis">
+    <div class="kpi"><b>{{ n_std }}</b><span>ảnh chuẩn đã gen</span></div>
+    <div class="kpi"><b>{{ tot.col_done }}/{{ n_col }}</b><span>collection xong 100%</span></div>
+    <div class="kpi"><b>1000²</b><span>nền trắng · fill 85%</span></div>
+  </div>
+  <p class="legend">Chuẩn: 1000×1000, nền trắng, sản phẩm căn giữa chiếm 85% khung. Bấm 1 collection để
+    xem từng SP + kéo-thả sắp xếp. Xem xong bấm <b>Duyệt</b> trong collection → ngoài này hiện ✓.</p>
+
+  <div class="searchwrap">
+    <input id="spsearch" type="text" placeholder="🔍 Tìm tên sản phẩm… (SP ở nhiều danh mục sẽ hiện nhiều dòng)" autocomplete="off">
+    <div class="sresults" id="sresults"></div>
+  </div>
+
+  <div class="syncbar">
+    <div class="info">Đã duyệt chờ sync: <b>{{ tot.approved }}</b> · Đã sync: {{ tot.synced }}</div>
+    <button class="syncbtn" id="syncbtn" onclick="syncApproved()" {{ 'disabled' if not tot.approved }}>
+      ⤴ Sync {{ tot.approved }} collection đã duyệt lên live
+    </button>
+  </div>
+
+  {% for wkey, w in waves.items() %}
+  <div class="wave">
+    <h3><span class="pill ready">{{ wkey }}</span> {{ w.nhom }}
+      <span style="font-weight:400;color:var(--ink-3);font-size:13px">· {{ w.cols|length }} collection · {{ w.gen }}/{{ w.total }} ảnh</span>
+      <span class="wpct">{{ w.pct }}%</span></h3>
+    <div class="wbar"><i style="width:{{ w.pct }}%"></i></div>
+    <div class="grid">
+      {% for c in w.cols %}
+      {% if c.gen %}
+        <a class="card {{ 'approved' if c.review=='da_duyet' }}{{ 'synced' if c.review=='da_sync' }}{{ ' allseen' if c.all_seen }}" href="{{ url_for('thumbs_collection', handle=c.handle) }}"
+           {% if c.all_seen %}title="Toàn bộ SP của collection này đã có ở collection khác — không có gì mới để duyệt"{% endif %}>
+          {% if c.all_seen %}<span class="tick allseen">đã xem ở nơi khác</span>
+          {% elif c.review=='da_sync' %}<span class="tick sync">✓ đã sync</span>
+          {% elif c.review=='da_duyet' %}<span class="tick duyet">✓ đã duyệt</span>{% endif %}
+          <div class="h">{{ c.handle }}</div>
+          <div class="m">
+            <span class="frac">{{ c.gen }}/{{ c.so_sp }}</span>
+            {% if c.status == 'done' %}<span class="pill ready">xong</span>
+            {% else %}<span class="pill warn">đang gen</span>{% endif %}
+            {% if c.rembg %}<span class="pill warn">{{ c.rembg }} xóa nền</span>{% endif %}
+            {% if c.noimg %}<span class="pill warn">{{ c.noimg }} thiếu ảnh</span>{% endif %}
+          </div>
+          <div class="pbar {{ 'full' if c.status=='done' }}"><i style="width:{{ c.pct }}%"></i></div>
+        </a>
+      {% else %}
+        <div class="card" style="opacity:.6;cursor:default">
+          <div class="h">{{ c.handle }}</div>
+          <div class="m"><span class="frac">0/{{ c.so_sp }}</span><span class="pill pending">chưa gen</span></div>
+          <div class="pbar"><i style="width:0%"></i></div>
+        </div>
+      {% endif %}
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+<script>
+// Trang khôi phục từ cache (bấm Back) -> tải lại để thấy trạng thái duyệt mới nhất
+window.addEventListener('pageshow', function(e){ if(e.persisted) location.reload(); });
+
+// ── Tìm SP ──
+const _si=document.getElementById('spsearch'), _sr=document.getElementById('sresults');
+let _t=null;
+function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+_si.addEventListener('input', ()=>{
+  clearTimeout(_t); const q=_si.value.trim();
+  if(q.length<2){ _sr.style.display='none'; _sr.innerHTML=''; return; }
+  _t=setTimeout(()=>{
+    fetch('/thumbs/search?q='+encodeURIComponent(q)).then(r=>r.json()).then(d=>{
+      const rs=d.results||[];
+      if(!rs.length){ _sr.innerHTML='<div class="empty">Không thấy SP nào (chỉ tìm SP đã có ảnh chuẩn).</div>'; _sr.style.display='block'; return; }
+      _sr.innerHTML = rs.map(r=>{
+        const url='/thumbs/c/'+encodeURIComponent(r.collection)+'#sp-'+encodeURIComponent(r.handle);
+        return '<a href="'+url+'"><span>'+esc(r.title)+'</span><span class="ct">'+esc(r.collection)+'</span></a>';
+      }).join('');
+      _sr.style.display='block';
+    }).catch(()=>{});
+  }, 250);
+});
+document.addEventListener('click', e=>{ if(!e.target.closest('.searchwrap')) _sr.style.display='none'; });
+
+function syncApproved(){
+  const btn=document.getElementById('syncbtn');
+  if(!confirm('Sync tất cả collection ĐÃ DUYỆT lên Haravan LIVE?\nẢnh chuẩn sẽ thay ảnh sản phẩm trên store thật (ảnh local giữ nguyên).')) return;
+  btn.disabled=true; btn.textContent='Đang khởi động...';
+  fetch('/thumbs/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){ pollSync(); }
+      else { alert('Lỗi: '+(d.error||'không rõ')); btn.disabled=false; btn.textContent='⤴ Sync lại'; }
+    }).catch(()=>{ alert('Lỗi mạng'); btn.disabled=false; });
+}
+function pollSync(){
+  const btn=document.getElementById('syncbtn');
+  fetch('/thumbs/sync-status').then(r=>r.json()).then(s=>{
+    if(s.running){
+      btn.textContent='Đang sync '+s.done+'/'+s.total+' SP — '+(s.current||'');
+      setTimeout(pollSync, 1500);
+    } else if(s.finished){
+      alert('Sync xong: '+s.ok+' SP ok'+(s.fail? (', '+s.fail+' lỗi'):'')+'.');
+      location.reload();
+    } else { setTimeout(pollSync, 1500); }
+  }).catch(()=>setTimeout(pollSync,2000));
+}
+</script>
+{% endblock %}

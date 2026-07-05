@@ -1,0 +1,248 @@
+{% extends "redesign_base.html" %}
+{% block title %}{{ handle }} · Thumbnail · Sintech Hub{% endblock %}
+{% block page_title %}
+  <i class="ic" data-icon="images"></i><a href="{{ url_for('thumbs_page') }}" style="text-decoration:none;color:inherit">Chuẩn hóa ảnh</a>
+  <i class="ic" data-icon="chevron-right"></i><b>{{ handle }}</b>
+{% endblock %}
+{% block page_actions %}
+  <a class="btn-primary" href="{{ url_for('thumbs_page') }}"><i class="ic" data-icon="arrow-left"></i>Tất cả collection</a>
+{% endblock %}
+{% block head_extra %}
+<style>
+  .sec{background:#fff;border:1px solid var(--line,#eadfe6);border-radius:14px;padding:16px;margin-bottom:16px}
+  .sec h3{margin:0 0 12px;font-size:15px}
+  .sheet img{width:100%;border:1px solid #eadfe6;border-radius:10px;margin-bottom:12px;display:block}
+  .toggle{display:flex;gap:8px;margin-bottom:14px}
+  .tbtn{padding:6px 13px;border:1px solid #d9cdd6;border-radius:9px;background:#fff;cursor:pointer;font:inherit;font-weight:600;font-size:13px}
+  .tbtn.on{background:linear-gradient(135deg,#ff9966,#d75151);color:#fff;border:0}
+  .sprow{border:1px solid #eadfe6;border-radius:11px;padding:11px 13px;background:#fff;margin-bottom:12px;scroll-margin-top:90px}
+  .sprow.hl{border-color:#d75151;box-shadow:0 0 0 3px rgba(215,81,81,.18);animation:hlfade 2.4s ease}
+  @keyframes hlfade{0%{background:#fff3f0}60%{background:#fff3f0}100%{background:#fff}}
+  .sprow .t{font-weight:600;font-size:13.5px;margin-bottom:9px;word-break:break-word;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .sprow .t small{font-weight:400;color:var(--ink-3)}
+  .live-btn{margin-left:auto;padding:4px 11px;border:1px solid #cdd9e8;border-radius:8px;background:#fff;cursor:pointer;font:inherit;font-size:12px;font-weight:600;color:#1457b8;text-decoration:none}
+  .live-btn:hover{background:#eef5ff;border-color:#7aa4e0}
+  .redo-btn{margin-left:8px;padding:4px 11px;border:1px solid #d9cdd6;border-radius:8px;background:#fff;cursor:pointer;font:inherit;font-size:12px;font-weight:600;color:#b25a00}
+  .redo-btn:hover{background:#fff7ee;border-color:#e0a060}
+  .redo-btn:disabled{opacity:.55;cursor:default}
+  .saved{font-size:11.5px;color:#1c7a3e;font-weight:600;opacity:0;transition:opacity .2s}
+  .saved.show{opacity:1}
+  .strip{display:flex;gap:9px;overflow-x:auto;padding-bottom:5px}
+  .strip figure{margin:0;flex:0 0 auto;width:140px;cursor:grab;position:relative}
+  .strip figure.drag{opacity:.4}
+  .delx{position:absolute;top:4px;right:4px;width:22px;height:22px;border:1px solid #fff;border-radius:50%;background:#dc2626;color:#fff;font-size:14px;font-weight:700;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+  .delx:hover{background:#b91c1c}
+  .addbox{flex:0 0 auto;width:140px;height:140px;border:2px dashed #d0b9c8;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:#a06a8c;font-size:12.5px;font-weight:600;text-align:center;background:#fdf8fb}
+  .addbox:hover{border-color:#d75151;color:#d75151;background:#fff5f3}
+  .addbox .plus{font-size:26px;line-height:1}
+  .strip img{width:140px;height:140px;object-fit:contain;background:#fafafa;border:1px solid #eee;border-radius:8px;display:block;pointer-events:none}
+  .strip figcaption{font-size:10.5px;color:var(--ink-3);text-align:center;margin-top:2px}
+  .hint{font-size:12px;color:var(--ink-3);margin:-6px 0 12px}
+  .approvebar{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line,#eadfe6);border-radius:12px;padding:11px 15px;margin-bottom:14px;font-size:13.5px}
+  .approvebar[data-state="da_duyet"]{border-color:#2a9d5a;background:#f4fbf6}
+  .approvebar[data-state="da_sync"]{border-color:#1457b8;background:#f3f8ff}
+  .apbtn{margin-left:auto;padding:8px 16px;border:0;border-radius:10px;background:linear-gradient(135deg,#2a9d5a,#1e8c4e);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+  .apbtn.un{background:#f3eef2;color:#8a7d87}
+  .hide{display:none}
+  .seenbar{display:flex;align-items:center;gap:8px;margin:-4px 0 13px;font-size:13px;color:var(--ink-3);cursor:pointer}
+  .seenbar input{width:16px;height:16px;cursor:pointer}
+  #view-sp.hide-seen .sprow.seen{display:none}
+  .sprow.seen{opacity:.62;border-style:dashed}
+  .seenbadge{font-weight:600;font-size:11.5px;color:#8a5a00;background:#fff4e0;border:1px solid #f0d9a8;border-radius:7px;padding:2px 8px}
+  .muted{color:var(--ink-3);font-size:13px}
+  .miss{font-size:12.5px;color:#b25a00}
+  .miss li{margin:2px 0}
+</style>
+{% endblock %}
+{% block content %}
+  <div class="approvebar" id="approvebar" data-state="{{ review }}">
+    <span id="apstate">
+      {% if review=='da_sync' %}<b style="color:#1457b8">✓ Đã sync lên live</b>
+      {% elif review=='da_duyet' %}<b style="color:#1c7a3e">✓ Đã duyệt — chờ sync</b>
+      {% else %}Xem hết các sản phẩm rồi bấm <b>Duyệt</b> để đánh dấu collection này.{% endif %}
+    </span>
+    <button class="apbtn" id="apbtn" onclick="approve()">
+      {% if review %}Bỏ duyệt{% else %}✓ Duyệt collection này{% endif %}
+    </button>
+  </div>
+
+  <div class="toggle">
+    <button class="tbtn on" data-v="sp" onclick="sw('sp')">Theo sản phẩm ({{ items|length }} SP{% if n_seen %} · ẩn {{ n_seen }} trùng{% endif %} · {{ n_img }} ảnh)</button>
+    <button class="tbtn" data-v="sheet" onclick="sw('sheet')">Lưới đại diện</button>
+  </div>
+
+  {% if n_seen %}
+  <label class="seenbar"><input type="checkbox" id="showseen" onchange="toggleSeen()">
+    Đang ẩn <b>{{ n_seen }}</b> SP đã xem ở collection khác cho gọn — tích để hiện lại</label>
+  {% endif %}
+
+  <p class="hint" id="sp-hint">Kéo-thả ảnh trong 1 sản phẩm để đổi thứ tự (tự lưu). Nút <b>Làm lại</b> sẽ tải lại ảnh từ Haravan và chuẩn hóa lại, KHÔNG xóa nền.</p>
+  <div id="view-sp" class="hide-seen">
+    {% if items %}
+      {% for it in items %}
+      <div class="sprow{% if it.seen_at %} seen{% endif %}" data-handle="{{ it.handle }}" id="sp-{{ it.handle }}">
+        <div class="t">{{ it.title or it.handle }} <small>{{ it.imgs|length }} ảnh</small>
+          {% if it.seen_at %}<span class="seenbadge">👁 đã xem ở {{ it.seen_at }}</span>{% endif %}
+          <span class="saved">✓ đã lưu thứ tự</span>
+          <a class="live-btn" href="https://sintech.vn/products/{{ it.handle }}" target="_blank" rel="noopener" title="Mở trang sản phẩm trên web">🔗 Xem live</a>
+          <button class="redo-btn" onclick="redo(this)">↻ Làm lại (không xóa nền)</button>
+        </div>
+        <div class="strip">
+          {% for idx in it.imgs %}
+          <figure draggable="true" data-idx="{{ idx }}">
+            <button class="delx" title="Xóa ảnh này" onclick="delImg(event,'{{ it.handle }}',{{ idx }})">✕</button>
+            <img loading="lazy"
+                 src="{{ url_for('thumbs_img', kind='std', name=it.handle + '/' + idx|string + '.jpg') }}">
+            <figcaption>#{{ loop.index }}</figcaption>
+          </figure>
+          {% endfor %}
+          <label class="addbox" title="Chèn 1 hoặc nhiều ảnh từ máy (Downloads…)">
+            <input type="file" accept="image/*" multiple hidden onchange="addImg(this,'{{ it.handle }}')">
+            <span class="plus">＋</span><span>Thêm ảnh</span>
+          </label>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="sec"><p class="muted">Chưa có ảnh đã xử cho collection này (có thể đang gen).</p></div>
+    {% endif %}
+  </div>
+
+  <div id="view-sheet" class="hide">
+    <div class="sec sheet">
+      <h3>Lưới đại diện (1 ảnh/SP) — {{ handle }}</h3>
+      {% if sheets %}
+        {% for s in sheets %}
+        <img loading="lazy" src="{{ url_for('thumbs_img', kind='_contact', name=s) }}" alt="{{ s }}">
+        {% endfor %}
+      {% else %}
+        <p class="muted">Chưa có lưới đại diện cho collection này.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if missing %}
+  <div class="sec">
+    <h3 class="miss">⚠️ {{ missing|length }} SP thiếu ảnh gốc trên Haravan (cần bổ sung ảnh)</h3>
+    <ul class="miss">{% for m in missing %}<li>{{ m.title or m.handle }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+<script>
+function sw(v){
+  document.getElementById('view-sp').classList.toggle('hide', v!=='sp');
+  document.getElementById('view-sheet').classList.toggle('hide', v!=='sheet');
+  document.querySelectorAll('.tbtn[data-v]').forEach(b=>b.classList.toggle('on', b.dataset.v===v));
+}
+
+// Bật/tắt hiển thị SP đã xem ở collection khác (mặc định ẩn cho gọn)
+function toggleSeen(){
+  const on=document.getElementById('showseen').checked;
+  document.getElementById('view-sp').classList.toggle('hide-seen', !on);
+}
+
+// Mở từ kết quả tìm (#sp-<handle>) -> cuộn tới + làm nổi bật SP
+window.addEventListener('load', ()=>{
+  if(location.hash && location.hash.startsWith('#sp-')){
+    const el=document.getElementById(location.hash.slice(1));
+    if(el){
+      // nếu SP đang bị ẩn (đã xem ở nơi khác) -> tự hiện để nhảy tới được
+      if(el.classList.contains('seen')){
+        const cb=document.getElementById('showseen'); if(cb){ cb.checked=true; toggleSeen(); }
+      }
+      el.scrollIntoView({behavior:'smooth',block:'start'}); el.classList.add('hl'); setTimeout(()=>el.classList.remove('hl'),2600);
+    }
+  }
+});
+
+// ── Kéo-thả đổi thứ tự ảnh trong 1 SP ──
+document.querySelectorAll('.strip').forEach(strip=>{
+  let dragEl=null;
+  let moved=false;
+  strip.addEventListener('dragstart',e=>{
+    dragEl=e.target.closest('figure'); if(dragEl) dragEl.classList.add('drag');
+    moved=false;
+    e.dataTransfer.effectAllowed='move';
+  });
+  // dragend LUÔN bắn khi thả (dù thả ở đâu) -> lưu chắc chắn, không lệ thuộc 'drop'
+  strip.addEventListener('dragend',()=>{
+    if(dragEl){ dragEl.classList.remove('drag'); if(moved) saveOrder(strip); }
+    dragEl=null; moved=false;
+  });
+  strip.addEventListener('dragover',e=>{
+    e.preventDefault();
+    const f=e.target.closest('figure'); if(!f||f===dragEl) return;
+    const r=f.getBoundingClientRect();
+    strip.insertBefore(dragEl, (e.clientX-r.left)>r.width/2 ? f.nextSibling : f);
+    moved=true;
+  });
+  strip.addEventListener('drop',e=>{ e.preventDefault(); if(dragEl && moved){ saveOrder(strip); moved=false; } });
+});
+
+function saveOrder(strip){
+  const row=strip.closest('.sprow');
+  const handle=row.dataset.handle;
+  const figs=[...strip.querySelectorAll('figure')];
+  const order=figs.map(f=>parseInt(f.dataset.idx));
+  figs.forEach((f,i)=>{ f.querySelector('figcaption').textContent='#'+(i+1); });
+  fetch('/thumbs/reorder',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({handle,order})})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){ const s=row.querySelector('.saved'); s.classList.add('show'); setTimeout(()=>s.classList.remove('show'),1500); }
+    }).catch(()=>{});
+}
+
+// ── Xóa 1 ảnh ──
+function delImg(e, handle, idx){
+  e.preventDefault(); e.stopPropagation();
+  if(!confirm('Xóa ảnh này khỏi sản phẩm?')) return;
+  fetch('/thumbs/delete-image',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({handle,idx})})
+    .then(r=>r.json()).then(d=>{ if(d.ok) location.reload(); else alert('Lỗi: '+(d.error||'')); })
+    .catch(()=>alert('Lỗi mạng'));
+}
+
+// ── Chèn ảnh từ máy vào 1 SP ──
+function addImg(input, handle){
+  const files=input.files; if(!files || !files.length) return;
+  const fd=new FormData(); fd.append('handle',handle);
+  for(const f of files){ fd.append('file', f); }
+  const box=input.closest('.addbox'); const txt=box.querySelector('span:last-child');
+  txt.textContent='Đang tải '+files.length+' ảnh...';
+  fetch('/thumbs/add-image',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{
+    if(d.ok){
+      if(d.errors>0) alert('Thêm '+d.added+' ảnh, '+d.errors+' ảnh lỗi bị bỏ qua.');
+      location.reload();
+    } else { alert('Lỗi: '+(d.error||'')); txt.textContent='Thêm ảnh'; }
+  }).catch(()=>{ alert('Lỗi mạng'); txt.textContent='Thêm ảnh'; });
+  input.value='';
+}
+
+// ── Duyệt / bỏ duyệt collection ──
+function approve(){
+  const bar=document.getElementById('approvebar');
+  const cur=bar.dataset.state;            // '' | da_duyet | da_sync
+  const value = !cur;                     // có trạng thái -> bỏ; chưa -> duyệt
+  const btn=document.getElementById('apbtn'); btn.disabled=true;
+  fetch('/thumbs/approve',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({handle:'{{ handle }}', value})})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){ if(d.moved>0) alert('Đã duyệt. Dọn '+d.moved+' ảnh gốc từ Downloads vào folder gom.'); location.reload(); }
+      else { alert('Lỗi: '+(d.error||'')); btn.disabled=false; }
+    }).catch(()=>{ alert('Lỗi mạng'); btn.disabled=false; });
+}
+
+// ── Làm lại 1 SP (không xóa nền) ──
+function redo(btn){
+  const row=btn.closest('.sprow'); const handle=row.dataset.handle;
+  if(!confirm('Làm lại các ảnh đang hiển thị (giữ ảnh đã thêm + thứ tự, KHÔNG xóa nền)?')) return;
+  btn.disabled=true; const old=btn.textContent; btn.textContent='Đang làm lại...';
+  fetch('/thumbs/redo',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({handle})})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){ btn.textContent='✓ Xong ('+d.n+' ảnh), tải lại...'; setTimeout(()=>location.reload(),600); }
+      else { alert('Lỗi: '+(d.error||'không rõ')); btn.disabled=false; btn.textContent=old; }
+    }).catch(()=>{ alert('Lỗi mạng'); btn.disabled=false; btn.textContent=old; });
+}
+</script>
+{% endblock %}
