@@ -587,13 +587,21 @@ function renderTitleMetaPicker(row, url, data) {
     ? '<span style="color:#34d399;font-size:11px">✓ Đã đọc spec thật từ mô tả SP</span>'
     : '<span style="color:#fbbf24;font-size:11px">⚠ SP không có body mô tả — AI gen từ tên</span>';
   const retryTag = data.retried ? ' · <span style="color:#fbbf24;font-size:11px">↻ đã retry chỉnh độ dài</span>' : '';
+  // spec gốc yếu (<4 token) -> đã kéo spec web bù. Hiện nguồn để vợ bấm kiểm chứng.
+  const src = data.web_spec_source
+    ? ` (<a href="${escapeHtml(data.web_spec_source)}" target="_blank" rel="noopener"
+         style="color:#7dd3fc;text-decoration:underline">nguồn</a>)`
+    : '';
+  const webSpecTag = data.web_spec_used
+    ? ` · <span style="color:#c084fc;font-size:11px">🌐 spec gốc yếu — đã bù spec web${src}</span>`
+    : '';
 
   const tr = document.createElement('tr');
   tr.className = 'tm-picker-row';
   tr.innerHTML = `<td colspan="11" style="background:#0b1220;padding:14px 18px;border-top:2px solid #0ea5e9">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <strong style="color:#7dd3fc">🎯 Chọn 1 Title + 1 Meta để sync</strong>
-      <span>${specTag}${retryTag}</span>
+      <span>${specTag}${webSpecTag}${retryTag}</span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
       <div>
