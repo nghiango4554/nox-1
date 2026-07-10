@@ -30,18 +30,33 @@
   .pnew-banner-warn{background:#fef3c7;color:#92400e;}
   .pnew-banner-error{background:#fee2e2;color:#991b1b;}
   .pnew-banner-success{background:#dcfce7;color:#14532d;}
-  /* Preview render — gần với style Sintech.vn (link đỏ + bold) */
-  #body_preview a{color:#dc2626 !important;text-decoration:underline;}
-  #body_preview a strong{color:inherit;font-weight:700;}
-  #body_preview h2{font-size:18px;margin:18px 0 8px;color:#111827;}
-  #body_preview h3{font-size:15px;margin:14px 0 6px;color:#374151;}
-  #body_preview p{margin:8px 0;}
-  #body_preview ul{padding-left:22px;margin:8px 0;}
-  #body_preview li{margin:3px 0;}
-  #body_preview table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px;}
-  #body_preview table th,#body_preview table td{border:1px solid #e5e7eb;padding:6px 10px;text-align:left;}
-  #body_preview table th{background:#f9fafb;font-weight:600;}
-  #body_preview em{color:#6b7280;font-size:13px;}
+  /* Editor render — gần với style Sintech.vn (link đỏ + bold) */
+  #body_wys a{color:#dc2626 !important;text-decoration:underline;}
+  #body_wys a strong{color:inherit;font-weight:700;}
+  #body_wys h2{font-size:18px;margin:18px 0 8px;color:#111827;}
+  #body_wys h3{font-size:15px;margin:14px 0 6px;color:#374151;}
+  #body_wys p{margin:8px 0;}
+  #body_wys ul{padding-left:22px;margin:8px 0;}
+  #body_wys li{margin:3px 0;}
+  #body_wys table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px;}
+  #body_wys table th,#body_wys table td{border:1px solid #e5e7eb;padding:6px 10px;text-align:left;}
+  #body_wys table th{background:#f9fafb;font-weight:600;}
+  #body_wys em{color:#6b7280;font-size:13px;}
+  #body_wys img{max-width:100%;height:auto;}
+  #body_wys:focus{outline:2px solid #a78bfa;outline-offset:-2px;}
+  .pnew-toolbar{display:flex;gap:4px;flex-wrap:wrap;align-items:center;border:1px solid #d1d5db;
+    border-radius:4px 4px 0 0;background:#f9fafb;padding:6px 8px;}
+  .pnew-toolbar button{background:#fff;border:1px solid #d1d5db;border-radius:4px;padding:4px 10px;
+    font-size:12px;cursor:pointer;color:#374151;}
+  .pnew-toolbar button:hover{background:#ede9fe;border-color:#a78bfa;}
+  /* Ảnh: lưới preview */
+  .pnew-imgcard{border:1px solid #e5e7eb;border-radius:6px;padding:6px;text-align:center;background:#fff;}
+  .pnew-imgcard img{display:block;width:150px;height:auto;border-radius:4px;}
+  .pnew-imgcard span{font-size:11px;color:#6b7280;display:block;margin-top:4px;}
+  /* Quét trùng */
+  .pnew-dup{border:1px solid #fcd34d;background:#fffbeb;border-radius:6px;padding:10px 12px;}
+  .pnew-dup table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px;}
+  .pnew-dup td{padding:4px 6px;border-bottom:1px solid #fde68a;vertical-align:top;}
 </style>
 
 <div style="max-width:920px;">
@@ -55,6 +70,7 @@
       <input type="text" id="name" class="pnew-input"
              placeholder="vd: Card Màn Hình Asus Dual RTX 3060 12GB V1" />
       <small style="color:#6b7280;font-size:12px;">Theo <code>product_naming_rules.md</code>. <strong>Mainboard</strong> skip — vợ tự viết.</small>
+      <div id="dupBox" style="display:none;margin-top:8px;"></div>
     </div>
 
     <div class="pnew-2col">
@@ -96,9 +112,26 @@
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
       <button type="button" id="btnPreview" class="pnew-btn pnew-btn-primary" onclick="doPreview()">✨ Preview parse</button>
+      <button type="button" id="btnDup" class="pnew-btn" style="background:#f59e0b;color:#fff;" onclick="doCheckDup(true)">🔍 Quét SP trùng</button>
       <button type="button" id="btnOrganize" class="pnew-btn pnew-btn-primary" onclick="doOrganizeSpec()" disabled style="background:#0891b2;">🔄 Sắp xếp spec</button>
       <button type="button" id="btnGen" class="pnew-btn pnew-btn-primary" onclick="doGenerate()" disabled>🤖 Gen body + SEO (AI)</button>
     </div>
+  </div>
+
+  <!-- ──────────── STEP 1.5: ẢNH SP ──────────── -->
+  <div class="pnew-card">
+    <h2>🖼️ Ảnh sản phẩm <small style="font-weight:normal;color:#9ca3af;font-size:12px;">— optional</small></h2>
+    <input type="file" id="imgInput" accept="image/*" multiple onchange="onPickImages(event)" />
+    <small style="display:block;color:#6b7280;font-size:12px;margin-top:6px;">
+      Ảnh <strong>gốc</strong> lên carousel SP. 3 ảnh đầu được nhúng vào body (dùng URL carousel
+      <code>_grande</code>, không dùng theme asset). Nút resize chỉ để <strong>xem trước</strong> 600×338.
+    </small>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+      <button type="button" id="btnResize" class="pnew-btn" style="background:#0891b2;color:#fff;"
+              onclick="doResizePreview()" disabled>📐 Xem trước resize 600×338</button>
+      <button type="button" class="pnew-btn" style="background:#e5e7eb;color:#374151;" onclick="clearImages()">✕ Bỏ ảnh</button>
+    </div>
+    <div id="imgGrid" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;"></div>
   </div>
 
   <!-- ──────────── STEP 2: PARSE PREVIEW ──────────── -->
@@ -163,14 +196,25 @@
     </div>
 
     <div class="pnew-row">
-      <label class="pnew-label">Body HTML <small style="font-weight:normal;color:#9ca3af;">(edit được, preview render bên dưới)</small></label>
-      <textarea id="body_html" class="pnew-input" rows="12" style="font-family:monospace;font-size:12px;" oninput="updateBodyPreview()"></textarea>
+      <label class="pnew-label">Body <small style="font-weight:normal;color:#9ca3af;">(sửa trực tiếp như Word — đúng cái sẽ lên Haravan)</small></label>
+      <div class="pnew-toolbar">
+        <button type="button" onclick="ed('bold')"><b>B</b></button>
+        <button type="button" onclick="ed('italic')"><i>I</i></button>
+        <button type="button" onclick="edBlock('h2')">H2</button>
+        <button type="button" onclick="edBlock('h3')">H3</button>
+        <button type="button" onclick="edBlock('p')">¶</button>
+        <button type="button" onclick="ed('insertUnorderedList')">• List</button>
+        <button type="button" onclick="edLink()">🔗 Link</button>
+        <button type="button" onclick="ed('removeFormat')">✕ Xoá format</button>
+        <button type="button" id="btnHtmlToggle" onclick="toggleHtml()" style="margin-left:auto;">&lt;/&gt; Xem HTML</button>
+      </div>
+      <!-- WYSIWYG: nguồn chân lý khi đang mở. Textarea giữ HTML thô, đồng bộ 2 chiều. -->
+      <div id="body_wys" contenteditable="true" oninput="syncFromWys()"
+           style="border:1px solid #d1d5db;border-top:none;border-radius:0 0 4px 4px;padding:14px;
+                  min-height:320px;max-height:560px;overflow:auto;background:#fff;font-size:14px;line-height:1.6;"></div>
+      <textarea id="body_html" class="pnew-input" rows="14" oninput="syncFromHtml()"
+                style="font-family:monospace;font-size:12px;display:none;margin-top:0;"></textarea>
     </div>
-
-    <details>
-      <summary style="cursor:pointer;font-weight:600;color:#7c3aed;font-size:13px;margin-bottom:8px;">👁 Preview HTML render</summary>
-      <div id="body_preview" style="border:1px solid #e5e7eb;border-radius:4px;padding:14px;background:#fafafa;font-size:14px;line-height:1.6;"></div>
-    </details>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
       <button type="button" class="pnew-btn pnew-btn-primary" onclick="doGenerate()">🔁 Gen lại</button>
@@ -223,6 +267,7 @@ async function doPreview() {
     const j = await res.json();
     lastParsed = j;
     renderParsed(j);
+    doCheckDup(false);        // quét trùng ngầm, không chen status của parse
     if (j.loai) {
       document.getElementById('btnGen').disabled = false;
       document.getElementById('btnOrganize').disabled = false;
@@ -412,8 +457,136 @@ function updateCounters() {
   eCnt.className = 'pnew-counter ' + (e.length <= 160 ? 'ok' : 'warn');
 }
 
-function updateBodyPreview() {
-  document.getElementById('body_preview').innerHTML = document.getElementById('body_html').value;
+// ─── Editor WYSIWYG ↔ HTML thô (đồng bộ 2 chiều, WYSIWYG là mặc định) ───
+let htmlMode = false;
+
+function updateBodyPreview() {   // gọi sau khi AI gen: đổ HTML vào editor
+  document.getElementById('body_wys').innerHTML = document.getElementById('body_html').value;
+}
+function syncFromWys() {         // gõ trong WYSIWYG → cập nhật HTML thô
+  document.getElementById('body_html').value = document.getElementById('body_wys').innerHTML;
+}
+function syncFromHtml() {        // sửa HTML thô → cập nhật WYSIWYG
+  document.getElementById('body_wys').innerHTML = document.getElementById('body_html').value;
+}
+function getBodyHtml() {         // nguồn chân lý theo mode đang mở
+  return htmlMode ? document.getElementById('body_html').value
+                  : document.getElementById('body_wys').innerHTML;
+}
+function toggleHtml() {
+  const ta = document.getElementById('body_html'), wys = document.getElementById('body_wys');
+  htmlMode = !htmlMode;
+  if (htmlMode) { ta.value = wys.innerHTML; wys.style.display = 'none'; ta.style.display = 'block'; }
+  else { wys.innerHTML = ta.value; ta.style.display = 'none'; wys.style.display = 'block'; }
+  document.getElementById('btnHtmlToggle').innerHTML = htmlMode ? '👁 Xem bài' : '&lt;/&gt; Xem HTML';
+}
+function ed(cmd) { document.getElementById('body_wys').focus(); document.execCommand(cmd, false, null); syncFromWys(); }
+function edBlock(tag) { document.getElementById('body_wys').focus(); document.execCommand('formatBlock', false, tag); syncFromWys(); }
+function edLink() {
+  const u = prompt('Dán link (https://sintech.vn/...):');
+  if (!u) return;
+  document.getElementById('body_wys').focus();
+  document.execCommand('createLink', false, u);
+  syncFromWys();
+}
+
+// ─── Quét SP trùng ───
+async function doCheckDup(manual) {
+  const name = document.getElementById('name').value.trim();
+  const box = document.getElementById('dupBox');
+  if (!name) { if (manual) setStatus('error', 'Nhập tên SP trước nha'); return; }
+  if (manual) setStatus('info', 'Đang quét catalog...');
+  try {
+    const res = await fetch('/products/new/check-dup', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({name}),
+    });
+    const j = await res.json();
+    const ms = j.matches || [];
+    if (!ms.length) {
+      box.style.display = 'block';
+      box.className = 'pnew-banner pnew-banner-success';
+      box.textContent = `✅ Không thấy SP trùng (đã quét ${j.checked} SP).`;
+      if (manual) setStatus('success', 'Không có SP nghi trùng.');
+      return;
+    }
+    box.style.display = 'block';
+    box.className = 'pnew-dup';
+    const rows = ms.map(m => {
+      const live = m.status === 'active'
+        ? `<a href="https://sintech.vn/products/${m.handle}" target="_blank" rel="noopener">xem</a>` : '(ẩn)';
+      return `<tr><td><strong>${escHtml(m.title)}</strong><br>
+        <span style="color:#92400e;font-family:monospace">${escHtml((m.match || []).join(', '))}</span></td>
+        <td style="white-space:nowrap">${m.score}</td>
+        <td style="white-space:nowrap">
+          <a href="https://admin.haravan.com/admin/products/${m.haravan_id}" target="_blank" rel="noopener">admin</a> · ${live}
+        </td></tr>`;
+    }).join('');
+    box.innerHTML = `<strong style="color:#92400e">⚠️ ${ms.length} SP nghi trùng</strong>
+      <small style="color:#92400e"> (quét ${j.checked} SP — kiểm trước khi tạo)</small>
+      <table>${rows}</table>`;
+    if (manual) setStatus('warn', `⚠️ ${ms.length} SP nghi trùng — xem danh sách dưới ô tên.`);
+  } catch (e) {
+    if (manual) setStatus('error', 'Lỗi quét trùng: ' + e.message);
+  }
+}
+
+function escHtml(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+// ─── Ảnh SP ───
+let imgOriginals = [];   // base64 ảnh GỐC — cái này mới gửi lên Haravan
+
+function onPickImages(ev) {
+  const files = [...(ev.target.files || [])].slice(0, 12);
+  imgOriginals = [];
+  const grid = document.getElementById('imgGrid');
+  grid.innerHTML = '';
+  document.getElementById('btnResize').disabled = !files.length;
+  files.forEach(f => {
+    const rd = new FileReader();
+    rd.onload = e => {
+      imgOriginals.push(e.target.result);
+      const d = document.createElement('div');
+      d.className = 'pnew-imgcard';
+      d.innerHTML = `<img src="${e.target.result}"><span>gốc · ${f.name.slice(0, 18)}</span>`;
+      grid.appendChild(d);
+    };
+    rd.readAsDataURL(f);
+  });
+}
+
+function clearImages() {
+  imgOriginals = [];
+  document.getElementById('imgGrid').innerHTML = '';
+  document.getElementById('imgInput').value = '';
+  document.getElementById('btnResize').disabled = true;
+}
+
+async function doResizePreview() {
+  if (!imgOriginals.length) return;
+  setStatus('info', 'Đang resize (chỉ xem trước, chưa up)...');
+  try {
+    const res = await fetch('/products/new/resize-images', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({images: imgOriginals}),
+    });
+    const j = await res.json();
+    const grid = document.getElementById('imgGrid');
+    grid.innerHTML = '';
+    j.resized.forEach((r, i) => {
+      const d = document.createElement('div');
+      d.className = 'pnew-imgcard';
+      d.innerHTML = r
+        ? `<img src="${r}"><span>600×338 (xem trước)</span>`
+        : `<img src="${imgOriginals[i]}"><span style="color:#dc2626">resize lỗi — vẫn up ảnh gốc</span>`;
+      grid.appendChild(d);
+    });
+    setStatus('success', `📐 Resize xem trước ${j.count}/${imgOriginals.length} ảnh. Lúc tạo SP vẫn up ảnh GỐC lên carousel.`);
+  } catch (e) {
+    setStatus('error', 'Lỗi resize: ' + e.message);
+  }
 }
 
 async function doCreate() {
@@ -423,10 +596,11 @@ async function doCreate() {
   try {
     const payload = {
       ...getFormPayload(),
-      body_html: document.getElementById('body_html').value,
+      body_html: getBodyHtml(),
       excerpt: document.getElementById('excerpt').value,
       seo_title: document.getElementById('seo_title').value,
       seo_meta: document.getElementById('seo_meta').value,
+      images: imgOriginals,
     };
     const res = await fetch('/products/new/create', {
       method: 'POST',
