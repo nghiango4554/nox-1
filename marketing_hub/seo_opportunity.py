@@ -34,7 +34,7 @@ import db
 # ───────────────────────── constants ─────────────────────────
 
 PAGE_TYPES = (
-    "blog_info", "blog_commercial", "service_page",
+    "blog_info", "blog_commercial", "landing_page", "service_page", "support_page",
     "collection_page", "product_page", "faq", "ignore",
 )
 STATUSES = (
@@ -323,21 +323,170 @@ def compute_score(row: dict) -> tuple[float, dict]:
     return score, bd
 
 
-def suggest_page_type(row: dict) -> str:
-    """Gợi ý page_type theo intent + dạng keyword (heuristic, có thể sửa tay)."""
-    kw = (row.get("keyword") or "").lower()
-    intent = (row.get("intent") or "").lower()
-    if any(q in kw for q in ("là gì", "tại sao", "cách", "hướng dẫn", "how", "what", "why", "vì sao")):
+# ───────────────────────── classification (derive-on-read) ─────────────────────────
+#
+# 3 nguyên tắc (đã phản biện, đừng bỏ):
+#   1) Match theo RANH GIỚI TỪ + token CÓ DẤU. KHÔNG substring thô với token ngắn
+#      ("đánh giá" chứa "gia" nếu bỏ dấu → false-positive). Token "giá" (có dấu) khớp
+#      "laptop giá rẻ" nhưng KHÔNG khớp "gia đình"/"tham gia"/"gia công" (chữ "gia" không dấu).
+#   2) intent / suggested_page_type / recommended_action / reason / flags đều tính LÚC ĐỌC.
+#      KHÔNG backfill hàng loạt vào DB. Cột DB chỉ giữ giá trị người dùng sửa tay (override).
+#   3) MỘT hàm derive(row) là nguồn chân lý duy nhất → không lệch nhau.
+
+# Token có dấu, khớp theo ranh giới từ. Cụm nhiều từ khớp nguyên cụm (cũng theo biên).
+_INTENT_TOKENS = {
+    "transactional": ("mua", "bán", "đặt mua", "order", "trả góp", "khuyến mãi",
+                      "giảm giá", "sale", "ở đâu", "chỗ nào", "cửa hàng", "chính hãng"),
+    "commercial": ("giá", "giá rẻ", "bao nhiêu", "tốt nhất", "loại nào", "nên chọn",
+                   "nên mua", "so sánh", "review", "đánh giá", "có tốt", "có nên"),
+    "informational": ("là gì", "tại sao", "vì sao", "cách", "hướng dẫn", "mẹo",
+                      "kinh nghiệm", "how", "what", "why", "lỗi", "sửa"),
+}
+
+
+def _kw_has(kw_norm: str, token: str) -> bool:
+    """True nếu `token` (có dấu) xuất hiện trong kw như MỘT TỪ/CỤM TỪ trọn vẹn.
+    Dùng ranh giới từ Unicode (\\w bao gồm ký tự tiếng Việt) → không dính substring."""
+    return re.search(r"(?<!\w)" + re.escape(token) + r"(?!\w)", kw_norm) is not None
+
+
+def _classify_intent(kw_norm: str) -> str | None:
+    """Suy luận intent từ keyword. Không chắc → None (KHÔNG ép bucket)."""
+    if not kw_norm:
+        return None
+    # Ưu tiên transactional > commercial > informational khi trùng tín hiệu.
+    for intent in ("transactional", "commercial", "informational"):
+        for tok in _INTENT_TOKENS[intent]:
+            if _kw_has(kw_norm, tok):
+                return intent
+    return None
+
+
+def _suggest_page_type(kw_norm: str, intent: str | None) -> str:
+    """Heuristic page_type LƯU DB (default khi upsert). Giữ đơn giản, ổn định."""
+    if any(_kw_has(kw_norm, t) for t in ("là gì", "tại sao", "vì sao", "cách",
+                                         "hướng dẫn", "how", "what", "why", "mẹo")):
         return "blog_info"
-    if "?" in kw or kw.startswith(("có nên", "nên", "bao nhiêu")):
+    if kw_norm.startswith(("có nên", "nên", "bao nhiêu")) or _kw_has(kw_norm, "có nên"):
         return "faq"
     if intent == "transactional":
         return "product_page"
     if intent == "commercial":
         return "collection_page"
-    if intent == "informational":
-        return "blog_info"
     return "blog_info"
+
+
+# ── safety / noise pre-check (chặn keyword rủi ro & nhiễu khỏi "quick win") ──
+# 'crack'/'keygen' distinctive → substring; cụm có dấu match theo cụm.
+_RISKY_SUBSTR = ("crack", "keygen", "bẻ khóa", "be khoa", "key lậu", "key lau",
+                 "tải lậu", "tai lau", "kích hoạt lậu", "kich hoat lau", "bản quyền lậu")
+# Domain / đối thủ hay lẫn vào GSC query.
+_NOISE_DOMAINS = ("gearvn", "hacom", "cellphones", "phongvu", "phong vu", "baotintech",
+                  "baotinhtech", "anphat", "an phat", "tncstore", "hanoicomputer",
+                  "nguyenkim", "thegioididong", "fptshop")
+
+
+def _is_risky(kw_norm: str) -> bool:
+    return any(t in kw_norm for t in _RISKY_SUBSTR)
+
+
+def _is_noise(kw_norm: str) -> bool:
+    if ".com" in kw_norm or ".vn" in kw_norm:
+        return True
+    return any(_kw_has(kw_norm, d) or d in kw_norm for d in _NOISE_DOMAINS)
+
+
+def _dynamic_page_type(kw_norm: str, intent: str | None) -> str:
+    """Gợi ý page_type ĐỘNG (badge, KHÔNG ghi DB). Nhận diện landing/service/support
+    — những loại mà 'chỉ sửa meta' là sai hướng. Thứ tự: service > landing > support > blog."""
+    if any(_kw_has(kw_norm, t) for t in (
+            "sửa laptop", "sua laptop", "sửa máy tính", "sua may tinh", "sửa pc",
+            "vệ sinh laptop", "ve sinh laptop", "cài win", "cai win", "cài windows",
+            "cai windows", "cài đặt win", "cai dat win", "cài mac", "cài macbook",
+            "bảo trì", "bao tri")):
+        return "service_page"
+    if any(_kw_has(kw_norm, t) for t in (
+            "build pc", "pc online", "xây dựng cấu hình", "xay dung cau hinh",
+            "build online", "web build", "trang web build", "pc build")):
+        return "landing_page"
+    if any(_kw_has(kw_norm, t) for t in (
+            "driver", "download", "tải", "tai", "phần mềm", "phan mem",
+            "benchmark", "cài đặt", "cai dat")):
+        return "support_page"
+    if any(_kw_has(kw_norm, t) for t in (
+            "là gì", "tại sao", "vì sao", "cách", "hướng dẫn", "so sánh", "khác gì",
+            "how", "what", "why", "mẹo")):
+        return "blog_info"
+    return ""  # unknown — không ép
+
+
+def derive(row: dict) -> dict:
+    """NGUỒN CHÂN LÝ phân loại — tính lúc đọc, KHÔNG ghi DB.
+    Trả {intent, suggested_page_type, page_type_suggest, recommended_action, reason, flags}.
+    intent/suggested_page_type: ưu tiên giá trị người dùng đã lưu (override), else suy luận.
+    page_type_suggest: gợi ý ĐỘNG (landing/service/support/blog) — chỉ badge, không ghi DB."""
+    kw = normalize_keyword(row.get("keyword") or "")
+
+    # intent: giữ giá trị đã set (CSV/GSC/sửa tay) nếu hợp lệ, else suy luận keyword.
+    intent = (row.get("intent") or "").strip().lower() or None
+    if intent not in INTENTS:
+        intent = _classify_intent(kw)
+
+    # page_type: giữ override đã lưu, else heuristic ổn định (cho <select>).
+    page_type = row.get("suggested_page_type") or _suggest_page_type(kw, intent)
+    pt_suggest = _dynamic_page_type(kw, intent)  # động — badge
+
+    # flags — tín hiệu để người vận hành để mắt.
+    flags: list[str] = []
+    risky = _is_risky(kw)
+    noise = _is_noise(kw)
+    if risky:
+        flags.append("risky")
+    if noise:
+        flags.append("noise")
+    pos = row.get("gsc_position")
+    ctr = row.get("gsc_ctr")
+    demand = max([v for v in (row.get("volume"), row.get("gsc_impressions")) if v] or [0])
+    if kw and len(kw.split()) <= 1:
+        flags.append("too_broad")
+    if pos and 4 <= pos <= 20:
+        flags.append("striking_distance")
+    if pos and ctr is not None and pos <= 20 and ctr < max(0.01, 0.30 / pos):
+        flags.append("ctr_gap")
+    if not intent:
+        flags.append("intent_unclear")
+
+    # recommended_action — SAFETY thắng trước (risky/noise → review_manual bất kể CTR gap).
+    if risky:
+        action = "review_manual"
+        reason = "Keyword nhạy cảm/rủi ro (crack/bẻ khóa) → review thủ công, chỉ xử lý theo hướng bản quyền/an toàn."
+    elif noise:
+        action = "review_manual"
+        reason = "Keyword có dấu hiệu nhiễu/domain/đối thủ → review trước khi xử lý."
+    elif "ctr_gap" in flags and pos and pos <= 20:
+        action = "improve_metadata"  # nhãn hiển thị = "CTR gap — cần xử lý" (không chỉ meta)
+        reason = f"Đã rank (pos {pos}) nhưng CTR dưới kỳ vọng → soi snippet/page; sửa title/meta hoặc đúng loại page ({pt_suggest or page_type})."
+    elif "striking_distance" in flags:
+        action = "optimize_page"
+        reason = f"Striking distance (pos {pos}) → tối ưu on-page/nội dung đẩy lên top."
+    elif intent and (not pos or pos > 40) and demand > 0:
+        action = "create_content"
+        reason = f"Chưa rank, có nhu cầu (~{int(demand)} imp/vol), intent {intent} → tạo nội dung mới."
+    elif not intent or "too_broad" in flags:
+        action = "review_manual"
+        reason = "Keyword mơ hồ/quá rộng — cần người xem quyết định, không tự phân loại."
+    else:
+        action = "low_priority"
+        reason = "Ít tín hiệu nổi bật — để theo dõi thêm."
+
+    return {"intent": intent, "suggested_page_type": page_type,
+            "page_type_suggest": pt_suggest, "recommended_action": action,
+            "reason": reason, "flags": flags}
+
+
+def suggest_page_type(row: dict) -> str:
+    """Wrapper tương thích ngược — dùng derive() làm nguồn chung."""
+    return derive(row)["suggested_page_type"]
 
 
 # ───────────────────────── upsert / queries ─────────────────────────
@@ -566,7 +715,44 @@ def list_keywords(source=None, intent=None, status=None, priority=None,
     args.append(int(limit))
     rows = conn.execute(sql, args).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        # Derive-on-read: gắn gợi ý (KHÔNG ghi DB). intent/page_type_suggest để UI
+        # hiển thị khi cột lưu còn trống; action/reason/flags luôn tính động.
+        dv = derive(d)
+        d["intent_suggest"] = dv["intent"]
+        d["page_type_default"] = dv["suggested_page_type"]   # ổn định — fallback cho <select>
+        d["page_type_suggest"] = dv["page_type_suggest"]     # động — badge (landing/service/support/"")
+        d["recommended_action"] = dv["recommended_action"]
+        d["reason"] = dv["reason"]
+        d["flags"] = dv["flags"]
+        out.append(d)
+    return out
+
+
+def count_keywords(source=None, intent=None, status=None, priority=None,
+                   page_type=None, q=None) -> int:
+    """Tổng số keyword khớp filter (bỏ qua limit) — để UI hiện shown/total."""
+    ensure_schema()
+    conn = db.get_conn()
+    sql = "SELECT COUNT(*) c FROM seo_keyword_opportunities WHERE 1=1"
+    args = []
+    if source:
+        sql += " AND source=?"; args.append(source)
+    if intent:
+        sql += " AND intent=?"; args.append(intent)
+    if status:
+        sql += " AND status=?"; args.append(status)
+    if priority:
+        sql += " AND priority=?"; args.append(priority)
+    if page_type:
+        sql += " AND suggested_page_type=?"; args.append(page_type)
+    if q:
+        sql += " AND keyword LIKE ?"; args.append(f"%{q}%")
+    n = conn.execute(sql, args).fetchone()["c"]
+    conn.close()
+    return n
 
 
 def get_keyword(kid: int) -> dict | None:
@@ -964,15 +1150,18 @@ def _extract_json(raw: str):
 
 def export_keywords_csv() -> str:
     rows = list_keywords(limit=100000)
-    cols = ["id", "keyword", "source", "intent", "volume", "keyword_difficulty", "cpc",
-            "gsc_clicks", "gsc_impressions", "gsc_ctr", "gsc_position",
-            "suggested_page_type", "opportunity_score", "priority", "status",
-            "topic_cluster", "country", "language", "notes", "updated_at"]
+    cols = ["id", "keyword", "source", "intent", "intent_suggest", "volume",
+            "keyword_difficulty", "cpc", "gsc_clicks", "gsc_impressions", "gsc_ctr",
+            "gsc_position", "suggested_page_type", "page_type_suggest",
+            "recommended_action", "reason", "flags", "opportunity_score", "priority",
+            "status", "topic_cluster", "country", "language", "notes", "updated_at"]
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(cols)
     for r in rows:
-        w.writerow([r.get(c, "") for c in cols])
+        row = dict(r)
+        row["flags"] = "|".join(row.get("flags") or [])
+        w.writerow([row.get(c, "") for c in cols])
     return buf.getvalue()
 
 

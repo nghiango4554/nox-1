@@ -69,6 +69,18 @@
       <select id="f-intent" onchange="load()"><option value="">— intent —</option>{% for i in intents %}<option>{{ i }}</option>{% endfor %}</select>
       <select id="f-status" onchange="load()"><option value="">— status —</option>{% for s in statuses %}<option>{{ s }}</option>{% endfor %}</select>
       <select id="f-ptype" onchange="load()"><option value="">— page type —</option>{% for p in page_types %}<option>{{ p }}</option>{% endfor %}</select>
+      <select id="f-action" onchange="render()"><option value="">— gợi ý —</option>
+        <option value="improve_metadata">⚠️ CTR gap</option>
+        <option value="optimize_page">⬆️ Tối ưu on-page</option>
+        <option value="create_content">📝 Viết bài mới</option>
+        <option value="review_manual">👀 Xem tay</option>
+        <option value="low_priority">· Theo dõi</option>
+        <option value="_risky">⛔ Risky</option>
+        <option value="_noise">🚫 Noise</option>
+        <option value="_landing">🖥️ Landing/tool</option>
+        <option value="_service">🔧 Service</option>
+        <option value="_support">💾 Support</option>
+      </select>
       <select id="f-sort" onchange="load()">
         <option value="score">sort: score</option>
         <option value="volume">volume</option>
@@ -84,9 +96,9 @@
     <table>
       <thead><tr>
         <th>Keyword</th><th>Score</th><th>Intent</th><th>Vol</th><th>KD</th>
-        <th>Imp</th><th>CTR</th><th>Pos</th><th>Page type</th><th>Status</th><th>Hành động</th>
+        <th>Imp</th><th>CTR</th><th>Pos</th><th>Page type</th><th>Gợi ý</th><th>Status</th><th>Hành động</th>
       </tr></thead>
-      <tbody id="tbody"><tr><td colspan="11" class="muted">Đang tải…</td></tr></tbody>
+      <tbody id="tbody"><tr><td colspan="12" class="muted">Đang tải…</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -145,10 +157,61 @@ async function load(){
   }
   const r = await fetch('/api/seo/opportunities?'+p.toString());
   const j = await r.json();
-  document.getElementById('count').textContent = j.count+' keyword';
+  _rows = j.rows||[]; _total = j.total!=null ? j.total : _rows.length;
+  render();
+}
+
+let _rows=[], _total=0;
+function matchAction(r, f){
+  if(!f) return true;
+  if(f==='_risky') return (r.flags||[]).includes('risky');
+  if(f==='_noise') return (r.flags||[]).includes('noise');
+  if(f==='_landing') return r.page_type_suggest==='landing_page';
+  if(f==='_service') return r.page_type_suggest==='service_page';
+  if(f==='_support') return r.page_type_suggest==='support_page';
+  return r.recommended_action===f;
+}
+function render(){
+  const f=document.getElementById('f-action').value;
+  const rows=_rows.filter(r=>matchAction(r,f));
+  const shown=rows.length;
+  const label = f ? shown+'/'+_rows.length+' (lọc)' : (_total>_rows.length ? _rows.length+'/'+_total : _total);
+  document.getElementById('count').textContent = label+' keyword';
   const tb=document.getElementById('tbody');
-  if(!j.rows.length){ tb.innerHTML='<tr><td colspan="11" class="muted">Chưa có keyword. Sync GSC hoặc Import CSV.</td></tr>'; return; }
-  tb.innerHTML = j.rows.map(rowHtml).join('');
+  if(!rows.length){ tb.innerHTML='<tr><td colspan="12" class="muted">Không có keyword khớp. Đổi bộ lọc, Sync GSC hoặc Import CSV.</td></tr>'; return; }
+  tb.innerHTML = rows.map(rowHtml).join('');
+}
+
+// Nhãn gợi ý (recommended_action) — chỉ GỢI Ý, người vận hành tự quyết.
+// LƯU Ý: "CTR gap" KHÔNG có nghĩa lúc nào cũng sửa meta — nhiều keyword cần đúng loại page.
+const ACTION_LABEL = {
+  improve_metadata: ['⚠️ CTR gap — cần xử lý','#d97706'],
+  optimize_page:    ['⬆️ Tối ưu on-page','#0891b2'],
+  create_content:   ['📝 Viết bài mới','#16a34a'],
+  review_manual:    ['👀 Xem tay','#9333ea'],
+  low_priority:     ['· Theo dõi','#9ca3af'],
+};
+const FLAG_LABEL = {
+  striking_distance:'striking distance (pos 4-20)', ctr_gap:'CTR dưới kỳ vọng',
+  too_broad:'keyword quá rộng', intent_unclear:'intent chưa rõ',
+  risky:'⛔ nhạy cảm (crack/bẻ khóa) — review tay', noise:'🚫 nhiễu/domain/đối thủ — review tay',
+};
+const FLAG_COLOR = { risky:'#dc2626', noise:'#dc2626' };
+function actionHtml(r){
+  const a = ACTION_LABEL[r.recommended_action] || [r.recommended_action||'—','#9ca3af'];
+  const flags = (r.flags||[]).map(f=>{const col=FLAG_COLOR[f]||'#7a6b76';const bg=FLAG_COLOR[f]?'#fdeaea':'#f3eef2';
+    return '<span class="pill" style="background:'+bg+';color:'+col+'" title="'+esc(FLAG_LABEL[f]||f)+'">'+esc(f)+'</span>';}).join(' ');
+  return '<span class="pill" style="background:'+a[1]+'1a;color:'+a[1]+'" title="'+esc(r.reason||'')+'">'+esc(a[0])+'</span>'+(flags?'<br>'+flags:'');
+}
+// Badge page-type ĐỘNG — cảnh báo khi khác page type đang lưu.
+function pageTypeCell(r){
+  const cur = r.suggested_page_type||r.page_type_default;
+  let html = selHtml(PAGE_TYPES, cur, r.id, 'suggested_page_type');
+  const sug = r.page_type_suggest;
+  if(sug && sug!==cur && ['landing_page','service_page','support_page'].includes(sug)){
+    html += '<br><span class="pill" style="background:#fef3c7;color:#92400e" title="page type có thể chưa đúng — gợi ý động, chưa xác nhận">→ '+esc(sug)+'?</span>';
+  }
+  return html;
 }
 
 function selHtml(opts, cur, kid, field){
@@ -157,18 +220,24 @@ function selHtml(opts, cur, kid, field){
 }
 function scoreColor(s){ return s>=60?'#16a34a':(s>=35?'#d97706':'#9ca3af'); }
 
+function intentHtml(r){
+  if(r.intent) return esc(r.intent);
+  if(r.intent_suggest) return '<span class="muted" title="gợi ý tự động — chưa xác nhận">'+esc(r.intent_suggest)+' ⋯</span>';
+  return '<span class="muted">—</span>';
+}
 function rowHtml(r){
   const ctr = r.gsc_ctr!=null ? (r.gsc_ctr*100).toFixed(1)+'%' : '<span class="muted">—</span>';
   return '<tr>'+
     '<td class="kw">'+esc(r.keyword)+' <span class="src">'+esc(r.source||'')+'</span></td>'+
     '<td class="score" style="color:'+scoreColor(r.opportunity_score)+'" title="bấm xem breakdown"><a href="#" onclick="scoreDetail('+r.id+');return false" style="color:inherit">'+(r.opportunity_score??0)+'</a></td>'+
-    '<td>'+esc(r.intent||'<span class="muted">—</span>')+'</td>'+
+    '<td>'+intentHtml(r)+'</td>'+
     '<td>'+(r.volume??'<span class="muted">—</span>')+'</td>'+
     '<td>'+(r.keyword_difficulty??'<span class="muted">—</span>')+'</td>'+
     '<td>'+(r.gsc_impressions??'<span class="muted">—</span>')+'</td>'+
     '<td>'+ctr+'</td>'+
     '<td>'+(r.gsc_position??'<span class="muted">—</span>')+'</td>'+
-    '<td>'+selHtml(PAGE_TYPES, r.suggested_page_type, r.id, 'suggested_page_type')+'</td>'+
+    '<td>'+pageTypeCell(r)+'</td>'+
+    '<td>'+actionHtml(r)+'</td>'+
     '<td>'+selHtml(STATUSES, r.status, r.id, 'status')+'</td>'+
     '<td class="acts">'+
       '<button class="btn" onclick="openBrief('+r.id+',\''+esc(r.keyword).replace(/'/g,"\\'")+'\')">Brief</button>'+
@@ -212,6 +281,13 @@ async function doBrief(){
 }
 
 async function sendBlog(kid){
+  const row=_rows.find(x=>x.id===kid)||{};
+  const fl=row.flags||[], sug=row.page_type_suggest;
+  const badFit = fl.includes('risky')||fl.includes('noise')||(sug && sug!=='blog_info' && sug!=='');
+  if(badFit){
+    const why = fl.includes('risky')?'nhạy cảm (crack/bẻ khóa)':fl.includes('noise')?'nhiễu/domain đối thủ':('hợp '+sug+' hơn blog');
+    if(!confirm('Keyword này có thể KHÔNG hợp blog thường ('+why+').\n\nVẫn đưa vào blog queue?')) return;
+  }
   const r=await fetch('/api/seo/opportunities/'+kid+'/send-to-blog',{method:'POST'});
   const j=await r.json(); toast(j.message||(j.ok?'OK':'Lỗi')); load();
 }

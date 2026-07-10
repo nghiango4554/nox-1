@@ -41,17 +41,18 @@ def seo_serp_briefs_page():
 
 def api_opp_list():
     args = request.args
-    rows = opp.list_keywords(
+    filters = dict(
         source=args.get("source") or None,
         intent=args.get("intent") or None,
         status=args.get("status") or None,
         priority=args.get("priority") or None,
         page_type=args.get("page_type") or None,
         q=args.get("q") or None,
-        sort=args.get("sort") or "score",
-        limit=int(args.get("limit") or 500),
     )
-    return jsonify({"ok": True, "rows": rows, "count": len(rows)})
+    rows = opp.list_keywords(sort=args.get("sort") or "score",
+                             limit=int(args.get("limit") or 500), **filters)
+    total = opp.count_keywords(**filters)
+    return jsonify({"ok": True, "rows": rows, "count": len(rows), "total": total})
 
 
 def api_opp_import_csv():
