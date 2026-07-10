@@ -15,7 +15,7 @@ explicit UI flow tạo SP mới (default gate cấm POST products.json).
 
 Dep:
 - product_parser as pp, product_writer as pw, codex_provider as cp
-- haravan_client (create_product, upsert_metafield, get_product)
+- haravan_client (create_product, update_product [flat-field SEO], get_product)
 """
 
 from datetime import datetime, timezone
@@ -129,6 +129,7 @@ def products_new_create():
     warranty = (body.get("warranty_months") or "").strip()
     price = body.get("price")
     compare_price = body.get("compare_price")
+    stock = str(body.get("stock") or "").strip()
     body_html = (body.get("body_html") or "").strip()
     excerpt = (body.get("excerpt") or "").strip()
     seo_title = (body.get("seo_title") or "").strip()
@@ -145,8 +146,13 @@ def products_new_create():
     variant_title = f"Bảo hành {int(warranty)} tháng" if warranty and str(warranty).isdigit() else "Mặc định"
     variant = {
         "option1": variant_title,
-        "requires_shipping": False,
+        "requires_shipping": True,       # SP vật lý — bật ship
+        "taxable": True,
+        "inventory_management": "haravan",
+        "inventory_policy": "continue",  # cho bán tiếp khi hết tồn (khớp catalog live)
     }
+    if stock.isdigit():
+        variant["inventory_quantity"] = int(stock)
     if price and str(price).replace(".", "").isdigit():
         variant["price"] = float(price)
     if compare_price and str(compare_price).replace(".", "").isdigit():
@@ -161,7 +167,7 @@ def products_new_create():
         "published_at": datetime.now(timezone.utc).isoformat(),
         "published_scope": "web",  # chỉ lên web store, KHÔNG tick Haravan POS (vợ dặn 23/6)
         "summary_html": excerpt,
-        "options": [{"name": "Kích thước", "values": [variant_title]}],
+        "options": [{"name": "Bảo hành", "values": [variant_title]}],
         "variants": [variant],
     }
 
@@ -174,31 +180,18 @@ def products_new_create():
         if not product_id:
             return jsonify({"ok": False, "error": "Tạo SP OK nhưng không có id trả về", "raw": created}), 500
 
-        seo_results = {"title": None, "description": None}
-        if seo_title:
-            try:
-                with hv_client.allow_blocked_operations("ui_form:/products/new"):
-                    seo_results["title"] = hv_client.upsert_metafield(
-                        "products", product_id, "global", "title_tag", seo_title)
-            except Exception as e:
-                errors.append(f"upsert SEO title fail: {e}")
-        if seo_meta:
-            try:
-                with hv_client.allow_blocked_operations("ui_form:/products/new"):
-                    seo_results["description"] = hv_client.upsert_metafield(
-                        "products", product_id, "global", "description_tag", seo_meta)
-            except Exception as e:
-                errors.append(f"upsert SEO meta fail: {e}")
-
-        # Flat-field SEO — theme Sintech CHỈ đọc metafields_global_* set qua PUT
-        # product; KHÔNG đọc /metafields endpoint (metafield lưu OK nhưng <title> +
-        # meta description trang live bị tự sinh từ body). Set thêm để SEO lên đúng.
+        # SEO title/meta — theme Sintech CHỈ đọc flat-field metafields_global_*
+        # set qua PUT product. /metafields endpoint theme KHÔNG đọc (chỉ tạo
+        # metafield rác), nên bỏ hẳn. Verify bằng <title> trang live.
+        seo_sent = {"title": None, "description": None}
         if seo_title or seo_meta:
             flat = {"id": product_id}
             if seo_title:
                 flat["metafields_global_title_tag"] = seo_title
+                seo_sent["title"] = seo_title
             if seo_meta:
                 flat["metafields_global_description_tag"] = seo_meta
+                seo_sent["description"] = seo_meta
             try:
                 with hv_client.allow_blocked_operations("ui_form:/products/new"):
                     hv_client.update_product(product_id, flat)
@@ -224,16 +217,10 @@ def products_new_create():
         except Exception as e:
             errors.append(f"verify body fail: {e}")
 
-        title_resp = seo_results.get("title") or {}
-        desc_resp = seo_results.get("description") or {}
         seo_check = {
-            "title_tag_present": bool(title_resp.get("id")),
-            "title_tag_id": title_resp.get("id"),
-            "title_tag_value": (title_resp.get("value") or "")[:100] if title_resp else None,
-            "description_tag_present": bool(desc_resp.get("id")),
-            "description_tag_id": desc_resp.get("id"),
-            "description_tag_value": (desc_resp.get("value") or "")[:160] if desc_resp else None,
-            "note": "Verified from upsert response (Haravan list cache ~3min, sẽ hiện trong admin sau vài phút)",
+            "title_sent": seo_sent.get("title"),
+            "description_sent": (seo_sent.get("description") or "")[:160] or None,
+            "note": "SEO set qua flat-field metafields_global_* (PUT product). Verify <title> trang live sau ~vài phút CDN.",
         }
 
         handle = created.get("handle") or parsed.get("slug") or ""

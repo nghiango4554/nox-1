@@ -57,10 +57,17 @@
       <small style="color:#6b7280;font-size:12px;">Theo <code>product_naming_rules.md</code>. <strong>Mainboard</strong> skip — vợ tự viết.</small>
     </div>
 
-    <div class="pnew-row">
-      <label class="pnew-label">Bảo hành (tháng)</label>
-      <input type="number" id="warranty_months" min="1" max="120" class="pnew-input" placeholder="36" />
-      <small style="color:#6b7280;font-size:12px;">Sẽ thành tag <code>bh_NN_tháng</code></small>
+    <div class="pnew-2col">
+      <div>
+        <label class="pnew-label">Bảo hành (tháng)</label>
+        <input type="number" id="warranty_months" min="1" max="120" class="pnew-input" placeholder="36" />
+        <small style="color:#6b7280;font-size:12px;">Sẽ thành tag <code>bh_NN_tháng</code> + option "Bảo hành"</small>
+      </div>
+      <div>
+        <label class="pnew-label">Số lượng tồn</label>
+        <input type="number" id="stock" min="0" class="pnew-input" placeholder="10" />
+        <small style="color:#6b7280;font-size:12px;">Set tồn kho Haravan lúc tạo</small>
+      </div>
     </div>
 
     <div class="pnew-2col">
@@ -75,7 +82,7 @@
     </div>
 
     <p style="font-size:12px;color:#9ca3af;margin:8px 0 0;">
-      <span style="background:#f3f4f6;padding:2px 8px;border-radius:4px;">⚠️ Phase 2.1</span> Stock + "Hiển thị Google" tạm tắt — vợ tick tay trong admin Haravan sau.
+      <span style="background:#f3f4f6;padding:2px 8px;border-radius:4px;">ℹ️</span> Tồn kho set tự động lúc tạo. "Hiển thị Google" vẫn tick tay trong admin Haravan sau.
     </p>
 
     <hr style="margin:18px 0;border:none;border-top:1px solid #e5e7eb;">
@@ -199,6 +206,7 @@ function getFormPayload() {
     warranty_months: document.getElementById('warranty_months').value,
     price: document.getElementById('price').value,
     compare_price: document.getElementById('compare_price').value,
+    stock: document.getElementById('stock').value,
   };
 }
 
