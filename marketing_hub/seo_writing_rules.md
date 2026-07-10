@@ -1,3 +1,6 @@
+> ⚠️ **FILE NÀY LÀ PHỤ LỤC (v2026-05-08).** Rules chính đã gom vào **`SINTECH_CONTENT_RULES.md`** (9/7/2026).
+> Khi mâu thuẫn → file kia thắng. Ở đây chỉ tra cứu: văn phong mẫu, 4 template xoay vòng, quy tắc ALT ảnh, banlist cụm SEOer.
+
 # BỘ RULES SEO SINTECH (v2026-05-08)
 
 **Mục tiêu:** Khách đọc nhanh hiểu sản phẩm → biết hợp với mình không → ra quyết định mua tại Sintech. Đồng thời tăng **time on site** — đoạn văn cuốn, có dẫn dắt, không cộc lốc.

@@ -1,3 +1,5 @@
+> ⚠️ **FILE NÀY LÀ PHỤ LỤC.** Rules chính (gồm RULE 0 HTML CLEAN + cấu trúc 5 section) đã gom vào **`SINTECH_CONTENT_RULES.md`** phần 3. Ở đây giữ ví dụ input/output đầy đủ để dán cho ChatGPT Plus. Mâu thuẫn → file kia thắng.
+
 # BỘ RULES VIẾT BÀI COLLECTION SINTECH (cho ChatGPT Plus)
 
 > **Cách dùng:** Vợ copy nguyên bộ rules này, paste vào ChatGPT Plus, sau đó gửi tiếp message "Viết content collection: [tên collection]" + thông tin SP trong collection (nếu có).

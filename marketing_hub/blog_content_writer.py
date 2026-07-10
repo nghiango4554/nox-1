@@ -67,7 +67,8 @@ _SYSTEM_PROMPT = (
 KHÔNG H1.
 
 """
-    + sintech_rules.common_rules_block(cta_note="Blog có thể dùng thêm CTA 'TÌM HIỂU NGAY'.")
+    + sintech_rules.common_rules_block(cta_note="Blog có thể dùng thêm CTA 'TÌM HIỂU NGAY'.",
+                                       is_product=False)
     + """
 
 CẤU TRÚC BODY — tuân thủ outline đã gen (KHÔNG tự thêm H2/H3):

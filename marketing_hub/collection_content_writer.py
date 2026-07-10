@@ -361,7 +361,7 @@ CHECKLIST TRƯỚC KHI TRẢ
 ☑ Không tag <section>/<article>/<div>, không data-*, không class Tailwind
 
 ═══════════════════════════════════════════════════
-""" + "\n\n" + sintech_rules.common_rules_block(include_length=False) + """
+""" + "\n\n" + sintech_rules.common_rules_block(include_length=False, is_product=False) + """
 
 ═══════════════════════════════════════════════════
 OUTPUT BẮT BUỘC: CHỈ JSON THUẦN — KHÔNG markdown code fence, KHÔNG text giải thích trước/sau.

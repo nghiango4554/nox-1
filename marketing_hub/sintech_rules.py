@@ -2,7 +2,10 @@
 (SP / blog / collection / title-meta).
 
 Đổi rule chung ở ĐÂY → mọi writer ăn theo (hết cảnh sửa 3 nơi, lệch nhau).
-Đồng bộ seo_writing_rules.md (v2026-05-08).
+Đồng bộ **SINTECH_CONTENT_RULES.md** (v2026-07-09) — file rules duy nhất cho người đọc.
+File này là bản dịch sang prompt cho code. Sửa rules → sửa CẢ HAI.
+
+Đầu ra vẫn phải qua `qc_content.py` trước khi sync (prompt có thể bị AI phớt lờ, QC thì không).
 
 Cách dùng trong writer:
     import sintech_rules
@@ -57,19 +60,73 @@ PRONOUN = (
     "KHÔNG lặp 'Bạn cần... Bạn nên...' liên tiếp."
 )
 
+# ─────────── Luật vợ chốt 9/7/2026 (xem PHẦN 2 + PHẦN 7 SINTECH_CONTENT_RULES.md) ───────────
+
+NO_PRICE = (
+    "TUYỆT ĐỐI KHÔNG nhắc giá trong body: không số tiền (45.000 đồng / tầm 149k / 3tr390k), "
+    "không 'giá rẻ', 'giá sốc', 'rẻ nhất'. Thay bằng 'phổ thông', 'đời cũ', 'cùng tầm'. "
+    "Giá đổi liên tục, nêu vào là bài lỗi thời."
+)
+
+HEADING_RULES = (
+    "HEADING: không H1, chỉ H2/H3. "
+    "MỖI HEADING MỘT MỆNH ĐỀ, ≤55 ký tự — không nối 2 vế bằng ':' hay ','. "
+    "Heading lấy NGUYÊN VĂN cách người ta gõ Google "
+    "(đúng: 'LED Rainbow và LED RGB khác nhau như thế nào?' — "
+    "sai: 'Phân biệt ba loại đèn quạt để không mua nhầm'). "
+    "Không heading nào trùng nhau."
+)
+
+# Chỉ áp cho bài SẢN PHẨM (blog/collection không dùng)
+H2_FIRST_PRODUCT = (
+    "H2 ĐẦU TIÊN = tên SP + model + biến thể, KHÔNG dấu ':' "
+    "(đúng: 'Fan case VSP SF-1225M12S Đen' — sai: 'Fan case VSP SF-1225M12S: 120mm, 1200rpm'). "
+    "Ngay dưới H2 đầu: 1 câu dẫn + 5-6 bullet tóm spec."
+)
+
+BODY_STYLE = (
+    "VĂN PHONG: đoạn 2-3 câu ngắn. Nhiều bullet, ít chữ đặc. "
+    "KHÔNG dùng <strong> trong thân bài (chỉ dùng cho nhãn trong khối spec cuối bài). "
+    "CẤM dấu ';' trong body. CẤM '---' separator. "
+    "Trung thực: nói thẳng SP không hợp với ai, hãng không công bố gì."
+)
+
+INTERNAL_LINK = (
+    "INTERNAL LINK: 3-6 link trong body, URL thật. Anchor là cụm danh từ mô tả ≤30 ký tự. "
+    "CẤM anchor 'tại đây', 'xem thêm', 'click here'. "
+    "Thẻ <a> THƯỜNG, KHÔNG bọc <strong>. "
+    "Verify slug collection tồn tại trước khi chèn — hay bịa (usb / cap-sac / hub-argb là 404; "
+    "đúng phải là usb-flash / cap-chuyen-doi)."
+)
+
+POLICY_SENTENCE = (
+    "Sintech hiện công bố chính sách bán hàng, kiểm hàng, vận chuyển và trả góp 0% "
+    "qua thẻ tín dụng đối với 1 số sản phẩm."
+)
+
+SPEC_BLOCKQUOTE = (
+    "KHỐI SPEC = <blockquote> và là BLOCK CUỐI CÙNG TUYỆT ĐỐI (sau cả signature, "
+    "không có gì đứng sau). Để TRẦN, KHÔNG inline style (nhồi style → đè CSS theme → "
+    "không lên bảng). KHÔNG nhét <table> vào trong blockquote (không hiển thị trên trang SP). "
+    "Cấu trúc: <p><strong>Tên nhóm</strong></p><ul><li><strong>Nhãn:</strong> giá trị</li></ul>. "
+    "LOẠI BỎ 'Tình trạng' và 'Bảo hành' khỏi khối spec."
+)
+
 
 def forbidden_block() -> str:
     return "CẤM filler (vợ rate 0%): " + ", ".join(f'"{x}"' for x in FORBIDDEN_FILLER) + "."
 
 
-def common_rules_block(cta_note: str = "", include_length: bool = True) -> str:
+def common_rules_block(cta_note: str = "", include_length: bool = True,
+                       is_product: bool = True) -> str:
     """Khối RULE CHUNG để chèn vào mọi prompt content gen (body dài).
 
     cta_note: ghi chú CTA riêng theo loại (vd blog cho thêm 'TÌM HIỂU NGAY').
     include_length: True → kèm rule độ dài title/meta chung (45-61 / 140-160).
         Đặt False cho writer đã có rule length RIÊNG chặt hơn (vd collection 48-58,
-        title-meta gen 45-58/145-158) để KHỎI mâu thuẫn — vẫn giữ các rule chung
-        còn lại (chống bịa spec, filler, xưng hô, CTA link, signature).
+        title-meta gen 45-58/145-158) để KHỎI mâu thuẫn.
+    is_product: True → thêm luật riêng bài SP (H2 đầu = tên SP, blockquote spec cuối,
+        câu chính sách). Đặt False cho blog.
     """
     lines = ["=== RULE CHUNG SINTECH (nguồn: sintech_rules.py) ==="]
     if include_length:
@@ -79,11 +136,25 @@ def common_rules_block(cta_note: str = "", include_length: bool = True) -> str:
         lines.append("- " + cta_note)
     lines += [
         "- " + SPEC_SAFETY,
+        "- " + NO_PRICE,
+        "- " + HEADING_RULES,
+        "- " + BODY_STYLE,
+        "- " + INTERNAL_LINK,
         "- " + forbidden_block(),
         "- " + PRONOUN,
-        f'- CTA link intro + outro: <a href="{HOMEPAGE}"><strong>Sintech</strong></a>.',
-        f"- Signature CỐ ĐỊNH cuối bài (in nghiêng): {SIGNATURE}",
+        f'- CTA link intro + outro, anchor "Sintech" → <a href="{HOMEPAGE}">Sintech</a> '
+        f"(thẻ <a> thường, KHÔNG bọc <strong>).",
+        f"- Signature CỐ ĐỊNH cuối bài (in nghiêng, có dấu chấm cuối): {SIGNATURE}",
     ]
+    if is_product:
+        lines += [
+            "- " + H2_FIRST_PRODUCT,
+            f'- Section "Vì sao nên mua tại Sintech": 2 đoạn × 2 câu, đoạn 2 chèn NGUYÊN VĂN: '
+            f'"{POLICY_SENTENCE}"',
+            '- Có section "Những điểm cần kiểm tra trước khi mua" dạng checklist H3 nhãn NGẮN '
+            "(6-21 ký tự): Cổng trên máy / Nhu cầu đèn / Vị trí lắp…",
+            "- " + SPEC_BLOCKQUOTE,
+        ]
     return "\n".join(lines)
 
 
