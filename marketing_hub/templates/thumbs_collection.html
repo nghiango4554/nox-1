@@ -46,6 +46,28 @@
   .hide{display:none}
   .seenbar{display:flex;align-items:center;gap:8px;margin:-4px 0 13px;font-size:13px;color:var(--ink-3);cursor:pointer}
   .seenbar input{width:16px;height:16px;cursor:pointer}
+  .grpnav{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+  .grpnav-lb{font-size:12.5px;color:var(--ink-3);font-weight:600}
+  .grpchip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border:1px solid #eadfe6;border-radius:999px;background:#fff;font-size:12.5px;color:#7a4d68;text-decoration:none;transition:.15s}
+  .grpchip:hover{border-color:#d75151;color:#d75151}
+  .grpchip b{font-weight:700;color:#a06a8c}
+  .grp{margin-bottom:22px;scroll-margin-top:80px}
+  .grph{display:flex;align-items:center;gap:10px;margin:0 0 11px;padding:9px 13px;background:linear-gradient(90deg,#fdf8fb,#fff);border:1px solid #eadfe6;border-left:4px solid #d75151;border-radius:9px;font-size:14.5px;position:sticky;top:56px;z-index:3}
+  .grph-name{font-weight:700;color:#5c3a4e}
+  .grph small{font-weight:400;color:var(--ink-3);font-size:12.5px}
+  .grpfold{width:26px;height:26px;border:1px solid #eadfe6;border-radius:6px;background:#fff;cursor:pointer;color:#a06a8c;font-size:13px;line-height:1;padding:0}
+  .grpbtn{margin-left:auto;padding:5px 12px;border:1px solid #d75151;border-radius:7px;background:#fff;color:#d75151;font-size:12.5px;font-weight:600;cursor:pointer}
+  .grpbtn:hover{background:#d75151;color:#fff}
+  .grpbtn:disabled{opacity:.5;cursor:wait}
+  .grpok{font-size:12px;font-weight:600;color:#1c7a3e;background:#e8f5ec;border:1px solid #b9e0c6;border-radius:999px;padding:2px 9px}
+  .grp.done .grph{border-left-color:#1c7a3e;background:linear-gradient(90deg,#f2faf5,#fff)}
+  .grp.done .grpbtn{border-color:#c3c3c3;color:#777}
+  .grp.done .grpbtn:hover{background:#777;color:#fff}
+  .grpchip.done{border-color:#b9e0c6;background:#f2faf5;color:#1c7a3e}
+  .grpchip.done b{color:#1c7a3e}
+  .grp.fold .grpbody{display:none}
+  .grp.fold .grpfold{transform:rotate(-90deg)}
+  .grpnav.hide{display:none}
   #view-sp.hide-seen .sprow.seen{display:none}
   .sprow.seen{opacity:.62;border-style:dashed}
   .seenbadge{font-weight:600;font-size:11.5px;color:#8a5a00;background:#fff4e0;border:1px solid #f0d9a8;border-radius:7px;padding:2px 8px}
@@ -76,10 +98,7 @@
     Đang ẩn <b>{{ n_seen }}</b> SP đã xem ở collection khác cho gọn — tích để hiện lại</label>
   {% endif %}
 
-  <p class="hint" id="sp-hint">Kéo-thả ảnh trong 1 sản phẩm để đổi thứ tự (tự lưu). Nút <b>Làm lại</b> sẽ tải lại ảnh từ Haravan và chuẩn hóa lại, KHÔNG xóa nền.</p>
-  <div id="view-sp" class="hide-seen">
-    {% if items %}
-      {% for it in items %}
+  {% macro sprow(it) %}
       <div class="sprow{% if it.seen_at %} seen{% endif %}" data-handle="{{ it.handle }}" id="sp-{{ it.handle }}">
         <div class="t">{{ it.title or it.handle }} <small>{{ it.imgs|length }} ảnh</small>
           {% if it.seen_at %}<span class="seenbadge">👁 đã xem ở {{ it.seen_at }}</span>{% endif %}
@@ -102,7 +121,43 @@
           </label>
         </div>
       </div>
-      {% endfor %}
+  {% endmacro %}
+
+  <p class="hint" id="sp-hint">Kéo-thả ảnh trong 1 sản phẩm để đổi thứ tự (tự lưu). Nút <b>Làm lại</b> sẽ tải lại ảnh từ Haravan và chuẩn hóa lại, KHÔNG xóa nền.</p>
+
+  {% if groups %}
+  <div class="grpnav">
+    <span class="grpnav-lb">Nhóm ({{ n_grp_done }}/{{ groups|length }} đã duyệt):</span>
+    {% for g in groups %}
+    <a class="grpchip{% if g.status %} done{% endif %}" href="#grp-{{ g.slug }}">
+      {% if g.status %}✓ {% endif %}{{ g.name }} <b>{{ g.n_sp }}</b></a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div id="view-sp" class="hide-seen">
+    {% if items %}
+      {% if groups %}
+        {% for g in groups %}
+        <section class="grp{% if g.status %} done{% endif %}" id="grp-{{ g.slug }}" data-slug="{{ g.slug }}"
+                 data-state="{{ g.status }}">
+          <h3 class="grph">
+            <span class="grph-name">{{ g.name }}</span>
+            <small>{{ g.n_sp }} SP · {{ g.n_img }} ảnh</small>
+            {% if g.status %}<span class="grpok" title="Duyệt lúc {{ g.at }}">✓ đã duyệt</span>{% endif %}
+            <button class="grpbtn" onclick="approveGrp(this)">
+              {% if g.status %}Bỏ duyệt nhóm{% else %}✓ Duyệt nhóm này{% endif %}
+            </button>
+            <button class="grpfold" onclick="foldGrp(this)" title="Thu gọn / mở nhóm">▾</button>
+          </h3>
+          <div class="grpbody">
+            {% for it in g['items'] %}{{ sprow(it) }}{% endfor %}
+          </div>
+        </section>
+        {% endfor %}
+      {% else %}
+        {% for it in items %}{{ sprow(it) }}{% endfor %}
+      {% endif %}
     {% else %}
       <div class="sec"><p class="muted">Chưa có ảnh đã xử cho collection này (có thể đang gen).</p></div>
     {% endif %}
@@ -133,7 +188,40 @@ function sw(v){
   document.getElementById('view-sp').classList.toggle('hide', v!=='sp');
   document.getElementById('view-sheet').classList.toggle('hide', v!=='sheet');
   document.querySelectorAll('.tbtn[data-v]').forEach(b=>b.classList.toggle('on', b.dataset.v===v));
+  document.querySelector('.grpnav')?.classList.toggle('hide', v!=='sp');
 }
+
+// Duyệt / bỏ duyệt 1 nhóm SP
+function approveGrp(btn){
+  const g = btn.closest('.grp');
+  const value = !g.dataset.state;         // đang duyệt -> bỏ; chưa -> duyệt
+  btn.disabled = true;
+  fetch('/thumbs/approve-group',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({handle:'{{ handle }}', slug:g.dataset.slug, value})})
+    .then(r=>r.json()).then(d=>{
+      if(!d.ok){ alert('Lỗi: '+(d.error||'')); btn.disabled=false; return; }
+      if(d.auto_approved){
+        alert('Đã duyệt đủ '+d.n_groups+' nhóm → tự duyệt luôn collection.'
+              + (d.moved>0 ? '\nDọn '+d.moved+' ảnh gốc từ Downloads vào folder gom.' : ''));
+      }
+      location.reload();
+    }).catch(()=>{ alert('Lỗi mạng'); btn.disabled=false; });
+}
+
+// Thu gọn / mở 1 nhóm SP (nhớ trạng thái theo collection)
+function foldGrp(btn){
+  const g = btn.closest('.grp');
+  g.classList.toggle('fold');
+  const key = 'tnfold:' + location.pathname;
+  const folded = [...document.querySelectorAll('.grp.fold')].map(x=>x.id);
+  localStorage.setItem(key, JSON.stringify(folded));
+}
+(function restoreFold(){
+  try{
+    const folded = JSON.parse(localStorage.getItem('tnfold:'+location.pathname) || '[]');
+    folded.forEach(id => document.getElementById(id)?.classList.add('fold'));
+  }catch(e){}
+})();
 
 // Bật/tắt hiển thị SP đã xem ở collection khác (mặc định ẩn cho gọn)
 function toggleSeen(){

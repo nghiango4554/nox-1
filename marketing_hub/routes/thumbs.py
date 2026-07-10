@@ -12,6 +12,7 @@ import base64
 import csv
 import io
 import json
+import re
 import threading
 import time
 import unicodedata
@@ -36,7 +37,7 @@ BACKUP_ORIG = THUMB_ROOT / "_backup_orig"
 
 # tiến độ sync (chạy nền)
 SYNC_STATE = {"running": False, "finished": False, "total": 0, "done": 0,
-              "ok": 0, "fail": 0, "current": "", "msg": ""}
+              "ok": 0, "fail": 0, "current": "", "msg": "", "relech": []}
 SYNC_LOCK = threading.Lock()
 
 
@@ -296,14 +297,58 @@ def thumbs_page():
     return resp
 
 
-def thumbs_collection(handle):
-    track = {r["handle"]: r for r in _read_tracking()}
-    row = track.get(handle)
-    wave = row["wave"] if row else ""
-    # contact sheets
-    cdir = THUMB_ROOT / "_contact"
-    sheets = sorted(p.name for p in cdir.glob(f"{wave}__{handle}__p*.jpg")) if cdir.exists() else []
-    # gom ảnh theo TỪNG SP (query live lấy SP trong collection, theo thứ tự collection)
+# Chia SP trong 1 collection thành các nhóm con cho dễ duyệt.
+# Rule khớp theo THỨ TỰ (con đầu tiên khớp thì lấy) -> đặt nhóm hẹp lên trước.
+# Collection không có rule ở đây thì trang render phẳng như cũ.
+GROUP_RULES = {
+    "tan-nhiet": [
+        ("Tản zin (stock CPU)", r"\bstock\b|\bzin\b"),
+        ("Tản nước AIO",        r"\baio\b|nước|nuoc"),
+        ("Tản khí",             r"khí|\bkhi\b"),
+    ],
+}
+
+
+def _group_items(col_handle, items, gstatus=None):
+    """[{name, slug, items, n_sp, n_img, status, at}] theo thứ tự rule; None nếu chưa có rule."""
+    rules = GROUP_RULES.get(col_handle)
+    if not rules:
+        return None
+    gstatus = gstatus or {}
+    buckets = {name: [] for name, _ in rules}
+    buckets["Khác"] = []
+    for it in items:
+        text = (it.get("title") or it.get("handle") or "")
+        for name, pat in rules:
+            if re.search(pat, text, re.IGNORECASE):
+                buckets[name].append(it)
+                break
+        else:
+            buckets["Khác"].append(it)
+    out = []
+    for name in [n for n, _ in rules] + ["Khác"]:
+        grp = buckets[name]
+        if not grp:
+            continue
+        slug = _group_slug(name)
+        g = gstatus.get(slug) or {}
+        out.append({"name": name, "slug": slug, "items": grp,
+                    "n_sp": len(grp),
+                    "n_img": sum(len(x["imgs"]) for x in grp),
+                    "status": g.get("status", ""), "at": g.get("at", "")})
+    return out
+
+
+def _group_slug(name):
+    return re.sub(r"[^a-z0-9]+", "-", _strip_accents(name).lower()).strip("-")
+
+
+def _strip_accents(s):
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+
+
+def _collection_items(handle):
+    """(items, missing, n_img) — SP trong collection theo thứ tự collection, kèm ảnh chuẩn local."""
     items, missing = [], []
     n_img = 0
     primary = _primary_map()           # SP -> collection chính
@@ -323,11 +368,26 @@ def thumbs_collection(handle):
                 items.append({"handle": ph, "title": p.get("title"), "imgs": [], "seen_at": seen_at})
             else:
                 missing.append({"handle": ph, "title": p.get("title")})
+    return items, missing, n_img
+
+
+def thumbs_collection(handle):
+    track = {r["handle"]: r for r in _read_tracking()}
+    row = track.get(handle)
+    wave = row["wave"] if row else ""
+    # contact sheets
+    cdir = THUMB_ROOT / "_contact"
+    sheets = sorted(p.name for p in cdir.glob(f"{wave}__{handle}__p*.jpg")) if cdir.exists() else []
+    items, missing, n_img = _collection_items(handle)
     n_seen = sum(1 for it in items if it.get("seen_at"))
-    review = (_load_status().get(handle) or {}).get("status", "")
+    strow = _load_status().get(handle) or {}
+    review = strow.get("status", "")
+    groups = _group_items(handle, items, strow.get("groups"))
+    n_grp_done = sum(1 for g in groups if g["status"]) if groups else 0
     return render_template("thumbs_collection.html", active="thumbs",
                            handle=handle, wave=wave,
-                           sheets=sheets, items=items, missing=missing,
+                           sheets=sheets, items=items, missing=missing, groups=groups,
+                           n_grp_done=n_grp_done,
                            n_img=n_img, n_seen=n_seen, row=row, review=review)
 
 
@@ -493,13 +553,60 @@ def thumbs_approve():
         return jsonify(ok=False, error="thiếu handle"), 400
     st = _load_status()
     moved = 0
+    row = st.get(handle) or {}
+    groups = row.get("groups")          # trạng thái duyệt từng nhóm — giữ lại khi bỏ duyệt collection
     if value:
         st[handle] = {"status": "da_duyet", "at": _now()}
         moved = _cleanup_added_from_downloads(handle)
     else:
         st.pop(handle, None)
+    if groups:
+        st.setdefault(handle, {})["groups"] = groups
     _save_status(st)
     return jsonify(ok=True, status=(st.get(handle) or {}).get("status", ""), moved=moved)
+
+
+def thumbs_approve_group():
+    """Duyệt 1 NHÓM con trong collection. body: {handle, slug, value}.
+    Duyệt hết các nhóm -> tự duyệt luôn collection (nếu chưa sync)."""
+    data = request.get_json(force=True, silent=True) or {}
+    handle, slug = data.get("handle", ""), data.get("slug", "")
+    value = data.get("value", True)
+    if not handle or not slug:
+        return jsonify(ok=False, error="thiếu handle/slug"), 400
+    rules = GROUP_RULES.get(handle)
+    if not rules:
+        return jsonify(ok=False, error="collection không chia nhóm"), 400
+    valid = {_group_slug(n) for n, _ in rules} | {_group_slug("Khác")}
+    if slug not in valid:
+        return jsonify(ok=False, error="nhóm không tồn tại"), 400
+
+    st = _load_status()
+    row = st.setdefault(handle, {})
+    gs = row.setdefault("groups", {})
+    if value:
+        gs[slug] = {"status": "da_duyet", "at": _now()}
+    else:
+        gs.pop(slug, None)
+    if not gs:
+        row.pop("groups", None)
+
+    # đủ nhóm -> duyệt cả collection (không đè trạng thái đã sync)
+    auto, moved = False, 0
+    items, _, _ = _collection_items(handle)
+    n_real = len(_group_items(handle, items) or [])
+    if value and n_real and len(gs) >= n_real and row.get("status") not in ("da_duyet", "da_sync"):
+        row["status"], row["at"] = "da_duyet", _now()
+        moved = _cleanup_added_from_downloads(handle)
+        auto = True
+    if not value and row.get("status") == "da_duyet":
+        row.pop("status", None); row.pop("at", None)     # bỏ 1 nhóm -> collection không còn "duyệt đủ"
+    if not row:
+        st.pop(handle, None)
+    _save_status(st)
+    return jsonify(ok=True, slug=slug, status=(gs.get(slug) or {}).get("status", ""),
+                   n_done=len(gs), n_groups=n_real, col_status=row.get("status", ""),
+                   auto_approved=auto, moved=moved)
 
 
 def _sync_one_product(handle):
@@ -576,20 +683,42 @@ def _sync_one_product(handle):
     return {"ok": True, "n": len(new_ids)}
 
 
+def _n_live(handle):
+    """Số ảnh SP trên Haravan. -1 = không đọc được (coi như cần sync)."""
+    try:
+        prods = hc._request("GET", "/products.json",
+                            params={"handle": handle, "limit": 1}).get("products", [])
+        if not prods:
+            return -1
+        return len(prods[0].get("images") or [])
+    except Exception:
+        return -1
+
+
 def _sync_worker(coll_list):
     cmap = _collection_map()
     synced = _load_synced()
-    # gom SP (dedup): bỏ SP đã sync trước đó
-    prod_order, seen = [], set()
+    # gom SP (dedup). SP đã synced chỉ được bỏ qua khi local == live: nếu vợ chèn thêm
+    # ảnh ở /thumbs sau lần sync trước thì ảnh đó không bao giờ lên live mà collection
+    # vẫn bị đánh dấu da_sync (bẫy dedup 6/7/2026).
+    prod_order, seen, relech = [], set(), []
     for c in coll_list:
         for ph in cmap.get(c, []):
-            if ph in seen or ph in synced:
+            if ph in seen:
                 continue
             seen.add(ph)
+            if ph in synced:
+                nl, nv = len(_sp_images(ph)), _n_live(ph)
+                if nl == nv:
+                    continue
+                relech.append((ph, nl, nv))
             prod_order.append(ph)
     failed = set()
     SYNC_STATE.update(running=True, finished=False, total=len(prod_order),
-                      done=0, ok=0, fail=0, current="", msg="")
+                      done=0, ok=0, fail=0, current="",
+                      msg=(f"⚠️ {len(relech)} SP đã synced nhưng lệch local vs live → sync lại"
+                           if relech else ""),
+                      relech=[{"handle": p, "local": nl, "live": nv} for p, nl, nv in relech])
     for ph in prod_order:
         SYNC_STATE["current"] = ph
         try:
@@ -690,5 +819,7 @@ def register(app):
     app.add_url_rule("/thumbs/reorder", "thumbs_reorder", thumbs_reorder, methods=["POST"])
     app.add_url_rule("/thumbs/redo", "thumbs_redo", thumbs_redo, methods=["POST"])
     app.add_url_rule("/thumbs/approve", "thumbs_approve", thumbs_approve, methods=["POST"])
+    app.add_url_rule("/thumbs/approve-group", "thumbs_approve_group", thumbs_approve_group,
+                     methods=["POST"])
     app.add_url_rule("/thumbs/add-image", "thumbs_add_image", thumbs_add_image, methods=["POST"])
     app.add_url_rule("/thumbs/delete-image", "thumbs_delete_image", thumbs_delete_image, methods=["POST"])
