@@ -223,14 +223,17 @@ def get_product_id_by_handle(handle: str):
     return prods[0]["id"] if prods else None
 
 
+PAGE_SIZE = 50  # Haravan chặn cứng 50/trang dù gửi limit=250
+
+
 def list_products_in_collection(collection_id: int, fields: str = "id,handle,title",
                                 max_pages: int = 60) -> list:
     """Tất cả SP thuộc 1 collection (custom hoặc smart) qua /products.json?collection_id=.
-    Phân trang 250/lần. Read-only (GET)."""
+    Read-only (GET)."""
     out = []
     page = 1
     while page <= max_pages:
-        params = {"collection_id": collection_id, "limit": 250, "page": page}
+        params = {"collection_id": collection_id, "limit": PAGE_SIZE, "page": page}
         if fields:
             params["fields"] = fields
         data = _request("GET", "/products.json", params=params)
@@ -238,7 +241,7 @@ def list_products_in_collection(collection_id: int, fields: str = "id,handle,tit
         if not batch:
             break
         out.extend(batch)
-        if len(batch) < 250:
+        if len(batch) < PAGE_SIZE:
             break
         page += 1
     return out
