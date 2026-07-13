@@ -78,9 +78,23 @@ def main():
         BACKUP_DIR.mkdir(parents=True, exist_ok=True)
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         (BACKUP_DIR / f"{r['id']}_{r['handle']}_{stamp}.html").write_text(body, encoding="utf-8")
-        hb.update_article(r["blog_id"], r["id"], {"body_html": new_body})
-        print(f"  DA DAY {n} cau: {r['handle']}")
-        done += 1
+
+        # ⚠️ Haravan hay tra HTTP 500 NHUNG VAN GHI THANH CONG (da xac minh 13/7).
+        # -> loi thi GET lai kiem chung, dung tin ma status code.
+        try:
+            hb.update_article(r["blog_id"], r["id"], {"body_html": new_body})
+            err = None
+        except Exception as e:
+            err = e
+
+        check = hb.get_article(r["blog_id"], r["id"]).get("body_html") or ""
+        got = len(faq_schema.extract_faq(check))
+        if got >= faq_schema.MIN_QUESTIONS:
+            print(f"  DA DAY {got} cau: {r['handle']}" + ("  (API bao 500 nhung DA GHI)" if err else ""))
+            done += 1
+        else:
+            print(f"  LOI THAT: {r['handle']} — {str(err)[:80]}")
+            fail += 1
 
     print(f"\n[XONG] day={done} bo_qua={skip} loi={fail}")
     if not dry and done:

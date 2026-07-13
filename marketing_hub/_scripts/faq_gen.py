@@ -110,7 +110,10 @@ def gather_hints(title: str, cap: int = 15) -> list:
     return (q + rest)[:cap]
 
 
-def gen_faq(title: str, body_text: str, hints: list) -> list:
+def gen_faq(title: str, body_text: str, hints: list, provider: str = None) -> list:
+    """provider=None -> fallback chain (codex->claude->gemini).
+    provider='codex'/'claude' -> GHIM CUNG 1 AI, khong fallback cheo (dung cho dual-AI:
+    moi worker mot AI, het quota thi worker do dung, khong an quota cua worker kia)."""
     hint_txt = "\n".join(f"- {h}" for h in hints[:12]) or "(không có)"
     msg = f"""BÀI BLOG: {title}
 
@@ -121,7 +124,10 @@ CỤM NGƯỜI THẬT GÕ GOOGLE (bám vào để đặt câu hỏi, bỏ cụm 
 {hint_txt}
 
 Viết 4-6 câu hỏi thường gặp + câu trả lời. JSON array thuần."""
-    raw = ai_provider.call_ai(SYSTEM, msg, timeout=240)
+    if provider:
+        raw = ai_provider.call_ai_single(provider, SYSTEM, msg, timeout=240)
+    else:
+        raw = ai_provider.call_ai(SYSTEM, msg, timeout=240)
     raw = re.sub(r"^```(?:json)?|```$", "", (raw or "").strip(), flags=re.M).strip()
     m = re.search(r"\[.*\]", raw, re.S)
     if not m:
