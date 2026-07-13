@@ -46,7 +46,8 @@ def main():
         cu = len(faq_schema.extract_faq(body))
 
         clean = faq_schema.strip_faq_block(body)          # go khoi FAQ cu (neu co)
-        block = render_block(r["title"], r["faqs"])       # render lai tu faqs (tieu de khoi da fix)
+        # Uu tien block_html san co (ban B2 co topic do AI dat + dong "Lưu ý" -> khong render lai duoc)
+        block = r.get("block_html") or render_block(r["title"], r["faqs"])
         new_body, n = faq_schema.attach(insert_block(clean, block))
 
         if n != len(r["faqs"]):
