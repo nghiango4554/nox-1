@@ -141,8 +141,17 @@ Viết 4-6 câu hỏi thường gặp + câu trả lời. JSON array thuần."""
     return out
 
 
+def _topic(title: str) -> str:
+    """Chu de ngan cho tieu de khoi FAQ. v1 quen cat dau '?' -> ra tieu de le the kieu
+    'Cau hoi thuong gap ve Snap Tap la gi? Tai sao Snap Tap lai pho bien trong gioi game thu'."""
+    t = re.split(r"[:\-–|?]", title or "")[0].strip()
+    t = re.sub(r"^(hướng dẫn|cách|top \d+|review)\s+", "", t, flags=re.I).strip()
+    w = t.split()
+    return " ".join(w[:7]) if len(w) > 7 else t
+
+
 def render_block(title: str, faqs: list) -> str:
-    topic = re.split(r"[:\-–|]", title)[0].strip()
+    topic = _topic(title)
     parts = [f'<h2 style="{H2}">Câu hỏi thường gặp về {topic}</h2>']
     for f in faqs:
         parts.append(f'<h3 style="{H3}">{htmllib.escape(f["q"])}</h3>')

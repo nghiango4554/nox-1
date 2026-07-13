@@ -73,6 +73,26 @@ def strip_comment(body_html: str) -> str:
     return _COMMENT_RE.sub("", body_html or "").rstrip()
 
 
+def strip_faq_block(body_html: str) -> str:
+    """Go KHOI FAQ hien thi (H2 'Cau hoi thuong gap' + toan bo H3/P duoi no) khoi body.
+
+    Dung khi VIET LAI FAQ cho bai da co (rework) — khong the chen chong len khoi cu.
+    Cat tu H2 FAQ toi H2 ke tiep (hoac het bai). Chi cat section co it nhat 1 H3 ben trong
+    -> tranh cat nham H2 chi tinh co co chu 'FAQ' trong ten."""
+    body = strip_comment(body_html or "")
+    h2s = list(re.finditer(r"<h2[^>]*>(.*?)</h2>", body, re.S | re.I))
+    cuts = []
+    for i, m in enumerate(h2s):
+        if not FAQ_H2.search(_text(m.group(1))):
+            continue
+        end = h2s[i + 1].start() if i + 1 < len(h2s) else len(body)
+        if re.search(r"<h3", body[m.end():end], re.I):
+            cuts.append((m.start(), end))
+    for s, e in reversed(cuts):  # cat tu duoi len -> khong lech index
+        body = body[:s] + body[e:]
+    return body.rstrip()
+
+
 def attach(body_html: str) -> tuple[str, int]:
     """Gan/lam moi comment FAQ schema vao body. Tra ve (body_moi, so_cau_hoi).
 
