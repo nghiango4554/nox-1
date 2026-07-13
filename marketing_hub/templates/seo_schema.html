@@ -83,6 +83,46 @@
     </div>
   </div>
 
+  <!-- ── Gắn FAQ schema cho 1 bài blog (bài viết tay trên Haravan) ── -->
+  <div class="summary-card blue" style="margin-bottom:16px">
+    <div class="lbl">❓ Gắn FAQ schema cho bài blog</div>
+    <div class="sub" style="margin:6px 0 10px">
+      Dán link bài (hoặc handle). Bóc mục “Câu hỏi thường gặp” trong bài → sinh JSON-LD FAQPage.
+      Bài phải có sẵn khối FAQ hiển thị (mỗi câu hỏi là H3) — Google bắt schema khớp nội dung, không tự bịa được.
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input id="faqUrl" type="text" placeholder="https://sintech.vn/blogs/news/ten-bai"
+             style="flex:1;min-width:280px;padding:8px 10px;border:1px solid var(--border,#e2e8f0);border-radius:8px">
+      <button class="btn-primary" onclick="attachFaq()" id="faqBtn">Gắn FAQ schema</button>
+    </div>
+    <div id="faqOut" style="margin-top:10px;font-size:13px"></div>
+  </div>
+
+  <script>
+  async function attachFaq() {
+    const url = document.getElementById('faqUrl').value.trim();
+    const out = document.getElementById('faqOut');
+    const btn = document.getElementById('faqBtn');
+    if (!url) { out.innerHTML = '<span style="color:#ef4444">Chưa nhập link bài.</span>'; return; }
+    btn.disabled = true; out.innerHTML = '⏳ Đang bóc FAQ trong bài...';
+    try {
+      const fd = new FormData(); fd.append('url', url);
+      const r = await fetch('{{ url_for("seo_faq_attach") }}', { method: 'POST', body: fd });
+      const d = await r.json();
+      if (!d.ok) {
+        out.innerHTML = '<span style="color:#ef4444">✖ ' + d.error + '</span>';
+      } else {
+        out.innerHTML = '<span style="color:#22c55e">✔ Đã gắn ' + d.n + ' câu hỏi cho “' + d.title +
+          '”. Backup body cũ đã lưu.</span><ul style="margin:6px 0 0 18px;color:#64748b">' +
+          d.questions.map(q => '<li>' + q + '</li>').join('') + '</ul>';
+      }
+    } catch (e) {
+      out.innerHTML = '<span style="color:#ef4444">Lỗi: ' + e + '</span>';
+    }
+    btn.disabled = false;
+  }
+  </script>
+
   <!-- ── Filter bar ── -->
   <form method="get" class="filter-bar">
     <label>url_type:

@@ -223,6 +223,13 @@ def _push_blog_to_haravan(job, publish=True):
     if not title or not body:
         return {"ok": False, "error": "Chưa có title/body — gen AI trước."}
     body_html = bcw.compress_html(bcw.sanitize_pasted_html(body))
+    # FAQ schema: gan comment FAQJSON -> theme article.liquid in ra JSON-LD FAQPage.
+    # (Haravan strip <script> khoi body nen phai di duong comment.) Bai khong co khoi FAQ -> bo qua.
+    try:
+        import faq_schema
+        body_html, _n_faq = faq_schema.attach(body_html)
+    except Exception:
+        pass
     blog_id = job.get("haravan_blog_id") or BLOG_ID_BY_TARGET.get(
         (job.get("target_blog") or "news").strip(), 1000906526)
     meta = (job.get("edited_meta") or "").strip()

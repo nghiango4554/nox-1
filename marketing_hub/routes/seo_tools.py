@@ -847,6 +847,59 @@ def seo_schema_rescan(page_id):
     })
 
 
+def seo_faq_attach():
+    """Gan FAQ schema cho 1 bai blog viet tay tren Haravan.
+
+    Vo dan link bai (hoac handle) -> boc khoi FAQ hien thi trong bai -> gan comment FAQJSON
+    -> theme article.liquid in ra JSON-LD FAQPage. Body cu backup truoc khi PUT.
+    Bai khong co khoi FAQ (>=2 cau, moi cau la H3) thi bao ro, KHONG bia cau hoi.
+    """
+    import faq_schema
+    import haravan_blog as hb
+
+    raw = (request.form.get("url") or request.json.get("url") if request.is_json
+           else request.form.get("url") or "").strip()
+    if not raw:
+        return jsonify({"ok": False, "error": "Chưa nhập link bài."}), 200
+    handle = raw.rstrip("/").split("/")[-1].split("?")[0]
+
+    art = blog_id = None
+    for bid in (1000906526, 1000960873, 1001049577):
+        page = 1
+        while True:
+            arts = hb.list_articles(bid, limit=50, page=page)
+            if not arts:
+                break
+            for a in arts:
+                if a.get("handle") == handle:
+                    art, blog_id = a, bid
+                    break
+            if art:
+                break
+            page += 1
+        if art:
+            break
+    if not art:
+        return jsonify({"ok": False, "error": f"Không tìm thấy bài có handle '{handle}' trên Haravan."}), 200
+
+    body = art.get("body_html") or ""
+    new_body, n = faq_schema.attach(body)
+    if n < faq_schema.MIN_QUESTIONS:
+        return jsonify({"ok": False, "error": (
+            f"Bài '{art.get('title')}' chưa có khối FAQ hợp lệ trong nội dung "
+            f"(cần mục H2 kiểu \"Câu hỏi thường gặp\", mỗi câu hỏi là H3, câu trả lời ≥40 ký tự). "
+            f"Google bắt schema phải khớp nội dung hiển thị nên không thể tự bịa câu hỏi.")}), 200
+
+    bdir = Path(r"C:\Users\NGHIANGO\.openclaw\workspace\nox-outputs\faq_backup")
+    bdir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    (bdir / f"{art['id']}_{handle}_{stamp}.html").write_text(body, encoding="utf-8")
+
+    hb.update_article(int(blog_id), int(art["id"]), {"body_html": new_body})
+    return jsonify({"ok": True, "n": n, "title": art.get("title"), "handle": handle,
+                    "questions": [f["q"] for f in faq_schema.extract_faq(new_body)]})
+
+
 def seo_schema_detail(page_id):
     conn = db.get_conn()
     row = conn.execute("SELECT url, url_type, title FROM seo_pages WHERE id=?", (page_id,)).fetchone()
@@ -974,8 +1027,9 @@ def register(app):
     app.add_url_rule("/api/seo/cwv/sync-github", "api_cwv_sync_github", api_cwv_sync_github, methods=["POST"])
     app.add_url_rule("/api/seo/cwv/sync-status", "api_cwv_sync_status", api_cwv_sync_status)
 
-    # Schema (3)
+    # Schema (4)
     app.add_url_rule("/seo/schema", "seo_schema_page", seo_schema_page)
+    app.add_url_rule("/seo/schema/faq-attach", "seo_faq_attach", seo_faq_attach, methods=["POST"])
     app.add_url_rule("/seo/schema/rescan/<int:page_id>", "seo_schema_rescan", seo_schema_rescan, methods=["POST"])
     app.add_url_rule("/seo/schema/detail/<int:page_id>", "seo_schema_detail", seo_schema_detail)
 
