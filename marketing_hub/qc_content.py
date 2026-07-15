@@ -90,11 +90,12 @@ def check_product_body(html: str) -> list:
     for m in _PRICE.finditer(body):
         e.append(f"nhắc giá: {m.group(0)!r}")
 
-    # <strong> chỉ được dùng trong khối spec HOẶC để in đậm anchor (vợ chốt 15/7).
-    # Bỏ nội dung anchor ra trước khi soi <strong> lạc trong thân bài.
-    _body_wo_anchor = re.sub(r"<a\b.*?</a>", "", body, flags=re.S | re.I)
-    if re.search(r"<strong[ >]", _body_wo_anchor, re.I):
-        e.append("có <strong> trong thân bài (chỉ được dùng trong khối spec hoặc anchor)")
+    # <strong> được dùng trong: khối spec, anchor, VÀ nhãn đầu bullet <li> (vợ chốt 15/7).
+    # Bỏ anchor + nội dung <li> ra trước khi soi <strong> lạc trong đoạn văn thân bài.
+    _wo = re.sub(r"<a\b.*?</a>", "", body, flags=re.S | re.I)
+    _wo = re.sub(r"<li\b.*?</li>", "", _wo, flags=re.S | re.I)
+    if re.search(r"<strong[ >]", _wo, re.I):
+        e.append("có <strong> trong đoạn văn thân bài (chỉ được ở spec, anchor, hoặc nhãn bullet)")
 
     if ";" in re.sub(r"<[^>]+>", "", body):
         e.append("còn dấu ';' trong body")

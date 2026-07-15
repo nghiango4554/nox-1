@@ -24,8 +24,11 @@ from bs4 import BeautifulSoup
 ROOT = Path(__file__).parent
 BK = ROOT.parent.parent / "nox-outputs"
 
-H2 = "font-size: 18px; font-weight: 700; margin: 18px 0 8px; line-height: 1.35;"
+H2 = ("font-size: 18px; font-weight: 700; color: #dc2626; "
+      "border-left: 4px solid #dc2626; padding-left: 10px; margin: 26px 0 12px; line-height: 1.35;")
 H3 = "font-size: 16px; font-weight: 600; margin: 12px 0 6px; line-height: 1.4;"
+BOX = ("background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; "
+       "padding: 10px 16px 4px; margin: 12px 0;")
 A_ = "color:#dc2626;"
 IMG = "max-width: 500px; width: 100%; height: auto; display: block; margin: 0 auto;"
 IMGP = "text-align: center; margin: 16px 0;"
@@ -67,7 +70,17 @@ def reformat(body: str) -> str:
     for tag in soup.find_all(["ul", "ol", "li", "strong", "em", "span"]):
         if tag.has_attr("style"):
             del tag["style"]
-    return str(soup)
+    # đóng khung <ul> tóm tắt đầu bài (ul đầu tiên) cho dễ nhìn như khuôn combo PC
+    first_ul = soup.find("ul")
+    if first_ul is not None and first_ul.parent.name != "div":
+        wrapper = soup.new_tag("div")
+        wrapper["style"] = BOX
+        first_ul.wrap(wrapper)
+    html = str(soup)
+    # in đậm nhãn trước dấu ':' đầu mỗi <li> (vd "Chuẩn kết nối: ...")
+    import re as _re
+    html = _re.sub(r"<li>([^:<>]{1,28}):", r"<li><strong>\1:</strong>", html)
+    return html
 
 
 def _stats(body: str, new: str) -> dict:
