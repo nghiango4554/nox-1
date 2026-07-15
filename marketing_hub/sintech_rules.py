@@ -177,8 +177,13 @@ def common_rules_block(cta_note: str = "", include_length: bool = True,
             "- " + H2_FIRST_PRODUCT,
             f'- Section "Vì sao nên mua tại Sintech": 2 đoạn × 2 câu, đoạn 2 chèn NGUYÊN VĂN: '
             f'"{POLICY_SENTENCE}"',
-            '- Có section "Những điểm cần kiểm tra trước khi mua" dạng checklist H3 nhãn NGẮN '
-            "(6-21 ký tự): Cổng trên máy / Nhu cầu đèn / Vị trí lắp…",
+            '- Có section checklist "cần kiểm tra trước khi mua" (H3 nhãn NGẮN 6-21 ký tự: '
+            "Cổng trên máy / Nhu cầu đèn / Vị trí lắp…).",
+            "- XOAY WORDING heading các mục cố định, KHÔNG lặp verbatim giữa các bài SP: "
+            "'phù hợp với ai' → 'Ai nên chọn [SP]'/'[SP] hợp gu ai'; "
+            "'cần kiểm tra trước khi mua' → 'Trước khi mua cần xem gì'/'Chọn [SP] cần lưu ý gì'; "
+            "'vì sao mua tại Sintech' → 'Mua [SP] tại Sintech được gì'. "
+            "NGOẠI LỆ: FAQ giữ nguyên 'Câu hỏi thường gặp'. Thêm ≥1 H2 riêng theo loại SP ở giữa bài.",
             "- " + SPEC_BLOCKQUOTE,
         ]
     else:

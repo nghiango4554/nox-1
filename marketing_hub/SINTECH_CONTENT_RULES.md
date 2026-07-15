@@ -123,6 +123,18 @@ Link vợ đưa có **spec chính xác tuyệt đối** → **bê nguyên bảng
 - **Bắt buộc research bằng Playwright + Chrome THẬT**: `chromium.launch(headless=False, channel="chrome")`, **thu nhỏ cửa sổ (minimize)** để không che màn hình vợ. Xem [[feedback_browser_research_autonomy]].
 - **Đánh mạnh tính năng thật của SP** (1B.2): moi đủ spec từ trang hãng (clock, mem, kích thước, cổng, TBW…) rồi nhồi vào blockquote + thân bài, đừng để spec thiếu thốn.
 
+## 1B.7 XOAY wording heading các mục cố định — chống trùng cấu trúc (vợ chốt 15/7)
+
+> Bẫy: unique về TỪ NGỮ (98%) nhưng heading đuôi bài **dập khuôn giống hệt** giữa các bài SP → nhìn như auto-gen. Đo unique phải xét CẢ cấu trúc heading, không chỉ từ.
+
+- Các mục **KHÔNG được để 1 câu heading cứng lặp verbatim** giữa các bài. Mỗi bài rút 1 cách diễn đạt khác:
+  - *Phù hợp với ai* → "Ai nên chọn [SP]" · "[SP] hợp gu người dùng nào" · "[SP] hợp với ai"
+  - *Cần kiểm tra trước khi mua* → "Trước khi mua cần xem gì" · "Chọn [SP] cần lưu ý gì" · "Vài điểm nên cân nhắc"
+  - *Vì sao nên mua tại Sintech* → "Mua [SP] tại Sintech được gì" · "Chọn Sintech có lợi gì" (câu chính sách VẪN giữ trong đoạn)
+- ✅ **NGOẠI LỆ: FAQ giữ NGUYÊN "Câu hỏi thường gặp"** (vợ chốt — không xoay).
+- **Bắt buộc có ≥1 H2 riêng theo loại SP** ở giữa bài (VGA "cần nguồn gì", CPU "vì sao cần card rời", phím "gasket có gì hay") để khung giữa cũng khác nhau.
+- Kiểm chéo: 2 bài SP bất kỳ **không được trùng >1 heading** (trừ FAQ). Đo Jaccard heading, không chỉ đo từ.
+
 ## 1B.3 Internal link BÀI MỒI → MONEY PAGE — bắt buộc (gap đã ĐO 15/7)
 
 > 🚨 Lỗ hổng nặng nhất đã verify live: **5/6 bài guide đang có 0 link** về collection/product → khách vào rồi thoát, không kéo được về trang bán, PageRank không truyền.
@@ -151,7 +163,7 @@ Link vợ đưa có **spec chính xác tuyệt đối** → **bê nguyên bảng
   ✅ `LED Rainbow và LED RGB khác nhau như thế nào?`
   ❌ `Phân biệt ba loại đèn quạt để không mua nhầm`
 - Heading phải unique trong bài (dễ đẻ heading trùng khi chèn H2 mới mà quên xoá cũ).
-- Có cụm cố định: **"[Tên SP] phù hợp với ai?"** và FAQ chốt **"Có nên mua [tên SP]?"**
+- Mục "phù hợp với ai" và "cần kiểm tra"/"vì sao Sintech" phải **XOAY wording, không lặp verbatim giữa bài** (1B.7). FAQ giữ nguyên **"Câu hỏi thường gặp"**.
 
 ## 2.2 Cấu trúc bài
 
