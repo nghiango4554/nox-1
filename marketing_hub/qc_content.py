@@ -90,8 +90,11 @@ def check_product_body(html: str) -> list:
     for m in _PRICE.finditer(body):
         e.append(f"nhắc giá: {m.group(0)!r}")
 
-    if re.search(r"<strong[ >]", body, re.I):
-        e.append("có <strong> trong thân bài (chỉ được dùng trong khối spec)")
+    # <strong> chỉ được dùng trong khối spec HOẶC để in đậm anchor (vợ chốt 15/7).
+    # Bỏ nội dung anchor ra trước khi soi <strong> lạc trong thân bài.
+    _body_wo_anchor = re.sub(r"<a\b.*?</a>", "", body, flags=re.S | re.I)
+    if re.search(r"<strong[ >]", _body_wo_anchor, re.I):
+        e.append("có <strong> trong thân bài (chỉ được dùng trong khối spec hoặc anchor)")
 
     if ";" in re.sub(r"<[^>]+>", "", body):
         e.append("còn dấu ';' trong body")
@@ -103,8 +106,6 @@ def check_product_body(html: str) -> list:
     nlink = len(re.findall(r'<a [^>]*href="https://sintech\.vn', body))
     if not LINK_MIN <= nlink <= LINK_MAX:
         e.append(f"internal link = {nlink} (phải {LINK_MIN}-{LINK_MAX})")
-    if re.search(r'<a [^>]*>\s*<strong>', body, re.I):
-        e.append("anchor bọc <strong> (phải là thẻ <a> thường)")
 
     if sintech_rules.SIGNATURE.rstrip(".") not in html:
         e.append("signature sai chuẩn hoặc thiếu")

@@ -70,7 +70,8 @@ NO_PRICE = (
 
 HEADING_RULES = (
     "HEADING: không H1, chỉ H2/H3. "
-    "MỖI HEADING MỘT MỆNH ĐỀ, ≤55 ký tự — không nối 2 vế bằng ':' hay ','. "
+    "MỖI HEADING MỘT MỆNH ĐỀ, ≤55 ký tự — không nối 2 vế bằng ':' ',' hay '-'. "
+    "HẠN CHẾ dấu '-' và ':' trong heading, chỉ dùng khi bất khả kháng (tên SP, tên riêng, mã model). "
     "Heading lấy NGUYÊN VĂN cách người ta gõ Google "
     "(đúng: 'LED Rainbow và LED RGB khác nhau như thế nào?' — "
     "sai: 'Phân biệt ba loại đèn quạt để không mua nhầm'). "
@@ -94,7 +95,7 @@ BODY_STYLE = (
 INTERNAL_LINK = (
     "INTERNAL LINK: 3-6 link trong body, URL thật. Anchor là cụm danh từ mô tả ≤30 ký tự. "
     "CẤM anchor 'tại đây', 'xem thêm', 'click here'. "
-    "Thẻ <a> THƯỜNG, KHÔNG bọc <strong>. "
+    "Anchor IN ĐẬM: bọc <strong> trong <a> — <a href='...'><strong>tên đích</strong></a> (theme tự tô đỏ + đậm). "
     "Verify slug collection tồn tại trước khi chèn — hay bịa (usb / cap-sac / hub-argb là 404; "
     "đúng phải là usb-flash / cap-chuyen-doi)."
 )

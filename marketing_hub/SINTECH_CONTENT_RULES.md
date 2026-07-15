@@ -106,6 +106,23 @@ Link vợ đưa có **spec chính xác tuyệt đối** → **bê nguyên bảng
 - Không có số thật → **viết an toàn, KHÔNG bịa** (giữ nguyên luật cấm bịa ở 1.3, 2.5).
 - ⚠️ Tác giả thật + trang author/bio là việc **theme/schema**, không phải content-gen → làm riêng, xem [[project_blog_faq_schema]].
 
+## 1B.4 Heading hạn chế dấu `-` và `:` (vợ chốt 15/7)
+
+- **Trong heading, hạn chế tối đa dấu `-` và `:`.** Chỉ dùng khi **bất khả kháng**: tên SP, tên riêng, mã model (`Core i5 9400F`, `M.2`, `RX 7700 XT`).
+- Không dùng `-`/`:` để nối 2 vế hay liệt kê trong heading. Vế giải thích đẩy xuống đoạn văn.
+
+## 1B.5 Anchor internal link IN ĐẬM (vợ chốt 15/7)
+
+- **Anchor bọc `<strong>` bên trong `<a>`** để chữ vừa đỏ (theme tự tô) vừa **in đậm**: `<a href='...'><strong>tên đích</strong></a>`.
+- Đã test: `<strong>` trong `<a>` **sống qua `reformat`** (ra `color:#dc2626` + đậm); inline `style=font-weight` bị strip.
+- ⚠️ Đây ĐẢO rule cũ ("anchor không bọc strong"). QC `check_product_body` đã sửa để CHO PHÉP.
+
+## 1B.6 Research SPEC bằng TRÌNH DUYỆT THẬT, cửa sổ minisize (vợ chốt 15/7)
+
+- Trang hãng (Gigabyte, Intel, TechPowerUp…) hay chặn WebFetch/headless (**403 Access Denied**).
+- **Bắt buộc research bằng Playwright + Chrome THẬT**: `chromium.launch(headless=False, channel="chrome")`, **thu nhỏ cửa sổ (minimize)** để không che màn hình vợ. Xem [[feedback_browser_research_autonomy]].
+- **Đánh mạnh tính năng thật của SP** (1B.2): moi đủ spec từ trang hãng (clock, mem, kích thước, cổng, TBW…) rồi nhồi vào blockquote + thân bài, đừng để spec thiếu thốn.
+
 ## 1B.3 Internal link BÀI MỒI → MONEY PAGE — bắt buộc (gap đã ĐO 15/7)
 
 > 🚨 Lỗ hổng nặng nhất đã verify live: **5/6 bài guide đang có 0 link** về collection/product → khách vào rồi thoát, không kéo được về trang bán, PageRank không truyền.
@@ -129,7 +146,7 @@ Link vợ đưa có **spec chính xác tuyệt đối** → **bê nguyên bảng
   ✅ `Fan case VSP SF-1225M12S Đen` · `Loa 2.0 SoundMax A140 Xám bạc`
   ❌ `Fan case VSP SF-1225M12S: 120mm, 1200rpm, 38 CFM`
 - Ngay dưới H2 đầu: **1 câu dẫn + 5-6 bullet tóm spec**.
-- **Mỗi heading MỘT mệnh đề, ≤55 ký tự.** Đừng nối 2 vế bằng `:` hay `,` — vế sau vốn là câu giải thích, đẩy xuống đoạn văn.
+- **Mỗi heading MỘT mệnh đề, ≤55 ký tự.** Đừng nối 2 vế bằng `:` `,` `-` — vế sau vốn là câu giải thích, đẩy xuống đoạn văn. Dấu `-`/`:` trong heading CHỈ dùng khi bất khả kháng (tên SP, tên riêng, mã model) — xem 1B.4.
 - Heading thân bài = **nguyên văn cách người ta gõ Google**.
   ✅ `LED Rainbow và LED RGB khác nhau như thế nào?`
   ❌ `Phân biệt ba loại đèn quạt để không mua nhầm`
@@ -157,8 +174,8 @@ signature
 
 - Xưng **"bạn"**, không dùng "anh". Đoạn 2-3 câu, ngắn (trung vị ~170 ký tự).
 - **Nhiều bullet, ít chữ.** Đối thủ mạnh dùng ~1 bullet mỗi 16 từ.
-- **KHÔNG bôi đậm trong thân bài.** `<strong>` chỉ dùng cho nhãn trong khối spec.
-  (⚠️ Khi đếm `<strong>` để so sánh, phải LOẠI blockquote ra.)
+- **KHÔNG bôi đậm câu chữ trong thân bài.** `<strong>` chỉ dùng cho: nhãn trong khối spec, VÀ **anchor internal link** (1B.5).
+  (⚠️ Khi đếm `<strong>` để so sánh, phải LOẠI blockquote và anchor ra.)
 - Trung thực: nói thẳng SP không hợp với ai, hãng không công bố gì.
 - CẤM dấu `;` trong body. CẤM `---` separator.
 - CẤM lộ nội bộ: không "theo research", "theo SERP", "SEO", "inventory", không nhắc đối thủ, không citation trong bài public.
@@ -178,7 +195,7 @@ signature
 ## 2.6 Internal link
 
 - **3-6 link** trong body, URL thật (verify 200 trước khi đẩy).
-- Anchor là cụm danh từ mô tả, ≤30 ký tự.
+- Anchor là cụm danh từ mô tả, ≤30 ký tự, **bọc `<strong>` để in đậm** (1B.5): `<a href='...'><strong>...</strong></a>`.
 - **CẤM** "tại đây", "xem thêm", "click here".
 - Vị trí tự nhiên: 1 ở cuối intro (anchor "Sintech" hoặc collection), 1-2 giữa bài (SP/collection liên quan), 1 ở outro (anchor "Sintech").
 - ⚠️ Slug collection phải verify tồn tại — AI hay bịa. `usb`, `cap-sac`, `hub-argb` là 404; đúng phải là `usb-flash`, `cap-chuyen-doi`.
@@ -323,7 +340,7 @@ Script `qc_push` tự chặn các mục có dấu 🤖.
 | Intro | **2 đoạn ngắn** (bỏ luật "đúng 3 câu, 1 đoạn") |
 | H2 kề H3 | **Được phép** ở mục "cần kiểm tra trước khi mua" và FAQ. Các H2 khác vẫn cần ≥2 câu dẫn |
 | Bảng | Giữ 1-3 bảng, **có câu dẫn trước bảng**, không để bảng đứng sát heading |
-| Anchor | **HTML `<a>` thường, KHÔNG in đậm** (thân bài đã bỏ hết `<strong>`) |
+| Anchor | **Bọc `<strong>` trong `<a>` → đỏ + IN ĐẬM** (1B.5, đổi rule 15/7) |
 | Section "Thông số nổi bật cần biết" giữa bài | **BỎ.** Thay bằng bullet spec dưới H2 đầu + `<blockquote>` cuối bài |
 | 4 template xoay vòng A/B/C/D | **BỎ.** Dùng một dàn chung ở mục 2.2 |
 | Câu chính sách bắt buộc | **VẪN GIỮ** (mục 2.7) |
