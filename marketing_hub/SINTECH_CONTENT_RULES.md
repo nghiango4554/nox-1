@@ -1,6 +1,7 @@
 # 📕 BỘ RULES CONTENT SINTECH — FILE DUY NHẤT
 
-> **Cập nhật 9/7/2026.** Gom từ `seo_research_rules.md` (research, vợ training 9/7) +
+> **Cập nhật 15/7/2026** (thêm PHẦN 1B: viết để được AI trích + link bài mồi → money page).
+> Gốc 9/7/2026: gom từ `seo_research_rules.md` (research, vợ training 9/7) +
 > `seo_writing_rules.md` v2026-05-08 (khuôn viết) + các luật vợ chốt trong phiên gen lại 9 SP.
 >
 > ⚠️ **Đọc file này TRƯỚC khi viết bất kỳ bài nào.** Hai file cũ giữ lại làm phụ lục tra cứu
@@ -82,6 +83,40 @@ Content · **đúng 3 Title** · **đúng 3 Meta** · bài hoàn chỉnh.
 ## 1.6 Ca CLONE theo link vợ đưa
 
 Link vợ đưa có **spec chính xác tuyệt đối** → **bê nguyên bảng thông số** làm spec table, KHÔNG research lại spec. Chỉ research thêm **chức năng + lợi ích** để chèn vào bài.
+
+---
+
+# PHẦN 1B — VIẾT ĐỂ ĐƯỢC AI TRÍCH DẪN & TRUYỀN LỰC VỀ MONEY PAGE
+
+> **Bổ sung 15/7/2026.** Nguồn: case study Schema/E-E-A-T + bài Topical Authority + rubric SMEPlan (vợ đưa 15/7). Áp cho **cả SP, collection và blog**. Ba nguồn độc lập cùng chỉ về đây → ưu tiên cao.
+
+## 1B.1 Block trả lời thẳng ngay dưới heading câu hỏi (để AI Overview/ChatGPT trích)
+
+- Heading dạng câu hỏi (đã có ở 2.1) → **ngay dưới đặt 1 đoạn 40-55 từ trả lời TRỰC TIẾP, đủ nghĩa khi tách khỏi bài.**
+- Đoạn này đứng **TRƯỚC** mọi giải thích dài / bullet. **Trả lời trước, diễn giải sau.**
+- Có con số hoặc kết luận cụ thể ngay trong câu đầu.
+  ✅ *"SSD Gen4 nhanh gấp ~2 lần Gen3 ở tốc độ tuần tự, nhưng khi chơi game / mở app thường chỉ nhanh hơn 5-10%. Chỉ nên lên Gen4 nếu main hỗ trợ và bạn hay chép file lớn."*
+- **Mỗi đoạn thân bài ≤150 từ.** Đoạn 300-400 từ liền mạch = cắt nhỏ (dễ trích + dễ đọc mobile).
+
+## 1B.2 Nội dung phải có bằng chứng, không nói chung chung (E-E-A-T)
+
+- Thay câu định tính bằng con số / nguồn khi có:
+  ❌ "bền cao" → ✅ "chịu ~50 triệu lần bấm" · ❌ "chạy mát" → ✅ "hạ 8-12°C so với tản zin" · ❌ "nhanh" → ✅ "đọc tuần tự ~5.000 MB/s".
+- Ưu tiên **số liệu THẬT của Sintech** (đã build / test / đo) — SMEPlan gọi là *"số liệu tự sản xuất"*.
+- Không có số thật → **viết an toàn, KHÔNG bịa** (giữ nguyên luật cấm bịa ở 1.3, 2.5).
+- ⚠️ Tác giả thật + trang author/bio là việc **theme/schema**, không phải content-gen → làm riêng, xem [[project_blog_faq_schema]].
+
+## 1B.3 Internal link BÀI MỒI → MONEY PAGE — bắt buộc (gap đã ĐO 15/7)
+
+> 🚨 Lỗ hổng nặng nhất đã verify live: **5/6 bài guide đang có 0 link** về collection/product → khách vào rồi thoát, không kéo được về trang bán, PageRank không truyền.
+
+- **Mọi bài blog / guide phải có ≥2 link theo ngữ cảnh về đúng money page** (collection hoặc product) mà bài phục vụ intent:
+  - "Cấu hình chơi GTA 5" → `/collections/vga`, `/collections/ram-may-tinh`, tool Build PC.
+  - "Card đồ họa laptop là gì" → collection laptop / VGA liên quan.
+  - "Kích thước bàn phím cơ" → `/collections/ban-phim-co`.
+- Anchor **mô tả đúng đích** (≤30 ký tự), KHÔNG "tại đây". Verify slug trả 200 trước khi đẩy.
+- Đặt link **ngay chỗ người đọc đang có nhu cầu mua** (giữa/cuối đoạn giải quyết vấn đề), KHÔNG dồn hết xuống cuối bài.
+- Nguyên tắc: **bài mồi tồn tại để kéo khách + truyền lực về money page, không phải ngõ cụt.**
 
 ---
 
@@ -225,6 +260,10 @@ signature
 
 Không cần đủ mọi section của bài SP, nhưng vẫn cần: phân tích keyword + search intent · bảng kế hoạch internal link · 3-6 internal link · CTA Sintech intro/outro · outline cuối bài · cấu trúc linh hoạt theo chủ đề.
 
+- **BẮT BUỘC (1B.3): ≥2 internal link về đúng money page** (collection/product) mà bài phục vụ intent — bài blog/guide KHÔNG được là ngõ cụt.
+- **Áp 1B.1 + 1B.2**: heading câu hỏi có block trả lời thẳng 40-55 từ ngay dưới; thay câu chung chung bằng số liệu cụ thể.
+- Bài dạng **tin tức** ("ra mắt / rò rỉ / lộ diện") giá trị topical-authority thấp → hạn chế; nếu viết vẫn phải gắn link về money page liên quan.
+
 ---
 
 # PHẦN 5 — FORMAT & KỸ THUẬT HARAVAN
@@ -269,6 +308,9 @@ Script `qc_push` tự chặn các mục có dấu 🤖.
 - [ ] Outro không heading, mở "Tóm lại,"
 - [ ] Dùng "bạn", không dùng "anh"
 - [ ] Không bịa spec — không chắc thì bỏ
+- [ ] 🤖 **Bài blog/guide có ≥2 link về money page** (collection/product) đúng intent (1B.3)
+- [ ] Mỗi heading câu hỏi có block trả lời thẳng 40-55 từ ngay dưới (1B.1)
+- [ ] Câu định tính đã thay bằng số liệu cụ thể khi có (1B.2)
 - [ ] Đã backup body cũ trước khi PUT
 - [ ] Đã verify trên trang LIVE
 
@@ -301,6 +343,10 @@ Script `qc_push` tự chặn các mục có dấu 🤖.
 **Nguyên tắc:** prompt có thể bị AI phớt lờ, QC thì không. Luật nào kiểm được bằng máy thì phải có trong `qc_content.py`, đừng chỉ nhét vào prompt.
 
 **Sửa 1 luật = sửa 3 nơi.** Chưa có cơ chế đồng bộ tự động (còn nợ).
+
+> ⏳ **PHẦN 1B (thêm 15/7) mới ở Tier 1.** Để có hiệu lực thật cần đồng bộ:
+> - **Tier 2 `sintech_rules.py`**: nhét chỉ dẫn 1B.1/1B.2/1B.3 vào prompt của `blog_content_writer` + `product_writer` (nếu không AI vẫn gen theo luật cũ).
+> - **Tier 3 `qc_content.py`**: thêm check máy cho **1B.3** (đếm link `/collections/` + `/products/` trong body blog ≥2) — đây là luật kiểm được bằng regex, PHẢI có ở QC. (1B.1/1B.2 khó regex → chủ yếu dựa prompt + review tay.)
 
 **Phụ lục (tra cứu, không đọc mỗi lần):**
 - `seo_writing_rules.md` — văn phong mẫu, 4 template xoay vòng (đã bỏ), quy tắc ALT ảnh, banlist cụm SEOer.

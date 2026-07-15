@@ -3,12 +3,13 @@
 
 Prompt có thể bị AI phớt lờ. QC thì không. **Luôn chạy hàm này trước khi PUT.**
 
-Nguồn luật: SINTECH_CONTENT_RULES.md (v2026-07-09) + sintech_rules.py.
+Nguồn luật: SINTECH_CONTENT_RULES.md (v2026-07-15, PHẦN 1B) + sintech_rules.py.
 Sửa rules → sửa cả 3 nơi.
 
 Dùng:
-    from qc_content import check_product_body, check_links
-    errs = check_product_body(html)
+    from qc_content import check_product_body, check_blog_body, check_links
+    errs = check_product_body(html)      # bài SP
+    errs = check_blog_body(html)         # bài blog/guide (trọng tâm 1B.3)
     if errs: raise SystemExit(errs)      # hoặc log rồi bỏ qua bài đó
 
 CLI:
@@ -26,16 +27,28 @@ import sintech_rules
 _PRICE = re.compile(
     r"\d{1,3}[\.,]\d{3}\s*(?:đồng|đ)\b"      # 45.000 đồng
     r"|\btầm\s+\d+\s*k\b"                     # tầm 149k
-    r"|\d+\s*triệu\s*(?:đồng|rưỡi)?(?!\s*giờ)"  # 3 triệu (né "1 triệu giờ")
+    # 3 triệu (giá) — né spec "triệu màu / điểm / pixel / giờ / lượt / người / năm / lần"
+    r"|\d+(?:[.,]\d+)?\s*triệu(?!\s*(?:giờ|màu|điểm|pixel|px|sắc|lượt|người|năm|lần))\s*(?:đồng|rưỡi)?"
     r"|giá rẻ|giá sốc|rẻ nhất|mức giá \d",
     re.I,
 )
 _BANNED = ["research", "SERP", "đối thủ", "theo nguồn", "inventory", "tại đây",
            "xem thêm tại đây", "click here"]
+# Blog nới: "đối thủ" (đối thủ trong game) và "theo nguồn" (theo nguồn tin) là từ
+# hợp lệ trong bài blog → chỉ chặn các từ lộ nội bộ/quy trình.
+_BANNED_BLOG = ["research", "SERP", "inventory", "tại đây",
+                "xem thêm tại đây", "click here"]
 
 MAX_HEADING = 60          # ≤55 là target, >60 là chặn cứng
 MAX_H2_FIRST = 50
 LINK_MIN, LINK_MAX = 3, 6
+MONEY_LINK_MIN = 2        # 1B.3 — blog/guide phải có ≥2 link về collection/product
+
+# Link về MONEY PAGE: /collections/... hoặc /products/... (tuyệt đối hoặc tương đối)
+_MONEY_LINK = re.compile(
+    r'href="(?:https?://(?:www\.)?sintech\.vn)?/(?:collections|products)/[^"#?\s]+',
+    re.I,
+)
 
 
 def _strip_blockquote(html: str) -> str:
@@ -122,6 +135,41 @@ def check_product_body(html: str) -> list:
     return e
 
 
+def check_blog_body(html: str) -> list:
+    """Trả list lỗi (rỗng = đạt). Áp cho bài BLOG / GUIDE.
+
+    Trọng tâm 1B.3: bài mồi phải có ≥2 internal link về MONEY PAGE
+    (collection/product), không được là ngõ cụt. Blog nới hơn bài SP:
+    ĐƯỢC nhắc giá (ghi "tham khảo"), ĐƯỢC dùng H3/bảng — nên KHÔNG áp
+    check giá / blockquote / signature như check_product_body.
+    """
+    e: list = []
+
+    if re.search(r"<h1", html, re.I):
+        e.append("có <h1>")
+
+    hs = _headings(html)
+    if len(set(hs)) != len(hs):
+        dup = [h for h in set(hs) if hs.count(h) > 1]
+        e.append(f"heading trùng: {dup[:2]}")
+
+    for w in _BANNED_BLOG:
+        if re.search(rf"\b{re.escape(w)}\b", html, re.I):
+            e.append(f"từ cấm: {w!r}")
+
+    if re.search(r'<a [^>]*>\s*<strong>', html, re.I):
+        e.append("anchor bọc <strong> (phải là thẻ <a> thường)")
+
+    # 1B.3 — link về money page (đếm URL riêng biệt, tránh cùng 1 đích tính 2 lần)
+    money = set(m.group(0) for m in _MONEY_LINK.finditer(html))
+    if len(money) < MONEY_LINK_MIN:
+        e.append(
+            f"chỉ {len(money)} link về money page (collection/product), "
+            f"cần ≥{MONEY_LINK_MIN} — bài mồi không được là ngõ cụt (1B.3)"
+        )
+    return e
+
+
 def check_links(html: str, timeout: int = 15) -> list:
     """Trả list URL chết. Gọi mạng — tách riêng để test offline được."""
     dead = []
@@ -135,12 +183,20 @@ def check_links(html: str, timeout: int = 15) -> list:
     return dead
 
 
+def _is_product(html: str) -> bool:
+    """Bài SP luôn kết bằng khối <blockquote> spec; blog/guide thì không."""
+    return bool(re.search(r"<blockquote", html, re.I))
+
+
 def main(paths) -> int:
     bad = 0
     for p in paths:
         with open(p, encoding="utf-8") as f:
             html = f.read()
-        errs = check_product_body(html) + [f"link chết: {u}" for u in check_links(html)]
+        checker = check_product_body if _is_product(html) else check_blog_body
+        kind = "SP" if _is_product(html) else "blog"
+        errs = checker(html) + [f"link chết: {u}" for u in check_links(html)]
+        errs = [f"[{kind}] {x}" for x in errs]
         if errs:
             bad += 1
             print(f"\n!! {p}")

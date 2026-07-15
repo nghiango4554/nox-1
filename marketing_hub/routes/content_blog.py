@@ -230,6 +230,14 @@ def _push_blog_to_haravan(job, publish=True):
         body_html, _n_faq = faq_schema.attach(body_html)
     except Exception:
         pass
+    # QC gate (1B.3 + luật blog): thiếu link money page / có H1 / heading trùng… → CHẶN sync.
+    try:
+        from qc_content import check_blog_body
+        _qc = check_blog_body(body_html)
+    except Exception:
+        _qc = []
+    if _qc:
+        return {"ok": False, "error": "QC chặn: " + " · ".join(_qc[:4])}
     blog_id = job.get("haravan_blog_id") or BLOG_ID_BY_TARGET.get(
         (job.get("target_blog") or "news").strip(), 1000906526)
     meta = (job.get("edited_meta") or "").strip()

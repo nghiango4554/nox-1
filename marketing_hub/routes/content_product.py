@@ -312,6 +312,7 @@ def content_jobs_sync():
             continue
     ok, fail = 0, 0
     errors = []
+    warns = []          # QC cảnh báo (không chặn sync SP — corpus cũ chưa chuẩn format)
     for jid in job_ids:
         job = db.content_job_get(jid)
         if not job or job["status"] != "approved":
@@ -329,6 +330,13 @@ def content_jobs_sync():
                 payload["body_html"] = body_with_cdn
                 if body_with_cdn != (job.get("edited_body_html") or ""):
                     db.content_job_update(jid, edited_body_html=body_with_cdn)
+                try:
+                    from qc_content import check_product_body
+                    _qcw = check_product_body(body_with_cdn)
+                    if _qcw:
+                        warns.append(f"#{jid}: " + " · ".join(_qcw[:3]))
+                except Exception:
+                    pass
             except Exception as e:
                 db.content_job_update(jid, status="failed", error=f"Upload local images fail: {str(e)[:200]}")
                 fail += 1
@@ -364,7 +372,8 @@ def content_jobs_sync():
             description=f"Lỗi: {fail}",
             href=url_for("content_jobs_list_page"),
         )
-    flash(f"🚀 Sync xong: {ok} OK, {fail} lỗi." + (f" Lỗi: {', '.join(errors[:5])}" if errors else ""),
+    flash(f"🚀 Sync xong: {ok} OK, {fail} lỗi." + (f" Lỗi: {', '.join(errors[:5])}" if errors else "")
+          + (f" ⚠️ QC ({len(warns)}): {' | '.join(warns[:3])}" if warns else ""),
           "success" if ok else "error")
     return redirect(url_for("content_jobs_list_page", status="synced" if ok else None))
 

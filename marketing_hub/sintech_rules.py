@@ -2,7 +2,7 @@
 (SP / blog / collection / title-meta).
 
 Đổi rule chung ở ĐÂY → mọi writer ăn theo (hết cảnh sửa 3 nơi, lệch nhau).
-Đồng bộ **SINTECH_CONTENT_RULES.md** (v2026-07-09) — file rules duy nhất cho người đọc.
+Đồng bộ **SINTECH_CONTENT_RULES.md** (v2026-07-15, PHẦN 1B) — file rules duy nhất cho người đọc.
 File này là bản dịch sang prompt cho code. Sửa rules → sửa CẢ HAI.
 
 Đầu ra vẫn phải qua `qc_content.py` trước khi sync (prompt có thể bị AI phớt lờ, QC thì không).
@@ -112,6 +112,29 @@ SPEC_BLOCKQUOTE = (
     "LOẠI BỎ 'Tình trạng' và 'Bảo hành' khỏi khối spec."
 )
 
+# ─────────── Bổ sung 15/7/2026 (PHẦN 1B SINTECH_CONTENT_RULES.md) ───────────
+
+AI_EXTRACT = (
+    "TRÍCH DẪN ĐƯỢC (cho AI Overview/ChatGPT): dưới MỖI heading dạng câu hỏi, đặt NGAY "
+    "1 đoạn 40-55 từ trả lời TRỰC TIẾP — đủ nghĩa khi tách khỏi bài, có con số/kết luận "
+    "cụ thể ngay câu đầu, đứng TRƯỚC mọi giải thích dài/bullet (trả lời trước, diễn giải sau). "
+    "Mỗi đoạn thân bài ≤150 từ; đoạn 300-400 từ liền mạch phải cắt nhỏ."
+)
+
+EVIDENCE = (
+    "BẰNG CHỨNG (E-E-A-T): thay câu định tính chung chung bằng số liệu cụ thể khi có "
+    "('bền cao' → '~50 triệu lần bấm'; 'chạy mát' → 'hạ 8-12°C'; 'nhanh' → 'đọc ~5.000 MB/s'). "
+    "Ưu tiên số THẬT đã test. Không có số thật → viết an toàn, KHÔNG bịa."
+)
+
+MONEY_PAGE_LINK = (
+    "LINK VỀ MONEY PAGE (bài blog/guide BẮT BUỘC): trong các internal link phải có ≥2 link "
+    "theo ngữ cảnh trỏ về đúng COLLECTION/PRODUCT phục vụ intent của bài "
+    "(vd 'cấu hình chơi GTA 5' → /collections/vga, /collections/ram-may-tinh; "
+    "'card đồ họa laptop là gì' → collection VGA/laptop). Đặt NGAY chỗ người đọc đang có "
+    "nhu cầu mua, KHÔNG dồn cuối bài. Bài mồi KHÔNG được là ngõ cụt."
+)
+
 
 def forbidden_block() -> str:
     return "CẤM filler (vợ rate 0%): " + ", ".join(f'"{x}"' for x in FORBIDDEN_FILLER) + "."
@@ -138,6 +161,8 @@ def common_rules_block(cta_note: str = "", include_length: bool = True,
         "- " + SPEC_SAFETY,
         "- " + NO_PRICE,
         "- " + HEADING_RULES,
+        "- " + AI_EXTRACT,
+        "- " + EVIDENCE,
         "- " + BODY_STYLE,
         "- " + INTERNAL_LINK,
         "- " + forbidden_block(),
@@ -155,6 +180,8 @@ def common_rules_block(cta_note: str = "", include_length: bool = True,
             "(6-21 ký tự): Cổng trên máy / Nhu cầu đèn / Vị trí lắp…",
             "- " + SPEC_BLOCKQUOTE,
         ]
+    else:
+        lines.append("- " + MONEY_PAGE_LINK)
     return "\n".join(lines)
 
 
