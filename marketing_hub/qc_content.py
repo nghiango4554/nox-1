@@ -157,8 +157,7 @@ def check_blog_body(html: str) -> list:
         if re.search(rf"\b{re.escape(w)}\b", html, re.I):
             e.append(f"từ cấm: {w!r}")
 
-    if re.search(r'<a [^>]*>\s*<strong>', html, re.I):
-        e.append("anchor bọc <strong> (phải là thẻ <a> thường)")
+    # (Blog ĐƯỢC dùng <strong>/bold, kể cả trong anchor — khác bài SP; không check ở đây.)
 
     # 1B.3 — link về money page (đếm URL riêng biệt, tránh cùng 1 đích tính 2 lần)
     money = set(m.group(0) for m in _MONEY_LINK.finditer(html))
