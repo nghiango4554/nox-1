@@ -108,7 +108,9 @@ def check_product_body(html: str) -> list:
     if not LINK_MIN <= nlink <= LINK_MAX:
         e.append(f"internal link = {nlink} (phải {LINK_MIN}-{LINK_MAX})")
 
-    if sintech_rules.SIGNATURE.rstrip(".") not in html:
+    # strip tag trước khi so — signature có thể chứa nút SĐT (tel:) chèn tag vào giữa
+    _sig_text = re.sub(r"<[^>]+>", "", html)
+    if sintech_rules.SIGNATURE.rstrip(".") not in _sig_text:
         e.append("signature sai chuẩn hoặc thiếu")
     if not re.search(r"457 Trần Xuân Soạn, Q7, TP\.HCM\.", html):
         e.append("signature thiếu dấu chấm cuối")

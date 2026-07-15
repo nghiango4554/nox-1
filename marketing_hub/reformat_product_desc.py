@@ -24,11 +24,26 @@ from bs4 import BeautifulSoup
 ROOT = Path(__file__).parent
 BK = ROOT.parent.parent / "nox-outputs"
 
-H2 = ("font-size: 18px; font-weight: 700; color: #dc2626; "
+H2 = ("font-size: 20px; font-weight: 700; color: #dc2626; "
       "border-left: 4px solid #dc2626; padding-left: 10px; margin: 26px 0 12px; line-height: 1.35;")
-H3 = "font-size: 16px; font-weight: 600; margin: 12px 0 6px; line-height: 1.4;"
+H3 = "font-size: 18px; font-weight: 600; margin: 12px 0 6px; line-height: 1.4;"
+PBODY = "font-size: 16px; line-height: 1.65;"
+LIBODY = "font-size: 16px; line-height: 1.6;"
 BOX = ("background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; "
        "padding: 10px 16px 4px; margin: 12px 0;")
+# Signature nổi bật (khung đỏ nhạt + viền trái đỏ)
+SIG = ("font-size: 16px; line-height: 1.7; background: #fef2f2; border-left: 4px solid #dc2626; "
+       "padding: 12px 16px; border-radius: 6px; margin: 18px 0; color: #111;")
+SIG_MARK = "Tư vấn cấu hình bởi team"
+# SĐT thành nút bấm gọi (tel:) — icon SVG trắng, chỉnh màu ở fill
+_PHONE_ICON = ('<svg viewBox="0 0 24 24" width="14" height="14" fill="#ffffff" '
+               'style="vertical-align:-2px;margin-right:5px"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 '
+               '6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 '
+               '3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.2.2 2.4.6 3.6.1.4 0 .8-.3 1l-2.2 2.2z"/></svg>')
+PHONE_NUM = "0911 713 000"
+PHONE_BTN = ('<a href="tel:0911713000" style="display:inline-block;background:#dc2626;color:#fff;'
+             'padding:3px 12px;border-radius:6px;text-decoration:none;font-weight:700;font-style:normal;'
+             'white-space:nowrap">' + _PHONE_ICON + PHONE_NUM + '</a>')
 A_ = "color:#dc2626;"
 IMG = "max-width: 500px; width: 100%; height: auto; display: block; margin: 0 auto;"
 IMGP = "text-align: center; margin: 16px 0;"
@@ -60,14 +75,18 @@ def reformat(body: str) -> str:
             for cell in fr.find_all("td"):
                 cell["style"] = ("border: 1px solid #d1d5db; padding: 8px 10px; "
                                  "text-align: left; font-weight: 600; background: #f9fafb;")
-    # p: bọc ảnh -> center; còn lại bỏ style (theme lo)
+    # p: bọc ảnh -> center; signature -> khung nổi bật; còn lại -> cỡ chữ body
     for p in soup.find_all("p"):
         if p.find("img"):
             p["style"] = IMGP
-        elif p.has_attr("style"):
-            del p["style"]
-    # bỏ inline style rác trên list/inline tag -> theme lo
-    for tag in soup.find_all(["ul", "ol", "li", "strong", "em", "span"]):
+        elif p.find("em") and SIG_MARK in p.get_text():
+            p["style"] = SIG
+        else:
+            p["style"] = PBODY
+    # li -> cỡ chữ body; các inline tag khác bỏ style rác (theme lo)
+    for li in soup.find_all("li"):
+        li["style"] = LIBODY
+    for tag in soup.find_all(["ul", "ol", "strong", "em", "span"]):
         if tag.has_attr("style"):
             del tag["style"]
     # đóng khung <ul> tóm tắt đầu bài (ul đầu tiên) cho dễ nhìn như khuôn combo PC
@@ -77,9 +96,11 @@ def reformat(body: str) -> str:
         wrapper["style"] = BOX
         first_ul.wrap(wrapper)
     html = str(soup)
-    # in đậm nhãn trước dấu ':' đầu mỗi <li> (vd "Chuẩn kết nối: ...")
     import re as _re
-    html = _re.sub(r"<li>([^:<>]{1,28}):", r"<li><strong>\1:</strong>", html)
+    # in đậm nhãn trước dấu ':' đầu mỗi <li> (li giờ có style -> khớp cả <li ...>)
+    html = _re.sub(r"(<li\b[^>]*>)([^:<>]{1,28}):", r"\1<strong>\2:</strong>", html)
+    # SĐT -> nút bấm gọi (tel:)
+    html = html.replace(PHONE_NUM, PHONE_BTN)
     return html
 
 

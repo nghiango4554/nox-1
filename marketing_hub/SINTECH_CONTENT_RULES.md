@@ -305,7 +305,10 @@ Không cần đủ mọi section của bài SP, nhưng vẫn cần: phân tích 
 | Hàm | `reformat_product_desc.reformat()` | `apply_sintech_style()` |
 
 - **Format SP mới (vợ chốt 15/7, dễ nhìn như khuôn combo PC):** `reformat()` tự áp —
-  H2 **đỏ #dc2626 + thanh viền trái đỏ** (`border-left:4px`); `<ul>` tóm tắt đầu bài **đóng khung** (box nền xám nhạt bo góc); **nhãn đầu mỗi bullet in đậm** (viết bullet dạng `Nhãn: giá trị`). QC cho phép `<strong>` trong `<li>`.
+  H2 **đỏ #dc2626 + viền trái đỏ** cỡ **20px**; H3 **18px**; body/bullet **16px** (giãn dòng thoáng);
+  `<ul>` tóm tắt đầu bài **đóng khung** (box nền xám bo góc); **nhãn đầu bullet in đậm** (viết dạng `Nhãn: giá trị`);
+  **signature đóng khung đỏ nhạt + viền trái đỏ**; **SĐT `0911 713 000` tự thành NÚT bấm gọi** (`tel:`, icon SVG trắng).
+  QC cho phép `<strong>` trong `<li>` + strip tag khi soi signature (vì có nút SĐT chèn tag).
 - **Haravan strip `<style>` block** → chỉ inline style sống.
 - **SEO product**: flat field `metafields_global_title_tag` / `metafields_global_description_tag` trong `update_product`. **KHÔNG** dùng `/metafields` endpoint (theme không đọc).
 - **SEO collection/article**: ngược lại, phải dùng `upsert_seo_metafields`.
