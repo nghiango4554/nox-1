@@ -589,8 +589,8 @@ async function doResizePreview() {
   }
 }
 
-async function doCreate() {
-  if (!confirm('🚀 Xác nhận tạo SP MỚI trên Haravan?\n\nLưu ý: hành động này thật sự POST lên store sintech.vn — không thể undo từ Hub (phải vào admin xóa thủ công nếu sai).')) return;
+async function doCreate(force) {
+  if (!force && !confirm('🚀 Xác nhận tạo SP MỚI trên Haravan?\n\nSP tạo ở trạng thái ẨN, chỉ tự publish LIVE khi body verify đạt. Không undo từ Hub (sai thì vào admin sửa/ẩn).')) return;
   setStatus('info', '🚀 Đang POST Haravan...');
   document.getElementById('btnCreate').disabled = true;
   try {
@@ -601,6 +601,7 @@ async function doCreate() {
       seo_title: document.getElementById('seo_title').value,
       seo_meta: document.getElementById('seo_meta').value,
       images: imgOriginals,
+      force_create: !!force,
     };
     const res = await fetch('/products/new/create', {
       method: 'POST',
@@ -609,6 +610,15 @@ async function doCreate() {
     });
     const j = await res.json();
     if (!j.ok) {
+      if (res.status === 409 && j.need_force) {
+        const list = (j.duplicates || []).map(d => `• ${d.title} (${d.status})`).join('\n');
+        if (confirm(`⚠️ ${j.message}\n\nSP nghi trùng:\n${list}\n\nBấm OK để VẪN TẠO SP mới.`)) {
+          await doCreate(true);   // gửi lại với force_create
+          return;
+        }
+        setStatus('warn', 'Đã hủy tạo — có SP trùng.');
+        return;
+      }
       setStatus('error', j.error || 'Create fail');
       return;
     }
@@ -626,7 +636,7 @@ async function doCreate() {
         <tr><td class="lbl">Handle</td><td><code>${j.handle || ''}</code></td></tr>
         <tr><td class="lbl">Admin Haravan</td><td><a href="${j.admin_url}" target="_blank">${j.admin_url}</a></td></tr>
         ${j.live_url ? `<tr><td class="lbl">Live URL</td><td><a href="${j.live_url}" target="_blank">${j.live_url}</a></td></tr>` : ''}
-        <tr><td class="lbl">Published</td><td>${bc.haravan_published_at || '<em>draft?</em>'}</td></tr>
+        <tr><td class="lbl">Trạng thái</td><td>${j.published_live ? '🟢 LIVE (đã publish)' : '🟡 ẨN — chưa publish (kiểm rồi bật tay trong admin)'}</td></tr>
       </table>
 
       <h3 style="margin:18px 0 8px;font-size:14px;color:${bodyOk?'#16a34a':'#dc2626'};">📄 Body verify (GET sau khi POST):</h3>
@@ -657,7 +667,7 @@ async function doCreate() {
       <p style="margin-top:14px;color:#6b7280;font-size:12px;">⚠️ Vào admin Haravan kiểm tra: tags / bảo hành / variants / SEO. Nếu Body verify pass ✅ mà admin vẫn show plain text → có thể theme Sintech.vn render khác trên public; thử mở Admin Haravan WYSIWYG.</p>
     `;
     cr.scrollIntoView({behavior:'smooth'});
-    setStatus('success', '✅ SP đã được tạo trên Haravan');
+    setStatus(j.published_live ? 'success' : 'warn', j.status_msg || '✅ SP đã được tạo trên Haravan');
   } catch (e) {
     setStatus('error', 'Lỗi: ' + e.message);
   } finally {

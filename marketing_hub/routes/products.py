@@ -76,12 +76,8 @@ def _dup_features(name: str):
     return raw, core, codes, nums
 
 
-def products_new_check_dup():
-    """Quét SP trùng/giống trong catalog (DB local). Match theo MÃ MODEL (ghép mã
-    nối dấu), số model, + containment (tên ngắn là subset vẫn ăn)."""
-    name = ((request.get_json(silent=True) or {}).get("name") or "").strip()
-    if not name:
-        return jsonify({"ok": True, "matches": []})
+def _scan_duplicates_cache(name: str):
+    """Quét SP trùng/giống trong CACHE local. Trả (list_match, số_row_đã_quét)."""
     _, qcore, qcodes, qnums = _dup_features(name)
     try:
         conn = db.get_conn()
@@ -108,9 +104,62 @@ def products_new_check_dup():
             "haravan_id": r["haravan_id"], "status": r["status"],
             "score": round(len(code_hit) * 2.0 + len(num_hit) * 0.6 + contain * 1.5, 2),
             "match": (sorted(code_hit) or sorted(num_hit | core_hit))[:4],
+            "source": "cache",
         })
     out.sort(key=lambda x: -x["score"])
-    return jsonify({"ok": True, "matches": out[:10], "checked": len(rows)})
+    return out, len(rows)
+
+
+def _live_dup_by_handle(name: str):
+    """#3: soi Haravan LIVE theo handle (slug tên mới). Bắt cả SP mà cache còn thiếu
+    (cache stale/vừa prune) → dedup không bị lỗ. Handle trùng = dup chắc (score cao)."""
+    try:
+        slug = (pp.parse(name).get("slug") or "").strip()
+        if not slug:
+            return []
+        data = hv_client._request("GET", "/products.json",
+                                  params={"handle": slug, "limit": 5})
+        prods = data.get("products", []) if isinstance(data, dict) else []
+        return [{
+            "title": p.get("title"), "handle": p.get("handle"),
+            "haravan_id": p.get("id"),
+            "status": ("live" if p.get("published_at") else "hidden"),
+            "score": 99.0, "match": ["handle trùng (live)"], "source": "live",
+        } for p in prods if p.get("id")]
+    except Exception:
+        return []
+
+
+def _find_duplicates(name: str):
+    """Gộp cache + live, dedup theo haravan_id (ưu tiên bản 'live'). Trả list sort score."""
+    cache, _ = _scan_duplicates_cache(name)
+    merged = {}
+    for d in cache + _live_dup_by_handle(name):
+        i = d.get("haravan_id")
+        if i is None:
+            continue
+        if i not in merged or d.get("source") == "live":
+            merged[i] = d
+    return sorted(merged.values(), key=lambda x: -x.get("score", 0))
+
+
+def products_new_check_dup():
+    """Quét SP trùng/giống trong catalog (cache local + Haravan live theo handle)."""
+    name = ((request.get_json(silent=True) or {}).get("name") or "").strip()
+    if not name:
+        return jsonify({"ok": True, "matches": []})
+    cache, checked = _scan_duplicates_cache(name)
+    live = _live_dup_by_handle(name)
+    merged = {}
+    for d in cache + live:
+        i = d.get("haravan_id")
+        if i is None:
+            continue
+        if i not in merged or d.get("source") == "live":
+            merged[i] = d
+    out = sorted(merged.values(), key=lambda x: -x.get("score", 0))
+    return jsonify({"ok": True, "matches": out[:10], "checked": checked,
+                    "live_hits": len(live)})
 
 
 # ─────────────────────── ẢNH (resize + nhúng body) ───────────────
@@ -149,18 +198,44 @@ def _grande(src: str) -> str:
     return re.sub(r"(\.(?:jpg|jpeg|png|webp))(\?|$)", r"_grande\1\2", src, flags=re.I)
 
 
+def _img_count_for_body(body_html: str) -> int:
+    """#8: số ảnh chèn body bám số H2 — bài dài nhiều ảnh, linh kiện lặt vặt ít ảnh.
+    ≤2 H2 → 1 · 3-4 → 2 · 5-6 → 3 · ≥7 → 4."""
+    n = len(re.findall(r"<h2", body_html or "", re.I))
+    if n <= 2:
+        return 1
+    if n <= 4:
+        return 2
+    if n <= 6:
+        return 3
+    return 4
+
+
 def _embed_images(body_html: str, urls: list, alt: str) -> str:
-    """Nhúng ảnh vào body trước H2 #2, #4, #6 (giàn đều)."""
-    pos = [m.start() for m in re.finditer(r"<h2", body_html)]
+    """Nhúng ảnh giàn đều trước các H2 (bỏ H2 đầu = intro). Số ảnh = len(urls)."""
+    pos = [m.start() for m in re.finditer(r"<h2", body_html or "", re.I)]
+    if not pos or not urls:
+        return body_html
+    slots = pos[1:] if len(pos) > 1 else pos   # ưu tiên chèn từ H2 thứ 2 (sau intro)
+    k = min(len(urls), len(slots))
+    if k <= 0:
+        return body_html
+    if k == len(slots):
+        chosen = slots
+    elif k == 1:
+        chosen = [slots[0]]
+    else:
+        step = (len(slots) - 1) / (k - 1)
+        chosen = [slots[round(i * step)] for i in range(k)]
 
     def tag(u):
         return (f'<img src="{u}" alt="{alt}" style="display:block;max-width:600px;'
                 f'width:100%;height:auto;margin:14px auto;border-radius:6px;">')
 
-    ins = [(pos[k], tag(u)) for k, u in zip([1, 3, 5], urls) if k < len(pos)]
+    ins = list(zip(chosen, urls[:k]))
     b = body_html
-    for off, t in sorted(ins, reverse=True):
-        b = b[:off] + t + b[off:]
+    for off, u in sorted(ins, key=lambda x: -x[0]):
+        b = b[:off] + tag(u) + b[off:]
     return b
 
 
@@ -281,9 +356,23 @@ def products_new_create():
     if not body_html:
         return jsonify({"ok": False, "error": "Body HTML rỗng — chạy AI gen trước"}), 400
 
+    # #2/#3: chặn trùng ở SERVER (không chỉ tin frontend). Match mạnh (handle live
+    # trùng, hoặc score cache cao) → chặn, trừ khi user tick "vẫn tạo" (force_create).
+    if not body.get("force_create"):
+        dups = _find_duplicates(name)
+        strong = [d for d in dups if d.get("source") == "live" or d.get("score", 0) >= 3.0]
+        if strong:
+            return jsonify({
+                "ok": False, "error": "duplicate", "need_force": True,
+                "message": "Có SP trùng/rất giống trong catalog. Tick 'Vẫn tạo' nếu chắc chắn tạo mới.",
+                "duplicates": strong[:5],
+            }), 409
+
     tags_list = []
     if warranty and str(warranty).isdigit() and 1 <= int(warranty) <= 120:
-        tags_list.append(f"bh_{int(warranty):02d}_tháng")
+        # tag bảo hành chuẩn catalog = "bh_NN tháng" (DẤU CÁCH, không gạch dưới) —
+        # smart collection/bộ lọc khớp format này; "bh_NN_tháng" bị bỏ sót.
+        tags_list.append(f"bh_{int(warranty):02d} tháng")
     tags_list.extend(parsed.get("tags") or [])
 
     variant_title = f"Bảo hành {int(warranty)} tháng" if warranty and str(warranty).isdigit() else "Mặc định"
@@ -294,12 +383,19 @@ def products_new_create():
         "inventory_management": "haravan",
         "inventory_policy": "continue",  # cho bán tiếp khi hết tồn (khớp catalog live)
     }
-    if stock.isdigit():
-        variant["inventory_quantity"] = int(stock)
-    if price and str(price).replace(".", "").isdigit():
-        variant["price"] = float(price)
-    if compare_price and str(compare_price).replace(".", "").isdigit():
+    # #4: bóc số từ ô tồn kho ("25 cái" → 25). Qty set được (test 17/7 SP ẩn: dính 25).
+    stock_digits = re.sub(r"[^\d]", "", stock)
+    if stock_digits:
+        variant["inventory_quantity"] = int(stock_digits)
+    price_val = None
+    if price is not None and str(price).replace(".", "").strip().isdigit():
+        price_val = float(price)
+        variant["price"] = price_val
+    # #6: giá so sánh — có thì dùng, KHÔNG để trống → mặc định = giá nhập
+    if compare_price is not None and str(compare_price).replace(".", "").strip().isdigit():
         variant["compare_at_price"] = float(compare_price)
+    elif price_val is not None:
+        variant["compare_at_price"] = price_val
 
     product_fields = {
         "title": name,
@@ -307,8 +403,7 @@ def products_new_create():
         "vendor": parsed.get("hang") or "",
         "product_type": parsed.get("loai") or "",
         "tags": ", ".join(tags_list),
-        "published_at": datetime.now(timezone.utc).isoformat(),
-        "published_scope": "web",  # chỉ lên web store, KHÔNG tick Haravan POS (vợ dặn 23/6)
+        "published": False,  # #7: tạo ẨN trước, publish ở CUỐI khi build xong (tránh SP live dở)
         "summary_html": excerpt,
         "options": [{"name": "Bảo hành", "values": [variant_title]}],
         "variants": [variant],
@@ -362,7 +457,8 @@ def products_new_create():
                 with hv_client.allow_blocked_operations("ui_form:/products/new"):
                     fresh = hv_client.get_product(product_id)
                 car = sorted(fresh.get("images") or [], key=lambda x: x.get("position") or 0)
-                urls = [_grande(im["src"]) for im in car[:3] if im.get("src")]
+                want = _img_count_for_body(body_html)  # #8: số ảnh body bám số H2
+                urls = [_grande(im["src"]) for im in car if im.get("src")][:want]
                 if urls:
                     new_body = _embed_images(body_html, urls, name)
                     with hv_client.allow_blocked_operations("ui_form:/products/new"):
@@ -397,13 +493,32 @@ def products_new_create():
             "note": "SEO set qua flat-field metafields_global_* (PUT product). Verify <title> trang live sau ~vài phút CDN.",
         }
 
+        # #7: PUBLISH ở CUỐI — chỉ khi body đã lưu OK (có content + H2). Lỗi giữa
+        # chừng → SP GIỮ ẨN chờ vợ kiểm, không để 1 SP live dở dang.
+        published_live = False
+        body_ok = bool(body_check.get("stored_length")) and body_check.get("has_h2")
+        if body_ok:
+            try:
+                with hv_client.allow_blocked_operations("ui_form:/products/new"):
+                    hv_client.update_product(
+                        product_id, {"id": product_id, "published": True, "published_scope": "web"})
+                published_live = True
+            except Exception as e:
+                errors.append(f"publish fail (SP giữ ẩn): {e}")
+        else:
+            errors.append("Body chưa lưu đúng → SP GIỮ ẨN, kiểm tra rồi publish tay")
+
         handle = created.get("handle") or parsed.get("slug") or ""
+        status_msg = ("✅ Đã tạo + publish LIVE" if published_live
+                      else "⚠️ SP tạo ở trạng thái ẨN (có lỗi/body chưa đạt) — kiểm rồi publish tay")
         return jsonify({
             "ok": True,
             "product_id": product_id,
             "handle": handle,
+            "published_live": published_live,
+            "status_msg": status_msg,
             "admin_url": f"https://admin.haravan.com/admin/products/{product_id}",
-            "live_url": f"https://sintech.vn/products/{handle}" if handle else None,
+            "live_url": (f"https://sintech.vn/products/{handle}" if (handle and published_live) else None),
             "body_check": body_check,
             "seo_check": seo_check,
             "img_report": img_report,

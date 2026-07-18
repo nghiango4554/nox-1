@@ -102,69 +102,26 @@ _ANGLE_META_PATTERN = {
 }
 
 
-# ═══════════════════════════════════════════════════════════════
-# Sintech inline styles — applied trước khi POST Haravan, để body render
-# đúng trên theme (không bị plain text). Mẫu rút từ bài cũ vợ đã làm.
-# ═══════════════════════════════════════════════════════════════
-
-# CHUẨN MỚI 23/6/2026 (vợ chốt theo bài mẫu Laptop ThinkBook 16 G9):
-# style NHẸ — chỉ inline h2/h3/a/table/img; p/ul/li để THEME lo (không Arial
-# nặng). h2 18px, h3 16px (px-based), link đỏ #dc2626, ảnh max 500px, bảng viền
-# ngang nhẹ. Đồng bộ với reformat_product_desc.py + preview trong products_new.
-# (Lý do bỏ style cũ Arial 17pt/bảng viền xám: xem memory reference_haravan_strips_style_block.)
-_SINTECH_STYLES = {
-    "h2":    "font-size: 18px; font-weight: 700; margin: 18px 0 8px; line-height: 1.35;",
-    "h3":    "font-size: 16px; font-weight: 600; margin: 12px 0 6px; line-height: 1.4;",
-    "a":     "color:#dc2626;",
-    "table": "border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px; line-height: 1.55; border: 1px solid #d1d5db;",
-    "th":    "border: 1px solid #d1d5db; padding: 8px 10px; text-align: left; font-weight: 600; background: #f9fafb;",
-    "td":    "border: 1px solid #e5e7eb; padding: 8px 10px; vertical-align: top;",
-    "img":   "max-width: 500px; width: 100%; height: auto; display: block; margin: 0 auto;",
-}
-_IMG_WRAP_P = "text-align: center; margin: 16px 0;"
+# Format body SP = NGUỒN DUY NHẤT reformat_product_desc.reformat() (h2 20px đỏ+viền,
+# box tóm tắt, signature khung đỏ, SĐT→nút gọi). inject_sintech_styles() giữ tên cũ
+# chỉ là shim gọi reformat() — đã bỏ bản style NHẸ CŨ để hết cảnh 2 hàm lệch nhau (17/7).
 
 
 def inject_sintech_styles(html: str) -> str:
-    """Áp inline style CHUẨN MỚI (bài mẫu ThinkBook) cho body_html.
+    """Shim tương thích ngược → gọi reformat_product_desc.reformat() (NGUỒN FORMAT DUY NHẤT).
 
-    Style nhẹ: h2/h3/a/table/th/td/img có inline; p/ul/li/strong để theme render
-    (Haravan chỉ giữ inline style — xem memory reference_haravan_strips_style_block).
-    Overwrite style cũ để bài cũ format lại cũng về đúng chuẩn.
+    Trước đây hàm này áp bản style NHẸ CŨ (h2 18px trơn), lệch với reformat() chuẩn
+    (h2 20px đỏ+viền, box tóm tắt, signature khung đỏ, SĐT→nút gọi) → SP gen mới bị
+    format cũ (bug phát hiện 17/7). Giờ MỌI caller đi qua reformat() → 1 format duy nhất,
+    gọi nhầm tên cũ cũng ra đúng chuẩn.
     """
     if not html or "<" not in html:
         return html
     try:
-        from bs4 import BeautifulSoup
-    except ImportError:
-        return html  # bs4 không có → return unchanged
-
-    soup = BeautifulSoup(html, "html.parser")
-
-    for tag_name, style in _SINTECH_STYLES.items():
-        for tag in soup.find_all(tag_name):
-            tag["style"] = style
-
-    # Hàng đầu mỗi bảng = HEADER (nền + đậm) khi bảng toàn <td> (từ Google Docs)
-    for table in soup.find_all("table"):
-        first_row = table.find("tr")
-        if first_row and not first_row.find("th"):
-            for cell in first_row.find_all("td"):
-                cell["style"] = ("border: 1px solid #d1d5db; padding: 8px 10px; "
-                                 "text-align: left; font-weight: 600; background: #f9fafb;")
-
-    # <p> bọc ảnh → căn giữa; <p> chữ thường → bỏ style (theme lo)
-    for p in soup.find_all("p"):
-        if p.find("img"):
-            p["style"] = _IMG_WRAP_P
-        elif p.has_attr("style"):
-            del p["style"]
-
-    # bỏ inline style rác trên list/inline tag → theme lo
-    for tag in soup.find_all(["ul", "ol", "li", "strong", "em", "span"]):
-        if tag.has_attr("style"):
-            del tag["style"]
-
-    return str(soup)
+        import reformat_product_desc as _rf
+        return _rf.reformat(html)
+    except Exception:
+        return html  # fallback an toàn: giữ nguyên body, không vỡ luồng gen
 
 
 def pick_angle(name: str, prev_angle: str | None = None) -> str:

@@ -463,6 +463,33 @@ def init_db():
             created_at TEXT NOT NULL
         )
     """)
+    # blog_jobs: base table — bug 17/7: trước KHÔNG có CREATE, DB mới crash ngay ALTER.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS blog_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            blog_url TEXT UNIQUE NOT NULL,
+            handle TEXT,
+            haravan_article_id INTEGER,
+            haravan_blog_id INTEGER,
+            article_title TEXT,
+            edited_title TEXT,
+            edited_meta TEXT,
+            edited_body_html TEXT,
+            ai_generated_at TEXT,
+            status TEXT NOT NULL DEFAULT 'draft',
+            error TEXT,
+            synced_at TEXT,
+            quality_score INTEGER,
+            readability_score INTEGER,
+            quality_breakdown TEXT,
+            word_count INTEGER,
+            click INTEGER DEFAULT 0,
+            impression INTEGER DEFAULT 0,
+            pos REAL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
     # blog_jobs: cột mới cho bài AI Pillar/Cluster (net-new, chưa có URL thật)
     bj_cols = {r["name"] for r in conn.execute("PRAGMA table_info(blog_jobs)").fetchall()}
     bj_new = {

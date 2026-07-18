@@ -695,18 +695,41 @@ def _n_live(handle):
         return -1
 
 
+def _sp_list_of(coll_handle, cmap):
+    """Danh sách SP của 1 collection, lấy từ HARAVAN (nguồn thật) hợp với bản đồ local.
+
+    Bản đồ local `thumb_collection_map.json` là file tĩnh nên hay STALE: SP mới thêm trên
+    Haravan không có trong đó => sync bỏ sót ÂM THẦM mà vẫn báo "x/x OK" (bẫy 14/7/2026,
+    sót đúng con fan-case-vsp poster). Trả về (danh sách SP, danh sách SP local thiếu).
+    """
+    local = list(cmap.get(coll_handle, []))
+    try:
+        cid = _collections().get(coll_handle)
+        live = [p["handle"] for p in _products_in(cid)] if cid else []
+    except Exception:
+        live = []          # mạng lỗi -> lùi về bản đồ local, KHÔNG chặn sync
+    if not live:
+        return local, []
+    missing = [h for h in live if h not in set(local)]
+    return local + missing, missing
+
+
 def _sync_worker(coll_list):
     cmap = _collection_map()
     synced = _load_synced()
     # gom SP (dedup). SP đã synced chỉ được bỏ qua khi local == live: nếu vợ chèn thêm
     # ảnh ở /thumbs sau lần sync trước thì ảnh đó không bao giờ lên live mà collection
     # vẫn bị đánh dấu da_sync (bẫy dedup 6/7/2026).
-    prod_order, seen, relech = [], set(), []
+    prod_order, seen, relech, missing_all = [], set(), [], []
     for c in coll_list:
-        for ph in cmap.get(c, []):
+        sp_list, missing = _sp_list_of(c, cmap)
+        missing_all += [{"collection": c, "handle": h} for h in missing]
+        for ph in sp_list:
             if ph in seen:
                 continue
             seen.add(ph)
+            if not (THUMB_ROOT / "std" / ph).exists():
+                continue          # chưa có ảnh chuẩn local -> không có gì để đẩy
             if ph in synced:
                 nl, nv = len(_sp_images(ph)), _n_live(ph)
                 if nl == nv:
@@ -714,11 +737,17 @@ def _sync_worker(coll_list):
                 relech.append((ph, nl, nv))
             prod_order.append(ph)
     failed = set()
+    msgs = []
+    if relech:
+        msgs.append(f"⚠️ {len(relech)} SP đã synced nhưng lệch local vs live → sync lại")
+    if missing_all:
+        msgs.append(f"⚠️ {len(missing_all)} SP có trên Haravan nhưng THIẾU trong bản đồ local "
+                    f"(đã tự thêm vào lượt sync này) → chạy lại build_collection_map.py")
     SYNC_STATE.update(running=True, finished=False, total=len(prod_order),
                       done=0, ok=0, fail=0, current="",
-                      msg=(f"⚠️ {len(relech)} SP đã synced nhưng lệch local vs live → sync lại"
-                           if relech else ""),
-                      relech=[{"handle": p, "local": nl, "live": nv} for p, nl, nv in relech])
+                      msg=" · ".join(msgs),
+                      relech=[{"handle": p, "local": nl, "live": nv} for p, nl, nv in relech],
+                      missing_local=missing_all)
     for ph in prod_order:
         SYNC_STATE["current"] = ph
         try:
@@ -735,16 +764,21 @@ def _sync_worker(coll_list):
             failed.add(ph)
         SYNC_STATE["done"] += 1
     # đánh dấu collection da_sync nếu KHÔNG có SP nào của nó lỗi
+    # (xét theo danh sách SP THẬT trên Haravan, không theo bản đồ local stale)
     st = _load_status()
     for c in coll_list:
-        phs = cmap.get(c, [])
+        phs, _ = _sp_list_of(c, cmap)
         if any(p in failed for p in phs):
             continue
         if (st.get(c) or {}).get("status") in ("da_duyet", "da_sync"):
             st[c] = {"status": "da_sync", "at": _now()}
     _save_status(st)
+    tail = ""
+    if SYNC_STATE.get("missing_local"):
+        tail = (f" · ⚠️ {len(SYNC_STATE['missing_local'])} SP thiếu trong bản đồ local "
+                f"(đã sync bù) → chạy lại build_collection_map.py")
     SYNC_STATE.update(running=False, finished=True, current="",
-                      msg=f"Xong: {SYNC_STATE['ok']} SP ok, {SYNC_STATE['fail']} lỗi")
+                      msg=f"Xong: {SYNC_STATE['ok']} SP ok, {SYNC_STATE['fail']} lỗi{tail}")
 
 
 def thumbs_sync():
