@@ -528,14 +528,18 @@ def analyze_html(url: str, html: bytes, status_code: int, load_ms: int,
     title_tag = soup.find("title")
     title = re.sub(r"\s+", " ", title_tag.get_text()).strip() if title_tag else ""
     title_len = len(title)
+    # Đo độ dài phần title TEAM ĐẶT: bỏ suffix " – Sintech" Haravan tự thêm (+~10c),
+    # nếu không mọi title bị chấm title_long OAN (cùng regex với check sintech_in_title).
+    title_core = re.sub(r"\s*[-–—|]\s*sintech.*$", "", title, flags=re.I).strip() or title
+    core_len = len(title_core)
     t_long = _thr("title_long", 61)
     t_short = _thr("title_short", 20)
     if not title:
         _add_issue("no_title")
-    elif title_len > t_long:
-        score += _add_issue("title_long", len=title_len, threshold=t_long)
-    elif title_len < t_short:
-        score += _add_issue("title_short", len=title_len, threshold=t_short)
+    elif core_len > t_long:
+        score += _add_issue("title_long", len=core_len, threshold=t_long)
+    elif core_len < t_short:
+        score += _add_issue("title_short", len=core_len, threshold=t_short)
     else:
         score += _pass_score("title_ok")
 
