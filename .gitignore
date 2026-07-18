@@ -7,6 +7,7 @@
 marketing_hub/state/
 marketing_hub/config.local.json
 marketing_hub/data/insights_live.json
+marketing_hub/sig_edited_ids.json
 .env
 .env/
 *.env
