@@ -123,7 +123,9 @@ def _products_in(cid):
     while page <= 200:
         b = hc._request("GET", "/products.json",
                         params={"collection_id": cid, "limit": 50, "page": page,
-                                "fields": "id,handle,title,images"}).get("products", [])
+                                # published_at: thiếu field này thì mọi SP đều bị coi là ẨN
+                                "fields": "id,handle,title,images,published_at"}
+                        ).get("products", [])
         out.extend(b)
         if len(b) < 50:
             break
@@ -160,8 +162,59 @@ def _preview_log():
     return out
 
 
+UNGROUPED = "__ungrouped__"
+
+# Vợ chốt 22/7/2026: nhánh PC build sẵn + combo PC HIỆN KHÔNG LÀM ảnh chuẩn.
+# Vẫn hiện trên trang (gập lại, để cuối) nhưng KHÔNG tính vào tiến độ / việc cần làm.
+OUT_OF_SCOPE_ROOTS = {"PC Gaming – Đồ Họa – AI", "PC Văn Phòng – Máy Bộ",
+                      "Dịch Vụ & Sửa Chữa"}
+
+
+def _menu_groups():
+    """Phân tầng theo MENU LIVE (giống tab /spec): chỉ collection LÁ, gom theo nhánh gốc.
+
+    Thay cho `thumb_tracking.csv` (4 wave, thứ tự cũ) + `thumb_collection_map.json`
+    (file tĩnh, 22/7/2026 đo được **4.791/8.221 cặp là rác** vì gom cả collection MẸ).
+    Nguồn: bảng `spec_menu_collections` + `spec_group_products` do tab /spec quét từ menu live.
+    Trả list [{handle, title, root, parent, sp: [handle SP]}] + nhóm "SP chưa phân loại".
+    """
+    import db as _db
+    conn = _db.get_conn()
+    try:
+        colls = conn.execute("SELECT handle, title, root, parent, sort_order "
+                             "FROM spec_menu_collections ORDER BY sort_order").fetchall()
+        gp = {}
+        for h, pid in conn.execute("SELECT handle, haravan_id FROM spec_group_products"):
+            gp.setdefault(h, []).append(pid)
+        prods = {r[0]: dict(handle=r[1], title=r[2], cond=r[3], svc=r[4])
+                 for r in conn.execute("SELECT haravan_id, handle, title, condition_kind, "
+                                       "COALESCE(is_service,0) FROM product_spec_index")}
+    except Exception:
+        conn.close()
+        return []
+    conn.close()
+    out, seen = [], set()
+    for c in colls:
+        sp = [prods[i]["handle"] for i in gp.get(c["handle"], []) if i in prods]
+        seen |= set(sp)
+        root = c["root"] or "Khác"
+        out.append({"handle": c["handle"], "title": c["title"], "root": root,
+                    "parent": c["parent"] or "", "sp": sp,
+                    "in_scope": root not in OUT_OF_SCOPE_ROOTS})
+    rest = [p["handle"] for p in prods.values()
+            if p["cond"] == "new" and not p["svc"] and p["handle"] not in seen]
+    if rest:
+        out.append({"handle": UNGROUPED, "title": "SP chưa phân loại",
+                    "root": "⚠️ Chưa phân loại", "parent": "", "sp": rest,
+                    "in_scope": True})
+    return out
+
+
 def _collection_map():
-    """handle collection -> [handle SP] (để đếm ảnh đã gen / tổng)."""
+    """handle collection -> [handle SP]. Lấy từ menu live; hụt thì lùi về file cũ."""
+    groups = _menu_groups()
+    if groups:
+        return {g["handle"]: g["sp"] for g in groups}
     p = NOXOUT / "thumb_collection_map.json"
     if p.exists():
         try:
@@ -181,27 +234,15 @@ AGGREGATE_HANDLES = {
 
 
 def _primary_map():
-    """handle SP -> handle collection 'CHÍNH' (nơi SP hiện đầy đủ 1 lần; các collection
-    khác đánh dấu 'đã xem' + ẩn). Ưu tiên collection CỤ THỂ (theo thứ tự tracking),
-    né các collection tổng/cha trong AGGREGATE_HANDLES; nếu SP CHỈ nằm ở collection
-    tổng thì mới lấy collection tổng làm chính."""
-    cmap = _collection_map()
-    order = [r["handle"] for r in _read_tracking()]
-    seen_order = set(order)
-    for ch in cmap:                       # collection có trong map nhưng không có trong tracking -> nối đuôi
-        if ch not in seen_order:
-            order.append(ch)
+    """handle SP -> collection 'CHÍNH' (nơi SP hiện đầy đủ 1 lần, chỗ khác đánh dấu 'đã xem').
+
+    Từ 22/7/2026 chỉ còn collection LÁ nên không cần né collection mẹ nữa:
+    lấy nhóm ĐẦU TIÊN theo thứ tự menu live làm nhà.
+    """
     primary = {}
-    # lượt 1: chỉ collection CỤ THỂ
-    for ch in order:
-        if ch in AGGREGATE_HANDLES:
-            continue
-        for ph in (cmap.get(ch) or []):
-            primary.setdefault(ph, ch)
-    # lượt 2: SP còn sót (chỉ nằm ở collection tổng) -> lấy tổng làm chính
-    for ch in order:
-        for ph in (cmap.get(ch) or []):
-            primary.setdefault(ph, ch)
+    for g in _menu_groups():
+        for ph in g["sp"]:
+            primary.setdefault(ph, g["handle"])
     return primary
 
 
@@ -238,24 +279,22 @@ def _sp_images(handle, kind="std"):
 # ───────────── pages ─────────────
 
 def thumbs_page():
-    track = _read_tracking()
+    # Phân tầng theo MENU LIVE (đổi 22/7/2026, vợ chốt: bỏ hẳn 4 wave + collection mẹ)
+    groups = _menu_groups()
     log = _preview_log()
-    cmap = _collection_map()
     primary = _primary_map()          # SP -> collection 'nhà'
     done_set = _std_done()
+    synced_set = _load_synced()
     status = _load_status()
-    waves = {}
-    tot = {"sp": 0, "col_done": 0, "approved": 0, "synced": 0, "to_sync": 0}
-    for r in track:
+    waves, waves_off = {}, {}
+    tot = {"sp": 0, "col_done": 0, "approved": 0, "synced": 0, "to_sync": 0,
+           "off_col": 0, "off_sp": 0}
+    for r in groups:
         h = r["handle"]
         lg = log.get(h)
-        total = int(r["so_sp"])
-        # đã gen = số SP của collection đã có thư mục ảnh chuẩn (theo map). Fallback: dùng log.
-        sp_handles = cmap.get(h)
-        if sp_handles is not None:
-            gen = sum(1 for ph in sp_handles if ph in done_set)
-        else:
-            gen = total if lg else 0
+        sp_handles = r["sp"]
+        total = len(sp_handles)
+        gen = sum(1 for ph in sp_handles if ph in done_set)
         pct = round(gen * 100 / total) if total else 0
 
         def _int(v):
@@ -267,19 +306,31 @@ def thumbs_page():
         noimg = _int(lg.get("noimg")) if lg else 0
         gstatus = "done" if (total and gen >= total) else ("partial" if gen else "pending")
         review = (status.get(h) or {}).get("status", "")   # '' | da_duyet | da_sync
-        # 'nhà' của bao nhiêu SP nằm ở chính collection này. own==0 mà vẫn có SP
-        # => toàn bộ SP đã có nhà ở collection khác -> làm MỜ card (không xóa/ẩn).
-        sp_list = cmap.get(h) or []
-        own = sum(1 for ph in sp_list if primary.get(ph) == h)
-        all_seen = bool(sp_list) and own == 0
-        w = waves.setdefault(r["wave"], {"nhom": r["nhom"], "cols": [], "gen": 0, "total": 0})
+        # 'nhà' của bao nhiêu SP nằm ở chính nhóm này. own==0 mà vẫn có SP
+        # => toàn bộ SP đã có nhà ở nhóm khác -> làm MỜ card (không xóa/ẩn).
+        own = sum(1 for ph in sp_handles if primary.get(ph) == h)
+        all_seen = bool(sp_handles) and own == 0
+        # Bẫy 22/7/2026: cờ 'da_sync' đóng từ lần trước KHÔNG tự mở khi có SP/ảnh mới
+        # → thẻ hiện xanh "đã sync" trong khi còn SP chưa đẩy (vợ bắt được 2 con laptop).
+        pending = sum(1 for ph in sp_handles
+                      if (THUMB_ROOT / "std" / ph).exists() and ph not in synced_set)
+        if review == "da_sync" and pending:
+            review = "sync_lech"
+        bucket = waves if r.get("in_scope", True) else waves_off
+        w = bucket.setdefault(r["root"], {"nhom": r["root"], "cols": [], "gen": 0, "total": 0})
         w["cols"].append({
-            "handle": h, "so_sp": total, "gen": gen, "pct": pct,
+            "handle": h, "title": r["title"], "parent": r["parent"],
+            "so_sp": total, "gen": gen, "pct": pct,
+            "synced": sum(1 for ph in sp_handles if ph in synced_set), "pending": pending,
             "rembg": rembg, "noimg": noimg, "status": gstatus, "review": review,
             "own": own, "all_seen": all_seen,
         })
         w["gen"] += gen
         w["total"] += total
+        if not r.get("in_scope", True):        # ngoài phạm vi: không tính vào tiến độ
+            tot["off_col"] += 1
+            tot["off_sp"] += total
+            continue
         tot["sp"] += total
         if gstatus == "done":
             tot["col_done"] += 1
@@ -288,11 +339,13 @@ def thumbs_page():
             tot["to_sync"] += 1
         elif review == "da_sync":
             tot["synced"] += 1
-    for w in waves.values():
+    for w in list(waves.values()) + list(waves_off.values()):
         w["pct"] = round(w["gen"] * 100 / w["total"]) if w["total"] else 0
     n_std = len(done_set)
+    n_in = sum(1 for g in groups if g.get("in_scope", True))
     resp = make_response(render_template("thumbs.html", active="thumbs", waves=waves,
-                                         tot=tot, n_std=n_std, n_col=len(track)))
+                                         waves_off=waves_off, tot=tot, n_std=n_std,
+                                         n_col=n_in))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return resp
 
@@ -352,6 +405,26 @@ def _collection_items(handle):
     items, missing = [], []
     n_img = 0
     primary = _primary_map()           # SP -> collection chính
+    if handle == UNGROUPED:
+        # nhóm SP không thuộc collection nào trên menu live → lấy thẳng từ kho SP
+        import db as _db
+        conn = _db.get_conn()
+        rows = conn.execute("""SELECT handle, title, published, haravan_id FROM product_spec_index
+            WHERE condition_kind='new' AND COALESCE(is_service,0)=0
+              AND haravan_id NOT IN (SELECT haravan_id FROM spec_group_products)
+            ORDER BY title""").fetchall()
+        conn.close()
+        for r in rows:
+            ph = r["handle"]
+            idxs = _sp_images(ph, "std")
+            if idxs or (THUMB_ROOT / "std" / ph).exists():
+                items.append({"handle": ph, "title": r["title"], "imgs": idxs, "seen_at": None,
+                              "live": [], "n_live": 0, "pub": bool(r["published"]),
+                              "pid": r["haravan_id"]})
+                n_img += len(idxs)
+            else:
+                missing.append({"handle": ph, "title": r["title"]})
+        return items, missing, n_img
     cid = _collections().get(handle)
     if cid:
         for p in _products_in(cid):
@@ -360,31 +433,42 @@ def _collection_items(handle):
             prim = primary.get(ph)
             seen_at = prim if (prim and prim != handle) else None
             idxs = _sp_images(ph, "std")
+            live_src = [im.get("src") for im in (p.get("images") or []) if im.get("src")]
+            # SP đang ẨN → trang bán hàng trả 404, phải mở bằng link ADMIN (bẫy 22/7)
+            base = {"handle": ph, "title": p.get("title"), "seen_at": seen_at,
+                    "live": live_src, "n_live": len(live_src),
+                    "pub": bool(p.get("published_at")), "pid": p.get("id")}
             if idxs:
-                items.append({"handle": ph, "title": p.get("title"), "imgs": idxs, "seen_at": seen_at})
+                items.append({**base, "imgs": idxs})
                 n_img += len(idxs)
-            elif (p.get("images") or []) or (THUMB_ROOT / "std" / ph).exists():
-                # SP còn trong tool nhưng hết ảnh chuẩn (vợ xóa hết) -> hiện hàng trống để thêm lại
-                items.append({"handle": ph, "title": p.get("title"), "imgs": [], "seen_at": seen_at})
+            elif live_src or (THUMB_ROOT / "std" / ph).exists():
+                # CHƯA chuẩn hoá (hoặc vợ đã xoá hết ảnh chuẩn) — vẫn có ảnh trên live.
+                # Bẫy 22/7: trước đây chỉ ghi "0 ảnh" làm tưởng SP không có ảnh nào.
+                items.append({**base, "imgs": []})
             else:
                 missing.append({"handle": ph, "title": p.get("title")})
     return items, missing, n_img
 
 
 def thumbs_collection(handle):
-    track = {r["handle"]: r for r in _read_tracking()}
-    row = track.get(handle)
-    wave = row["wave"] if row else ""
-    # contact sheets
+    g = next((x for x in _menu_groups() if x["handle"] == handle), None)
+    row = ({"handle": handle, "nhom": g["root"], "so_sp": len(g["sp"]),
+            "title": g["title"], "parent": g["parent"]} if g else None)
+    wave = g["root"] if g else ""
+    # contact sheet đặt tên theo wave CŨ (W1__handle__p1.jpg) → tìm theo handle, bỏ tiền tố
     cdir = THUMB_ROOT / "_contact"
-    sheets = sorted(p.name for p in cdir.glob(f"{wave}__{handle}__p*.jpg")) if cdir.exists() else []
+    sheets = sorted(p.name for p in cdir.glob(f"*__{handle}__p*.jpg")) if cdir.exists() else []
     items, missing, n_img = _collection_items(handle)
     n_seen = sum(1 for it in items if it.get("seen_at"))
     strow = _load_status().get(handle) or {}
     review = strow.get("status", "")
     groups = _group_items(handle, items, strow.get("groups"))
     n_grp_done = sum(1 for g in groups if g["status"]) if groups else 0
-    return render_template("thumbs_collection.html", active="thumbs",
+    try:
+        shop = hc.load_config().get("shop_domain", "")
+    except Exception:  # noqa: BLE001
+        shop = ""
+    return render_template("thumbs_collection.html", active="thumbs", shop=shop,
                            handle=handle, wave=wave,
                            sheets=sheets, items=items, missing=missing, groups=groups,
                            n_grp_done=n_grp_done,
@@ -788,6 +872,16 @@ def thumbs_sync():
             return jsonify(ok=False, error="Đang sync, đợi xong đã"), 409
         st = _load_status()
         coll = [h for h, v in st.items() if (v or {}).get("status") == "da_duyet"]
+        # Thêm nhóm đã đóng cờ 'da_sync' nhưng SAU ĐÓ có SP/ảnh mới chưa đẩy —
+        # trước đây những nhóm này bị bỏ quên vĩnh viễn (bẫy 22/7/2026).
+        synced = _load_synced()
+        cmap = _collection_map()
+        for h, v in st.items():
+            if (v or {}).get("status") != "da_sync":
+                continue
+            if any((THUMB_ROOT / "std" / ph).exists() and ph not in synced
+                   for ph in cmap.get(h, [])):
+                coll.append(h)
         if not coll:
             return jsonify(ok=False, error="Chưa có collection nào đã duyệt"), 400
         t = threading.Thread(target=_sync_worker, args=(coll,), daemon=True)

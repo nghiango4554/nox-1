@@ -98,19 +98,53 @@
     Đang ẩn <b>{{ n_seen }}</b> SP đã xem ở collection khác cho gọn — tích để hiện lại</label>
   {% endif %}
 
+  {# ── Xem ảnh phóng to: hiện KÍCH THƯỚC THẬT + khung 1000x1000 đỏ để soi căn chỉnh ── #}
+  <div id="zoomwrap" onclick="closeZoom(event)"
+       style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(15,18,26,.82);
+              align-items:center;justify-content:center;flex-direction:column;gap:10px">
+    <div id="zoominfo" style="color:#fff;font-size:13.5px;font-weight:600;text-align:center"></div>
+    <div id="zoombox" style="position:relative;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+      <img id="zoomimg" style="display:block">
+      <div style="position:absolute;inset:0;border:2px solid #e11d48;pointer-events:none"></div>
+      <div style="position:absolute;left:0;right:0;top:50%;border-top:1px dashed rgba(225,29,72,.55);pointer-events:none"></div>
+      <div style="position:absolute;top:0;bottom:0;left:50%;border-left:1px dashed rgba(225,29,72,.55);pointer-events:none"></div>
+      <div id="zoom85" style="position:absolute;border:1px dashed rgba(225,29,72,.4);pointer-events:none"></div>
+    </div>
+    <div style="color:#cbd5e1;font-size:12px">
+      khung đỏ = 1000×1000 · nét đứt giữa = tâm · ô đứt trong = vùng 85% chuẩn ·
+      bấm ra ngoài hoặc Esc để đóng</div>
+  </div>
+
   {% macro sprow(it) %}
       <div class="sprow{% if it.seen_at %} seen{% endif %}" data-handle="{{ it.handle }}" id="sp-{{ it.handle }}">
-        <div class="t">{{ it.title or it.handle }} <small>{{ it.imgs|length }} ảnh</small>
+        <div class="t">{{ it.title or it.handle }}
+          {% if it.imgs %}<small>{{ it.imgs|length }} ảnh chuẩn</small>
+          {% elif it.n_live %}<small style="color:#b45309;font-weight:600">chưa chuẩn hoá · {{ it.n_live }} ảnh đang có trên live</small>
+          {% else %}<small>0 ảnh</small>{% endif %}
           {% if it.seen_at %}<span class="seenbadge">👁 đã xem ở {{ it.seen_at }}</span>{% endif %}
           <span class="saved">✓ đã lưu thứ tự</span>
-          <a class="live-btn" href="https://sintech.vn/products/{{ it.handle }}" target="_blank" rel="noopener" title="Mở trang sản phẩm trên web">🔗 Xem live</a>
+          {% if it.pub is defined and not it.pub %}
+            <span class="seenbadge" style="background:#f1f2f6;color:#5b647a">🚫 đang ẩn — không có trang live</span>
+            {% if shop and it.pid %}<a class="live-btn" href="https://{{ shop }}/admin/products/{{ it.pid }}" target="_blank" rel="noopener" title="Mở trong trang quản trị Haravan">🔗 Mở trong admin</a>{% endif %}
+          {% else %}
+            <a class="live-btn" href="https://sintech.vn/products/{{ it.handle }}" target="_blank" rel="noopener" title="Mở trang sản phẩm trên web">🔗 Xem live</a>
+          {% endif %}
           <button class="redo-btn" onclick="redo(this)">↻ Làm lại (không xóa nền)</button>
         </div>
         <div class="strip">
+          {% if not it.imgs and it.live %}
+            {% for src in it.live[:8] %}
+            <figure style="opacity:.85">
+              <img loading="lazy" src="{{ src }}" referrerpolicy="no-referrer"
+                   style="cursor:zoom-in">
+              <figcaption style="color:#b45309">live #{{ loop.index }}</figcaption>
+            </figure>
+            {% endfor %}
+          {% endif %}
           {% for idx in it.imgs %}
           <figure draggable="true" data-idx="{{ idx }}">
             <button class="delx" title="Xóa ảnh này" onclick="delImg(event,'{{ it.handle }}',{{ idx }})">✕</button>
-            <img loading="lazy"
+            <img loading="lazy" style="cursor:zoom-in"
                  src="{{ url_for('thumbs_img', kind='std', name=it.handle + '/' + idx|string + '.jpg') }}">
             <figcaption>#{{ loop.index }}</figcaption>
           </figure>
@@ -184,6 +218,83 @@
   {% endif %}
 
 <script>
+// ── Xem ảnh phóng to + kích thước thật + khung 1000x1000 ──
+function zoomImg(ev, img, title, idx){
+  ev.preventDefault(); ev.stopPropagation();
+  const wrap = document.getElementById('zoomwrap');
+  const box  = document.getElementById('zoombox');
+  const big  = document.getElementById('zoomimg');
+  const info = document.getElementById('zoominfo');
+  const g85  = document.getElementById('zoom85');
+  const probe = new Image();
+  probe.onload = () => {
+    const w = probe.naturalWidth, h = probe.naturalHeight;
+    // hiển thị vừa màn hình nhưng GIỮ tỉ lệ thật
+    const max = Math.min(window.innerHeight - 190, window.innerWidth - 120, 760);
+    const scale = max / Math.max(w, h);
+    big.style.width = (w * scale) + 'px';
+    big.style.height = (h * scale) + 'px';
+    const chuan = (w === 1000 && h === 1000);
+    info.innerHTML = `${title} — ảnh #${idx}<br>` +
+      `<span style="font-weight:800;font-size:16px;color:${chuan ? '#4ade80' : '#fca5a5'}">` +
+      `${w} × ${h} px</span> ` +
+      (chuan ? '<span style="color:#4ade80">✓ đúng khung chuẩn</span>'
+             : '<span style="color:#fca5a5">✗ KHÔNG phải 1000×1000</span>') +
+      ` <span style="color:#94a3b8;font-weight:400">· đang xem ở ${Math.round(scale*100)}%</span>`;
+    // ô 85% nằm giữa
+    const pad = (1 - 0.85) / 2 * 100;
+    g85.style.left = g85.style.right = g85.style.top = g85.style.bottom = pad + '%';
+    big.src = img.src;
+    wrap.style.display = 'flex';
+    _zoomAt = Date.now();
+  };
+  probe.src = img.src;
+}
+let _zoomAt = 0;
+function closeZoom(ev){
+  if (ev && ev.target && ev.target.id === 'zoomimg') return;   // bấm vào ảnh thì giữ
+  // Cú click mở modal cũng bắn tiếp sự kiện `click` trúng lớp phủ vừa hiện
+  // → phải bỏ qua, không thì modal đóng ngay lập tức (bẫy 22/7).
+  if (Date.now() - _zoomAt < 450) return;
+  document.getElementById('zoomwrap').style.display = 'none';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeZoom(); });
+
+// Ô ảnh bật kéo-thả (đổi thứ tự) nên trình duyệt hay NUỐT cú click → sự kiện click
+// không bắn ra. Bắt bằng pointerdown/up: di chuyển <5px và nhấn nhanh = click, không phải kéo.
+(function(){
+  let sx = 0, sy = 0, st = 0, target = null, last = 0;
+  // CSS `.strip img{pointer-events:none}` → sự kiện rơi vào <figure>, KHÔNG phải <img>.
+  const figOf = el => (el && el.closest) ? el.closest('.strip figure') : null;
+  const onDown = e => {
+    const f = figOf(e.target);
+    target = (f && f.querySelector('img')) || null;
+    sx = e.clientX; sy = e.clientY; st = Date.now();
+  };
+  document.addEventListener('pointerdown', onDown, true);
+  document.addEventListener('mousedown', onDown, true);   // bắt cả chuột cổ điển
+  const onUp = e => {
+    if (!target) return;
+    if (e.target.classList && e.target.classList.contains('delx')) { target = null; return; }
+    const moved = Math.hypot(e.clientX - sx, e.clientY - sy);
+    const quick = Date.now() - st < 700;
+    const f = figOf(e.target);
+    const im = f && f.querySelector('img');
+    if (im === target && moved < 5 && quick && Date.now() - last > 350) {
+      last = Date.now();
+      const fig = target.closest('figure');
+      const cap = fig && fig.querySelector('figcaption');
+      const row = target.closest('.sprow');
+      const t = row ? (row.querySelector('.t') || {}).childNodes[0] : null;
+      zoomImg(e, target, (t ? t.textContent : '').trim().slice(0, 80),
+              cap ? cap.textContent.replace(/[^0-9]/g, '') : '');
+    }
+    target = null;
+  };
+  document.addEventListener('pointerup', onUp, true);
+  document.addEventListener('mouseup', onUp, true);
+})();
+
 function sw(v){
   document.getElementById('view-sp').classList.toggle('hide', v!=='sp');
   document.getElementById('view-sheet').classList.toggle('hide', v!=='sheet');

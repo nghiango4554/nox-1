@@ -12,6 +12,7 @@
   .kpi b{display:block;font-size:26px;line-height:1.1}
   .kpi span{font-size:12.5px;color:var(--ink-3)}
   .wave{background:#fff;border:1px solid var(--line,#eadfe6);border-radius:14px;padding:16px;margin-bottom:16px}
+  .card .sub{font-size:11px;color:var(--ink-3,#98a0b3);margin:-2px 0 6px}
   .wave h3{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
   .card{border:1px solid #eadfe6;border-radius:11px;padding:11px 13px;text-decoration:none;color:inherit;display:block;transition:.12s}
@@ -77,8 +78,8 @@
 
   {% for wkey, w in waves.items() %}
   <div class="wave">
-    <h3><span class="pill ready">{{ wkey }}</span> {{ w.nhom }}
-      <span style="font-weight:400;color:var(--ink-3);font-size:13px">· {{ w.cols|length }} collection · {{ w.gen }}/{{ w.total }} ảnh</span>
+    <h3>{{ w.nhom }}
+      <span style="font-weight:400;color:var(--ink-3);font-size:13px">· {{ w.cols|length }} danh mục · {{ w.gen }}/{{ w.total }} ảnh</span>
       <span class="wpct">{{ w.pct }}%</span></h3>
     <div class="wbar"><i style="width:{{ w.pct }}%"></i></div>
     <div class="grid">
@@ -86,12 +87,15 @@
       {% if c.gen %}
         <a class="card {{ 'approved' if c.review=='da_duyet' }}{{ 'synced' if c.review=='da_sync' }}{{ ' allseen' if c.all_seen }}" href="{{ url_for('thumbs_collection', handle=c.handle) }}"
            {% if c.all_seen %}title="Toàn bộ SP của collection này đã có ở collection khác — không có gì mới để duyệt"{% endif %}>
-          {% if c.all_seen %}<span class="tick allseen">đã xem ở nơi khác</span>
+          {% if c.review=='sync_lech' %}<span class="tick" style="background:#fff4e5;color:#b45309;border-color:#f0c987">⚠ còn {{ c.pending }} SP chưa sync</span>
+          {% elif c.all_seen %}<span class="tick allseen">đã xem ở nơi khác</span>
           {% elif c.review=='da_sync' %}<span class="tick sync">✓ đã sync</span>
           {% elif c.review=='da_duyet' %}<span class="tick duyet">✓ đã duyệt</span>{% endif %}
-          <div class="h">{{ c.handle }}</div>
+          <div class="h">{{ c.title or c.handle }}</div>
+          {% if c.parent %}<div class="sub">{{ c.parent }}</div>{% endif %}
           <div class="m">
             <span class="frac">{{ c.gen }}/{{ c.so_sp }}</span>
+            {% if c.synced %}<span class="pill ready">{{ c.synced }} đã sync</span>{% endif %}
             {% if c.status == 'done' %}<span class="pill ready">xong</span>
             {% else %}<span class="pill warn">đang gen</span>{% endif %}
             {% if c.rembg %}<span class="pill warn">{{ c.rembg }} xóa nền</span>{% endif %}
@@ -100,16 +104,44 @@
           <div class="pbar {{ 'full' if c.status=='done' }}"><i style="width:{{ c.pct }}%"></i></div>
         </a>
       {% else %}
-        <div class="card" style="opacity:.6;cursor:default">
-          <div class="h">{{ c.handle }}</div>
+        <a class="card" style="opacity:.72" href="{{ url_for('thumbs_collection', handle=c.handle) }}">
+          <div class="h">{{ c.title or c.handle }}</div>
+          {% if c.parent %}<div class="sub">{{ c.parent }}</div>{% endif %}
           <div class="m"><span class="frac">0/{{ c.so_sp }}</span><span class="pill pending">chưa gen</span></div>
           <div class="pbar"><i style="width:0%"></i></div>
-        </div>
+        </a>
       {% endif %}
       {% endfor %}
     </div>
   </div>
   {% endfor %}
+
+{% if waves_off %}
+<details style="margin-top:18px">
+  <summary style="cursor:pointer;font-size:14px;font-weight:600;padding:10px 14px;
+                  background:#f4f5f8;border:1px solid var(--line,#eadfe6);border-radius:12px">
+    🚫 Ngoài phạm vi — {{ tot.off_col }} danh mục · {{ tot.off_sp }} SP
+    <span style="font-weight:400;color:var(--ink-3);font-size:12.5px">
+      (PC build sẵn / combo · dịch vụ &amp; sửa chữa — vợ chốt hiện không làm ảnh chuẩn)</span>
+  </summary>
+  {% for wkey, w in waves_off.items() %}
+  <div class="wave" style="opacity:.72;margin-top:12px">
+    <h3>{{ w.nhom }}
+      <span style="font-weight:400;color:var(--ink-3);font-size:13px">· {{ w.cols|length }} danh mục · {{ w.gen }}/{{ w.total }} ảnh</span></h3>
+    <div class="grid">
+      {% for c in w.cols %}
+      <a class="card" style="opacity:.8" href="{{ url_for('thumbs_collection', handle=c.handle) }}">
+        <div class="h">{{ c.title or c.handle }}</div>
+        {% if c.parent %}<div class="sub">{{ c.parent }}</div>{% endif %}
+        <div class="m"><span class="frac">{{ c.gen }}/{{ c.so_sp }}</span>
+          <span class="pill pending">ngoài phạm vi</span></div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</details>
+{% endif %}
 
 <script>
 // Trang khôi phục từ cache (bấm Back) -> tải lại để thấy trạng thái duyệt mới nhất
