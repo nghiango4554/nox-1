@@ -1,0 +1,233 @@
+{% extends "redesign_base.html" %}
+{% set active = 'spec' %}
+{% block title %}Thông số SP · Sintech Hub{% endblock %}
+{% block page_title %}<span style="font-weight:600">🧬 Thông số SP</span>{% endblock %}
+{% block page_actions %}
+<button class="btn" onclick="sxScan()" id="sx-scan-btn">🔄 Quét lại từ Haravan</button>
+{% endblock %}
+{% block content %}
+<style>
+  .sx-top{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;margin-bottom:16px}
+  .sx-search{flex:1;min-width:280px;position:relative}
+  .sx-search input{width:100%;padding:11px 14px;border-radius:9px;border:1px solid var(--line);
+    background:var(--surface);color:var(--ink);font-size:14px}
+  .sx-search input::placeholder{color:var(--ink-3)}
+  .sx-res{position:absolute;z-index:40;left:0;right:0;top:46px;background:var(--surface);
+    border:1px solid var(--line);border-radius:9px;max-height:380px;overflow:auto;
+    box-shadow:0 14px 38px rgba(28,34,48,.18)}
+  .sx-res a{display:flex;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line-2);
+    color:var(--ink);text-decoration:none;font-size:13px}
+  .sx-res a:hover{background:var(--surface-2)}
+  .sx-res img{width:34px;height:34px;object-fit:contain;background:#fff;border-radius:5px;flex:none}
+  .sx-stats{display:flex;gap:10px;flex-wrap:wrap}
+  .sx-kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    padding:10px 14px;min-width:104px;color:var(--ink)}
+  .sx-kpi b{display:block;font-size:20px;line-height:1.2}
+  .sx-kpi span{font-size:11px;color:var(--ink-3)}
+  .sx-bar{height:8px;border-radius:5px;background:var(--surface-2);overflow:hidden;margin-top:6px}
+  .sx-bar i{display:block;height:100%;background:linear-gradient(90deg,#22c55e,#16a34a)}
+  .sx-root{margin:18px 0 8px;display:flex;align-items:baseline;gap:10px}
+  .sx-root h3{margin:0;font-size:15px;color:var(--ink)}
+  .sx-root small{color:var(--ink-3);font-size:11.5px}
+  .sx-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:10px}
+  .sx-card{display:block;text-decoration:none;color:var(--ink);border:1px solid var(--line);
+    border-radius:10px;padding:11px 13px;background:var(--surface);transition:.14s}
+  .sx-card:hover{border-color:var(--accent-to,#d75151);background:var(--surface-2);
+    transform:translateY(-1px);box-shadow:0 8px 22px -12px rgba(28,34,48,.28)}
+  .sx-card .t{font-weight:600;font-size:13.5px;margin-bottom:2px}
+  .sx-card .p{font-size:11px;color:var(--ink-3);margin-bottom:7px}
+  .sx-card .n{font-size:11.5px;display:flex;justify-content:space-between;gap:8px;color:var(--ink-2)}
+  .sx-empty{opacity:.5}
+  .sx-badge{font-size:10.5px;padding:1px 7px;border-radius:20px;font-weight:600}
+  .ok{background:#dcfce7;color:#15803d}
+  .bad{background:#fee2e2;color:#b91c1c}
+  .other{background:#e8eaf0;color:#4b5563}
+  .sx-log{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;background:#0f1420;color:#d7dce8;
+    border-radius:8px;padding:10px;max-height:170px;overflow:auto;white-space:pre-wrap}
+  .sx-tbl{width:100%;border-collapse:collapse;font-size:13px;background:var(--surface);
+    border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .sx-tbl th{text-align:left;padding:8px 11px;background:var(--surface-2);color:var(--ink-3);
+    font-size:11.5px;text-transform:uppercase}
+  .sx-tbl td{padding:7px 11px;border-top:1px solid var(--line-2);color:var(--ink)}
+  .sx-log-card{border:1px solid var(--line);border-radius:10px;background:var(--surface);
+    overflow:hidden;margin:14px 0}
+  .sx-log-head{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    padding:9px 12px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+  .sx-tabs{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;
+    background:var(--surface)}
+  .sx-tabs button{background:transparent;border:none;color:var(--ink-2);padding:6px 14px;
+    font-size:12.5px;cursor:pointer;font-weight:600}
+  .sx-tabs button.on{background:linear-gradient(135deg,#ff9966,#d75151);color:#fff}
+  .sx-pager{display:flex;gap:5px;align-items:center;padding:8px 12px;border-top:1px solid var(--line-2)}
+  .sx-pager button{border:1px solid var(--line);background:var(--surface);color:var(--ink);
+    border-radius:6px;padding:3px 9px;font-size:12px;cursor:pointer}
+  .sx-pager button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .sx-pager button:disabled{opacity:.4;cursor:default}
+</style>
+
+<p style="font-size:12.5px;color:var(--ink-2);margin:0 0 14px">
+  Khối thông số kỹ thuật trong mô tả sản phẩm — nhóm theo collection đang hiện trên menu sintech.vn.
+  Chỉ khối trích dẫn nằm <b>ở đuôi mô tả</b> mới được theme bốc vào khung "Thông số kỹ thuật".
+</p>
+
+<div class="sx-top">
+  <div class="sx-search">
+    <input id="sx-q" type="text" placeholder="🔍 Tìm sản phẩm theo tên / handle / ID rồi bấm để sửa thông số…"
+           autocomplete="off" oninput="sxSearch()">
+    <div class="sx-res" id="sx-res" style="display:none"></div>
+  </div>
+  <div class="sx-stats">
+    <div class="sx-kpi"><b>{{ total }}</b><span>SP trong Haravan</span></div>
+    <div class="sx-kpi"><b>{{ new_total }}</b><span>hàng NEW</span></div>
+    <div class="sx-kpi"><b style="color:#15803d">{{ ok_total }}</b><span>đúng chuẩn</span>
+      <div class="sx-bar"><i style="width:{{ (ok_total * 100 // (new_total or 1)) }}%"></i></div></div>
+    <div class="sx-kpi"><b style="color:#b91c1c">{{ new_total - ok_total }}</b><span>cần sửa</span></div>
+    <div class="sx-kpi"><b style="color:#4b5563">{{ service }}</b><span>trang dịch vụ<br>(ngoài phạm vi)</span></div>
+  </div>
+  <div style="font-size:11px;align-self:center;color:var(--ink-3)">Lần quét gần nhất:<br>{{ scanned_at or '—' }}</div>
+</div>
+
+<div id="sx-log-wrap" style="display:none;margin-bottom:14px"><div class="sx-log" id="sx-log"></div></div>
+
+<div class="sx-log-card">
+  <div class="sx-log-head">
+    <div class="sx-tabs">
+      <button id="tab-vo" class="on" onclick="loadLog('vo',1)">🙋‍♀️ Em đã sync</button>
+      <button id="tab-nox" onclick="loadLog('nox',1)">🤖 Anh sync</button>
+    </div>
+    <div id="log-count" style="font-size:11.5px;color:var(--ink-3)"></div>
+  </div>
+  <table class="sx-tbl" style="border:none;border-radius:0">
+    <thead><tr>
+      <th style="width:132px">Thời gian</th><th>Nội dung</th>
+      <th style="width:150px">Dạng sau khi sync</th><th style="width:64px">Dòng</th>
+    </tr></thead>
+    <tbody id="log-body"><tr><td colspan="4" style="color:var(--ink-3)">Đang tải…</td></tr></tbody>
+  </table>
+  <div class="sx-pager" id="log-pager"></div>
+</div>
+
+<details style="margin-bottom:6px">
+  <summary style="cursor:pointer;font-size:13px">📊 Chi tiết dạng hiển thị thông số ({{ fmt_rows|length }} dạng)</summary>
+  <table class="sx-tbl" style="margin-top:8px">
+    <thead><tr><th>Dạng hiển thị</th><th style="width:110px">Đánh giá</th><th style="width:90px">SP</th></tr></thead>
+    <tbody>
+      {% for f in fmt_rows %}
+      <tr>
+        <td>{{ f.label }}</td>
+        <td><span class="sx-badge {{ 'ok' if f.verdict == 'ĐÚNG' else ('other' if f.verdict == 'KHUÔN RIÊNG' else 'bad') }}">{{ f.verdict }}</span></td>
+        <td><b>{{ f.count }}</b></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+
+<a class="sx-card" href="{{ url_for('spec_group_page', handle='__ungrouped__') }}"
+   style="display:block;margin:14px 0;border-color:#f0a020;background:#fff8ec">
+  <div class="t">📦 SP chưa phân loại</div>
+  <div class="p">Không nằm trong collection nào đang hiện trên menu live</div>
+  <div class="n"><span>{{ ungrouped_count }} sản phẩm NEW</span><span class="sx-badge bad">cần gán danh mục</span></div>
+</a>
+
+{% for r in roots %}
+<div class="sx-root">
+  <h3>{{ r.root }}</h3>
+  <small>{{ r.groups|length }} danh mục · {{ r.new_count }} SP new · {{ r.ok_count }} đúng chuẩn</small>
+</div>
+<div class="sx-grid">
+  {% for g in r.groups %}
+  <a class="sx-card {% if g.new_count == 0 %}sx-empty{% endif %}"
+     href="{{ url_for('spec_group_page', handle=g.handle) }}{% if g.tag_filter %}?tag={{ g.tag_filter }}{% endif %}">
+    <div class="t">{{ g.title }}{% if g.approved_at %} <span class="sx-badge ok">đã duyệt</span>{% endif %}</div>
+    <div class="p">{% if g.approved_at %}duyệt lúc {{ g.approved_at }}{% else %}{{ g.parent }}{% endif %}{% if g.tag_filter %} · lọc tag {{ g.tag_filter }}{% endif %}</div>
+    <div class="n">
+      <span>{{ g.new_count }} SP new{% if g.product_count != g.new_count %} <span style="color:var(--ink-3)">/ {{ g.product_count }}</span>{% endif %}</span>
+      {% if g.new_count %}
+        <span class="sx-badge {{ 'ok' if g.ok_count == g.new_count else 'bad' }}">{{ g.ok_count }}/{{ g.new_count }} đúng</span>
+      {% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endfor %}
+
+<script>
+// ───── nhật ký sync: 2 tab, 10 dòng/trang ─────
+let LOG_ACTOR = 'vo';
+async function loadLog(actor, page) {
+  LOG_ACTOR = actor;
+  document.getElementById('tab-vo').classList.toggle('on', actor === 'vo');
+  document.getElementById('tab-nox').classList.toggle('on', actor === 'nox');
+  const d = await (await fetch(`/spec/api/log?actor=${actor}&page=${page}`)).json();
+  const tb = document.getElementById('log-body');
+  document.getElementById('log-count').textContent =
+    d.total ? `${d.total} lượt · trang ${d.page}/${d.pages}` : '';
+  if (!d.rows.length) {
+    tb.innerHTML = `<tr><td colspan="4" style="color:var(--ink-3)">${
+      actor === 'vo' ? 'Em chưa sync sản phẩm nào từ tab này. Duyệt 1 danh mục hoặc sửa 1 SP là hiện ở đây.'
+                     : 'Chưa có lượt nào.'}</td></tr>`;
+    document.getElementById('log-pager').innerHTML = ''; return;
+  }
+  tb.innerHTML = d.rows.map(r => r.is_collection
+    ? `<tr style="background:#fff8ec"><td>${r.when}</td>
+         <td colspan="3">✅ <b>Đã duyệt danh mục "${r.title}"</b>
+            <span style="color:var(--ink-3)">${r.note ? '· ' + r.note : ''}</span></td></tr>`
+    : `<tr><td>${r.when}</td>
+         <td><a class="sg-t" href="/spec/p/${r.haravan_id}">${r.title || ''}</a>
+             <div style="font-size:11px;color:var(--ink-3)">${r.note || ''}</div></td>
+         <td><span class="sx-badge ${r.spec_format === 'A_BLOCKQUOTE' ? 'ok' : 'bad'}">
+             ${r.spec_format === 'A_BLOCKQUOTE' ? 'đúng chuẩn' : (r.spec_format || '—')}</span></td>
+         <td>${r.pair_count || 0}</td></tr>`).join('');
+  let p = '';
+  for (let i = 1; i <= d.pages && i <= 12; i++)
+    p += `<button class="${i === d.page ? 'on' : ''}" onclick="loadLog('${actor}',${i})">${i}</button>`;
+  if (d.pages > 12) p += `<span style="font-size:11.5px;color:var(--ink-3)">… ${d.pages} trang</span>`;
+  document.getElementById('log-pager').innerHTML = p;
+}
+loadLog('vo', 1);
+
+let sxT = null;
+function sxSearch() {
+  clearTimeout(sxT);
+  sxT = setTimeout(async () => {
+    const q = document.getElementById('sx-q').value.trim();
+    const box = document.getElementById('sx-res');
+    if (q.length < 2) { box.style.display = 'none'; return; }
+    const r = await fetch('/spec/api/search?q=' + encodeURIComponent(q));
+    const d = await r.json();
+    if (!d.items.length) { box.innerHTML = '<a>Không tìm thấy</a>'; box.style.display = 'block'; return; }
+    box.innerHTML = d.items.map(i => `
+      <a href="/spec/p/${i.haravan_id}">
+        <img src="${i.image_src || ''}" onerror="this.style.visibility='hidden'">
+        <span style="flex:1">${i.title}
+          <br><small style="color:#8b93a5">${i.product_type || ''} · ${i.pair_count} dòng thông số</small></span>
+        <span class="sx-badge ${i.condition_kind !== 'new' ? 'other' : (i.verdict === 'ĐÚNG' ? 'ok' : 'bad')}">
+          ${i.condition_kind !== 'new' ? i.condition_kind : i.verdict}</span>
+      </a>`).join('');
+    box.style.display = 'block';
+  }, 220);
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('.sx-search')) document.getElementById('sx-res').style.display = 'none';
+});
+
+async function sxScan() {
+  const btn = document.getElementById('sx-scan-btn');
+  if (!confirm('Quét lại toàn bộ SP từ Haravan + menu live? Mất khoảng 1-2 phút.')) return;
+  btn.disabled = true; btn.textContent = '⏳ Đang quét…';
+  document.getElementById('sx-log-wrap').style.display = 'block';
+  await fetch('/spec/scan', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                             body: JSON.stringify({what: 'all'})});
+  const tick = setInterval(async () => {
+    const d = await (await fetch('/spec/scan-status')).json();
+    document.getElementById('sx-log').textContent = (d.log || []).join('\n');
+    if (!d.running) {
+      clearInterval(tick);
+      if (d.error) { alert('Lỗi quét: ' + d.error); btn.disabled = false; btn.textContent = '🔄 Quét lại từ Haravan'; }
+      else location.reload();
+    }
+  }, 1500);
+}
+</script>
+{% endblock %}

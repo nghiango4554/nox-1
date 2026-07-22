@@ -1,0 +1,111 @@
+{% extends "redesign_base.html" %}
+{% set active = 'spec' %}
+{% block title %}{{ title }} · Thông số SP{% endblock %}
+{% block page_title %}<span style="font-weight:600">🧬 {{ title }}</span>{% endblock %}
+{% block page_actions %}
+{% if handle != '__ungrouped__' %}
+<button class="btn btn-primary" id="btn-approve" onclick="approveCollection(this)">✅ Duyệt danh mục này</button>
+{% endif %}
+<a class="btn" href="{{ url_for('spec_index_page') }}">← Tất cả danh mục</a>
+{% endblock %}
+{% block content %}
+<style>
+  .sg-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .sg-filter input{padding:8px 12px;border-radius:8px;border:1px solid var(--line);
+    background:var(--surface);color:var(--ink);font-size:13px;min-width:240px}
+  .sg-filter input::placeholder{color:var(--ink-3)}
+  table.sg{width:100%;border-collapse:collapse;font-size:13px;background:var(--surface)}
+  table.sg th{text-align:left;padding:9px 11px;border-bottom:1px solid var(--line);
+    font-size:11.5px;text-transform:uppercase;color:var(--ink-3);position:sticky;top:0;
+    background:var(--surface-2);z-index:2}
+  table.sg td{padding:7px 11px;border-bottom:1px solid var(--line-2);vertical-align:middle;color:var(--ink)}
+  table.sg tr:hover td{background:var(--surface-2)}
+  table.sg img{width:38px;height:38px;object-fit:contain;background:#fff;border-radius:5px}
+  .sg-t{color:var(--ink);text-decoration:none;font-weight:500}
+  .sg-t:hover{color:#c2410c;text-decoration:underline}
+  .sx-badge{font-size:10.5px;padding:1px 7px;border-radius:20px;font-weight:600;white-space:nowrap}
+  .ok{background:#dcfce7;color:#15803d}
+  .bad{background:#fee2e2;color:#b91c1c}
+  .other{background:#e8eaf0;color:#4b5563}
+  .sg-issue{color:#b45309;font-size:11px;font-weight:600}
+  .sg-muted{color:var(--ink-3)}
+</style>
+
+<div class="sg-head">
+  <div>
+    <div class="sg-muted" style="font-size:12px">{{ parent }}</div>
+    <div style="font-size:13px;margin-top:3px">
+      <b>{{ rows|length }}</b> sản phẩm ·
+      <span style="color:#15803d;font-weight:600">{{ rows|selectattr('verdict','equalto','ĐÚNG')|list|length }} đúng chuẩn</span> ·
+      <span style="color:#b91c1c;font-weight:600">{{ rows|rejectattr('verdict','equalto','ĐÚNG')|list|length }} cần sửa</span>
+    </div>
+  </div>
+  <div class="sg-filter">
+    <input id="sg-q" type="text" placeholder="Lọc nhanh trong danh mục này…" oninput="sgFilter()">
+    <label style="font-size:12px;margin-left:10px">
+      <input type="checkbox" {% if show_all %}checked{% endif %}
+             onchange="location.search = this.checked ? '?{% if tag %}tag={{ tag }}&{% endif %}all=1' : '?{% if tag %}tag={{ tag }}{% endif %}'">
+      hiện cả hàng cũ/tray
+    </label>
+  </div>
+</div>
+
+<div style="max-height:calc(100vh - 230px);overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)">
+<table class="sg" id="sg-tbl">
+  <thead><tr>
+    <th style="width:48px"></th><th>Sản phẩm</th><th style="width:130px">Loại</th>
+    <th style="width:186px">Dạng thông số</th><th style="width:56px">Dòng</th>
+    <th style="width:210px">Nguồn research</th><th style="width:96px">Vấn đề</th>
+  </tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td><img loading="lazy" src="{{ r.image_src or '' }}" onerror="this.style.visibility='hidden'"></td>
+      <td>
+        <a class="sg-t" href="{{ url_for('spec_product_page', pid=r.haravan_id) }}">{{ r.title }}</a>
+        {% if not r.published %}<span class="sx-badge other">ẩn</span>{% endif %}
+        {% if r.condition_kind != 'new' %}<span class="sx-badge other">{{ r.condition_kind }}</span>{% endif %}
+      </td>
+      <td class="sg-muted">{{ r.product_type }}</td>
+      <td><span class="sx-badge {{ 'ok' if r.verdict == 'ĐÚNG' else ('other' if r.verdict == 'KHUÔN RIÊNG' else 'bad') }}">{{ r.verdict or '—' }}</span>
+        <span style="font-size:11.5px">{{ r.fmt_label }}</span></td>
+      <td>{{ r.pair_count }}</td>
+      <td>
+        {% if r.src_host %}
+          <a href="{{ url_for('spec_product_page', pid=r.haravan_id) }}" class="sg-t"
+             title="{{ r.src_why }}">{{ r.src_host }}</a>
+          <div class="sg-muted" style="font-size:11px">{{ r.src_rows }} dòng · đã soi {{ r.src_seen }} trang</div>
+        {% elif r.src_seen %}
+          <span class="sx-badge bad">không nguồn nào đạt</span>
+          <div class="sg-muted" style="font-size:11px">đã soi {{ r.src_seen }} trang · xem lý do trong SP</div>
+        {% else %}<span class="sg-muted">chưa tra</span>{% endif %}
+      </td>
+      <td>{% if r.issue_count %}<span class="sg-issue">⚠ {{ r.issue_count }}</span>{% else %}<span class="sg-muted">—</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if not rows %}<p class="sg-muted" style="margin-top:14px">Danh mục này chưa có sản phẩm nào (hoặc chỉ có hàng cũ — bật ô "hiện cả hàng cũ/tray").</p>{% endif %}
+
+<script>
+async function approveCollection(btn) {
+  if (!confirm('Xác nhận đã duyệt xong danh mục "{{ title }}"?\nMột dòng "đã duyệt" sẽ hiện ở bảng nhật ký trang chính.')) return;
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '⏳ Đang lưu…';
+  try {
+    const r = await fetch('/spec/g/{{ handle }}/approve?tag={{ tag }}', {method: 'POST'});
+    const d = await r.json();
+    btn.innerHTML = d.ok ? '✅ Đã duyệt' : '❌ Lỗi';
+    if (d.ok) btn.style.background = '#dcfce7', btn.style.color = '#15803d';
+  } catch (e) { btn.innerHTML = '❌ ' + e; btn.disabled = false; return; }
+}
+
+function sgFilter() {
+  const q = document.getElementById('sg-q').value.toLowerCase();
+  document.querySelectorAll('#sg-tbl tbody tr').forEach(tr => {
+    tr.style.display = tr.innerText.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

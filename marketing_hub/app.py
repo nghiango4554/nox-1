@@ -37,6 +37,7 @@ from routes import products as routes_products
 from routes import blog_content_center as routes_blog_content_center
 from routes import seo_opportunity as routes_seo_opportunity
 from routes import thumbs as routes_thumbs
+from routes import spec_manager as routes_spec_manager
 
 ROOT = Path(__file__).parent
 
@@ -75,6 +76,7 @@ routes_products.register(app)
 routes_blog_content_center.register(app)
 routes_seo_opportunity.register(app)
 routes_thumbs.register(app)
+routes_spec_manager.register(app)
 
 
 @app.template_filter("from_json")

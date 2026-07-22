@@ -1,0 +1,324 @@
+{% extends "redesign_base.html" %}
+{% set active = 'spec' %}
+{% block title %}{{ p.title if not missing else 'Không thấy SP' }} · Thông số SP{% endblock %}
+{% block page_title %}<span style="font-weight:600">🧬 Sửa thông số</span>{% endblock %}
+{% block page_actions %}
+<a class="btn" href="{{ url_for('spec_index_page') }}">← Danh mục</a>
+{% endblock %}
+{% block content %}
+{% if missing %}
+  <p>Không tìm thấy SP <b>{{ pid }}</b> trong kho. Bấm "Quét lại từ Haravan" ở trang chính.</p>
+{% else %}
+<style>
+  .se-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;color:var(--ink)}
+  .se-head img{width:74px;height:74px;object-fit:contain;background:#fff;border-radius:8px;
+    border:1px solid var(--line)}
+  .se-title{font-size:16px;font-weight:600;margin-bottom:4px}
+  .se-muted{color:var(--ink-3)}
+  .sx-badge{font-size:10.5px;padding:1px 8px;border-radius:20px;font-weight:600}
+  .ok{background:#dcfce7;color:#15803d}
+  .bad{background:#fee2e2;color:#b91c1c}
+  .other{background:#e8eaf0;color:#4b5563}
+  .se-issues{background:#fff8ec;border:1px solid #f0c987;border-radius:9px;color:#7c4a03;
+    padding:9px 13px;font-size:12.5px;margin-bottom:14px}
+  .se-issues li{margin:2px 0}
+  .se-box{border:1px solid var(--line);border-radius:10px;margin-bottom:14px;overflow:hidden;
+    background:var(--surface)}
+  .se-boxh{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:9px 13px;background:var(--surface-2);border-bottom:1px solid var(--line);
+    font-size:13px;font-weight:600;color:var(--ink)}
+  .se-tb{display:flex;gap:3px;flex-wrap:wrap;padding:6px 9px;border-bottom:1px solid var(--line);
+    background:var(--surface-2)}
+  .se-tb button{background:var(--surface);border:1px solid var(--line);color:var(--ink);border-radius:6px;
+    padding:4px 9px;font-size:12px;cursor:pointer}
+  .se-tb button:hover{background:#fdece4;border-color:#f0a88a}
+  .se-sep{width:1px;background:var(--line);margin:2px 4px}
+  .se-rt{min-height:210px;max-height:520px;overflow:auto;padding:14px;background:#fff;color:#111;font-size:14px;line-height:1.6}
+  .se-rt blockquote{border-left:4px solid #dc2626;margin:0;padding:8px 14px;background:#fef2f2}
+  .se-rt table{width:100%;border-collapse:collapse}
+  .se-rt th,.se-rt td{border:1px solid #e5e7eb;padding:8px}
+  .se-rt ul{margin:6px 0;padding-left:22px}
+  .se-src{width:100%;min-height:220px;font-family:ui-monospace,Consolas,monospace;font-size:12px;
+    background:#0f1420;color:#d7dce8;border:none;border-top:1px solid var(--line);padding:12px}
+  .se-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px}
+  .se-mode{display:flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden;
+    background:var(--surface)}
+  .se-mode button{background:transparent;border:none;color:var(--ink-2);padding:6px 13px;
+    font-size:12.5px;cursor:pointer}
+  .se-mode button.on{background:linear-gradient(135deg,#ff9966,#d75151);color:#fff;font-weight:600}
+  table.src-tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.src-tbl th{text-align:left;padding:7px 9px;background:var(--surface-2);color:var(--ink-3);
+    font-size:11px;text-transform:uppercase;border-bottom:1px solid var(--line)}
+  table.src-tbl td{padding:8px 9px;border-bottom:1px solid var(--line-2);vertical-align:top;
+    color:var(--ink)}
+  table.src-tbl tr.used{background:#f3fdf6}
+  table.src-tbl tr.skip{opacity:.62}
+  .src-pill{font-size:10px;padding:1px 7px;border-radius:20px;font-weight:700;white-space:nowrap}
+  .src-spec{max-height:132px;overflow:auto;font-size:11.5px;line-height:1.55}
+  .src-spec b{color:var(--ink-2)}
+</style>
+
+<div class="se-head">
+  <img src="{{ p.image_src or '' }}" onerror="this.style.visibility='hidden'">
+  <div style="flex:1;min-width:260px">
+    <div class="se-title">{{ p.title }}</div>
+    <div class="se-muted" style="font-size:12px">
+      {{ p.product_type }} · {{ p.vendor or 'không rõ hãng' }} · ID {{ p.haravan_id }} ·
+      mô tả {{ p.body_len }} ký tự · {{ p.pair_count }} dòng thông số
+    </div>
+    <div style="margin-top:6px">
+      <span class="sx-badge {{ 'ok' if verdict == 'ĐÚNG' else ('other' if verdict == 'KHUÔN RIÊNG' else 'bad') }}">{{ verdict }}</span>
+      <span style="font-size:12px">{{ fmt_label }}</span>
+      <a href="https://sintech.vn/products/{{ p.handle }}" target="_blank"
+         style="font-size:12px;margin-left:10px">↗ Xem trang live</a>
+    </div>
+  </div>
+</div>
+
+{% if issues %}
+<div class="se-issues"><b>⚠ Điểm cần soát:</b>
+  <ul style="margin:5px 0 0;padding-left:20px">{% for i in issues %}<li>{{ i }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<div class="se-box">
+  <div class="se-boxh">
+    <span>📊 Khối thông số kỹ thuật</span>
+    <div class="se-actions">
+      <div class="se-mode">
+        <button id="m-bq" class="on" onclick="switchMode('blockquote')">❝ Khối trích dẫn</button>
+        <button id="m-tb" onclick="switchMode('table')">▦ Bảng</button>
+        <button id="m-src" onclick="showSources()" title="Xem các trang đã lấy data spec, đối chiếu model">🔎 Nguồn spec</button>
+      </div>
+      <a style="font-size:12px;cursor:pointer" onclick="toggleSrc('spec')" id="src-spec">&lt;/&gt; xem HTML</a>
+    </div>
+  </div>
+  <div class="se-tb">
+    <button onclick="cmd('bold')" title="Đậm"><b>B</b></button>
+    <button onclick="cmd('italic')" title="Nghiêng"><i>I</i></button>
+    <button onclick="cmd('underline')" title="Gạch chân"><u>U</u></button>
+    <span class="se-sep"></span>
+    <button onclick="cmd('insertUnorderedList')" title="Danh sách">•—</button>
+    <button onclick="cmd('formatBlock','P')" title="Đoạn">¶</button>
+    <button onclick="addRow()" title="Thêm 1 dòng thông số">＋ dòng</button>
+    <button onclick="addGroup()" title="Thêm nhóm thông số">＋ nhóm</button>
+    <span class="se-sep"></span>
+    <button onclick="cmd('removeFormat')" title="Xoá định dạng">🧹</button>
+    <button onclick="cmd('undo')">↶</button><button onclick="cmd('redo')">↷</button>
+  </div>
+  <div class="se-rt" id="spec-rt" contenteditable="true">{{ block_bq|safe }}</div>
+  <textarea class="se-src" id="spec-src" style="display:none"></textarea>
+
+  <div id="src-panel" style="display:none;padding:12px;background:var(--surface)">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;
+                flex-wrap:wrap;margin-bottom:9px">
+      <span style="font-size:12.5px;color:var(--ink-2)">
+        Các trang đã lấy data spec. <b>Soi cột "Tên trang nguồn"</b> xem đúng model của mình chưa.</span>
+      <button class="btn" onclick="findSources(this)">🔄 Tìm nguồn lại</button>
+    </div>
+    <div id="src-msg" style="font-size:12px;margin-bottom:8px;color:var(--ink-3)"></div>
+    <table class="src-tbl" id="src-tbl">
+      <thead><tr>
+        <th style="width:32%">Tên trang nguồn</th><th style="width:26%">Link</th>
+        <th>Spec đã lấy</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<details class="se-box" style="padding:0">
+  <summary style="padding:9px 13px;cursor:pointer;font-size:13px;font-weight:600">
+    📃 Toàn bộ mô tả sản phẩm (mở khi cần sửa phần thân bài)
+  </summary>
+  <div class="se-tb">
+    <button onclick="cmd('bold', null, 'body-rt')"><b>B</b></button>
+    <button onclick="cmd('italic', null, 'body-rt')"><i>I</i></button>
+    <button onclick="cmd('formatBlock','H2','body-rt')">H2</button>
+    <button onclick="cmd('formatBlock','H3','body-rt')">H3</button>
+    <button onclick="cmd('formatBlock','P','body-rt')">¶</button>
+    <button onclick="cmd('insertUnorderedList', null, 'body-rt')">•—</button>
+    <span class="se-sep"></span>
+    <a style="font-size:12px;cursor:pointer;align-self:center" onclick="toggleSrc('body')" id="src-body">&lt;/&gt; xem HTML</a>
+  </div>
+  <div class="se-rt" id="body-rt" contenteditable="true">{{ p.body_html|safe }}</div>
+  <textarea class="se-src" id="body-src" style="display:none"></textarea>
+  <p class="se-muted" style="font-size:11.5px;padding:8px 13px;margin:0">
+    Khi duyệt, khối thông số ở trên sẽ <b>thay thế khối cũ và được đặt xuống ĐUÔI</b> mô tả này —
+    đó là điều kiện để theme bốc vào khung "Thông số kỹ thuật".</p>
+</details>
+
+<div class="se-actions">
+  <button class="btn btn-primary" onclick="publish(this)">🚀 Duyệt &amp; đưa lên live</button>
+  <button class="btn" onclick="location.reload()">↺ Bỏ thay đổi</button>
+  <span id="se-msg" style="font-size:12.5px"></span>
+</div>
+
+<script>
+const PID = {{ p.haravan_id }};
+let MODE = 'blockquote';
+
+function cmd(c, arg, target) {
+  document.getElementById(target || 'spec-rt').focus();
+  document.execCommand(c, false, arg || null);
+}
+function toggleSrc(which) {
+  const rt = document.getElementById(which + '-rt'), src = document.getElementById(which + '-src');
+  const link = document.getElementById('src-' + which);
+  if (src.style.display === 'none') {
+    src.value = rt.innerHTML.replace(/></g, '>\n<');
+    src.style.display = 'block'; rt.style.display = 'none'; link.textContent = '👁 xem nội dung';
+  } else {
+    rt.innerHTML = src.value; src.style.display = 'none'; rt.style.display = 'block';
+    link.textContent = '</> xem HTML';
+  }
+}
+function specHTML() {
+  const src = document.getElementById('spec-src');
+  return src.style.display !== 'none' ? src.value : document.getElementById('spec-rt').innerHTML;
+}
+function bodyHTML() {
+  const src = document.getElementById('body-src');
+  return src.style.display !== 'none' ? src.value : document.getElementById('body-rt').innerHTML;
+}
+
+// ───── nút thứ 3: bảng đối chiếu nguồn lấy spec ─────
+function setMode(btnId) {
+  ['m-bq', 'm-tb', 'm-src'].forEach(i =>
+    document.getElementById(i).classList.toggle('on', i === btnId));
+  const isSrc = btnId === 'm-src';
+  document.getElementById('src-panel').style.display = isSrc ? 'block' : 'none';
+  document.getElementById('spec-rt').style.display = isSrc ? 'none' : 'block';
+  document.getElementById('spec-src').style.display = 'none';   // ô xem HTML
+  document.querySelector('.se-tb').style.display = isSrc ? 'none' : 'flex';
+}
+
+function renderSources(rows) {
+  const tb = document.querySelector('#src-tbl tbody');
+  if (!rows.length) {
+    tb.innerHTML = '<tr><td colspan="3" style="color:var(--ink-3)">Chưa có dữ liệu nguồn cho SP này. '
+      + 'Bấm "🔄 Tìm nguồn lại" để anh đi tra (không ghi gì lên web).</td></tr>';
+    return;
+  }
+  tb.innerHTML = rows.map(r => {
+    const used = r.status === 'dung';
+    const host = (r.url || '').replace(/^https?:\/\//, '').split('/')[0];
+    const spec = (r.rows || []).map(p => `<b>${p[0]}:</b> ${p[1]}`).join('<br>')
+      || `<span style="color:var(--ink-3)">— ${r.reason || 'không lấy được dòng nào'}</span>`;
+    return `<tr class="${used ? 'used' : 'skip'}">
+      <td><span class="src-pill ${used ? 'ok' : 'other'}">${used ? 'ĐÃ DÙNG' : 'bỏ qua'}</span><br>
+          ${r.page_title || '<i style="color:var(--ink-3)">(không có tiêu đề)</i>'}
+          ${r.reason && used ? `<div style="font-size:11px;color:var(--ink-3)">${r.reason}</div>` : ''}</td>
+      <td><a href="${r.url}" target="_blank" style="word-break:break-all">${host}</a>
+          <div style="font-size:11px;color:var(--ink-3)">${r.n_rows} dòng</div></td>
+      <td><div class="src-spec">${spec}</div></td></tr>`;
+  }).join('');
+}
+
+async function showSources() {
+  setMode('m-src');
+  document.getElementById('src-msg').textContent = 'Đang tải…';
+  const d = await (await fetch(`/spec/p/${PID}/sources`)).json();
+  document.getElementById('src-msg').textContent =
+    d.rows.length ? `${d.rows.length} trang đã soi` : '';
+  renderSources(d.rows);
+}
+
+async function findSources(btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '⏳ Đang tra…';
+  document.getElementById('src-msg').textContent = 'Đang tìm trên web, chờ ~10 giây…';
+  try {
+    const d = await (await fetch(`/spec/p/${PID}/find-sources`, {method: 'POST'})).json();
+    document.getElementById('src-msg').innerHTML = d.ok
+      ? `${d.found} trang qua cổng kiểm · ${d.skipped} trang bị loại`
+        + (d.reason ? ` · <span style="color:#b45309">${d.reason}</span>` : '')
+      : `<span style="color:#b91c1c">${d.error || 'lỗi'}</span>`;
+    renderSources(d.rows || []);
+  } catch (e) {
+    document.getElementById('src-msg').textContent = '❌ ' + e;
+  }
+  btn.disabled = false; btn.innerHTML = orig;
+}
+
+async function switchMode(to) {
+  setMode(to === 'table' ? 'm-tb' : 'm-bq');
+  if (to === MODE) return;
+  const msg = document.getElementById('se-msg');
+  msg.textContent = 'Đang đổi dạng…'; msg.style.color = '';
+  const r = await fetch(`/spec/p/${PID}/convert`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({block_html: specHTML(), to: to})
+  });
+  const d = await r.json();
+  if (!d.ok) { msg.textContent = '❌ ' + d.error; msg.style.color = '#b91c1c'; return; }
+  const src = document.getElementById('spec-src');
+  if (src.style.display !== 'none') toggleSrc('spec');
+  document.getElementById('spec-rt').innerHTML = d.block_html;
+  MODE = to;
+  document.getElementById('m-bq').classList.toggle('on', to === 'blockquote');
+  document.getElementById('m-tb').classList.toggle('on', to === 'table');
+  msg.textContent = `✓ Đã đổi sang ${to === 'table' ? 'dạng bảng' : 'khối trích dẫn'} — giữ nguyên ${d.rows} dòng / ${d.groups} nhóm`;
+  msg.style.color = '#15803d';
+}
+
+function addRow() {
+  const rt = document.getElementById('spec-rt');
+  if (MODE === 'table') {
+    const tb = rt.querySelector('tbody') || rt.querySelector('table');
+    if (tb) tb.insertAdjacentHTML('beforeend',
+      '<tr><td style="padding:10px;border:1px solid #e5e7eb;width:32%;font-weight:600">Nhãn mới</td>' +
+      '<td style="padding:10px;border:1px solid #e5e7eb">giá trị</td></tr>');
+  } else {
+    const ul = rt.querySelectorAll('ul');
+    const last = ul[ul.length - 1];
+    if (last) last.insertAdjacentHTML('beforeend',
+      '<li style="font-size: 16px; line-height: 1.6;"><strong>Nhãn mới:</strong> giá trị</li>');
+    else rt.insertAdjacentHTML('beforeend',
+      '<ul><li style="font-size: 16px; line-height: 1.6;"><strong>Nhãn mới:</strong> giá trị</li></ul>');
+  }
+}
+function addGroup() {
+  const rt = document.getElementById('spec-rt');
+  if (MODE === 'table') {
+    const tb = rt.querySelector('tbody') || rt.querySelector('table');
+    if (tb) tb.insertAdjacentHTML('beforeend',
+      '<tr><th colspan="2" style="padding:10px;background:#f3f4f6;text-align:left;font-weight:700;' +
+      'border:1px solid #e5e7eb">Nhóm mới</th></tr>');
+  } else {
+    rt.insertAdjacentHTML('beforeend',
+      '<p style="font-size: 16px; line-height: 1.65;"><strong>Nhóm mới</strong></p>' +
+      '<ul><li style="font-size: 16px; line-height: 1.6;"><strong>Nhãn mới:</strong> giá trị</li></ul>');
+  }
+}
+
+async function publish(btn) {
+  if (!confirm('Đưa mô tả này lên sintech.vn ngay?')) return;
+  const msg = document.getElementById('se-msg');
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '⏳ Đang đẩy lên Haravan…';
+  msg.textContent = ''; msg.style.color = '';
+  try {
+    const r = await fetch(`/spec/p/${PID}/publish`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({block_html: specHTML(), body_html: bodyHTML()})
+    });
+    const d = await r.json();
+    if (d.error) { msg.textContent = '❌ ' + d.error; msg.style.color = '#b91c1c'; }
+    else if (!d.ok) {
+      msg.innerHTML = '⚠ Haravan trả về OK nhưng đọc lại thấy lệch — mở trang live kiểm tay: ' +
+        `<a href="${d.url}" target="_blank">${d.url}</a>`;
+      msg.style.color = '#b45309';
+    } else {
+      msg.innerHTML = `✓ Đã lên live · dạng hiện tại: <b>${d.fmt_label}</b> (${d.verdict}) · ` +
+        `mô tả ${d.body_len} ký tự · <a href="${d.url}" target="_blank">mở trang live</a>`;
+      msg.style.color = '#15803d';
+    }
+  } catch (e) {
+    msg.textContent = '❌ ' + e; msg.style.color = '#b91c1c';
+  }
+  btn.disabled = false; btn.innerHTML = orig;
+}
+</script>
+{% endif %}
+{% endblock %}

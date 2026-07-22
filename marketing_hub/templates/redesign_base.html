@@ -15,7 +15,7 @@
 {% set a = active|default('') %}
 {% set analytics_keys = ['ga4','gsc','tracking','tasks','ops','cwv'] %}
 {% set seo_keys = ['seo_home','coverage','title_meta','h1','empty_desc','dup','broken','index','inlinks','eeat','schema','opp','serp'] %}
-{% set content_keys = ['content_jobs','collection','blog','products','alt'] %}
+{% set content_keys = ['content_jobs','collection','blog','products','alt','spec'] %}
 {% set fb_keys = ['post_new','posts','calendar','fb_posted'] %}
 {% set hv_keys = ['hv_home','hv_products','hv_blogs','hv_audit'] %}
 <div class="app">
@@ -65,6 +65,7 @@
         <a href="{{ url_for('content_jobs_list_page') }}" class="nav-sub {{ 'active' if a=='content_jobs' }}"><span>Content Jobs</span></a>
         <a href="{{ url_for('collection_content_page') }}" class="nav-sub {{ 'active' if a=='collection' }}"><span>Collection Content</span></a>
         <a href="{{ url_for('blog_content_page') }}" class="nav-sub {{ 'active' if a=='blog' }}"><span>📰 Blog Command Center</span></a>
+        <a href="{{ url_for('spec_index_page') }}" class="nav-sub {{ 'active' if a=='spec' }}"><span>🧬 Thông số SP</span></a>
         <a href="{{ url_for('products_new_form') }}" class="nav-sub {{ 'active' if a=='products' }}"><span>SP mới</span></a>
         <a href="{{ url_for('alt_manager_page') }}" class="nav-sub {{ 'active' if a=='alt' }}"><span>ALT ảnh</span></a>
       </div></div>
