@@ -50,6 +50,7 @@ def targets_by_collection(only_missing: bool = True) -> list[dict]:
             FROM product_spec_index p JOIN spec_group_products g ON g.haravan_id = p.haravan_id
             WHERE g.handle=? AND g.tag_filter=? AND p.condition_kind='new'
               AND COALESCE(p.is_service,0)=0 AND COALESCE(p.skipped,0)=0
+              AND COALESCE(p.published,1)=1
             ORDER BY p.title""", (c["handle"], c["tag_filter"])).fetchall()
         items = [dict(r) for r in rows if r["haravan_id"] not in done
                  and r["haravan_id"] not in seen]
@@ -60,7 +61,7 @@ def targets_by_collection(only_missing: bool = True) -> list[dict]:
     # SP không thuộc collection nào
     rest = [dict(r) for r in conn.execute("""SELECT haravan_id, title, product_type
         FROM product_spec_index WHERE condition_kind='new' AND COALESCE(is_service,0)=0
-          AND COALESCE(skipped,0)=0
+          AND COALESCE(skipped,0)=0 AND COALESCE(published,1)=1
           AND haravan_id NOT IN (SELECT haravan_id FROM spec_group_products)
         ORDER BY title""").fetchall() if r["haravan_id"] not in done]
     conn.close()

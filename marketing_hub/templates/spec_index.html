@@ -94,6 +94,7 @@
     <div class="sx-tabs">
       <button id="tab-vo" class="on" onclick="loadLog('vo',1)">🙋‍♀️ Em đã sync</button>
       <button id="tab-nox" onclick="loadLog('nox',1)">🤖 Anh sync</button>
+      <button id="tab-sai" onclick="loadLog('sai',1)">🔴 SP sai spec</button>
     </div>
     <div id="log-count" style="font-size:11.5px;color:var(--ink-3)"></div>
   </div>
@@ -137,8 +138,17 @@
 </div>
 <div class="sx-grid">
   {% for g in r.groups %}
-  <a class="sx-card {% if g.new_count == 0 %}sx-empty{% endif %}"
+  <a class="sx-card {% if g.new_count == 0 %}sx-empty{% endif %}" style="position:relative"
      href="{{ url_for('spec_group_page', handle=g.handle) }}{% if g.tag_filter %}?tag={{ g.tag_filter }}{% endif %}">
+    {% if g.new_count %}
+    {# nút phụ: KHÔNG dùng <a> lồng trong <a> (HTML sai) → span + điều hướng bằng JS #}
+    <span class="sx-badge" title="Mở trang duyệt nhanh cả danh mục"
+          style="position:absolute;top:9px;right:9px;background:#fff3e6;color:#c2410c;
+                 border:1px solid #f6d4b4;cursor:pointer;z-index:3"
+          onclick="event.preventDefault();event.stopPropagation();
+                   location.href='{{ url_for('spec_quick_page', handle=g.handle) }}{% if g.tag_filter %}?tag={{ g.tag_filter }}{% endif %}'">
+      ⚡ View nhanh</span>
+    {% endif %}
     <div class="t">{{ g.title }}{% if g.approved_at %} <span class="sx-badge ok">đã duyệt</span>{% endif %}</div>
     <div class="p">{% if g.approved_at %}duyệt lúc {{ g.approved_at }}{% else %}{{ g.parent }}{% endif %}{% if g.tag_filter %} · lọc tag {{ g.tag_filter }}{% endif %}</div>
     <div class="n">
@@ -153,12 +163,15 @@
 {% endfor %}
 
 <script>
-// ───── nhật ký sync: 2 tab, 10 dòng/trang ─────
+// ───── nhật ký sync: 3 tab (Em / Anh / SP sai spec), 10 dòng/trang ─────
+const esc = s => (s == null ? '' : String(s).replace(/[&<>"]/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])));
 let LOG_ACTOR = 'vo';
 async function loadLog(actor, page) {
   LOG_ACTOR = actor;
-  document.getElementById('tab-vo').classList.toggle('on', actor === 'vo');
-  document.getElementById('tab-nox').classList.toggle('on', actor === 'nox');
+  ['vo', 'nox', 'sai'].forEach(a =>
+    document.getElementById('tab-' + a).classList.toggle('on', actor === a));
+  if (actor === 'sai') { return loadErrors(page); }
   const d = await (await fetch(`/spec/api/log?actor=${actor}&page=${page}`)).json();
   const tb = document.getElementById('log-body');
   document.getElementById('log-count').textContent =
@@ -171,14 +184,46 @@ async function loadLog(actor, page) {
   }
   tb.innerHTML = d.rows.map(r => r.is_collection
     ? `<tr style="background:#fff8ec"><td>${r.when}</td>
-         <td colspan="3">✅ <b>Đã duyệt danh mục "${r.title}"</b>
-            <span style="color:var(--ink-3)">${r.note ? '· ' + r.note : ''}</span></td></tr>`
+         <td colspan="3">✅ <b>Đã duyệt danh mục "${esc(r.title)}"</b>
+            <span style="color:var(--ink-3)">${r.note ? '· ' + esc(r.note) : ''}</span></td></tr>`
     : `<tr><td>${r.when}</td>
-         <td><a class="sg-t" href="/spec/p/${r.haravan_id}">${r.title || ''}</a>
-             <div style="font-size:11px;color:var(--ink-3)">${r.note || ''}</div></td>
+         <td><a class="sg-t" href="/spec/p/${r.haravan_id}">${esc(r.title) || ''}</a>
+             <div style="font-size:11px;color:var(--ink-3)">${esc(r.note) || ''}</div></td>
          <td><span class="sx-badge ${r.spec_format === 'A_BLOCKQUOTE' ? 'ok' : 'bad'}">
              ${r.spec_format === 'A_BLOCKQUOTE' ? 'đúng chuẩn' : (r.spec_format || '—')}</span></td>
          <td>${r.pair_count || 0}</td></tr>`).join('');
+  pager(d, actor);
+}
+
+// Tab đỏ: mỗi SP 1 dòng, liệt kê chỉ tiêu sai (body → đúng theo hãng)
+async function loadErrors(page) {
+  const d = await (await fetch(`/spec/api/errors?page=${page}`)).json();
+  const tb = document.getElementById('log-body');
+  document.getElementById('log-count').textContent =
+    d.total ? `${d.total} SP sai spec · trang ${d.page}/${d.pages}` : '';
+  if (!d.rows.length) {
+    tb.innerHTML = `<tr><td colspan="4" style="color:var(--ink-3)">Chưa ghi nhận SP nào sai spec. Đối chiếu trang hãng rồi bấm "báo sai spec" ở trang duyệt SP.</td></tr>`;
+    document.getElementById('log-pager').innerHTML = ''; return;
+  }
+  tb.innerHTML = d.rows.map(r => {
+    const items = r.items.map(it =>
+      `<div style="margin-top:3px">🔴 <b>${esc(it.label)}</b>:
+         <span style="color:#b91c1c;text-decoration:line-through">${esc(it.wrong)}</span>
+         → <span style="color:#15803d;font-weight:600">${esc(it.correct)}</span>
+         ${it.source ? `<span style="color:var(--ink-3);font-size:11px"> · nguồn: ${esc(it.source)}</span>` : ''}
+         ${it.note ? `<span style="color:var(--ink-3);font-size:11px"> · ${esc(it.note)}</span>` : ''}</div>`).join('');
+    return `<tr style="background:#fef2f2">
+       <td>${r.when}</td>
+       <td colspan="3">
+         <a class="sg-t" href="/spec/p/${r.haravan_id}" style="color:#b91c1c">${esc(r.title) || r.haravan_id}</a>
+         <a href="https://sintech.vn/products/${esc(r.handle)}" target="_blank"
+            style="font-size:11px;margin-left:6px">xem live ↗</a>
+         ${items}</td></tr>`;
+  }).join('');
+  pager(d, 'sai');
+}
+
+function pager(d, actor) {
   let p = '';
   for (let i = 1; i <= d.pages && i <= 12; i++)
     p += `<button class="${i === d.page ? 'on' : ''}" onclick="loadLog('${actor}',${i})">${i}</button>`;

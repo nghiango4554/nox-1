@@ -1,0 +1,332 @@
+{% extends "redesign_base.html" %}
+{% set active = 'spec' %}
+{% block title %}View nhanh · {{ title }}{% endblock %}
+{% block page_title %}<span style="font-weight:600">⚡ View nhanh · {{ title }}</span>{% endblock %}
+{% block page_actions %}
+<a class="btn" href="{{ url_for('spec_group_page', handle=handle, tag=tag) }}">← Danh sách</a>
+<a class="btn" href="{{ url_for('spec_index_page') }}">Tất cả danh mục</a>
+{% endblock %}
+{% block content %}
+<style>
+  .qv-bar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px;
+    padding:10px 14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;
+    position:sticky;top:0;z-index:20}
+  .qv-bar b{color:var(--ink)}
+  .qv-chip{font-size:11.5px;padding:2px 9px;border-radius:20px;font-weight:600}
+  .c-moi{background:#dcfce7;color:#15803d}
+  .c-doi{background:#fef3c7;color:#b45309}
+  .c-luu{background:#dbeafe;color:#1d4ed8}
+  .c-skip{background:#e8eaf0;color:#4b5563}
+  .qv-f a{font-size:12px;padding:4px 10px;border-radius:7px;text-decoration:none;
+    color:var(--ink-3);border:1px solid var(--line)}
+  .qv-f a.on{background:#c2410c;color:#fff;border-color:#c2410c}
+
+  .qv-card{background:var(--surface);border:1px solid var(--line);border-radius:11px;
+    margin-bottom:16px;overflow:hidden}
+  .qv-card.skip{opacity:.45}
+  .qv-top{display:flex;gap:14px;align-items:flex-start;padding:12px 14px;
+    border-bottom:1px solid var(--line-2)}
+  .qv-img{width:104px;height:104px;object-fit:contain;background:#fff;border-radius:8px;
+    border:1px solid var(--line-2);cursor:zoom-in;flex:none}
+  .qv-meta{flex:1;min-width:0}
+  .qv-name{font-size:14.5px;font-weight:600;color:var(--ink);text-decoration:none;line-height:1.35}
+  .qv-name:hover{color:#c2410c;text-decoration:underline}
+  .qv-sub{font-size:11.5px;color:var(--ink-3);margin-top:4px}
+  .qv-act{display:flex;gap:7px;flex:none;align-items:center}
+  .qv-btn{font-size:12px;padding:5px 11px;border-radius:7px;border:1px solid var(--line);
+    background:var(--surface-2);color:var(--ink);cursor:pointer}
+  .qv-btn:hover{border-color:#c2410c;color:#c2410c}
+  .qv-btn.danger:hover{border-color:#b91c1c;color:#b91c1c}
+  .qv-btn.save{background:#15803d;color:#fff;border-color:#15803d}
+
+  /* ③ BẢN GỘP QUYẾT ĐỊNH CHIỀU CAO — hiện ĐỦ, không cắt, không cuộn.
+     Khối ①+② dùng absolute nên KHÔNG đẩy chiều cao lên; nó khớp đúng chiều cao
+     bản gộp, dài hơn thì mới sinh thanh cuộn (đúng yêu cầu: chỉ 2 bảng đầu cuộn). */
+  .qv-cols{display:grid;grid-template-columns:2fr 1fr;gap:0;align-items:stretch;
+    min-height:170px}
+  .qv-col{padding:10px 13px;border-right:1px solid var(--line-2);min-width:0}
+  .qv-col:last-child{border-right:0}
+  .qv-col h4{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.4px;
+    color:var(--ink-3);display:flex;justify-content:space-between;align-items:center;gap:6px}
+  .qv-col.m3{background:var(--surface-2)}
+
+  /* Khối ①+② căn NGANG HÀNG theo tên thông số, cuộn CHUNG bằng 1 thanh bên phải */
+  .qv-pair{position:relative;border-right:1px solid var(--line-2);min-width:0}
+  /* absolute → không góp chiều cao vào grid, luôn khít lề trên/dưới của bản gộp */
+  .qv-pair-in{position:absolute;inset:10px 0 10px 13px;display:flex;flex-direction:column}
+  .qv-ph{display:grid;grid-template-columns:1fr 1fr;gap:0;padding-right:13px;flex:none}
+  .qv-ph h4{margin:0 0 6px}
+  .qv-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:6px}
+  .qv-scroll::-webkit-scrollbar{width:11px}
+  .qv-scroll::-webkit-scrollbar-track{background:var(--surface-2);border-radius:6px}
+  .qv-scroll::-webkit-scrollbar-thumb{background:#c9ccd6;border-radius:6px;
+    border:2px solid var(--surface)}
+  .qv-scroll::-webkit-scrollbar-thumb:hover{background:#c2410c}
+  table.qp{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+  table.qp td{padding:3px 6px;border-bottom:1px solid var(--line-2);vertical-align:top;
+    word-break:break-word}
+  table.qp td.k{width:19%;color:var(--ink-3)}
+  table.qp td.v{width:31%;color:var(--ink)}
+  table.qp td.mid{border-left:1px solid var(--line)}
+  table.qp tr.s-doi td.v{color:#b45309;font-weight:600;background:#fffbeb}
+  table.qp tr.s-chi_web td{background:#f0fdf4}
+  table.qp tr.s-chi_live td{background:#fafafa}
+  table.qp td.empty{color:var(--ink-3);opacity:.35}
+  .qv-src{font-size:11px;color:#c2410c;text-decoration:none;background:#fff3e6;
+    border:1px solid #f6d4b4;border-radius:6px;padding:1px 7px;white-space:nowrap}
+  .qv-src:hover{background:#c2410c;color:#fff;border-color:#c2410c}
+  .qv-srcn{font-size:10.5px;color:var(--ink-3);margin-left:5px}
+  table.qv{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+  table.qv td{padding:3px 5px;border-bottom:1px solid var(--line-2);vertical-align:top;
+    word-break:break-word}
+  table.qv td.k{width:42%;color:var(--ink-3)}
+  table.qv td.v{color:var(--ink)}
+  tr.r-moi td.v{color:#15803d;font-weight:600}
+  tr.r-doi td.v{color:#b45309;font-weight:600}
+  .qv-x{display:none;color:#dc2626;cursor:pointer;font-weight:700;padding:0 4px;
+    font-size:13px;line-height:1}
+  .editing .qv-x{display:inline}
+  /* chế độ sửa: gõ thẳng vào nhãn và giá trị */
+  .editing .kk,.editing .vv{display:inline-block;min-width:38px;padding:1px 5px;
+    border:1px dashed #c9ccd6;border-radius:5px;background:var(--surface);cursor:text}
+  .editing .kk:focus,.editing .vv:focus{outline:none;border:1px solid #c2410c;
+    background:#fff7ed;box-shadow:0 0 0 2px rgba(194,65,11,.12)}
+  .editing tr.r-new-row .kk,.editing tr.r-new-row .vv{border-color:#15803d}
+  .qv-empty{color:var(--ink-3);font-size:12px;font-style:italic;padding:6px 2px}
+  .qv-saved{font-size:11px;color:#1d4ed8}
+
+  #zoom{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;z-index:999;
+    align-items:center;justify-content:center;cursor:zoom-out}
+  #zoom img{max-width:92vw;max-height:92vh;background:#fff;border-radius:10px}
+</style>
+
+<div class="qv-bar">
+  <div><b>{{ stat.n }}</b> sản phẩm</div>
+  <div><span class="qv-chip c-moi">{{ stat.moi }}</span> có dòng mới</div>
+  <div><span class="qv-chip c-doi">{{ stat.doi }}</span> có dòng đổi giá trị</div>
+  <div><span class="qv-chip c-luu">{{ stat.saved }}</span> đã lưu</div>
+  <div><span class="qv-chip c-skip">{{ stat.excluded }}</span> đã loại</div>
+  <div style="color:var(--ink-3);font-size:12px">{{ stat.co_web }} SP có nguồn fetch</div>
+  <div class="qv-f" style="margin-left:auto;display:flex;gap:6px">
+    <a href="?tag={{ tag }}" class="{{ 'on' if not only }}">Tất cả</a>
+    <a href="?tag={{ tag }}&only=doi" class="{{ 'on' if only=='doi' }}">Có đổi</a>
+    <a href="?tag={{ tag }}&only=moi" class="{{ 'on' if only=='moi' }}">Có mới</a>
+    <a href="?tag={{ tag }}&only=chua" class="{{ 'on' if only=='chua' }}">Chưa duyệt</a>
+  </div>
+</div>
+
+{% if not rows %}
+  <div class="qv-empty">Không có sản phẩm nào khớp bộ lọc.</div>
+{% endif %}
+
+{% for r in rows %}
+<div class="qv-card {{ 'skip' if r.excluded }}" id="c{{ r.haravan_id }}">
+  <div class="qv-top">
+    {% if r.img %}
+      <img class="qv-img" src="{{ r.img }}" alt="" onclick="zoomImg(this.src)">
+    {% else %}
+      <div class="qv-img" style="display:flex;align-items:center;justify-content:center;
+        color:var(--ink-3);font-size:11px">không ảnh</div>
+    {% endif %}
+    <div class="qv-meta">
+      <a class="qv-name" href="{{ url_for('spec_product_page', pid=r.haravan_id) }}"
+         target="_blank">{{ r.title }}</a>
+      <div class="qv-sub">
+        {{ r.product_type or '—' }} ·
+        live {{ r.n_live }} dòng · fetch {{ r.n_web }} dòng · gộp <b>{{ r.n_merged }}</b> dòng
+        {% if r.n_moi %} · <span class="qv-chip c-moi">+{{ r.n_moi }} mới</span>{% endif %}
+        {% if r.n_doi %} · <span class="qv-chip c-doi">{{ r.n_doi }} đổi</span>{% endif %}
+        {% if r.src_host %} · nguồn <code>{{ r.src_host }}</code>{% endif %}
+        {% if r.saved_at %} · <span class="qv-saved">đã lưu {{ r.saved_at }}</span>{% endif %}
+      </div>
+      <div class="qv-sub">
+        <a href="https://sintech.vn/products/{{ r.handle }}" target="_blank">xem trang live ↗</a>
+      </div>
+    </div>
+    <div class="qv-act">
+      {% if r.excluded %}
+        <button class="qv-btn" onclick="setSkip({{ r.haravan_id }},false,this)">↩ Đưa lại vào duyệt</button>
+      {% else %}
+        <button class="qv-btn danger" onclick="setSkip({{ r.haravan_id }},true,this)">✕ Bỏ khỏi duyệt</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="qv-cols">
+    <div class="qv-pair">
+     <div class="qv-pair-in">
+      <div class="qv-ph">
+        <h4>① Spec đang live</h4>
+        <h4 style="padding-left:7px;flex-wrap:wrap">
+          <span>② Spec fetch về
+            <span style="font-weight:400;text-transform:none;margin-left:4px">(cùng dòng = cùng thông số)</span>
+          </span>
+          <span style="text-transform:none;font-weight:400">
+            {% if r.src_url %}
+              <a class="qv-src" href="{{ r.src_url }}" target="_blank" rel="noopener"
+                 title="{{ r.src_title or r.src_url }}">🔗 {{ r.src_host }} ↗</a>
+              {% if r.src_seen > 1 %}<span class="qv-srcn" title="số trang đã soi cho SP này">
+                {{ r.src_seen }} nguồn đã soi</span>{% endif %}
+            {% else %}
+              <span class="qv-srcn">chưa có nguồn</span>
+            {% endif %}
+          </span>
+        </h4>
+      </div>
+      {% if r.aligned %}
+      <div class="qv-scroll">
+        <table class="qp">
+          {% for lk,lv,wk,wv,st in r.aligned %}
+          <tr class="s-{{ st }}">
+            <td class="k {{ 'empty' if not lk }}">{{ lk or '—' }}</td>
+            <td class="v {{ 'empty' if not lk }}">{{ lv or '' }}</td>
+            <td class="k mid {{ 'empty' if not wk }}">{{ wk or '—' }}</td>
+            <td class="v {{ 'empty' if not wk }}">{{ wv or '' }}</td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% else %}<div class="qv-empty">chưa có thông số nào để so</div>{% endif %}
+     </div>
+    </div>
+
+    <div class="qv-col m3" id="m3-{{ r.haravan_id }}">
+      <h4>
+        <span>③ Bản gộp (đã sửa theo fetch)</span>
+        <span>
+          <button class="qv-btn btn-add" style="display:none"
+                  onclick="addRow({{ r.haravan_id }},this)">+ Dòng</button>
+          <button class="qv-btn" onclick="toggleEdit({{ r.haravan_id }},this)">✎ Sửa</button>
+          <button class="qv-btn save" style="display:none"
+                  onclick="saveRows({{ r.haravan_id }},this)">💾 Lưu</button>
+        </span>
+      </h4>
+      {# KHÔNG bọc vùng cuộn: bản gộp phải hiện ĐỦ mọi dòng #}
+      {% if r.merged %}
+      <table class="qv" id="t{{ r.haravan_id }}">
+        {% for k,v,s in r.merged %}
+        <tr class="r-{{ s }}">
+          {# tách chữ ra span riêng: dấu ✕ nằm NGOÀI vùng gõ, khỏi bị xoá/gõ đè #}
+          <td class="k"><span class="kk">{{ k }}</span></td>
+          <td class="v"><span class="vv">{{ v }}</span><span class="qv-x" title="xoá dòng này"
+              contenteditable="false" onclick="this.closest('tr').remove()">✕</span></td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}<div class="qv-empty">không có dữ liệu để gộp</div>{% endif %}
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<div id="zoom" onclick="this.style.display='none'"><img id="zoomimg" src="" alt=""></div>
+
+<script>
+function zoomImg(src){
+  document.getElementById('zoomimg').src = src;
+  document.getElementById('zoom').style.display = 'flex';
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.getElementById('zoom').style.display = 'none';
+});
+
+function toggleEdit(pid, btn){
+  const box = document.getElementById('m3-' + pid);
+  const save = btn.nextElementSibling;
+  const on = box.classList.toggle('editing');
+  btn.textContent = on ? '✕ Thôi' : '✎ Sửa';
+  save.style.display = on ? '' : 'none';
+  const add = box.querySelector('.btn-add');
+  if (add) add.style.display = on ? '' : 'none';
+  // bật/tắt gõ chữ trực tiếp trên từng ô nhãn + giá trị
+  box.querySelectorAll('.kk, .vv').forEach(el => {
+    el.contentEditable = on ? 'true' : 'false';
+    el.spellcheck = false;
+  });
+}
+
+// Enter = xuống dòng trong ô → hỏng bảng. Chặn lại, cho Tab nhảy ô kế tiếp.
+document.addEventListener('keydown', e => {
+  const el = e.target;
+  if (!el.classList || !(el.classList.contains('kk') || el.classList.contains('vv'))) return;
+  if (e.key === 'Enter'){ e.preventDefault(); el.blur(); }
+});
+// dán chữ từ nơi khác: chỉ lấy TEXT, không kéo theo định dạng HTML
+document.addEventListener('paste', e => {
+  const el = e.target;
+  if (!el.classList || !(el.classList.contains('kk') || el.classList.contains('vv'))) return;
+  e.preventDefault();
+  document.execCommand('insertText', false,
+    (e.clipboardData || window.clipboardData).getData('text').replace(/\s+/g, ' ').trim());
+});
+
+function addRow(pid, btn){
+  const t = document.getElementById('t' + pid);
+  if (!t) return;
+  const tr = document.createElement('tr');
+  tr.className = 'r-moi r-new-row';
+  tr.innerHTML = '<td class="k"><span class="kk" contenteditable="true"></span></td>' +
+    '<td class="v"><span class="vv" contenteditable="true"></span>' +
+    '<span class="qv-x" contenteditable="false" title="xoá dòng này" ' +
+    'onclick="this.closest(\'tr\').remove()">✕</span></td>';
+  t.appendChild(tr);
+  tr.querySelector('.kk').focus();
+}
+
+async function saveRows(pid, btn){
+  // đọc từ span .kk/.vv → lấy đúng chữ vợ vừa sửa, không dính dấu ✕
+  const rows = [...document.querySelectorAll('#t' + pid + ' tr')].map(tr => {
+    const k = (tr.querySelector('.kk')?.textContent || '').replace(/\s+/g, ' ').trim();
+    const v = (tr.querySelector('.vv')?.textContent || '').replace(/\s+/g, ' ').trim();
+    return [k, v];
+  }).filter(([k, v]) => k || v);          // bỏ dòng trống hoàn toàn
+  const thieu = rows.filter(([k, v]) => !k || !v);
+  if (thieu.length){
+    alert('Còn ' + thieu.length + ' dòng thiếu nhãn hoặc giá trị. Điền nốt hoặc xoá dòng đó rồi lưu lại.');
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Đang lưu…';
+  try{
+    const res = await fetch('/spec/q/' + pid + '/save', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({rows})
+    });
+    const d = await res.json();
+    if(!d.ok) throw new Error(d.error || 'lỗi');
+    // lưu xong: ẩn dấu ✕ và nút Lưu, trả về như ban đầu
+    // lưu xong: trả giao diện về như ban đầu — ẩn ✕, ẩn Lưu, ẩn + Dòng, tắt gõ chữ
+    const box = document.getElementById('m3-' + pid);
+    box.classList.remove('editing');
+    box.querySelectorAll('.kk, .vv').forEach(el => el.contentEditable = 'false');
+    const add = box.querySelector('.btn-add'); if (add) add.style.display = 'none';
+    btn.style.display = 'none'; btn.disabled = false; btn.textContent = '💾 Lưu';
+    const edit = btn.previousElementSibling;
+    edit.textContent = '✎ Sửa';
+    edit.insertAdjacentHTML('beforebegin',
+      '<span class="qv-saved" style="margin-right:6px">✔ đã lưu ' + d.n + ' dòng</span>');
+  }catch(err){
+    btn.disabled = false; btn.textContent = '💾 Lưu';
+    alert('Không lưu được: ' + err.message);
+  }
+}
+
+async function setSkip(pid, on, btn){
+  btn.disabled = true;
+  try{
+    const res = await fetch('/spec/q/' + pid + '/exclude', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({on})
+    });
+    const d = await res.json();
+    if(!d.ok) throw new Error('lỗi');
+    const card = document.getElementById('c' + pid);
+    card.classList.toggle('skip', on);
+    btn.outerHTML = on
+      ? '<button class="qv-btn" onclick="setSkip(' + pid + ',false,this)">↩ Đưa lại vào duyệt</button>'
+      : '<button class="qv-btn danger" onclick="setSkip(' + pid + ',true,this)">✕ Bỏ khỏi duyệt</button>';
+  }catch(err){
+    btn.disabled = false; alert('Không đổi được: ' + err.message);
+  }
+}
+</script>
+{% endblock %}

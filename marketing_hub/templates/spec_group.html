@@ -3,6 +3,7 @@
 {% block title %}{{ title }} · Thông số SP{% endblock %}
 {% block page_title %}<span style="font-weight:600">🧬 {{ title }}</span>{% endblock %}
 {% block page_actions %}
+<a class="btn btn-primary" href="{{ url_for('spec_quick_page', handle=handle, tag=tag) }}">⚡ View nhanh</a>
 {% if handle != '__ungrouped__' %}
 <button class="btn btn-primary" id="btn-approve" onclick="approveCollection(this)">✅ Duyệt danh mục này</button>
 {% endif %}

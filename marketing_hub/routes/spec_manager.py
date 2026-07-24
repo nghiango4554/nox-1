@@ -101,6 +101,58 @@ def spec_group_page(handle):
                            handle=handle, tag=tag, show_all=show_all)
 
 
+def spec_quick_page(handle):
+    """View nhanh: 1 trang duyệt cả collection, mỗi SP 3 mẫu spec cạnh nhau."""
+    tag = request.args.get("tag", "")
+    rows = si.quick_rows(handle, tag)
+    only = request.args.get("only", "")          # "" | doi | moi | chua
+    if only == "doi":
+        rows = [r for r in rows if r["n_doi"]]
+    elif only == "moi":
+        rows = [r for r in rows if r["n_moi"]]
+    elif only == "chua":
+        rows = [r for r in rows if not r["saved_at"] and not r["excluded"]]
+    if handle == "__ungrouped__":
+        title, parent = "SP chưa phân loại", ""
+    else:
+        import db
+        conn = db.get_conn()
+        r = conn.execute("SELECT title,parent,root FROM spec_menu_collections "
+                         "WHERE handle=? AND tag_filter=?", (handle, tag)).fetchone()
+        conn.close()
+        title = r["title"] if r else handle
+        parent = f"{r['root']} › {r['parent']}" if r else ""
+    stat = {
+        "n": len(rows),
+        "co_web": sum(1 for r in rows if r["n_web"]),
+        "doi": sum(1 for r in rows if r["n_doi"]),
+        "moi": sum(1 for r in rows if r["n_moi"]),
+        "saved": sum(1 for r in rows if r["saved_at"]),
+        "excluded": sum(1 for r in rows if r["excluded"]),
+    }
+    return render_template("spec_quick.html", rows=rows, title=title, parent=parent,
+                           handle=handle, tag=tag, stat=stat, only=only)
+
+
+def spec_quick_save(pid):
+    data = request.get_json(silent=True) or {}
+    rows = data.get("rows") or []
+    if not isinstance(rows, list):
+        return jsonify({"ok": False, "error": "rows phải là danh sách"}), 400
+    pairs = []
+    for x in rows:
+        if isinstance(x, dict):
+            pairs.append([x.get("k", ""), x.get("v", "")])
+        elif isinstance(x, (list, tuple)) and len(x) >= 2:
+            pairs.append([x[0], x[1]])
+    return jsonify(si.quick_save(pid, pairs))
+
+
+def spec_quick_exclude(pid):
+    data = request.get_json(silent=True) or {}
+    return jsonify(si.quick_exclude(pid, bool(data.get("on", True))))
+
+
 def spec_product_page(pid):
     p = si.get_product(pid)
     if not p:
@@ -151,6 +203,24 @@ def spec_api_log():
         r["when"] = (r["created_at"] or "").replace("T", " ")[:16]
         r["is_collection"] = r["kind"] == "collection"
     return jsonify(d)
+
+
+def spec_api_errors():
+    """Tab đỏ 'SP sai spec': danh sách SP có chỉ tiêu sai (đã đối chiếu trang hãng)."""
+    page = max(1, int(request.args.get("page") or 1))
+    d = si.list_error_notes(page=page, per=10)
+    for r in d["rows"]:
+        r["when"] = (r["created_at"] or "").replace("T", " ")[:16]
+    return jsonify(d)
+
+
+def spec_error_add(pid):
+    """Thêm/ghi 1 chỉ tiêu sai cho SP (từ trang duyệt hoặc script nạp)."""
+    d = request.get_json(silent=True) or {}
+    eid = si.add_error_note(
+        pid, d.get("label", ""), d.get("wrong", ""), d.get("correct", ""),
+        source=d.get("source", ""), note=d.get("note", ""))
+    return jsonify({"ok": True, "id": eid})
 
 
 def spec_approve_collection(handle):
@@ -216,11 +286,19 @@ def spec_publish(pid):
 def register(app):
     app.add_url_rule("/spec", "spec_index_page", spec_index_page)
     app.add_url_rule("/spec/g/<handle>", "spec_group_page", spec_group_page)
+    app.add_url_rule("/spec/g/<handle>/quick", "spec_quick_page", spec_quick_page)
+    app.add_url_rule("/spec/q/<int:pid>/save", "spec_quick_save", spec_quick_save,
+                     methods=["POST"])
+    app.add_url_rule("/spec/q/<int:pid>/exclude", "spec_quick_exclude", spec_quick_exclude,
+                     methods=["POST"])
     app.add_url_rule("/spec/p/<int:pid>", "spec_product_page", spec_product_page)
     app.add_url_rule("/spec/scan", "spec_scan", spec_scan, methods=["POST"])
     app.add_url_rule("/spec/scan-status", "spec_scan_status", spec_scan_status)
     app.add_url_rule("/spec/api/search", "spec_api_search", spec_api_search)
     app.add_url_rule("/spec/api/log", "spec_api_log", spec_api_log)
+    app.add_url_rule("/spec/api/errors", "spec_api_errors", spec_api_errors)
+    app.add_url_rule("/spec/p/<int:pid>/error", "spec_error_add", spec_error_add,
+                     methods=["POST"])
     app.add_url_rule("/spec/g/<handle>/approve", "spec_approve_collection",
                      spec_approve_collection, methods=["POST"])
     app.add_url_rule("/spec/p/<int:pid>/sources", "spec_sources", spec_sources)

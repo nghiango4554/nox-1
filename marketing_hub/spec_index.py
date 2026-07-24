@@ -169,6 +169,34 @@ CREATE TABLE IF NOT EXISTS spec_group_products (
     PRIMARY KEY (handle, tag_filter, haravan_id)
 );
 CREATE INDEX IF NOT EXISTS idx_sgp_pid ON spec_group_products(haravan_id);
+
+-- View nhanh (23/7): bản spec đã gộp + vợ sửa tay, LƯU DB, KHÔNG tự đẩy lên web
+-- ⚠️ KHÔNG đặt tên cột là `excluded`: đó là từ khoá của SQLite trong câu UPSERT
+-- (`ON CONFLICT ... SET x = excluded.x`) → tự đá nhau. Dùng `skip_review`.
+CREATE TABLE IF NOT EXISTS spec_quick_draft (
+    haravan_id  INTEGER PRIMARY KEY,
+    rows_json   TEXT,       -- [[nhãn, giá trị], ...] bản cuối vợ chốt
+    skip_review INTEGER DEFAULT 0,   -- 1 = loại khỏi danh sách duyệt, KHÔNG sync
+    note        TEXT,
+    saved_at    TEXT
+);
+
+-- SP có thông số SAI trong mô tả (đối chiếu trang hãng bằng Chrome).
+-- 1 dòng = 1 chỉ tiêu sai. Hiện ở tab đỏ "SP sai spec" trong nhật ký /spec.
+CREATE TABLE IF NOT EXISTS spec_error_note (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    haravan_id  INTEGER,
+    handle      TEXT,
+    title       TEXT,
+    label       TEXT,       -- tên chỉ tiêu sai (vd: Độ phân giải)
+    wrong_value TEXT,       -- giá trị đang có trong body
+    correct_value TEXT,     -- giá trị đúng theo hãng
+    source      TEXT,       -- nguồn hãng đã đối chiếu
+    note        TEXT,       -- ghi chú thêm
+    status      TEXT DEFAULT 'open',   -- open | fixed
+    created_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_errnote_pid ON spec_error_note(haravan_id);
 """
 
 
@@ -671,9 +699,12 @@ def scan_menu(log=print) -> dict:
     id_cache, miss = {}, []
     known = {r[0] for r in conn.execute("SELECT haravan_id FROM product_spec_index").fetchall()}
     # SP dịch vụ/sửa chữa không nằm trong phạm vi → không tính vào new/đúng chuẩn
+    # 23/7: thêm published — SP đã ẩn (web trả 301/404) cũng không tính. Trước đó
+    # 97 SP đã ẩn vẫn nằm trong thống kê, làm mọi con số phồng lên.
     newset = {r[0] for r in conn.execute(
         "SELECT haravan_id FROM product_spec_index WHERE condition_kind='new' "
-        "AND COALESCE(is_service,0)=0 AND COALESCE(skipped,0)=0").fetchall()}
+        "AND COALESCE(is_service,0)=0 AND COALESCE(skipped,0)=0 "
+        "AND COALESCE(published,1)=1").fetchall()}
     okset = {r[0] for r in conn.execute(
         "SELECT haravan_id FROM product_spec_index WHERE spec_format=? "
         "AND COALESCE(is_service,0)=0", (FMT_A,)).fetchall()}
@@ -729,7 +760,8 @@ def groups_overview(only_new: bool = True) -> dict:
     allp = {r[0] for r in conn.execute(q).fetchall()}
     stats = dict(conn.execute(
         "SELECT spec_format, COUNT(*) FROM product_spec_index WHERE condition_kind='new' "
-        "AND COALESCE(is_service,0)=0 AND COALESCE(skipped,0)=0 GROUP BY spec_format").fetchall())
+        "AND COALESCE(is_service,0)=0 AND COALESCE(skipped,0)=0 "
+        "AND COALESCE(published,1)=1 GROUP BY spec_format").fetchall())
     total = conn.execute("SELECT COUNT(*) FROM product_spec_index").fetchone()[0]
     service = conn.execute("SELECT COUNT(*) FROM product_spec_index WHERE is_service=1 "
                            "AND condition_kind='new'").fetchone()[0]
@@ -889,6 +921,77 @@ def list_log(actor: str = None, page: int = 1, per: int = 10) -> dict:
             "pages": max(1, -(-total // per))}
 
 
+def add_error_note(pid: int, label: str, wrong_value: str, correct_value: str,
+                   source: str = "", note: str = "", handle: str = "",
+                   title: str = "") -> int:
+    """Ghi 1 chỉ tiêu SAI của SP (đã đối chiếu trang hãng). Nếu chưa có title/handle
+    thì lấy từ product_spec_index. Trùng (pid+label) thì cập nhật đè, không nhân đôi."""
+    init_schema()
+    conn = db.get_conn()
+    if not title or not handle:
+        r = conn.execute("SELECT handle, title FROM product_spec_index WHERE haravan_id=?",
+                         (pid,)).fetchone()
+        if r:
+            handle = handle or r["handle"]
+            title = title or r["title"]
+    old = conn.execute("SELECT id FROM spec_error_note WHERE haravan_id=? AND label=?",
+                       (pid, label)).fetchone()
+    now = datetime.now().isoformat(timespec="seconds")
+    if old:
+        conn.execute("""UPDATE spec_error_note SET wrong_value=?, correct_value=?,
+            source=?, note=?, status='open', created_at=? WHERE id=?""",
+            (wrong_value, correct_value, source, note, now, old["id"]))
+        eid = old["id"]
+    else:
+        cur = conn.execute("""INSERT INTO spec_error_note
+            (haravan_id,handle,title,label,wrong_value,correct_value,source,note,status,created_at)
+            VALUES (?,?,?,?,?,?,?,?, 'open', ?)""",
+            (pid, handle, title, label, wrong_value, correct_value, source, note, now))
+        eid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return eid
+
+
+def list_error_notes(page: int = 1, per: int = 10, only_open: bool = False) -> dict:
+    """Danh sách SP sai spec cho tab đỏ. Gom theo SP, mỗi SP kèm các chỉ tiêu sai."""
+    init_schema()
+    conn = db.get_conn()
+    where = "WHERE status='open'" if only_open else ""
+    rows = [dict(r) for r in conn.execute(
+        f"SELECT * FROM spec_error_note {where} ORDER BY id DESC").fetchall()]
+    conn.close()
+    # gom theo haravan_id, giữ thứ tự xuất hiện
+    order, grouped = [], {}
+    for r in rows:
+        pid = r["haravan_id"]
+        if pid not in grouped:
+            grouped[pid] = {"haravan_id": pid, "handle": r["handle"], "title": r["title"],
+                            "created_at": r["created_at"], "items": []}
+            order.append(pid)
+        grouped[pid]["items"].append({
+            "label": r["label"], "wrong": r["wrong_value"], "correct": r["correct_value"],
+            "source": r["source"], "note": r["note"], "status": r["status"], "id": r["id"]})
+    cards = [grouped[p] for p in order]
+    total = len(cards)
+    s = max(0, (page - 1) * per)
+    return {"rows": cards[s:s + per], "total": total, "page": page,
+            "pages": max(1, -(-total // per))}
+
+
+def error_note_pids() -> set:
+    """Tập haravan_id đang có lỗi spec (để chấm badge đỏ ở View nhanh / thẻ nhóm)."""
+    init_schema()
+    conn = db.get_conn()
+    try:
+        pids = {r[0] for r in conn.execute(
+            "SELECT DISTINCT haravan_id FROM spec_error_note WHERE status='open'").fetchall()}
+    except sqlite3.Error:
+        pids = set()
+    conn.close()
+    return pids
+
+
 def mark_skipped(pid: int, note: str = "", actor: str = "vo") -> dict:
     """Vợ chốt 'bỏ qua, xem như đã làm' → không tính vào nhóm cần sửa nữa."""
     init_schema()
@@ -961,3 +1064,306 @@ def approved_collections() -> dict:
                         "WHERE kind='collection' GROUP BY handle").fetchall()
     conn.close()
     return {r[0]: r[1] for r in rows}
+
+
+# ════════════════════ VIEW NHANH (23/7) ════════════════════
+import unicodedata as _ud
+
+
+def _qnorm(s: str) -> str:
+    """Chuẩn hoá nhãn để so khớp.
+
+    ⚠️ 'đ' KHÔNG tách được bằng NFD (là ký tự riêng, không phải d + dấu).
+    Không thay trước thì "Độ phân giải" → " o phan giai" và mọi phép khớp
+    nhãn có chữ đ đều trượt — lỗi đã trả giá 23/7.
+    """
+    s = str(s or "").lower().replace("đ", "d")
+    s = _ud.normalize("NFD", s)
+    s = "".join(c for c in s if _ud.category(c) != "Mn")
+    return re.sub(r"[^a-z0-9]+", " ", s).strip()
+
+
+# dòng CẤM đưa vào bảng thông số (rule content của vợ)
+_Q_BAN_LBL = re.compile(r"(?i)^\s*(giá|giá bán|giá niêm yết|đơn giá|bảo hành|tình trạng"
+                        r"|kho hàng|còn hàng|tồn kho|khuyến mãi|mã sản phẩm cũ)\s*$")
+_Q_BAN_VAL = re.compile(r"\d[\d.,]*\s*(₫|đ|vnđ|vnd|đồng)\b", re.I)
+
+
+def _q_pairs_from_product(p: dict) -> list:
+    """Bóc cặp [nhãn, giá trị] đang LIVE từ bản ghi SP."""
+    out = []
+    try:
+        for x in json.loads(p.get("spec_pairs_json") or "[]"):
+            if isinstance(x, dict):
+                k = x.get("label") or x.get("k") or ""
+                v = x.get("value") or x.get("v") or ""
+            elif isinstance(x, (list, tuple)) and len(x) >= 2:
+                k, v = x[0], x[1]
+            else:
+                continue
+            if str(k).strip():
+                out.append([str(k).strip(), str(v).strip()])
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def _q_rows_from_source(rj: str) -> list:
+    out = []
+    try:
+        for x in json.loads(rj or "[]"):
+            if isinstance(x, (list, tuple)) and len(x) >= 2 and str(x[0]).strip():
+                out.append([str(x[0]).strip(), str(x[1]).strip()])
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+# ── Nhãn ĐỒNG NGHĨA khác tên (23/7, vợ chỉ ra ca Lexar NM620) ────────────────
+# Live ghi "Hãng sản xuất | Lexar", nguồn fetch ghi "Thương hiệu | LEXAR" → gộp thô
+# ra 2 dòng cùng nghĩa. Nguồn còn tự trùng: "Tốc độ đọc tối đa" + "Tốc độ đọc".
+# ⚠️ Khớp TRỌN VẸN nhãn, KHÔNG khớp chuỗi con — nếu không "Tốc độ đọc" sẽ nuốt
+# luôn "Tốc độ đọc ngẫu nhiên" (chỉ số khác hẳn).
+_SYN_GROUPS = {
+    "hang":        ["hang san xuat", "thuong hieu", "hang", "brand", "nha san xuat",
+                    "hang sx", "hang sx thuong hieu"],
+    "dong_sp":     ["dong san pham", "dong", "series", "dong sp"],
+    "ma_sp":       ["ma san pham", "ma part", "part number", "ma hang", "sku",
+                    "ma san pham p n", "model", "ma model", "model number"],
+    "form":        ["form factor", "chuan kich co", "kieu dang", "chuan kich thuoc"],
+    "giao_tiep":   ["chuan giao tiep", "giao tiep", "interface", "chuan ket noi",
+                    "giao thuc truyen dan", "giao dien dau ra", "chuan giao dien"],
+    "bang_thong":  ["bang thong", "toc do truyen dan", "toc do truyen",
+                    "toc do truyen tai", "bandwidth", "toc do toi da"],
+    "chuan_ssd":   ["chuan ssd ho tro", "loai o cung tuong thich", "o cung ho tro",
+                    "chuan o cung", "loai o cung ho tro"],
+    "he_dieu_hanh": ["he dieu hanh ho tro", "he dieu hanh", "ho tro he dieu hanh",
+                     "tuong thich he dieu hanh", "os ho tro"],
+    "chip_nho":    ["bo nho flash", "loai chip nho", "chip nho", "loai bo nho",
+                    "cong nghe nand"],
+    "toc_doc":     ["toc do doc tuan tu", "toc do doc toi da", "toc do doc",
+                    "toc do doc tuan tu toi da"],
+    "toc_ghi":     ["toc do ghi tuan tu", "toc do ghi toi da", "toc do ghi",
+                    "toc do ghi tuan tu toi da"],
+    "dung_luong":  ["dung luong", "capacity", "dung luong luu tru"],
+    "kich_thuoc":  ["kich thuoc", "dimensions", "kich thuoc san pham"],
+    "trong_luong": ["trong luong", "can nang", "weight", "trong luong tinh"],
+    "tam_nen":     ["tam nen", "panel", "loai tam nen", "cong nghe tam nen"],
+    "tan_so":      ["tan so quet", "tan so lam tuoi", "refresh rate", "toc do lam moi"],
+    "do_phan_giai": ["do phan giai", "resolution", "do phan giai man hinh"],
+    "cong_suat":   ["cong suat", "cong suat toi da", "cong suat dinh muc"],
+    "socket":      ["socket", "socket ho tro", "de cam", "socket cpu"],
+    "cam_bien":    ["cam bien", "sensor", "mat doc", "cam bien quang"],
+}
+_LABEL_CANON = {lbl: key for key, lst in _SYN_GROUPS.items() for lbl in lst}
+# Nhãn ĐỊNH DANH: là dữ liệu của MÌNH, không phải thông số kỹ thuật → khi trùng
+# thì GIỮ giá trị live, không để nguồn ngoài đè. Nếu không, mã SP "LNM620X256G"
+# của mình bị thay bằng "LNM620X256G-RNNNG" của shop khác.
+_KEEP_LIVE = {"hang", "dong_sp", "ma_sp"}
+
+
+def _canon(label: str) -> str:
+    """Khoá gộp của một nhãn: nhãn đồng nghĩa cho ra cùng khoá."""
+    n = _qnorm(label)
+    return _LABEL_CANON.get(n, n)
+
+
+def _same_value(a: str, b: str) -> bool:
+    """Hai giá trị có coi là MỘT không? Dùng để quyết định có gộp 2 dòng đồng nghĩa.
+
+    ⚠️ Không có phép này thì "Model: M2PF-C3-BK" và "Mã sản phẩm: LNM620X256G"
+    (cùng nhóm ma_sp nhưng khác hẳn nội dung) sẽ bị nuốt mất một dòng.
+    """
+    na, nb = _qnorm(a), _qnorm(b)
+    if not na or not nb:
+        return True
+    if na == nb:
+        return True
+    # ⚠️ "chứa nhau" thôi thì CHƯA đủ: "NM620" nằm trong "LNM620X256G" nhưng là
+    # dòng SP vs mã SP, khác hẳn. Chỉ coi là một khi bên ngắn chiếm ≥60% bên dài
+    # ("m2pf c3 bk" trong "orico m2pf c3 bk" = 62% → đúng là một).
+    if na in nb or nb in na:
+        short, long_ = (na, nb) if len(na) <= len(nb) else (nb, na)
+        if len(short) / max(len(long_), 1) >= 0.6:
+            return True
+    # cùng bộ số + đơn vị (vd "Up to 3000 MBps" ⟷ "3000Mb/s") thì coi là một
+    sa, sb = re.findall(r"\d+(?:[.,]\d+)?", na), re.findall(r"\d+(?:[.,]\d+)?", nb)
+    return bool(sa) and sa == sb
+
+
+def _dedupe_by_canon(rows: list) -> list:
+    """Khử trùng trong CHÍNH một bảng (nguồn hay tự lặp: 'Tốc độ đọc tối đa' +
+    'Tốc độ đọc'). Giữ dòng ĐẦU TIÊN vì thường đầy đủ hơn.
+
+    Chỉ gộp khi GIÁ TRỊ tương thích — khác hẳn thì giữ cả hai, thà thừa còn hơn mất."""
+    keep, out = {}, []
+    for k, v in rows:
+        c = _canon(k)
+        if c in keep and _same_value(keep[c], v):
+            continue
+        if c not in keep:
+            keep[c] = v
+        out.append([k, v])
+    return out
+
+
+def merge_specs(live: list, web: list) -> list:
+    """Mẫu 3 = gộp live + web, ưu tiên GIÁ TRỊ MỚI FETCH khi cùng nhãn.
+
+    Trả [[nhãn, giá trị, trạng thái]] với trạng thái:
+      giu  — chỉ live có, giữ nguyên
+      doi  — cả hai có nhưng khác giá trị → lấy bản web
+      trung— cả hai có và giống nhau
+      moi  — chỉ web có → thêm mới
+    """
+    live = _dedupe_by_canon(live)
+    web = _dedupe_by_canon(web)
+    widx, worder = {}, []
+    for k, v in web:
+        n = _canon(k)
+        if n and n not in widx:
+            widx[n] = [k, v]
+            worder.append(n)
+    out, used = [], set()
+    for k, v in live:
+        if _Q_BAN_LBL.match(k) or _Q_BAN_VAL.search(v):
+            continue
+        n = _canon(k)
+        if n in widx:
+            used.add(n)
+            wk, wv = widx[n]
+            if _qnorm(v) == _qnorm(wv):
+                out.append([k, v, "trung"])
+            elif n in _KEEP_LIVE:
+                out.append([k, v, "giu"])        # định danh: giữ bản của mình
+            else:
+                out.append([k, wv, "doi"])       # sửa theo spec mới fetch
+        else:
+            out.append([k, v, "giu"])
+    for n in worder:
+        if n in used:
+            continue
+        k, v = widx[n]
+        if _Q_BAN_LBL.match(k) or _Q_BAN_VAL.search(v):
+            continue
+        out.append([k, v, "moi"])
+    return out
+
+
+def sort_web_like_live(live: list, web: list) -> list:
+    """Mẫu 2: xếp lại spec fetch theo ĐÚNG thứ tự nhãn của bản live cho dễ soi,
+    phần web có mà live không có thì dồn xuống cuối."""
+    web = _dedupe_by_canon(web)
+    order = {_canon(k): i for i, (k, _v) in enumerate(live)}
+    keyed = [(order.get(_canon(k), 10_000 + i), k, v) for i, (k, v) in enumerate(web)]
+    keyed.sort(key=lambda x: x[0])
+    return [[k, v] for _i, k, v in keyed]
+
+
+def align_live_web(live: list, web: list) -> list:
+    """Xếp NGANG HÀNG bản live và bản fetch: cùng tên thông số thì cùng một dòng.
+
+    Trả [[nhãn_live, giá_trị_live, nhãn_web, giá_trị_web, trạng_thái]] với
+    trạng thái: trung (2 bên giống) · doi (2 bên khác) · chi_live · chi_web.
+    """
+    live = _dedupe_by_canon(live)
+    web = _dedupe_by_canon(web)
+    widx = {}
+    for k, v in web:
+        widx.setdefault(_canon(k), [k, v])
+    out, used = [], set()
+    for k, v in live:
+        c = _canon(k)
+        if c in widx:
+            used.add(c)
+            wk, wv = widx[c]
+            st = "trung" if _qnorm(v) == _qnorm(wv) else "doi"
+            out.append([k, v, wk, wv, st])
+        else:
+            out.append([k, v, "", "", "chi_live"])
+    for k, v in web:                      # phần chỉ bản fetch có → dồn xuống cuối
+        c = _canon(k)
+        if c in used:
+            continue
+        used.add(c)
+        out.append(["", "", k, v, "chi_web"])
+    return out
+
+
+def quick_rows(handle: str, tag_filter: str = "") -> list:
+    """Dữ liệu cho trang View nhanh của 1 collection."""
+    init_schema()
+    base = products_of_group(handle, tag_filter, only_new=True)
+    if not base:
+        return []
+    ids = ",".join(str(r["haravan_id"]) for r in base)
+    conn = db.get_conn()
+    src, src_url, src_title = {}, {}, {}
+    for pid_, rj_, url_, pt_ in conn.execute(
+            f"SELECT haravan_id, rows_json, url, page_title FROM spec_research_source "
+            f"WHERE haravan_id IN ({ids}) AND status='dung'").fetchall():
+        src[pid_] = rj_
+        src_url[pid_] = url_ or ""
+        src_title[pid_] = pt_ or ""
+    full = {r[0]: dict(r) for r in conn.execute(
+        f"SELECT haravan_id, spec_pairs_json FROM product_spec_index "
+        f"WHERE haravan_id IN ({ids})").fetchall()}
+    draft = {r[0]: dict(r) for r in conn.execute(
+        f"SELECT haravan_id, rows_json, skip_review, saved_at FROM spec_quick_draft "
+        f"WHERE haravan_id IN ({ids})").fetchall()}
+    conn.close()
+
+    out = []
+    for r in base:
+        pid = r["haravan_id"]
+        live = _q_pairs_from_product(full.get(pid, {}))
+        web = _q_rows_from_source(src.get(pid))
+        merged = merge_specs(live, web)
+        d = draft.get(pid) or {}
+        saved = _q_rows_from_source(d.get("rows_json")) if d.get("rows_json") else None
+        if saved:                       # vợ đã sửa tay → dùng bản đã lưu
+            merged = [[k, v, "luu"] for k, v in saved]
+        out.append({
+            **r,
+            "live": live, "web": sort_web_like_live(live, web), "merged": merged,
+            "aligned": align_live_web(live, web),
+            "n_live": len(live), "n_web": len(web), "n_merged": len(merged),
+            "n_moi": sum(1 for x in merged if x[2] == "moi"),
+            "n_doi": sum(1 for x in merged if x[2] == "doi"),
+            "src_url": src_url.get(pid, ""),
+            "src_title": src_title.get(pid, ""),
+            "excluded": bool(d.get("skip_review")),
+            "saved_at": (d.get("saved_at") or "").replace("T", " ")[:16],
+            "img": r.get("image_src") or "",
+        })
+    return out
+
+
+def quick_save(pid: int, rows: list) -> dict:
+    """Lưu bản spec vợ chốt vào DB. KHÔNG đẩy lên Haravan."""
+    init_schema()
+    clean = [[str(a).strip(), str(b).strip()] for a, b in rows
+             if str(a).strip() and not _Q_BAN_LBL.match(str(a).strip())]
+    conn = db.get_conn()
+    conn.execute("""INSERT INTO spec_quick_draft (haravan_id, rows_json, skip_review, saved_at)
+        VALUES (?,?,COALESCE((SELECT skip_review FROM spec_quick_draft WHERE haravan_id=?),0),
+                datetime('now','localtime'))
+        ON CONFLICT(haravan_id) DO UPDATE SET rows_json=excluded.rows_json,
+                saved_at=excluded.saved_at""",
+                 (pid, json.dumps(clean, ensure_ascii=False), pid))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "n": len(clean)}
+
+
+def quick_exclude(pid: int, on: bool = True) -> dict:
+    """Loại SP khỏi danh sách duyệt (hàng quá cũ, không muốn đụng) → KHÔNG sync spec."""
+    init_schema()
+    conn = db.get_conn()
+    conn.execute("""INSERT INTO spec_quick_draft (haravan_id, skip_review, saved_at)
+        VALUES (?,?,datetime('now','localtime'))
+        ON CONFLICT(haravan_id) DO UPDATE SET skip_review=excluded.skip_review,
+                saved_at=excluded.saved_at""", (pid, 1 if on else 0))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "excluded": bool(on)}

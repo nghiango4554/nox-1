@@ -20,11 +20,21 @@ import spec_research_runner as rr  # noqa: E402
 
 def status():
     conn = db.get_conn()
+    # 23/7: PHẢI lọc published — trước đó đếm cả hàng đã ẩn nên phí 31 query
+    # research cho SP không còn bán. Xem AUDIT_link_chet_20260723.md.
     tot = conn.execute("""SELECT COUNT(*) FROM product_spec_index WHERE condition_kind='new'
-        AND COALESCE(is_service,0)=0 AND COALESCE(skipped,0)=0""").fetchone()[0]
-    tra = conn.execute("SELECT COUNT(DISTINCT haravan_id) FROM spec_research_source").fetchone()[0]
+        AND COALESCE(is_service,0)=0 AND COALESCE(skipped,0)=0
+        AND COALESCE(published,1)=1""").fetchone()[0]
+    # ⚠️ Tử số PHẢI lọc cùng phạm vi với mẫu số, nếu không ra "CHƯA TRA" ÂM
+    # (2056 đã tra / 1955 trong phạm vi = -101). Lỗi này sinh ra ngay khi thêm
+    # bộ lọc published 23/7 mà quên áp cho 2 dòng dưới.
+    SCOPE = """ AND haravan_id IN (SELECT haravan_id FROM product_spec_index
+        WHERE condition_kind='new' AND COALESCE(is_service,0)=0
+          AND COALESCE(skipped,0)=0 AND COALESCE(published,1)=1)"""
+    tra = conn.execute("SELECT COUNT(DISTINCT haravan_id) FROM spec_research_source "
+                       "WHERE 1=1" + SCOPE).fetchone()[0]
     ok = conn.execute("SELECT COUNT(DISTINCT haravan_id) FROM spec_research_source "
-                      "WHERE status='dung'").fetchone()[0]
+                      "WHERE status='dung'" + SCOPE).fetchone()[0]
     conn.close()
     print(f"SP trong phạm vi: {tot} · đã tra: {tra} · có nguồn dùng được: {ok} "
           f"· CHƯA TRA: {tot - tra}")
