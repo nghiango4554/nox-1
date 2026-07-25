@@ -25,6 +25,9 @@
   .redo-btn{margin-left:8px;padding:4px 11px;border:1px solid #d9cdd6;border-radius:8px;background:#fff;cursor:pointer;font:inherit;font-size:12px;font-weight:600;color:#b25a00}
   .redo-btn:hover{background:#fff7ee;border-color:#e0a060}
   .redo-btn:disabled{opacity:.55;cursor:default}
+  .paste-btn{margin-left:8px;padding:4px 11px;border:1px solid #b7e0c4;border-radius:8px;background:#effaf3;cursor:pointer;font:inherit;font-size:12px;font-weight:700;color:#1e8c4e}
+  .paste-btn:hover{background:#1e8c4e;color:#fff;border-color:#1e8c4e}
+  .paste-btn:disabled{opacity:.6;cursor:wait}
   .saved{font-size:11.5px;color:#1c7a3e;font-weight:600;opacity:0;transition:opacity .2s}
   .saved.show{opacity:1}
   .strip{display:flex;gap:9px;overflow-x:auto;padding-bottom:5px}
@@ -130,6 +133,7 @@
             <a class="live-btn" href="https://sintech.vn/products/{{ it.handle }}" target="_blank" rel="noopener" title="Mở trang sản phẩm trên web">🔗 Xem live</a>
           {% endif %}
           <button class="redo-btn" onclick="redo(this)">↻ Làm lại (không xóa nền)</button>
+          <button class="paste-btn" onclick="pasteFront(this,'{{ it.handle }}')" title="Copy ảnh từ ChatGPT (chuột phải → Copy image) rồi bấm đây — ảnh tự căn giữa & lên đầu SP">📋 Dán ảnh → đầu SP</button>
         </div>
         <div class="strip">
           {% if not it.imgs and it.live %}
@@ -415,6 +419,34 @@ function addImg(input, handle){
     } else { alert('Lỗi: '+(d.error||'')); txt.textContent='Thêm ảnh'; }
   }).catch(()=>{ alert('Lỗi mạng'); txt.textContent='Thêm ảnh'; });
   input.value='';
+}
+
+// ── Dán ảnh từ clipboard (ChatGPT) -> căn giữa -> lên ĐẦU SP ──
+async function pasteFront(btn, handle){
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = '📋 Đang đọc clipboard...';
+  try{
+    const items = await navigator.clipboard.read();
+    let blob = null;
+    for(const it of items){
+      const type = it.types.find(t => t.startsWith('image/'));
+      if(type){ blob = await it.getType(type); break; }
+    }
+    if(!blob){
+      alert('Clipboard chưa có ảnh.\nỞ ChatGPT: chuột phải lên ảnh → "Copy image" (Sao chép hình ảnh), rồi bấm nút này.');
+      btn.disabled=false; btn.textContent=orig; return;
+    }
+    const b64 = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(blob); });
+    btn.textContent = '📋 Đang tải lên...';
+    const resp = await fetch('/thumbs/paste',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({handle, image:b64})});
+    const d = await resp.json();
+    if(d.ok){ btn.textContent='✓ Xong, tải lại...'; setTimeout(()=>location.reload(), 500); }
+    else { alert('Lỗi: '+(d.error||'')); btn.disabled=false; btn.textContent=orig; }
+  }catch(e){
+    alert('Không đọc được clipboard: '+(e.message||e)+'\n(Trình duyệt cần cho phép quyền đọc clipboard — bấm "Allow/Cho phép" khi hỏi.)');
+    btn.disabled=false; btn.textContent=orig;
+  }
 }
 
 // ── Duyệt / bỏ duyệt collection ──

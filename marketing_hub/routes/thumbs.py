@@ -400,17 +400,56 @@ def _strip_accents(s):
     return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 
 
+def _old_cond_handles():
+    """Handle SP hàng CŨ / qua-sử-dụng (condition_kind cu/qsd) — ẩn khỏi /thumbs."""
+    try:
+        import db as _db
+        conn = _db.get_conn()
+        rows = conn.execute(
+            "SELECT handle FROM product_spec_index WHERE condition_kind IN ('cu','qsd')"
+        ).fetchall()
+        conn.close()
+        return {r["handle"] for r in rows if r["handle"]}
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def _product_types():
+    """handle -> product_type (từ DB) để lọc collection theo loại SP."""
+    try:
+        import db as _db
+        conn = _db.get_conn()
+        rows = conn.execute("SELECT handle, product_type FROM product_spec_index").fetchall()
+        conn.close()
+        return {r["handle"]: r["product_type"] for r in rows if r["handle"]}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+# Collection chỉ hiện đúng loại SP (bỏ SP smart-rule vơ nhầm: laptop/PC lẫn trong vga…).
+COLLECTION_TYPE_FILTER = {"vga-nvidia": {"VGA"}}
+
+# Loại SP ẨN toàn cục khỏi /thumbs (không chuẩn hoá) — combo PC dựng sẵn, mình không chỉnh.
+HIDE_PRODUCT_TYPES = {"COMBO PC"}
+
+
 def _collection_items(handle):
-    """(items, missing, n_img) — SP trong collection theo thứ tự collection, kèm ảnh chuẩn local."""
+    """(items, missing, n_img) — SP trong collection theo thứ tự collection, kèm ảnh chuẩn local.
+
+    Bỏ hàng CŨ (condition_kind cu/qsd) khỏi lưới — chỉ chuẩn hoá hàng đang bán mới."""
     items, missing = [], []
     n_img = 0
+    old_cond = _old_cond_handles()
+    allow_types = COLLECTION_TYPE_FILTER.get(handle)
+    ptypes = _product_types()          # luôn nạp: cần cho lọc combo PC toàn cục
     primary = _primary_map()           # SP -> collection chính
     if handle == UNGROUPED:
         # nhóm SP không thuộc collection nào trên menu live → lấy thẳng từ kho SP
         import db as _db
         conn = _db.get_conn()
         rows = conn.execute("""SELECT handle, title, published, haravan_id FROM product_spec_index
-            WHERE condition_kind='new' AND COALESCE(is_service,0)=0
+            WHERE condition_kind='new' AND COALESCE(is_service,0)=0 AND published=1
+              AND product_type != 'COMBO PC'
               AND haravan_id NOT IN (SELECT haravan_id FROM spec_group_products)
             ORDER BY title""").fetchall()
         conn.close()
@@ -429,6 +468,15 @@ def _collection_items(handle):
     if cid:
         for p in _products_in(cid):
             ph = p.get("handle")
+            if ph in old_cond:
+                continue               # ẩn hàng cũ khỏi /thumbs
+            if p.get("published_at") is None:
+                continue               # ẩn SP unpublished (đã ẩn khỏi cửa hàng)
+            t = ptypes.get(ph)
+            if t in HIDE_PRODUCT_TYPES:
+                continue               # ẩn combo PC toàn cục (mình không chỉnh PC)
+            if allow_types and t and t not in allow_types:
+                continue               # collection này chỉ hiện đúng loại (bỏ laptop/PC lẫn)
             # SP có collection chính KHÁC collection đang xem -> đánh dấu 'đã xem ở đó'
             prim = primary.get(ph)
             seen_at = prim if (prim and prim != handle) else None
@@ -575,6 +623,33 @@ def thumbs_add_image():
     if not added:
         return jsonify(ok=False, error="không ảnh nào hợp lệ"), 400
     return jsonify(ok=True, added=len(added), idxs=added, errors=errs)
+
+
+def thumbs_paste_front():
+    """Dán 1 ảnh từ clipboard (base64) -> chuẩn hoá căn giữa 1000² -> chèn vào ĐẦU SP
+    (thành ảnh đại diện). body JSON: {handle, image: 'data:image/...;base64,...'}."""
+    data = request.get_json(force=True, silent=True) or {}
+    handle = (data.get("handle") or "").strip()
+    img_data = data.get("image") or ""
+    if not handle or not img_data:
+        return jsonify(ok=False, error="thiếu handle hoặc ảnh"), 400
+    try:
+        if "," in img_data:
+            img_data = img_data.split(",", 1)[1]
+        raw = base64.b64decode(img_data)
+        std = _standardize_no_rembg(Image.open(io.BytesIO(raw)))
+    except Exception as e:  # noqa: BLE001
+        return jsonify(ok=False, error="ảnh không đọc được: " + str(e)[:60]), 400
+    d = THUMB_ROOT / "std" / handle
+    d.mkdir(parents=True, exist_ok=True)
+    existing = [int(p.stem) for p in d.glob("*.jpg") if p.stem.isdigit()]
+    nidx = (max(existing) + 1) if existing else 0
+    std.save(d / f"{nidx}.jpg", quality=92)
+    # manifest: chèn entry mới lên ĐẦU -> thành ảnh đại diện (pos 1)
+    man = _manifest(handle) or [{"idx": i} for i in sorted(existing)]
+    man.insert(0, {"idx": nidx, "image_id": None, "position": None, "note": "pasted-front"})
+    (d / "manifest.json").write_text(json.dumps(man, ensure_ascii=False), encoding="utf-8")
+    return jsonify(ok=True, idx=nidx, n=len(man))
 
 
 def thumbs_delete_image():
@@ -950,4 +1025,5 @@ def register(app):
     app.add_url_rule("/thumbs/approve-group", "thumbs_approve_group", thumbs_approve_group,
                      methods=["POST"])
     app.add_url_rule("/thumbs/add-image", "thumbs_add_image", thumbs_add_image, methods=["POST"])
+    app.add_url_rule("/thumbs/paste", "thumbs_paste_front", thumbs_paste_front, methods=["POST"])
     app.add_url_rule("/thumbs/delete-image", "thumbs_delete_image", thumbs_delete_image, methods=["POST"])
