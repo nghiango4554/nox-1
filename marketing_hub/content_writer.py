@@ -96,7 +96,7 @@ def validate_body_md(body_md: str) -> list:
         warnings.append(f"Quá nhiều câu mở bằng 'Bạn...' ({bao_open_count}/{p_count}) — đa dạng connector hơn")
     # 10. Author signature ở cuối bài (rule mới — tăng trust)
     if "team kỹ thuật Sintech" not in body_md or "0911 713 000" not in body_md:
-        warnings.append("Thiếu author signature cuối bài: 'Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Q7, TP.HCM.'")
+        warnings.append("Thiếu author signature cuối bài: 'Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh.'")
     # 11. FAQ section: mỗi câu hỏi PHẢI là H3
     faq_h2_match = re.search(r"^##\s+.*[Cc]âu hỏi\s+thường\s+gặp.*$", body_md, flags=re.MULTILINE)
     if faq_h2_match:

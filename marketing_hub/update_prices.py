@@ -293,7 +293,7 @@ def build_caption(name, hook, specs, price_note, usp, link, hashtags, censored_p
         f"👉 Xem thêm thông tin sản phẩm tại đây:\n{link}\n\n"
         f"📩 Inbox ngay để chốt giá tốt nhất\n"
         f"📞 Hotline: 0911 713 000\n"
-        f"📍 457 Trần Xuân Soạn, Q7\n\n"
+        f"📍 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh\n\n"
         f"{hashtags}"
     )
 

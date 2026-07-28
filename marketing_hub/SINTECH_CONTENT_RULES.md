@@ -218,13 +218,13 @@ signature
 
 > Sintech hiện công bố chính sách bán hàng, kiểm hàng, vận chuyển và trả góp 0% qua thẻ tín dụng đối với 1 số sản phẩm.
 
-Dữ liệu thật được dùng: build/lắp/test trước giao · bảo hành chính hãng · đổi trả theo chính sách · trả góp 0% · tư vấn cấu hình · Hotline 0911 713 000 · 457 Trần Xuân Soạn, Q7, TP.HCM.
+Dữ liệu thật được dùng: build/lắp/test trước giao · bảo hành chính hãng · đổi trả theo chính sách · trả góp 0% · tư vấn cấu hình · Hotline 0911 713 000 · 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh.
 **Không bịa** số lượng SP, mức giảm, tồn kho, cam kết hiệu năng.
 
 ## 2.8 Signature — CỐ ĐỊNH, một câu duy nhất cho MỌI loại SP
 
 ```html
-<p><em>Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Q7, TP.HCM.</em></p>
+<p><em>Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh.</em></p>
 ```
 Kể cả phụ kiện (USB, cáp, loa) vẫn dùng "Tư vấn **cấu hình**". **Đừng tự chế biến thể.** Nhớ **dấu chấm cuối**.
 

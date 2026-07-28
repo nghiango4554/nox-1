@@ -105,7 +105,7 @@ TB = ('border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; f
 TH = 'border: 1px solid #999; background: #f4f4f4; padding: 8px; font-weight: 700; text-align: left;'
 TD = 'border: 1px solid #999; padding: 8px;'
 
-SYSTEM = f"""Bạn viết bài blog cho Sintech — cửa hàng linh kiện & PC tại TP.HCM (457 Trần Xuân Soạn, Q7).
+SYSTEM = f"""Bạn viết bài blog cho Sintech — cửa hàng linh kiện & PC tại TP.HCM (457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh).
 
 MỤC TIÊU: thay thế nhóm bài "hướng dẫn cài phần mềm crack" vừa bị gỡ. Bài mới phải phục vụ
 người CÓ Ý ĐỊNH MUA, không phải người tìm phần mềm lậu.

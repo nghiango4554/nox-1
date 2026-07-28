@@ -238,7 +238,7 @@ Organize thành JSON theo schema trong system. Strict no-fabricate."""
     return data
 
 
-_SYSTEM_PROMPT = """Bạn là chuyên viên content + SEO cho Sintech.vn (PC Gaming & Gear, 457 Trần Xuân Soạn Q7 TP.HCM, hotline 0911 713 000).
+_SYSTEM_PROMPT = """Bạn là chuyên viên content + SEO cho Sintech.vn (PC Gaming & Gear, 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh, hotline 0911 713 000).
 Vợ Nghĩa đang tạo 1 SP MỚI trên Haravan và cần bạn gen 4 thứ: body_html / excerpt / seo_title / seo_meta.
 
 ═══════════════════════════════════════════════════════════════
@@ -379,7 +379,7 @@ BODY_HTML — CẤU TRÚC BẮT BUỘC (theo đúng thứ tự):
 
 <p>Tóm lại, ... outro 2-3 câu (mở bằng "Tóm lại,/Nói ngắn gọn,/Kết lại,/Sau tất cả,") + 1 link <strong>Sintech</strong>.</p>
 
-<p><em>Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Q7, TP.HCM.</em></p>
+<p><em>Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh.</em></p>
 
 ═══════════════════════════════════════════════════════════════
 SEO TITLE (45-61 ký tự, sweet 50-58):

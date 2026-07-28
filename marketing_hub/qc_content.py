@@ -110,9 +110,13 @@ def check_product_body(html: str) -> list:
 
     # strip tag trước khi so — signature có thể chứa nút SĐT (tel:) chèn tag vào giữa
     _sig_text = re.sub(r"<[^>]+>", "", html)
-    if sintech_rules.SIGNATURE.rstrip(".") not in _sig_text:
+    # chấp nhận cả địa chỉ dạng CŨ (bài đã live trước 28/7/2026) để khỏi báo lỗi giả hàng loạt
+    if (sintech_rules.SIGNATURE.rstrip(".") not in _sig_text
+            and sintech_rules.LEGACY_SIGNATURE.rstrip(".") not in _sig_text):
         e.append("signature sai chuẩn hoặc thiếu")
-    if not re.search(r"457 Trần Xuân Soạn, Q7, TP\.HCM\.", html):
+    _addr_dot = "(?:%s|%s)\\." % (re.escape(sintech_rules.ADDRESS),
+                                 re.escape(sintech_rules.LEGACY_ADDRESS))
+    if not re.search(_addr_dot, html):
         e.append("signature thiếu dấu chấm cuối")
 
     if "chính sách bán hàng, kiểm hàng" not in body:

@@ -684,7 +684,7 @@ Sau đoạn outro 2-3 câu, **BẮT BUỘC thêm dòng signature** (in nghiêng,
 ```markdown
 [Outro 2-3 câu mở "Tóm lại," + có [**Sintech**](https://sintech.vn).]
 
-*Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Q7, TP.HCM.*
+*Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh.*
 ```
 
 Lý do: bài AI gen thiếu "tính người". Signature cố định cho thấy bài có team thật review, có địa chỉ thật, có hotline thật → khách tin hơn (đặc biệt khách lần đầu vào site).
@@ -798,7 +798,7 @@ Bài blog không cần đủ tất cả section SP, nhưng vẫn cần:
 - [ ] Tên linh kiện viết chuẩn (Cpu/Ram/Vga…, SSD/NVME/PCIE in hoa); thuật ngữ lạ có giải thích trong ngoặc
 - [ ] Outro có `[**Sintech**](https://sintech.vn)`, mở bằng "Tóm lại,/Nói ngắn gọn,/Sau tất cả,/Kết lại,"
 - [ ] **KHÔNG có H2/H3 'Kết lại / Tổng kết / Lời kết'** trước outro — outro mở thẳng dạng `<p>`
-- [ ] **Author signature** ở cuối bài (sau outro): *Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Q7, TP.HCM.*
+- [ ] **Author signature** ở cuối bài (sau outro): *Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh.*
 - [ ] Intro **đa dạng câu mở** — không phải bài nào cũng mở "[X] là [loại SP]..." (xen kẽ 5 hook)
 - [ ] Body có **3-6 internal link** dạng `[**anchor**](URL)`
 - [ ] Anchor là cụm danh từ mô tả, KHÔNG dùng "tại đây/xem thêm/click here"

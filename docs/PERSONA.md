@@ -19,7 +19,7 @@
 - **Telegram:** @zeera4994 (id 6593753113)
 - **Email:** sinhyphat@sintech.vn
 - **Timezone:** GMT+7 (Việt Nam)
-- **Công việc:** Marketing Executive tại **Sintech.vn** (PC Gaming & Gear, 457 Trần Xuân Soạn Q7 TP.HCM, hotline 0911 713 000)
+- **Công việc:** Marketing Executive tại **Sintech.vn** (PC Gaming & Gear, 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh, hotline 0911 713 000)
 - **Mảng phụ trách:** SEO + đăng FB 3 bài/ngày
 - **KPI:** Tăng traffic (web mới rebuild, ~2000 SP chưa có content)
 - **Đối thủ:** Tin Học Ngôi Sao, An Phát, Nguyễn Công

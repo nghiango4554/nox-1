@@ -93,7 +93,7 @@ def fetch_real_products(haravan_collection_id: int, limit: int = 20) -> dict:
         return {"ok": False, "error": str(e)}
 
 
-_SYSTEM_PROMPT = """Bạn là chuyên gia SEO + copywriter cho Sintech.vn — shop PC, laptop, gaming gear tại 457 Trần Xuân Soạn, Q7, TP.HCM. Hotline 0911 713 000. Nền tảng Haravan.
+_SYSTEM_PROMPT = """Bạn là chuyên gia SEO + copywriter cho Sintech.vn — shop PC, laptop, gaming gear tại 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh. Hotline 0911 713 000. Nền tảng Haravan.
 NHIỆM VỤ: Viết content landing page cho 1 COLLECTION (category sản phẩm), tone tư vấn mua hàng, không học thuật, không SEOer.
 
 ═══════════════════════════════════════════════════
@@ -268,7 +268,7 @@ THỨ TỰ NỘI DUNG:
 
 5. <p>Tóm lại, [tên collection] tại <a href="https://sintech.vn"><strong>Sintech</strong></a> [chốt 2 câu phân tích lại]. Nếu chưa chắc nên chọn [option A] hay [option B], Sintech có thể tư vấn theo [nhu cầu/ngân sách/use case cụ thể] của bạn.</p>
 
-6. <p><em>Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Q7, TP.HCM.</em></p>
+6. <p><em>Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh.</em></p>
 
 ═══════════════════════════════════════════════════
 ⚠️ UNIQUE — MỖI BÀI PHẢI ĐỘC NHẤT
@@ -475,7 +475,7 @@ def _fix_meta_length(meta: str, collection_name: str, max_ai_retries: int = 2) -
 # ─────────── GUARD WORD-COUNT (ép body ≥2000 từ — bài chất lượng) ───────────
 _WORD_FLOOR = 2000  # vợ yêu cầu: bài collection chất lượng phải ≥2000 từ
 
-_EXPAND_SYSTEM_PROMPT = """Bạn là chuyên gia SEO + copywriter cho Sintech.vn (PC, laptop, gaming gear, 457 Trần Xuân Soạn Q7 TP.HCM, hotline 0911 713 000).
+_EXPAND_SYSTEM_PROMPT = """Bạn là chuyên gia SEO + copywriter cho Sintech.vn (PC, laptop, gaming gear, 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh, hotline 0911 713 000).
 NHIỆM VỤ DUY NHẤT: MỞ RỘNG một body HTML collection đã có cho ĐỦ 2000-2500 TỪ (nhắm ~2200), giữ NGUYÊN cấu trúc + chất lượng. KHÔNG viết lại từ đầu. KHÔNG vượt quá 2500 từ.
 
 CÁCH MỞ RỘNG (chỉ THÊM, không xoá nội dung cũ):
@@ -665,7 +665,7 @@ Trả JSON thuần."""
     }
 
 
-_TITLE_META_SYSTEM_PROMPT = """Bạn là chuyên gia SEO copywriter cho Sintech.vn (PC, laptop, gaming gear, 457 Trần Xuân Soạn Q7 TP.HCM, hotline 0911 713 000).
+_TITLE_META_SYSTEM_PROMPT = """Bạn là chuyên gia SEO copywriter cho Sintech.vn (PC, laptop, gaming gear, 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh, hotline 0911 713 000).
 
 Nhiệm vụ: Gen LẠI title + meta description CHO 1 collection. KHÔNG cần body.
 

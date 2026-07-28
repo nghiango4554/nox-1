@@ -15,7 +15,11 @@ Cách dùng trong writer:
 """
 
 HOTLINE = "0911 713 000"
-ADDRESS = "457 Trần Xuân Soạn, Q7, TP.HCM"
+# Vợ chốt 28/7/2026: địa chỉ viết ĐỦ, không rút gọn Q7/TP.HCM nữa.
+ADDRESS = "457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh"
+# Dạng CŨ — còn nằm trong hàng trăm bài đã live. Chỉ dùng để QA khỏi báo lỗi giả,
+# TUYỆT ĐỐI không dùng để sinh nội dung mới.
+LEGACY_ADDRESS = "457 Trần Xuân Soạn, Q7, TP.HCM"
 HOMEPAGE = "https://sintech.vn"
 
 # CTA HOA chuẩn (cụm hành động viết HOA). KHÁM PHÁ NGAY = SP cao cấp/độc lạ.
@@ -34,6 +38,7 @@ FORBIDDEN_FILLER = [
 ]
 
 SIGNATURE = f"Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline {HOTLINE} · {ADDRESS}."
+LEGACY_SIGNATURE = f"Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline {HOTLINE} · {LEGACY_ADDRESS}."
 
 TITLE_RULES = (
     "TITLE 45-61 ký tự (target 45-58, tối đa tuyệt đối 61). "

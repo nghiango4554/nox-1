@@ -152,7 +152,7 @@ Không copy. Không nhắc đối thủ trong public.
 
 ### 6.4. Dữ liệu thật của Sintech
 
-Chỉ dùng đúng thực tế: build/lắp/test trước giao · bảo hành chính hãng · đổi trả theo chính sách · trả góp 0% · tư vấn cấu hình theo ngân sách · Hotline **0911 713 000** · Địa chỉ **457 Trần Xuân Soạn, Q7, TP.HCM**.
+Chỉ dùng đúng thực tế: build/lắp/test trước giao · bảo hành chính hãng · đổi trả theo chính sách · trả góp 0% · tư vấn cấu hình theo ngân sách · Hotline **0911 713 000** · Địa chỉ **457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh**.
 
 **Không bịa** số lượng SP, mức giảm, tồn kho, cam kết hiệu năng, chính sách chưa xác nhận.
 

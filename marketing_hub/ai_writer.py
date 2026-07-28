@@ -363,7 +363,7 @@ def _build_user_prompt(product_info: dict) -> str:
         "10. Đọc kỹ section 'VĂN PHONG MẪU' ở đầu rules — viết theo tone 'người am hiểu chia sẻ' giống bài PC văn phòng / máy bộ mẫu.\n"
         "11. **VARY câu mở intro** — KHÔNG phải bài nào cũng mở '[Tên SP] là [loại SP]...'. Chọn 1 trong 5 hook ở rules section 7 (định nghĩa / trải nghiệm thực / nhu cầu khách / so sánh / tình huống dùng). Đa dạng giữa các bài.\n"
         "12. **BẮT BUỘC author signature CUỐI bài** (sau outro paragraph), nguyên văn in nghiêng:\n"
-        "    *Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Q7, TP.HCM.*\n"
+        "    *Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh.*\n"
         "13. **FAQ section**: Section 'Câu hỏi thường gặp' là H2, **mỗi câu hỏi BẮT BUỘC là H3** (`### [câu hỏi]?`). KHÔNG để câu hỏi dạng paragraph thường hoặc bold. Câu trả lời 2-4 câu paragraph ngay sau H3.\n"
         "14. Output 1 JSON object đúng schema {analysis_md, titles, metas, keywords, outline_md, body_md}, KHÔNG markdown code fence.\n"
         "15. **BẢNG**: bài SP có **1-3 bảng** Markdown. Nếu SP có spec số (dung lượng/tốc độ/kích thước/cổng…) BẮT BUỘC có ≥1 bảng (vd 'Thông số nổi bật' hoặc 'Chọn theo nhu cầu'). **Trước mỗi bảng ≥2 câu dẫn, sau mỗi bảng 2-3 câu tóm tắt.** KHÔNG để H2/section vừa mở đã là bảng/bullet ngay. Chỉ bỏ bảng khi SP gần như không có spec số.\n"

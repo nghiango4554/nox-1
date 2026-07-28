@@ -126,7 +126,7 @@ Pattern title ≤61c, meta 140-160c, đủ 4 CTA gồm "KHÁM PHÁ NGAY". Detail
 
 1. Drop ảnh vào `Desktop\Sintech\PIC đăng page\<DD-M>\`
 2. Upload qua web `/posts/<id>/update` (upload form)
-3. Footer chuẩn: Hotline `0911 713 000` + Địa chỉ `457 Trần Xuân Soạn Q7` + hashtag cluster
+3. Footer chuẩn: Hotline `0911 713 000` + Địa chỉ `457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh` + hashtag cluster
 4. Che giá: dùng pattern `1Tr8xx`, `7x.xxx`
 5. UTF-8 POST: dùng Python script, KHÔNG `curl -F` (Windows fail emoji)
 
