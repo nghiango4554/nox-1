@@ -53,39 +53,144 @@
   .sresults a:hover{background:#faf5f8}
   .sresults .ct{margin-left:auto;font-size:11.5px;color:#a06a8c;background:#fdf8fb;border:1px solid #f0dfe9;padding:1px 8px;border-radius:999px;white-space:nowrap}
   .sresults .empty{padding:11px 13px;color:var(--ink-3);font-size:13px}
+  /* ── 27/7/2026: thanh việc cần làm + bộ lọc ── */
+  .kpi.hot{border-color:#f0c987;background:#fffdf7}
+  .kpi.hot b{color:#b45309}
+  .kpi a{text-decoration:none;color:inherit;display:block}
+  .todo{background:#fffdf7;border:1px solid #f0c987;border-radius:14px;margin-bottom:16px;overflow:hidden}
+  .todo>summary{cursor:pointer;padding:13px 16px;font-size:14.5px;font-weight:700;color:#92400e;
+    display:flex;align-items:center;gap:9px;list-style:none}
+  .todo>summary::-webkit-details-marker{display:none}
+  .todo>summary::before{content:"▸";transition:.15s;display:inline-block}
+  .todo[open]>summary::before{transform:rotate(90deg)}
+  .todo .tbody{padding:0 16px 14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:8px}
+  .todo .ti{display:flex;align-items:center;gap:9px;padding:8px 11px;background:#fff;border:1px solid #f2e3c9;
+    border-radius:9px;text-decoration:none;color:inherit;font-size:13px}
+  .todo .ti:hover{border-color:#d75151;background:#fffaf5}
+  .todo .ti .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .todo .ti .qty{margin-left:auto;font-weight:700;font-size:12px;padding:2px 9px;border-radius:999px;white-space:nowrap}
+  /* khối "chỉ cần bấm nút" — tách khỏi việc phải làm tay (vợ hỏi 27/7) */
+  .todo.push{background:#f2fbf5;border-color:#a7e8c0}
+  .todo.push .tophead{display:flex;align-items:center;gap:16px;padding:15px 17px;flex-wrap:wrap}
+  .todo.push .tophead>div{flex:1;min-width:250px}
+  .todo.push b{font-size:15px;color:#14532d}
+  .todo.push .tsub{font-size:13px;color:#3f6b50;margin-top:3px;line-height:1.5}
+  .todo.push .syncbtn{margin:0}
+  .todo.push details{border-top:1px solid #cdeed9}
+  .tsee{cursor:pointer;padding:9px 17px;font-size:13px;color:#3f6b50;font-weight:600;list-style:none}
+  .tsee::-webkit-details-marker{display:none}
+  .tsee::before{content:"▸ ";display:inline-block;transition:.15s}
+  details[open]>.tsee::before{transform:rotate(90deg)}
+  .todo.push .tbody{padding-top:4px}
+  .alldone{background:#f2fbf5;border:1px solid #a7e8c0;border-radius:14px;padding:12px 16px;
+    font-size:13.5px;color:#14532d;margin-bottom:16px}
+  .qty.relech{background:#fff4e5;color:#b45309} .qty.nogen{background:#f3eef2;color:#8a7d87}
+  .qty.duyet{background:#e7f7ec;color:#1c7a3e}
+  .filters{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .fchip{border:1px solid #d9cdd6;background:#fff;border-radius:999px;padding:6px 14px;cursor:pointer;
+    font:inherit;font-size:13px;color:var(--ink-2)}
+  .fchip:hover{background:#faf5f8}
+  .fchip.on{background:#3a2b33;color:#fff;border-color:#3a2b33}
+  .fchip b{font-weight:700}
+  .wave.hidden,.card.hidden,.empty-note.hidden{display:none}
+  .wave h3 .need{background:#fff4e5;color:#b45309;font-size:11.5px;font-weight:700;
+    padding:2px 9px;border-radius:999px;margin-left:2px}
+  .toolbar{position:sticky;top:0;z-index:20;background:var(--bg,#faf7f9);padding-top:8px;margin-top:-8px}
+  .empty-note{padding:22px;text-align:center;color:var(--ink-3);font-size:14px;
+    background:#fff;border:1px dashed #e0d3db;border-radius:14px}
 </style>
 {% endblock %}
 {% block content %}
   <div class="kpis">
-    <div class="kpi"><b>{{ n_std }}</b><span>ảnh chuẩn đã gen</span></div>
-    <div class="kpi"><b>{{ tot.col_done }}/{{ n_col }}</b><span>collection xong 100%</span></div>
-    <div class="kpi"><b>1000²</b><span>nền trắng · fill 85%</span></div>
+    <div class="kpi"><b>{{ tot.pct }}%</b><span>{{ tot.gen_uniq }}/{{ tot.sp_uniq }} SP đã có ảnh chuẩn</span></div>
+    <div class="kpi"><b>{{ tot.col_done }}/{{ n_col }}</b><span>danh mục xong 100%</span></div>
+    {% if tot.push_sp %}
+    <div class="kpi hot"><a href="#viec-can-lam"><b>{{ tot.push_sp }}</b>
+      <span>SP có ảnh sẵn, chờ đẩy live</span></a></div>{% endif %}
+    {% if tot.nogen %}
+    <div class="kpi hot"><a href="#viec-can-lam"><b>{{ tot.nogen }}</b>
+      <span>danh mục chưa gen ảnh nào</span></a></div>{% endif %}
+    <div class="kpi"><b>{{ tot.synced }}</b><span>danh mục đã sync xong</span></div>
   </div>
-  <p class="legend">Chuẩn: 1000×1000, nền trắng, sản phẩm căn giữa chiếm 85% khung. Bấm 1 collection để
-    xem từng SP + kéo-thả sắp xếp. Xem xong bấm <b>Duyệt</b> trong collection → ngoài này hiện ✓.</p>
 
-  <div class="searchwrap">
-    <input id="spsearch" type="text" placeholder="🔍 Tìm tên sản phẩm… (SP ở nhiều danh mục sẽ hiện nhiều dòng)" autocomplete="off">
-    <div class="sresults" id="sresults"></div>
+  {% if tot.todo_push %}
+  <div class="todo push" id="viec-can-lam">
+    <div class="tophead">
+      <div>
+        <b>✅ Chỉ cần bấm nút — không phải làm tay</b>
+        <div class="tsub">{{ tot.push_sp }} sản phẩm đã có ảnh chuẩn sẵn ở {{ tot.todo_push|length }} danh mục,
+          chỉ chờ đẩy lên live. Bấm 1 lần là xong hết.</div>
+      </div>
+      <button class="syncbtn" id="syncbtn" onclick="syncApproved()">⤴ Đẩy {{ tot.push_sp }} SP lên live</button>
+    </div>
+    <details>
+      <summary class="tsee">Xem {{ tot.todo_push|length }} danh mục sẽ được đẩy</summary>
+      <div class="tbody">
+        {% for t in tot.todo_push %}
+        <a class="ti" href="{{ url_for('thumbs_collection', handle=t.handle) }}">
+          <span class="nm">{{ t.title or t.handle }}</span>
+          {% if t.kind=='relech' %}<span class="qty relech">{{ t.pending }} SP</span>
+          {% else %}<span class="qty duyet">đã duyệt</span>{% endif %}
+        </a>
+        {% endfor %}
+      </div>
+    </details>
   </div>
+  {% endif %}
 
-  <div class="syncbar">
-    <div class="info">Đã duyệt chờ sync: <b>{{ tot.approved }}</b> · Đã sync: {{ tot.synced }}</div>
-    <button class="syncbtn" id="syncbtn" onclick="syncApproved()" {{ 'disabled' if not tot.approved }}>
-      ⤴ Sync {{ tot.approved }} collection đã duyệt lên live
-    </button>
+  {% if tot.todo_hand %}
+  <details class="todo" open>
+    <summary>✋ Cần làm tay — {{ tot.todo_hand|length }} danh mục chưa có ảnh chuẩn</summary>
+    <div class="tbody">
+      {% for t in tot.todo_hand %}
+      <a class="ti" href="{{ url_for('thumbs_collection', handle=t.handle) }}">
+        <span class="nm">{{ t.title or t.handle }}</span>
+        <span class="qty nogen">chưa gen · {{ t.so_sp }} SP</span>
+      </a>
+      {% endfor %}
+    </div>
+  </details>
+  {% elif tot.todo_push %}
+  <p class="alldone">✋ Không còn danh mục nào phải làm tay — mọi SP đều đã có ảnh chuẩn.</p>
+  {% endif %}
+
+  <div class="toolbar">
+    <div class="searchwrap">
+      <input id="spsearch" type="text" placeholder="🔍 Tìm tên sản phẩm… (SP ở nhiều danh mục sẽ hiện nhiều dòng)" autocomplete="off">
+      <div class="sresults" id="sresults"></div>
+    </div>
+
+    <div class="filters">
+      <button class="fchip on" data-f="all">Tất cả</button>
+      {% if tot.relech %}<button class="fchip" data-f="relech">⚠ Cần đẩy live <b>{{ tot.relech }}</b></button>{% endif %}
+      {% if tot.nogen %}<button class="fchip" data-f="nogen">Chưa gen <b>{{ tot.nogen }}</b></button>{% endif %}
+      <button class="fchip" data-f="dang">Đang gen</button>
+      <button class="fchip" data-f="chosync">Gen xong, chưa duyệt</button>
+      <button class="fchip" data-f="xong">Đã sync <b>{{ tot.synced }}</b></button>
+      <span style="margin-left:auto;font-size:12.5px;color:var(--ink-3)" id="fcount"></span>
+    </div>
+
+    {% if not tot.todo_push %}
+    <div class="syncbar">
+      <div class="info">✓ Không còn gì chờ đẩy live · Đã sync: <b>{{ tot.synced }}</b> danh mục</div>
+    </div>
+    {% endif %}
   </div>
+  <p class="legend">Chuẩn: 1000×1000, nền trắng, sản phẩm căn giữa chiếm 85% khung. Bấm 1 danh mục để
+    xem từng SP + kéo-thả sắp xếp. Xem xong bấm <b>Duyệt</b> trong danh mục → ngoài này hiện ✓.</p>
+  <div class="empty-note hidden" id="emptynote">Không có danh mục nào ở bộ lọc này.</div>
 
   {% for wkey, w in waves.items() %}
   <div class="wave">
     <h3>{{ w.nhom }}
       <span style="font-weight:400;color:var(--ink-3);font-size:13px">· {{ w.cols|length }} danh mục · {{ w.gen }}/{{ w.total }} ảnh</span>
+      {% if w.need %}<span class="need">{{ w.need }} cần làm</span>{% endif %}
       <span class="wpct">{{ w.pct }}%</span></h3>
     <div class="wbar"><i style="width:{{ w.pct }}%"></i></div>
     <div class="grid">
       {% for c in w.cols %}
       {% if c.gen %}
-        <a class="card {{ 'approved' if c.review=='da_duyet' }}{{ 'synced' if c.review=='da_sync' }}{{ ' allseen' if c.all_seen }}" href="{{ url_for('thumbs_collection', handle=c.handle) }}"
+        <a class="card {{ 'approved' if c.review=='da_duyet' }}{{ 'synced' if c.review=='da_sync' }}{{ ' allseen' if c.all_seen }}" data-f="{{ c.flt }}" href="{{ url_for('thumbs_collection', handle=c.handle) }}"
            {% if c.all_seen %}title="Toàn bộ SP của collection này đã có ở collection khác — không có gì mới để duyệt"{% endif %}>
           {% if c.review=='sync_lech' %}<span class="tick" style="background:#fff4e5;color:#b45309;border-color:#f0c987">⚠ còn {{ c.pending }} SP chưa sync</span>
           {% elif c.all_seen %}<span class="tick allseen">đã xem ở nơi khác</span>
@@ -104,7 +209,7 @@
           <div class="pbar {{ 'full' if c.status=='done' }}"><i style="width:{{ c.pct }}%"></i></div>
         </a>
       {% else %}
-        <a class="card" style="opacity:.72" href="{{ url_for('thumbs_collection', handle=c.handle) }}">
+        <a class="card" style="opacity:.72" data-f="{{ c.flt }}" href="{{ url_for('thumbs_collection', handle=c.handle) }}">
           <div class="h">{{ c.title or c.handle }}</div>
           {% if c.parent %}<div class="sub">{{ c.parent }}</div>{% endif %}
           <div class="m"><span class="frac">0/{{ c.so_sp }}</span><span class="pill pending">chưa gen</span></div>
@@ -147,6 +252,43 @@
 // Trang khôi phục từ cache (bấm Back) -> tải lại để thấy trạng thái duyệt mới nhất
 window.addEventListener('pageshow', function(e){ if(e.persisted) location.reload(); });
 
+// ── Bộ lọc nhanh theo tình trạng (client-side, nhớ lựa chọn) ──
+(function(){
+  const chips=[...document.querySelectorAll('.fchip')],
+        cards=[...document.querySelectorAll('.card[data-f]')],
+        waves=[...document.querySelectorAll('.wave')],
+        note=document.getElementById('emptynote'),
+        fc=document.getElementById('fcount');
+  function apply(f){
+    let n=0;
+    cards.forEach(c=>{
+      const ok = (f==='all') || (c.dataset.f===f);
+      c.classList.toggle('hidden', !ok); if(ok) n++;
+    });
+    waves.forEach(w=>{
+      const any=[...w.querySelectorAll('.card[data-f]')].some(c=>!c.classList.contains('hidden'));
+      w.classList.toggle('hidden', !any);
+    });
+    note.classList.toggle('hidden', n>0);
+    fc.textContent = (f==='all') ? '' : (n+' danh mục');
+    try{ localStorage.setItem('thumbFilter', f); }catch(e){}
+  }
+  chips.forEach(b=>b.onclick=()=>{
+    chips.forEach(x=>x.classList.remove('on')); b.classList.add('on'); apply(b.dataset.f);
+  });
+  let saved='all';
+  try{ saved=localStorage.getItem('thumbFilter')||'all'; }catch(e){}
+  const btn=chips.find(b=>b.dataset.f===saved);
+  if(btn && saved!=='all'){ chips.forEach(x=>x.classList.remove('on')); btn.classList.add('on'); apply(saved); }
+})();
+
+// phím tắt: "/" nhảy vào ô tìm
+document.addEventListener('keydown', e=>{
+  if(e.key==='/' && document.activeElement.tagName!=='INPUT'){
+    e.preventDefault(); document.getElementById('spsearch').focus();
+  }
+});
+
 // ── Tìm SP ──
 const _si=document.getElementById('spsearch'), _sr=document.getElementById('sresults');
 let _t=null;
@@ -170,7 +312,7 @@ document.addEventListener('click', e=>{ if(!e.target.closest('.searchwrap')) _sr
 
 function syncApproved(){
   const btn=document.getElementById('syncbtn');
-  if(!confirm('Sync tất cả collection ĐÃ DUYỆT lên Haravan LIVE?\nẢnh chuẩn sẽ thay ảnh sản phẩm trên store thật (ảnh local giữ nguyên).')) return;
+  if(!confirm('Đẩy ảnh chuẩn lên Haravan LIVE?\n\n• Danh mục ĐÃ DUYỆT chờ đẩy\n• Danh mục đã sync trước đó nhưng có SP MỚI chưa đẩy\n\nẢnh chuẩn sẽ thay ảnh sản phẩm trên store thật (ảnh local giữ nguyên).')) return;
   btn.disabled=true; btn.textContent='Đang khởi động...';
   fetch('/thumbs/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})})
     .then(r=>r.json()).then(d=>{

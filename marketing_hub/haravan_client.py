@@ -50,10 +50,11 @@ def _check_paused():
 
 
 # Permission gate (2026-05-12): chỉ cho phép quyền CHỈNH SỬA + upload ảnh vào SP existing.
-# CẤM: tạo SP mới, xóa SP, tạo bài viết, xóa bài viết.
+# CẤM: xóa SP, tạo bài viết, xóa bài viết.
+# 2026-07-27: vợ Nghĩa chốt GỠ chặn "tạo SP mới" (POST /products.json) — cần tạo/clone SP
+# thường xuyên. Các chốt XÓA giữ nguyên: xóa SP vẫn cấm tuyệt đối.
 import re as _re_perm
 _BLOCKED_OPERATIONS = [
-    ("POST",   _re_perm.compile(r"^/products\.json"),                "Tạo sản phẩm mới"),
     ("POST",   _re_perm.compile(r"^/blogs/\d+/articles\.json"),      "Tạo bài viết blog mới"),
     ("DELETE", _re_perm.compile(r"^/products/\d+\.json$"),           "Xóa sản phẩm"),
     ("DELETE", _re_perm.compile(r"^/blogs/\d+/articles/\d+\.json$"), "Xóa bài viết blog"),

@@ -25,6 +25,9 @@
   .redo-btn{margin-left:8px;padding:4px 11px;border:1px solid #d9cdd6;border-radius:8px;background:#fff;cursor:pointer;font:inherit;font-size:12px;font-weight:600;color:#b25a00}
   .redo-btn:hover{background:#fff7ee;border-color:#e0a060}
   .redo-btn:disabled{opacity:.55;cursor:default}
+  .genlive-btn{margin-left:8px;padding:4px 12px;border:1px solid #7cc6ff;border-radius:8px;background:#eaf5ff;cursor:pointer;font:inherit;font-size:12px;font-weight:700;color:#1457b8}
+  .genlive-btn:hover{background:#1457b8;color:#fff;border-color:#1457b8}
+  .genlive-btn:disabled{opacity:.6;cursor:wait}
   .paste-btn{margin-left:8px;padding:4px 11px;border:1px solid #b7e0c4;border-radius:8px;background:#effaf3;cursor:pointer;font:inherit;font-size:12px;font-weight:700;color:#1e8c4e}
   .paste-btn:hover{background:#1e8c4e;color:#fff;border-color:#1e8c4e}
   .paste-btn:disabled{opacity:.6;cursor:wait}
@@ -71,8 +74,20 @@
   .grp.fold .grpbody{display:none}
   .grp.fold .grpfold{transform:rotate(-90deg)}
   .grpnav.hide{display:none}
-  #view-sp.hide-seen .sprow.seen{display:none}
+  /* SP CÒN VIỆC (.pending) không bao giờ bị ẩn — dù 'nhà' ở collection khác */
+  #view-sp.hide-seen .sprow.seen:not(.pending){display:none}
   .sprow.seen{opacity:.62;border-style:dashed}
+  .sprow.seen.pending{opacity:1;border-style:solid;border-color:#f0c987;background:#fffdf7}
+  /* 27/7/2026: ẩn SP ĐÃ ĐẨY LIVE cho gọn — mặc định ẩn, chỉ còn SP mới/chưa đẩy */
+  #view-sp.hide-synced .sprow.synced:not(.pending){display:none}
+  .syncedbadge{font-weight:600;font-size:11.5px;color:#1457b8;background:#e8f1ff;
+    border:1px solid #c3ddff;border-radius:7px;padding:2px 8px}
+  .newbadge{font-weight:700;font-size:11.5px;color:#166534;background:#dcfce7;
+    border:1px solid #bbf7d0;border-radius:7px;padding:2px 8px}
+  .barrow{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:-4px 0 13px}
+  .barrow .seenbar{margin:0}
+  .seenbar.off{opacity:.45;cursor:default}
+  .seenbar.off input{cursor:default}
   .seenbadge{font-weight:600;font-size:11.5px;color:#8a5a00;background:#fff4e0;border:1px solid #f0d9a8;border-radius:7px;padding:2px 8px}
   .muted{color:var(--ink-3);font-size:13px}
   .miss{font-size:12.5px;color:#b25a00}
@@ -96,10 +111,24 @@
     <button class="tbtn" data-v="sheet" onclick="sw('sheet')">Lưới đại diện</button>
   </div>
 
-  {% if n_seen %}
-  <label class="seenbar"><input type="checkbox" id="showseen" onchange="toggleSeen()">
-    Đang ẩn <b>{{ n_seen }}</b> SP đã xem ở collection khác cho gọn — tích để hiện lại</label>
-  {% endif %}
+  {# 2 ô tích LUÔN hiện ở MỌI collection cho nhất quán (vợ chốt 27/7).
+     Collection nào không có SP để ẩn thì làm mờ + khoá, KHÔNG giấu đi. #}
+  <div class="barrow">
+    <label class="seenbar{{ ' off' if not n_seen }}">
+      <input type="checkbox" id="showseen" onchange="toggleSeen()" {{ 'disabled' if not n_seen }}>
+      {% if n_seen %}Đang ẩn <b>{{ n_seen }}</b> SP đã xem ở collection khác — tích để hiện lại
+      {% else %}Không có SP nào trùng với collection khác{% endif %}</label>
+
+    <label class="seenbar{{ ' off' if not n_synced }}">
+      <input type="checkbox" id="showsynced" onchange="toggleSynced()"
+             {{ 'disabled' if not n_synced }}{{ ' checked' if n_synced and not hide_synced }}>
+      {% if not n_synced %}Chưa có SP nào đã đẩy live
+      {% elif hide_synced %}Đang ẩn <b>{{ n_synced }}</b> SP đã đẩy live — tích để hiện lại
+      {% else %}Đang hiện <b>{{ n_synced }}</b> SP đã đẩy live (không còn SP mới nào) — bỏ tích để ẩn{% endif %}</label>
+
+    {% if n_moi %}<span class="newbadge">còn {{ n_moi }} SP mới / chưa đẩy</span>
+    {% else %}<span class="syncedbadge">✓ đã đẩy hết</span>{% endif %}
+  </div>
 
   {# ── Xem ảnh phóng to: hiện KÍCH THƯỚC THẬT + khung 1000x1000 đỏ để soi căn chỉnh ── #}
   <div id="zoomwrap" onclick="closeZoom(event)"
@@ -119,12 +148,14 @@
   </div>
 
   {% macro sprow(it) %}
-      <div class="sprow{% if it.seen_at %} seen{% endif %}" data-handle="{{ it.handle }}" id="sp-{{ it.handle }}">
+      <div class="sprow{% if it.seen_at %} seen{% endif %}{% if it.synced and not it.seen_at %} synced{% endif %}{% if it.pending %} pending{% endif %}" data-handle="{{ it.handle }}" id="sp-{{ it.handle }}">
         <div class="t">{{ it.title or it.handle }}
           {% if it.imgs %}<small>{{ it.imgs|length }} ảnh chuẩn</small>
           {% elif it.n_live %}<small style="color:#b45309;font-weight:600">chưa chuẩn hoá · {{ it.n_live }} ảnh đang có trên live</small>
           {% else %}<small>0 ảnh</small>{% endif %}
           {% if it.seen_at %}<span class="seenbadge">👁 đã xem ở {{ it.seen_at }}</span>{% endif %}
+          {% if it.pending %}<span class="newbadge">● CHƯA ĐẨY LIVE</span>
+          {% elif it.synced and not it.seen_at %}<span class="syncedbadge">✓ đã đẩy live</span>{% endif %}
           <span class="saved">✓ đã lưu thứ tự</span>
           {% if it.pub is defined and not it.pub %}
             <span class="seenbadge" style="background:#f1f2f6;color:#5b647a">🚫 đang ẩn — không có trang live</span>
@@ -132,7 +163,13 @@
           {% else %}
             <a class="live-btn" href="https://sintech.vn/products/{{ it.handle }}" target="_blank" rel="noopener" title="Mở trang sản phẩm trên web">🔗 Xem live</a>
           {% endif %}
+          {% if not it.imgs and it.n_live %}
+          <button class="genlive-btn" onclick="genFromLive(this,'{{ it.handle }}')"
+                  title="SP này có {{ it.n_live }} ảnh trên Haravan nhưng chưa có ảnh chuẩn — bấm để tạo">
+            ✨ Tạo ảnh chuẩn từ {{ it.n_live }} ảnh live</button>
+          {% else %}
           <button class="redo-btn" onclick="redo(this)">↻ Làm lại (không xóa nền)</button>
+          {% endif %}
           <button class="paste-btn" onclick="pasteFront(this,'{{ it.handle }}')" title="Copy ảnh từ ChatGPT (chuột phải → Copy image) rồi bấm đây — ảnh tự căn giữa & lên đầu SP">📋 Dán ảnh → đầu SP</button>
         </div>
         <div class="strip">
@@ -173,7 +210,7 @@
   </div>
   {% endif %}
 
-  <div id="view-sp" class="hide-seen">
+  <div id="view-sp" class="hide-seen{{ ' hide-synced' if hide_synced }}">
     {% if items %}
       {% if groups %}
         {% for g in groups %}
@@ -343,15 +380,34 @@ function toggleSeen(){
   const on=document.getElementById('showseen').checked;
   document.getElementById('view-sp').classList.toggle('hide-seen', !on);
 }
+// Bật/tắt hiển thị SP ĐÃ ĐẨY LIVE (mặc định ẩn — chỉ còn SP mới/chưa đẩy trước mắt)
+function toggleSynced(){
+  const cb=document.getElementById('showsynced');
+  document.getElementById('view-sp').classList.toggle('hide-synced', !cb.checked);
+  try{ localStorage.setItem('tnShowSynced', cb.checked ? '1' : '0'); }catch(e){}
+}
+// nhớ lựa chọn của vợ giữa các lần vào.
+// Nếu collection này KHÔNG còn SP mới nào (server đã bật sẵn) thì cứ để hiện,
+// đừng ẩn hết làm trang trống trơn.
+(function(){
+  const cb=document.getElementById('showsynced');
+  if(!cb || cb.disabled || !{{ 'true' if hide_synced else 'false' }}) return;
+  let v='0';
+  try{ v=localStorage.getItem('tnShowSynced')||'0'; }catch(e){}
+  if(v==='1'){ cb.checked=true; toggleSynced(); }
+})();
 
 // Mở từ kết quả tìm (#sp-<handle>) -> cuộn tới + làm nổi bật SP
 window.addEventListener('load', ()=>{
   if(location.hash && location.hash.startsWith('#sp-')){
     const el=document.getElementById(location.hash.slice(1));
     if(el){
-      // nếu SP đang bị ẩn (đã xem ở nơi khác) -> tự hiện để nhảy tới được
+      // nếu SP đang bị ẩn (đã xem ở nơi khác / đã đẩy live) -> tự hiện để nhảy tới được
       if(el.classList.contains('seen')){
         const cb=document.getElementById('showseen'); if(cb){ cb.checked=true; toggleSeen(); }
+      }
+      if(el.classList.contains('synced')){
+        const cb2=document.getElementById('showsynced'); if(cb2){ cb2.checked=true; toggleSynced(); }
       }
       el.scrollIntoView({behavior:'smooth',block:'start'}); el.classList.add('hl'); setTimeout(()=>el.classList.remove('hl'),2600);
     }
@@ -472,6 +528,18 @@ function redo(btn){
     body:JSON.stringify({handle})})
     .then(r=>r.json()).then(d=>{
       if(d.ok){ btn.textContent='✓ Xong ('+d.n+' ảnh), tải lại...'; setTimeout(()=>location.reload(),600); }
+      else { alert('Lỗi: '+(d.error||'không rõ')); btn.disabled=false; btn.textContent=old; }
+    }).catch(()=>{ alert('Lỗi mạng'); btn.disabled=false; btn.textContent=old; });
+}
+
+// Tạo ảnh chuẩn LẦN ĐẦU cho SP mới (có ảnh trên Haravan nhưng std/ còn rỗng)
+function genFromLive(btn, handle){
+  if(!confirm('Tải ảnh từ Haravan về và chuẩn hoá 1000×1000 nền trắng cho SP này?\n(ảnh trên live KHÔNG bị đụng)')) return;
+  btn.disabled=true; const old=btn.textContent; btn.textContent='Đang tải & chuẩn hoá...';
+  fetch('/thumbs/gen-from-live',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({handle})})
+    .then(r=>r.json()).then(d=>{
+      if(d.ok){ btn.textContent='✓ Xong '+d.n+' ảnh, tải lại...'; setTimeout(()=>location.reload(),700); }
       else { alert('Lỗi: '+(d.error||'không rõ')); btn.disabled=false; btn.textContent=old; }
     }).catch(()=>{ alert('Lỗi mạng'); btn.disabled=false; btn.textContent=old; });
 }

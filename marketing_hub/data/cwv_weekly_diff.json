@@ -1,363 +1,39 @@
 {
-  "generated_at": "2026-07-19T02:00:01",
+  "generated_at": "2026-07-26T02:00:02",
   "current_week": {
-    "week_no": 29,
+    "week_no": 30,
     "year": 2026
   },
   "prev_week": {
-    "week_no": 24,
+    "week_no": 29,
     "year": 2026
   },
   "strategies": {
     "mobile": {
       "strategy": "mobile",
       "current_avg_score": 68.4,
-      "prev_avg_score": 69.5,
-      "avg_change": -1.1,
+      "prev_avg_score": 68.4,
+      "avg_change": 0.0,
       "current_count": 2688,
-      "prev_count": 2816,
-      "common_count": 2580,
-      "improved_count": 971,
-      "regressed_count": 1392,
-      "improved_top": [
-        {
-          "url": "https://sintech.vn/blogs/news/visual-studio-code-la-gi-cac-tinh-nang-noi-bat-cua-visual-studio-code",
-          "prev_score": 22,
-          "current_score": 54,
-          "delta": 32,
-          "prev_lcp_ms": 8689,
-          "current_lcp_ms": 12372
-        },
-        {
-          "url": "https://sintech.vn/products/laptop-asus-tuf-gaming-a14-rtx-5060-32-1tb",
-          "prev_score": 42,
-          "current_score": 73,
-          "delta": 31,
-          "prev_lcp_ms": 3931,
-          "current_lcp_ms": 4413
-        },
-        {
-          "url": "https://sintech.vn/blogs/news/cach-khac-phuc-loi-command-prompt-tu-mo-tren-windows",
-          "prev_score": 34,
-          "current_score": 64,
-          "delta": 30,
-          "prev_lcp_ms": 8704,
-          "current_lcp_ms": 3827
-        },
-        {
-          "url": "https://sintech.vn/blogs/news/bang-ma-loi-mainboard-huananzhi-x99",
-          "prev_score": 36,
-          "current_score": 65,
-          "delta": 29,
-          "prev_lcp_ms": 10122,
-          "current_lcp_ms": 4011
-        },
-        {
-          "url": "https://sintech.vn/blogs/news/openai-o1-dot-pha-trong-xu-ly-ngon-ngu-tu-nhien-vuot-xa-mong-doi",
-          "prev_score": 18,
-          "current_score": 47,
-          "delta": 29,
-          "prev_lcp_ms": 5489,
-          "current_lcp_ms": 13107
-        },
-        {
-          "url": "https://sintech.vn/pages/xay-dung-cau-hinh",
-          "prev_score": 44,
-          "current_score": 73,
-          "delta": 29,
-          "prev_lcp_ms": 7694,
-          "current_lcp_ms": 4623
-        },
-        {
-          "url": "https://sintech.vn/products/chuot-dareu-em908",
-          "prev_score": 45,
-          "current_score": 73,
-          "delta": 28,
-          "prev_lcp_ms": 4228,
-          "current_lcp_ms": 4293
-        },
-        {
-          "url": "https://sintech.vn/products/man-hinh-lcd-24-aoc-c24g2-74-fhd-va-165hz-1ms-hdr-freesync-gaming-cong",
-          "prev_score": 45,
-          "current_score": 73,
-          "delta": 28,
-          "prev_lcp_ms": 8015,
-          "current_lcp_ms": 4417
-        },
-        {
-          "url": "https://sintech.vn/blogs/news/huong-dan-cach-lap-va-ve-sinh-ram-dung-cach",
-          "prev_score": 45,
-          "current_score": 72,
-          "delta": 27,
-          "prev_lcp_ms": 11545,
-          "current_lcp_ms": 4442
-        },
-        {
-          "url": "https://sintech.vn/products/nguon-may-tinh-darkflash-pmt-750w-gold-atx-3-1-pcie-5-1-80-plus-gold-full-modular-den",
-          "prev_score": 43,
-          "current_score": 70,
-          "delta": 27,
-          "prev_lcp_ms": 4882,
-          "current_lcp_ms": 4064
-        }
-      ],
-      "regressed_top": [
-        {
-          "url": "https://sintech.vn/products/man-hinh-laptop-dell-xps-13-9370-13-full-hd-touch",
-          "prev_score": 77,
-          "current_score": 38,
-          "delta": -39,
-          "prev_lcp_ms": 4291,
-          "current_lcp_ms": 5671
-        },
-        {
-          "url": "https://sintech.vn/products/may-in-laser-den-trang-hp-neverstop-laser-1000a-4ry22a-a4-a5-usb",
-          "prev_score": 79,
-          "current_score": 44,
-          "delta": -35,
-          "prev_lcp_ms": 4014,
-          "current_lcp_ms": 4372
-        },
-        {
-          "url": "https://sintech.vn/products/phan-mem-kaspersky-standard-1pc-1-nam",
-          "prev_score": 74,
-          "current_score": 39,
-          "delta": -35,
-          "prev_lcp_ms": 4508,
-          "current_lcp_ms": 5026
-        },
-        {
-          "url": "https://sintech.vn/products/tay-cam-machenike-g5-pro-v2-premium-edition-set-tri-mode-hot-swap",
-          "prev_score": 77,
-          "current_score": 42,
-          "delta": -35,
-          "prev_lcp_ms": 4087,
-          "current_lcp_ms": 11229
-        },
-        {
-          "url": "https://sintech.vn/products/card-man-hinh-vga-gigabyte-geforce-rtx-4070-ti-super-eagle-oc-ice-16g",
-          "prev_score": 77,
-          "current_score": 44,
-          "delta": -33,
-          "prev_lcp_ms": 4214,
-          "current_lcp_ms": 5289
-        },
-        {
-          "url": "https://sintech.vn/collections/man-hinh-4k",
-          "prev_score": 77,
-          "current_score": 47,
-          "delta": -30,
-          "prev_lcp_ms": 4062,
-          "current_lcp_ms": 3986
-        },
-        {
-          "url": "https://sintech.vn/products/cpu-intel-core-i3-12100-4-3ghz-4-nhan-8-luong-tray",
-          "prev_score": 77,
-          "current_score": 47,
-          "delta": -30,
-          "prev_lcp_ms": 4372,
-          "current_lcp_ms": 4509
-        },
-        {
-          "url": "https://sintech.vn/products/laptop-lenovo-thinkbook-14-g9-i5-13420h-16-512gb",
-          "prev_score": 72,
-          "current_score": 42,
-          "delta": -30,
-          "prev_lcp_ms": 4432,
-          "current_lcp_ms": 4965
-        },
-        {
-          "url": "https://sintech.vn/products/ram-kingston-fury-beast-rgb-8gb-3600mhz-ddr4-den",
-          "prev_score": 76,
-          "current_score": 46,
-          "delta": -30,
-          "prev_lcp_ms": 3984,
-          "current_lcp_ms": 4612
-        },
-        {
-          "url": "https://sintech.vn/products/tan-nhiet-nuoc-aio-ocypus-delta-l36-bk-argb-v2-trang",
-          "prev_score": 71,
-          "current_score": 41,
-          "delta": -30,
-          "prev_lcp_ms": 4432,
-          "current_lcp_ms": 5051
-        }
-      ]
+      "prev_count": 2688,
+      "common_count": 2688,
+      "improved_count": 0,
+      "regressed_count": 0,
+      "improved_top": [],
+      "regressed_top": []
     },
     "desktop": {
       "strategy": "desktop",
       "current_avg_score": 88.8,
-      "prev_avg_score": 92.2,
-      "avg_change": -3.4,
+      "prev_avg_score": 88.8,
+      "avg_change": 0.0,
       "current_count": 2688,
-      "prev_count": 2796,
-      "common_count": 2573,
-      "improved_count": 722,
-      "regressed_count": 1622,
-      "improved_top": [
-        {
-          "url": "https://sintech.vn/products/o-cung-ssd-apacer-as2280p4u-512gb-m-2-pcie-gen-3x4-ap512gas2280p4u-1",
-          "prev_score": 49,
-          "current_score": 96,
-          "delta": 47,
-          "prev_lcp_ms": 2084,
-          "current_lcp_ms": 1028
-        },
-        {
-          "url": "https://sintech.vn/products/mainboard-asus-prime-h610m-k-ddr4",
-          "prev_score": 37,
-          "current_score": 81,
-          "delta": 44,
-          "prev_lcp_ms": 3288,
-          "current_lcp_ms": 1077
-        },
-        {
-          "url": "https://sintech.vn/products/tan-nhiet-khi-jonsbo-cr-1200",
-          "prev_score": 56,
-          "current_score": 97,
-          "delta": 41,
-          "prev_lcp_ms": 1631,
-          "current_lcp_ms": 1074
-        },
-        {
-          "url": "https://sintech.vn/products/man-hinh-chuyen-do-hoa-asus-proart-27-inch-pa279cv-j-27-inch-4k-ips-srgb-100",
-          "prev_score": 56,
-          "current_score": 96,
-          "delta": 40,
-          "prev_lcp_ms": 1240,
-          "current_lcp_ms": 1126
-        },
-        {
-          "url": "https://sintech.vn/products/card-man-hinh-vga-msi-geforce-rtx-4070-super-12g-gaming-x-slim-mlg",
-          "prev_score": 57,
-          "current_score": 96,
-          "delta": 39,
-          "prev_lcp_ms": 1502,
-          "current_lcp_ms": 1185
-        },
-        {
-          "url": "https://sintech.vn/products/man-hinh-do-hoa-aoc-q27u3cv-74-27-inch-qhd-nano-ips-75hz-4ms-loa-usb-c",
-          "prev_score": 56,
-          "current_score": 95,
-          "delta": 39,
-          "prev_lcp_ms": 1422,
-          "current_lcp_ms": 957
-        },
-        {
-          "url": "https://sintech.vn/products/o-cung-ssd-colorful-cn600-256gb-m-2-nvme-2280-pcie",
-          "prev_score": 61,
-          "current_score": 97,
-          "delta": 36,
-          "prev_lcp_ms": 966,
-          "current_lcp_ms": 1032
-        },
-        {
-          "url": "https://sintech.vn/products/laptop-asus-vivobook-s14-i7-13620h-16-512gb",
-          "prev_score": 61,
-          "current_score": 94,
-          "delta": 33,
-          "prev_lcp_ms": 1318,
-          "current_lcp_ms": 895
-        },
-        {
-          "url": "https://sintech.vn/products/tai-nghe-gaming-xiberia-t20-vali-cao-cap",
-          "prev_score": 60,
-          "current_score": 92,
-          "delta": 32,
-          "prev_lcp_ms": 1200,
-          "current_lcp_ms": 1132
-        },
-        {
-          "url": "https://sintech.vn/blogs/news/top-5-laptop-cho-sinh-vien-thiet-ke-do-hoa-2024",
-          "prev_score": 45,
-          "current_score": 76,
-          "delta": 31,
-          "prev_lcp_ms": 2929,
-          "current_lcp_ms": 2531
-        }
-      ],
-      "regressed_top": [
-        {
-          "url": "https://sintech.vn/products/tan-nhiet-khi-cpu-jonsbo-cr-3000e-argb-black",
-          "prev_score": 87,
-          "current_score": 38,
-          "delta": -49,
-          "prev_lcp_ms": 1860,
-          "current_lcp_ms": 3942
-        },
-        {
-          "url": "https://sintech.vn/products/nguon-may-tinh-darkflash-pmt-750w-gold-atx-3-1-pcie-5-1-80-plus-gold-full-modular",
-          "prev_score": 95,
-          "current_score": 47,
-          "delta": -48,
-          "prev_lcp_ms": 889,
-          "current_lcp_ms": 2691
-        },
-        {
-          "url": "https://sintech.vn/products/ban-phim-co-aula-f3261-phien-ban-nhieu-mau",
-          "prev_score": 96,
-          "current_score": 51,
-          "delta": -45,
-          "prev_lcp_ms": 1138,
-          "current_lcp_ms": 1641
-        },
-        {
-          "url": "https://sintech.vn/blogs/news/cau-hinh-choi-naraka-bladepoint-tren-pc-laptop",
-          "prev_score": 82,
-          "current_score": 38,
-          "delta": -44,
-          "prev_lcp_ms": 2511,
-          "current_lcp_ms": 3518
-        },
-        {
-          "url": "https://sintech.vn/blogs/news/facebook-instagram-thu-thap-du-lieu-tat-ca-nguoi-dung-australia-gom-c",
-          "prev_score": 86,
-          "current_score": 42,
-          "delta": -44,
-          "prev_lcp_ms": 1895,
-          "current_lcp_ms": 3327
-        },
-        {
-          "url": "https://sintech.vn/collections/may-bo-rosa",
-          "prev_score": 98,
-          "current_score": 54,
-          "delta": -44,
-          "prev_lcp_ms": 907,
-          "current_lcp_ms": 1838
-        },
-        {
-          "url": "https://sintech.vn/products/mainboard-gigabyte-b760m-h-ddr4",
-          "prev_score": 97,
-          "current_score": 54,
-          "delta": -43,
-          "prev_lcp_ms": 1148,
-          "current_lcp_ms": 1692
-        },
-        {
-          "url": "https://sintech.vn/products/ban-phim-co-gaming-aula-s2022-pro-4265-xam-co-day",
-          "prev_score": 91,
-          "current_score": 50,
-          "delta": -41,
-          "prev_lcp_ms": 873,
-          "current_lcp_ms": 3545
-        },
-        {
-          "url": "https://sintech.vn/collections/man-hinh-vsp",
-          "prev_score": 95,
-          "current_score": 55,
-          "delta": -40,
-          "prev_lcp_ms": 891,
-          "current_lcp_ms": 1490
-        },
-        {
-          "url": "https://sintech.vn/products/ban-phim-co-gaming-aula-f87-pro-v2-2643-3-mode-phien-ban-den-hong-gradient-x3-switch",
-          "prev_score": 97,
-          "current_score": 57,
-          "delta": -40,
-          "prev_lcp_ms": 1077,
-          "current_lcp_ms": 1319
-        }
-      ]
+      "prev_count": 2688,
+      "common_count": 2688,
+      "improved_count": 0,
+      "regressed_count": 0,
+      "improved_top": [],
+      "regressed_top": []
     }
   }
 }

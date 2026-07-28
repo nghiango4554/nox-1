@@ -666,21 +666,28 @@ def _collection_id(handle: str, cache: dict) -> int | None:
     if handle in cache:
         return cache[handle]
     cid = None
+    # ⚠️ BẪY 27/7/2026: Haravan lọc `?handle=X` kiểu KHỚP TIỀN TỐ, và trả handle DÀI hơn
+    # lên TRƯỚC. Lấy arr[0] => bốc NHẦM collection khác:
+    #   ?handle=ban-phim-co -> [ban-phim-co-day(4 SP), ban-phim-co(92 SP)]  => lấy nhầm 4 SP
+    #   ?handle=ghe         -> [ghe-van-phong(1 SP),   ghe(19 SP)]          => lấy nhầm 1 SP
+    # => PHẢI lọc handle KHỚP CHÍNH XÁC, chỉ fallback arr[0] khi không có cái nào khớp.
+    def _pick(arr):
+        for c in arr:
+            if (c.get("handle") or "") == handle:
+                return c["id"]
+        return None
+
     try:
         d = hc._request("GET", "/smart_collections.json",
                         params={"handle": handle, "fields": "id,handle"})
-        arr = d.get("smart_collections") or []
-        if arr:
-            cid = arr[0]["id"]
+        cid = _pick(d.get("smart_collections") or [])
     except Exception:  # noqa: BLE001
         cid = None
     if cid is None:
         try:
             d = hc._request("GET", "/custom_collections.json",
                             params={"handle": handle, "fields": "id,handle"})
-            arr = d.get("custom_collections") or []
-            if arr:
-                cid = arr[0]["id"]
+            cid = _pick(d.get("custom_collections") or [])
         except Exception:  # noqa: BLE001
             cid = None
     cache[handle] = cid
@@ -738,6 +745,52 @@ def scan_menu(log=print) -> dict:
              sum(1 for p in pids if p in okset), now))
         time.sleep(0.05)
     conn.commit()
+
+    # ── 27/7/2026 (vợ chốt): SP không thuộc collection LÁ nào -> gom về NGĂN MẸ,
+    # KHÔNG tạo collection con mới. Ngăn mẹ có thật trên Haravan, chỉ là không nằm
+    # trong menu nên trước đây /thumbs bỏ qua -> SP bị dồn vào "SP chưa phân loại".
+    # Thứ tự = CỤ THỂ TRƯỚC, TỔNG QUÁT SAU (mỗi SP chỉ vào ngăn mẹ đầu tiên khớp).
+    PARENTS = ["cap-chuyen-doi", "luu-tru-va-box", "may-in", "may-tinh-bo",
+               "ban-ghe-gaming", "phu-kien-linh-kien-laptop", "phu-kien-thiet-bi-mang-1",
+               "gaming-gear", "man-hinh-may-tinh", "linh-kien-may-tinh"]
+    leaf_ids = {r[0] for r in conn.execute("SELECT DISTINCT haravan_id FROM spec_group_products")}
+    left = newset - leaf_ids
+    log(f"SP chưa vào ngăn lá: {len(left)} -> gom về ngăn mẹ")
+    order = len(leaves) + 1
+    for ph in PARENTS:
+        if not left:
+            break
+        pcid = _collection_id(ph, id_cache)
+        if not pcid:
+            log(f"  ⚠ không tìm thấy ngăn mẹ {ph}")
+            continue
+        try:
+            pids = [p["id"] for p in hc.list_products_in_collection(pcid, fields="id")]
+        except Exception as e:  # noqa: BLE001
+            log(f"  ⚠ {ph}: {e}")
+            continue
+        take = [p for p in pids if p in left]
+        if not take:
+            continue
+        left -= set(take)
+        # lấy TÊN THẬT của collection cho dễ đọc (đừng hiện handle trần)
+        ptitle = ph
+        try:
+            r = hc._request("GET", f"/smart_collections/{pcid}.json")
+            ptitle = (r.get("smart_collection") or {}).get("title") or ph
+        except Exception:  # noqa: BLE001
+            pass
+        conn.executemany("INSERT OR REPLACE INTO spec_group_products VALUES (?,?,?)",
+                         [(ph, "", pid) for pid in take])
+        conn.execute(
+            "INSERT OR REPLACE INTO spec_menu_collections VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (ph, "", ptitle, "gom từ ngăn mẹ", "📦 Ngăn mẹ (SP chưa có danh mục con)",
+             order, pcid, len(take),
+             sum(1 for p in take if p in newset), sum(1 for p in take if p in okset), now))
+        order += 1
+        log(f"  📦 {ph}: nhận {len(take)} SP")
+    conn.commit()
+
     mark_services(conn)
     grouped = {r[0] for r in conn.execute("SELECT DISTINCT haravan_id FROM spec_group_products")}
     conn.close()

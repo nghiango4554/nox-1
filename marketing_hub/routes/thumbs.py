@@ -186,23 +186,48 @@ def _menu_groups():
         gp = {}
         for h, pid in conn.execute("SELECT handle, haravan_id FROM spec_group_products"):
             gp.setdefault(h, []).append(pid)
+        # 27/7/2026: LỌC SP ĐÃ ẨN. Trước đó /thumbs gom cả SP `published=0` (đo được 156 con,
+        # web trả 301 về collection hoặc 404) => tốn công căn ảnh cho SP không còn bán.
         prods = {r[0]: dict(handle=r[1], title=r[2], cond=r[3], svc=r[4])
                  for r in conn.execute("SELECT haravan_id, handle, title, condition_kind, "
-                                       "COALESCE(is_service,0) FROM product_spec_index")}
+                                       "COALESCE(is_service,0) FROM product_spec_index "
+                                       "WHERE COALESCE(published,1)=1")}
     except Exception:
         conn.close()
         return []
     conn.close()
+    # 🔧 27/7/2026 (vợ bắt được ở vga-nvidia): THẺ NGOÀI và TRANG TRONG phải đếm
+    # CÙNG MỘT BỘ LỌC. Trước đây _menu_groups() lấy hết SP trong nhóm, còn
+    # _collection_items() lại bỏ hàng cũ + combo PC + SP sai loại → vga-nvidia
+    # thẻ ngoài ghi "249 SP · 72 đã sync" mà bấm vào chỉ có 163 SP, 0 đã sync
+    # (rule smart collection vơ nhầm 55 laptop có chữ 'RTX' trong tên).
+    _old = _old_cond_handles()
+    _ptypes = _product_types()
+
+    def _keep(ph, coll):
+        if ph in _old:
+            return False                       # hàng cũ / qua sử dụng
+        t = _ptypes.get(ph)
+        if t in HIDE_PRODUCT_TYPES:
+            return False                       # combo PC — không chuẩn hoá
+        allow = COLLECTION_TYPE_FILTER.get(coll)
+        return not (allow and t and t not in allow)
+
     out, seen = [], set()
     for c in colls:
         sp = [prods[i]["handle"] for i in gp.get(c["handle"], []) if i in prods]
+        sp = [ph for ph in sp if _keep(ph, c["handle"])]
         seen |= set(sp)
         root = c["root"] or "Khác"
         out.append({"handle": c["handle"], "title": c["title"], "root": root,
                     "parent": c["parent"] or "", "sp": sp,
                     "in_scope": root not in OUT_OF_SCOPE_ROOTS})
+    # "SP chưa phân loại" cũng phải theo cùng bộ lọc, không thì SP vừa bị loại khỏi
+    # nhóm (laptop lẫn trong vga, combo PC…) lại rơi hết vào đây.
     rest = [p["handle"] for p in prods.values()
-            if p["cond"] == "new" and not p["svc"] and p["handle"] not in seen]
+            if p["cond"] == "new" and not p["svc"] and p["handle"] not in seen
+            and p["handle"] not in _old
+            and _ptypes.get(p["handle"]) not in HIDE_PRODUCT_TYPES]
     if rest:
         out.append({"handle": UNGROUPED, "title": "SP chưa phân loại",
                     "root": "⚠️ Chưa phân loại", "parent": "", "sp": rest,
@@ -288,7 +313,10 @@ def thumbs_page():
     status = _load_status()
     waves, waves_off = {}, {}
     tot = {"sp": 0, "col_done": 0, "approved": 0, "synced": 0, "to_sync": 0,
-           "off_col": 0, "off_sp": 0}
+           "off_col": 0, "off_sp": 0,
+           # 27/7/2026: số liệu cho thanh "việc cần làm" + bộ lọc
+           "relech": 0, "pending_sp": 0, "nogen": 0, "gen": 0, "todo": [],
+           "todo_push": [], "todo_hand": [], "push_sp_set": set(), "push_sp": 0}
     for r in groups:
         h = r["handle"]
         lg = log.get(h)
@@ -318,12 +346,23 @@ def thumbs_page():
             review = "sync_lech"
         bucket = waves if r.get("in_scope", True) else waves_off
         w = bucket.setdefault(r["root"], {"nhom": r["root"], "cols": [], "gen": 0, "total": 0})
+        # nhãn lọc: mỗi thẻ thuộc đúng 1 nhóm việc -> bộ lọc phía trên dùng cái này
+        if review == "sync_lech":
+            flt = "relech"
+        elif not gen:
+            flt = "nogen"
+        elif gstatus != "done":
+            flt = "dang"
+        elif review == "da_sync":
+            flt = "xong"
+        else:
+            flt = "chosync"
         w["cols"].append({
             "handle": h, "title": r["title"], "parent": r["parent"],
             "so_sp": total, "gen": gen, "pct": pct,
             "synced": sum(1 for ph in sp_handles if ph in synced_set), "pending": pending,
             "rembg": rembg, "noimg": noimg, "status": gstatus, "review": review,
-            "own": own, "all_seen": all_seen,
+            "own": own, "all_seen": all_seen, "flt": flt,
         })
         w["gen"] += gen
         w["total"] += total
@@ -332,6 +371,7 @@ def thumbs_page():
             tot["off_sp"] += total
             continue
         tot["sp"] += total
+        tot["gen"] += gen
         if gstatus == "done":
             tot["col_done"] += 1
         if review == "da_duyet":
@@ -339,8 +379,46 @@ def thumbs_page():
             tot["to_sync"] += 1
         elif review == "da_sync":
             tot["synced"] += 1
+        elif review == "sync_lech":
+            tot["relech"] += 1
+            tot["pending_sp"] += pending
+            tot["to_sync"] += 1
+        # danh mục RỖNG (0 SP) không phải "chưa gen" — đừng tính vào việc cần làm
+        if not gen and not all_seen and total:
+            tot["nogen"] += 1
+        if review in ("sync_lech", "da_duyet") or (not gen and not all_seen and total):
+            kind = ("relech" if review == "sync_lech"
+                    else "duyet" if review == "da_duyet" else "nogen")
+            row = {"handle": h, "title": r["title"], "root": r["root"],
+                   "pending": pending, "so_sp": total, "gen": gen, "kind": kind}
+            tot["todo"].append(row)
+            # Tách 2 loại việc KHÁC HẲN NHAU (vợ hỏi 27/7):
+            #  · bấm-1-nút  = đã có ảnh chuẩn, chỉ chờ đẩy live
+            #  · làm-tay    = chưa gen ảnh, phải ngồi làm
+            if kind in ("relech", "duyet"):
+                tot["todo_push"].append(row)
+                tot["push_sp_set"].update(
+                    ph for ph in sp_handles
+                    if (THUMB_ROOT / "std" / ph).exists() and ph not in synced_set)
+            else:
+                tot["todo_hand"].append(row)
+    tot["todo"].sort(key=lambda x: (-x["pending"], -x["so_sp"]))
+    tot["todo_push"].sort(key=lambda x: -x["pending"])
+    tot["todo_hand"].sort(key=lambda x: -x["so_sp"])
+    # ĐẾM SP DUY NHẤT — cộng 'pending' từng danh mục sẽ tính trùng SP nằm nhiều danh mục
+    tot["push_sp"] = len(tot["push_sp_set"])
+    # ⚠️ tot['sp']/tot['gen'] là số LƯỢT (1 SP ở nhiều danh mục bị cộng nhiều lần).
+    # KPI phải hiện SỐ SP DUY NHẤT, không thì vợ tưởng shop có 3.533 SP.
+    uniq = {ph for r in groups if r.get("in_scope", True) for ph in r["sp"]}
+    tot["sp_uniq"] = len(uniq)
+    tot["gen_uniq"] = sum(1 for ph in uniq if ph in done_set)
+    tot["pct"] = round(tot["gen_uniq"] * 100 / tot["sp_uniq"]) if tot["sp_uniq"] else 0
+    # thẻ CẦN XỬ LÝ nổi lên đầu mỗi nhóm, thẻ 'đã xem ở nơi khác' xuống cuối
+    _rank = {"relech": 0, "nogen": 1, "dang": 2, "chosync": 3, "xong": 4}
     for w in list(waves.values()) + list(waves_off.values()):
         w["pct"] = round(w["gen"] * 100 / w["total"]) if w["total"] else 0
+        w["cols"].sort(key=lambda c: (c["all_seen"], _rank.get(c["flt"], 9), -c["so_sp"]))
+        w["need"] = sum(1 for c in w["cols"] if c["flt"] in ("relech", "nogen"))
     n_std = len(done_set)
     n_in = sum(1 for g in groups if g.get("in_scope", True))
     resp = make_response(render_template("thumbs.html", active="thumbs", waves=waves,
@@ -443,6 +521,7 @@ def _collection_items(handle):
     allow_types = COLLECTION_TYPE_FILTER.get(handle)
     ptypes = _product_types()          # luôn nạp: cần cho lọc combo PC toàn cục
     primary = _primary_map()           # SP -> collection chính
+    synced_set = _load_synced()        # SP đã đẩy ảnh lên live
     if handle == UNGROUPED:
         # nhóm SP không thuộc collection nào trên menu live → lấy thẳng từ kho SP
         import db as _db
@@ -459,15 +538,24 @@ def _collection_items(handle):
             if idxs or (THUMB_ROOT / "std" / ph).exists():
                 items.append({"handle": ph, "title": r["title"], "imgs": idxs, "seen_at": None,
                               "live": [], "n_live": 0, "pub": bool(r["published"]),
-                              "pid": r["haravan_id"]})
+                              "pid": r["haravan_id"], "synced": ph in synced_set})
                 n_img += len(idxs)
             else:
                 missing.append({"handle": ph, "title": r["title"]})
         return items, missing, n_img
+    # 📦 NGĂN MẸ chỉ chứa SP KHÔNG thuộc ngăn con nào (gán ở scan_menu). Trang chi tiết
+    # phải hiện đúng bấy nhiêu, không thì thẻ ngoài ghi 28 SP mà bấm vào ra 297 SP.
+    _only = None
+    _g = next((x for x in _menu_groups() if x["handle"] == handle), None)
+    if _g and str(_g.get("root", "")).startswith("📦"):
+        _only = set(_g["sp"])
+
     cid = _collections().get(handle)
     if cid:
         for p in _products_in(cid):
             ph = p.get("handle")
+            if _only is not None and ph not in _only:
+                continue               # ngăn mẹ: chỉ SP được gán cho nó
             if ph in old_cond:
                 continue               # ẩn hàng cũ khỏi /thumbs
             if p.get("published_at") is None:
@@ -482,10 +570,29 @@ def _collection_items(handle):
             seen_at = prim if (prim and prim != handle) else None
             idxs = _sp_images(ph, "std")
             live_src = [im.get("src") for im in (p.get("images") or []) if im.get("src")]
+            # 🔧 27/7/2026 (vợ báo): thỉnh thoảng SP MỚI hiện 0 ảnh dù Haravan CÓ ảnh.
+            # /products.json?collection_id=... đôi lúc trả images rỗng cho SP vừa thêm
+            # (index collection chưa kịp gắn ảnh). Không có ảnh chuẩn + không có ảnh live
+            # => SP bị đẩy sang danh sách "thiếu ảnh" và biến mất khỏi lưới.
+            # → Hỏi lại TỪNG SP đó cho chắc, chỉ tốn 1 request cho ca hiếm.
+            if not idxs and not live_src and p.get("id"):
+                try:
+                    _full = hc.get_product(p["id"])
+                    live_src = [im.get("src") for im in (_full.get("images") or [])
+                                if im.get("src")]
+                except Exception:  # noqa: BLE001
+                    pass
             # SP đang ẨN → trang bán hàng trả 404, phải mở bằng link ADMIN (bẫy 22/7)
             base = {"handle": ph, "title": p.get("title"), "seen_at": seen_at,
                     "live": live_src, "n_live": len(live_src),
-                    "pub": bool(p.get("published_at")), "pid": p.get("id")}
+                    "pub": bool(p.get("published_at")), "pid": p.get("id"),
+                    # 27/7/2026 (vợ chốt): SP đã đẩy live rồi -> mặc định ẨN cho gọn,
+                    # để chỉ còn SP MỚI / chưa đẩy trước mắt.
+                    "synced": ph in synced_set,
+                    # ⚠️ SP CÒN VIỆC (có ảnh chuẩn mà chưa đẩy) thì KHÔNG BAO GIỜ ẩn,
+                    # kể cả khi 'nhà' của nó ở collection khác — nếu không thì thẻ ngoài
+                    # báo "còn 1 SP chưa sync" mà bấm vào lại không thấy con nào (vợ báo 27/7).
+                    "pending": (ph not in synced_set) and (THUMB_ROOT / "std" / ph).exists()}
             if idxs:
                 items.append({**base, "imgs": idxs})
                 n_img += len(idxs)
@@ -507,7 +614,14 @@ def thumbs_collection(handle):
     cdir = THUMB_ROOT / "_contact"
     sheets = sorted(p.name for p in cdir.glob(f"*__{handle}__p*.jpg")) if cdir.exists() else []
     items, missing, n_img = _collection_items(handle)
-    n_seen = sum(1 for it in items if it.get("seen_at"))
+    # SP còn việc (chưa đẩy) luôn hiện -> không tính vào 2 nhóm bị ẩn
+    n_seen = sum(1 for it in items if it.get("seen_at") and not it.get("pending"))
+    # SP đã đẩy live (và KHÔNG phải loại "đã xem ở nơi khác" — cái đó đã có ô riêng)
+    n_synced = sum(1 for it in items if it.get("synced") and not it.get("seen_at"))
+    n_moi = sum(1 for it in items if not it.get("synced"))
+    # Chỉ ẩn-mặc-định SP đã đẩy khi còn ít nhất 1 SP để xem. Không thì trang trống trơn
+    # (vd man-hinh-22-25-inch: 50 SP 'đã xem nơi khác' + 4 SP 'đã đẩy' = 0 SP hiện).
+    hide_synced = n_moi > 0
     strow = _load_status().get(handle) or {}
     review = strow.get("status", "")
     groups = _group_items(handle, items, strow.get("groups"))
@@ -520,7 +634,8 @@ def thumbs_collection(handle):
                            handle=handle, wave=wave,
                            sheets=sheets, items=items, missing=missing, groups=groups,
                            n_grp_done=n_grp_done,
-                           n_img=n_img, n_seen=n_seen, row=row, review=review)
+                           n_img=n_img, n_seen=n_seen, n_synced=n_synced, n_moi=n_moi,
+                           hide_synced=hide_synced, row=row, review=review)
 
 
 def thumbs_img(kind, name):
@@ -591,6 +706,48 @@ def thumbs_redo():
         except Exception:
             continue
     return jsonify(ok=True, n=n)
+
+
+def thumbs_gen_from_live():
+    """TẠO ảnh chuẩn LẦN ĐẦU cho 1 SP từ ảnh đang có trên Haravan. body: {handle}.
+
+    Vì sao cần (vợ hỏi 27/7/2026): /thumbs hiển thị ảnh CHUẨN LOCAL ở `std/<handle>/`,
+    không phải ảnh live. SP MỚI tạo (Samsung S32GF, Ryzen 5500GT, RTX 3060…) có ảnh
+    trên Haravan nhưng chưa qua bước chuẩn hoá nên `std/` rỗng -> /thumbs báo "chưa gen".
+    Trước đây chỉ có script chạy hàng loạt, KHÔNG có cách gen cho 1 SP lẻ trên web.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    handle = (data.get("handle") or "").strip()
+    if not handle:
+        return jsonify(ok=False, error="thiếu handle"), 400
+    d = THUMB_ROOT / "std" / handle
+    if d.exists() and any(d.glob("*.jpg")):
+        return jsonify(ok=False, error="SP đã có ảnh chuẩn — dùng nút Làm lại"), 400
+    try:
+        prods = hc._request("GET", "/products.json",
+                            params={"handle": handle, "limit": 1}).get("products", [])
+    except Exception as e:  # noqa: BLE001
+        return jsonify(ok=False, error=f"lỗi gọi Haravan: {e}"), 500
+    if not prods:
+        return jsonify(ok=False, error="không tìm thấy SP trên Haravan"), 404
+    imgs = sorted(prods[0].get("images") or [], key=lambda x: x.get("position") or 0)
+    if not imgs:
+        return jsonify(ok=False, error="SP không có ảnh nào trên Haravan"), 400
+    d.mkdir(parents=True, exist_ok=True)
+    man, n, errs = [], 0, 0
+    for im in imgs:
+        try:
+            raw = urllib.request.urlopen(im["src"], timeout=30).read()
+            _standardize_no_rembg(Image.open(io.BytesIO(raw))).save(d / f"{n}.jpg", quality=92)
+            man.append({"idx": n, "image_id": im.get("id"),
+                        "position": im.get("position"), "note": "gen-from-live"})
+            n += 1
+        except Exception:  # noqa: BLE001
+            errs += 1
+    if not n:
+        return jsonify(ok=False, error="tải/chuẩn hoá thất bại toàn bộ"), 500
+    (d / "manifest.json").write_text(json.dumps(man, ensure_ascii=False), encoding="utf-8")
+    return jsonify(ok=True, n=n, errors=errs)
 
 
 def thumbs_add_image():
@@ -1023,6 +1180,8 @@ def register(app):
     app.add_url_rule("/thumbs/redo", "thumbs_redo", thumbs_redo, methods=["POST"])
     app.add_url_rule("/thumbs/approve", "thumbs_approve", thumbs_approve, methods=["POST"])
     app.add_url_rule("/thumbs/approve-group", "thumbs_approve_group", thumbs_approve_group,
+                     methods=["POST"])
+    app.add_url_rule("/thumbs/gen-from-live", "thumbs_gen_from_live", thumbs_gen_from_live,
                      methods=["POST"])
     app.add_url_rule("/thumbs/add-image", "thumbs_add_image", thumbs_add_image, methods=["POST"])
     app.add_url_rule("/thumbs/paste", "thumbs_paste_front", thumbs_paste_front, methods=["POST"])
