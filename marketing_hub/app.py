@@ -38,6 +38,8 @@ from routes import blog_content_center as routes_blog_content_center
 from routes import seo_opportunity as routes_seo_opportunity
 from routes import thumbs as routes_thumbs
 from routes import spec_manager as routes_spec_manager
+from routes import preview as routes_preview
+from routes import fb_import as routes_fb_import
 
 ROOT = Path(__file__).parent
 
@@ -77,6 +79,8 @@ routes_blog_content_center.register(app)
 routes_seo_opportunity.register(app)
 routes_thumbs.register(app)
 routes_spec_manager.register(app)
+routes_preview.register(app)
+routes_fb_import.register(app)
 
 
 @app.template_filter("from_json")

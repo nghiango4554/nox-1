@@ -1,0 +1,66 @@
+{% extends "redesign_base.html" %}
+{% set active = 'fb_import' %}
+{% set a = 'fb_import' %}
+{% block title %}Bài FB đã cào · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span>📥 Bài Facebook đã cào</span>
+<span class="crumb"></span>
+<span class="muted" style="font-weight:400">lấy từ Meta Business Suite</span>
+{% endblock %}
+
+{% block page_actions %}
+<input type="text" id="fb-q" placeholder="🔍 Tìm trong caption..." class="seo-filter-input" style="min-width:240px">
+{% endblock %}
+
+{% block content %}
+<div class="sec-head">
+  <h2>{{ items|length }} bài</h2>
+  <div class="sec-meta">
+    Cập nhật {{ cap_nhat or 'chưa có' }} ·
+    {% for thang, n in theo_thang %}<b>{{ thang }}</b>: {{ n }} bài&nbsp;&nbsp;{% endfor %}
+  </div>
+</div>
+
+<table class="tbl" id="fb-tbl">
+  <thead><tr>
+    <th style="width:56px">STT</th>
+    <th style="width:130px">Ngày đăng</th>
+    <th>Nội dung</th>
+    <th style="width:80px">Tiếp cận</th>
+    <th style="width:80px">Lượt xem</th>
+  </tr></thead>
+  <tbody>
+  {% for x in items %}
+    <tr>
+      <td>{{ loop.index }}</td>
+      <td>{{ x.ngay }}</td>
+      <td class="cap">{{ x.caption[:190] }}{% if x.caption|length > 190 %}…{% endif %}</td>
+      <td>{{ x.tiep_can }}</td>
+      <td>{{ x.luot_xem }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<style>
+ .tbl{width:100%;border-collapse:collapse;background:var(--card,#fff);border-radius:10px;overflow:hidden;
+   box-shadow:0 1px 3px rgba(0,0,0,.07);font-size:13px}
+ .tbl th{background:#f8fafc;text-align:left;padding:9px 12px;font-size:12px;color:#475569;
+   border-bottom:1px solid var(--line,#e5e7eb)}
+ .tbl td{padding:9px 12px;border-bottom:1px solid var(--line,#f1f5f9);vertical-align:top}
+ .tbl tr:hover td{background:#fafafa}
+ .cap{line-height:1.45}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('fb-q').addEventListener('input', e => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll('#fb-tbl tbody tr').forEach(tr => {
+    tr.style.display = !q || tr.innerText.toLowerCase().includes(q) ? '' : 'none';
+  });
+});
+</script>
+{% endblock %}

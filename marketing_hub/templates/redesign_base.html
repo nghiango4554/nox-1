@@ -78,6 +78,7 @@
         <a href="{{ url_for('posts_page') }}" class="nav-sub {{ 'active' if a=='posts' }}"><span>Bài đã đăng</span></a>
         <a href="{{ url_for('calendar_page') }}" class="nav-sub {{ 'active' if a=='calendar' }}"><span>Lịch đăng</span></a>
         <a href="{{ url_for('fb_posted_page') }}" class="nav-sub {{ 'active' if a=='fb_posted' }}"><span>SP đã đăng</span></a>
+        <a href="{{ url_for('fb_posts_page') }}" class="nav-sub {{ 'active' if a=='fb_import' }}"><span>Bài đã cào từ FB</span></a>
       </div></div>
     </div>
 
@@ -96,6 +97,7 @@
       <a href="{{ url_for('library_page') }}" class="nav-item {{ 'active' if a=='library' }}" data-tone="slate"><i class="ic" data-icon="images"></i><span>Thư viện ảnh</span></a>
       <a href="{{ url_for('thumbs_page') }}" class="nav-item {{ 'active' if a=='thumbs' }}" data-tone="violet"><i class="ic" data-icon="layout-grid"></i><span>Chuẩn hóa ảnh SP</span></a>
       <a href="{{ url_for('competitors_page') }}" class="nav-item {{ 'active' if a=='competitors' }}" data-tone="slate"><i class="ic" data-icon="swords"></i><span>Đối thủ</span></a>
+      <a href="{{ url_for('preview_page') }}" class="nav-item {{ 'active' if a=='preview' }}" data-tone="amber"><i class="ic" data-icon="eye"></i><span>Preview</span></a>
     </div>
   </nav>
   <div class="sb-foot"><div class="avatar">N</div><div style="min-width:0"><div style="font-size:13px;font-weight:700">Vợ yêu Nghĩa</div><div style="font-size:11.5px;color:var(--ink-3);font-weight:600">Marketing · Sintech</div></div><i class="ic" data-icon="chevrons-up-down" style="margin-left:auto;color:var(--ink-3);font-size:16px"></i></div>

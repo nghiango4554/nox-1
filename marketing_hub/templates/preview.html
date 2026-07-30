@@ -1,0 +1,145 @@
+{% extends "redesign_base.html" %}
+{% set active = 'preview' %}
+{% set a = 'preview' %}
+{% block title %}Preview · Sintech Hub{% endblock %}
+
+{% block page_title %}
+<span>👁️ Preview</span>
+<span class="crumb"></span>
+<span class="muted" style="font-weight:400">mọi bản xem thử gom về một chỗ</span>
+{% endblock %}
+
+{% block page_actions %}
+<input type="text" id="pv-search" placeholder="🔍 Tìm tên file..." class="seo-filter-input" style="min-width:220px">
+<button class="btn" onclick="pvReload()">↻ Quét lại</button>
+{% endblock %}
+
+{% block content %}
+<div class="pv-wrap">
+  <aside class="pv-side">
+    <div class="pv-side-head">
+      <b id="pv-count">0</b> bản preview
+    </div>
+    <div class="pv-tabs">
+      <button class="pv-tab active" data-root="">Tất cả</button>
+      <button class="pv-tab" data-root="outputs">nox-outputs</button>
+      <button class="pv-tab" data-root="downloads">Downloads</button>
+      <button class="pv-tab" data-root="hub">Hub</button>
+    </div>
+    <div id="pv-list" class="pv-list"></div>
+  </aside>
+
+  <section class="pv-main">
+    <div class="pv-bar">
+      <div id="pv-title" class="pv-title muted">Chọn một bản preview bên trái</div>
+      <div class="pv-bar-actions">
+        <a id="pv-open" class="btn" target="_blank" style="display:none">↗ Mở tab mới</a>
+        <button id="pv-del" class="btn btn-danger" style="display:none" onclick="pvDelete()">🗑 Xoá</button>
+      </div>
+    </div>
+    <iframe id="pv-frame" class="pv-frame" src="about:blank"></iframe>
+    <div id="pv-empty" class="pv-empty">
+      <div style="font-size:44px">👁️</div>
+      <p>Mỗi lần anh dựng bản xem thử (ảnh sản phẩm, bảng so sánh, bản nháp nội dung),<br>
+         file sẽ hiện ở danh sách bên trái. Bấm vào là xem ngay tại đây.</p>
+      <p class="muted" style="font-size:12.5px">Quét từ: <code>{{ roots['outputs'] }}</code> ·
+         <code>{{ roots['downloads'] }}</code> · <code>{{ roots['hub'] }}</code></p>
+    </div>
+  </section>
+</div>
+
+<style>
+ .pv-wrap{display:grid;grid-template-columns:330px 1fr;gap:14px;height:calc(100vh - 132px)}
+ .pv-side{background:var(--card,#fff);border:1px solid var(--line,#e5e7eb);border-radius:12px;
+   display:flex;flex-direction:column;overflow:hidden}
+ .pv-side-head{padding:10px 12px;border-bottom:1px solid var(--line,#e5e7eb);font-size:13px}
+ .pv-tabs{display:flex;gap:4px;padding:8px;flex-wrap:wrap;border-bottom:1px solid var(--line,#e5e7eb)}
+ .pv-tab{font-size:12px;padding:4px 10px;border-radius:20px;border:1px solid var(--line,#e5e7eb);
+   background:transparent;cursor:pointer}
+ .pv-tab.active{background:#111;color:#fff;border-color:#111}
+ .pv-list{overflow-y:auto;flex:1}
+ .pv-item{padding:9px 12px;border-bottom:1px solid var(--line,#f1f5f9);cursor:pointer}
+ .pv-item:hover{background:#f8fafc}
+ .pv-item.active{background:#fff7ed;border-left:3px solid #ea580c;padding-left:9px}
+ .pv-item .n{font-size:13px;font-weight:600;word-break:break-all;line-height:1.35}
+ .pv-item .m{font-size:11.5px;color:var(--ink-3,#94a3b8);margin-top:2px}
+ .pv-badge{display:inline-block;font-size:10.5px;padding:1px 6px;border-radius:4px;
+   background:#e2e8f0;color:#475569;margin-right:5px}
+ .pv-main{background:var(--card,#fff);border:1px solid var(--line,#e5e7eb);border-radius:12px;
+   display:flex;flex-direction:column;overflow:hidden;position:relative}
+ .pv-bar{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line,#e5e7eb)}
+ .pv-title{font-size:13.5px;font-weight:600;flex:1;word-break:break-all}
+ .pv-frame{flex:1;width:100%;border:0;background:#fff}
+ .pv-empty{position:absolute;inset:44px 0 0 0;display:flex;flex-direction:column;align-items:center;
+   justify-content:center;text-align:center;color:var(--ink-3,#94a3b8);gap:6px;padding:20px}
+ .btn-danger{color:#dc2626;border-color:#fecaca}
+ @media(max-width:1100px){.pv-wrap{grid-template-columns:1fr;height:auto}.pv-frame{height:70vh}}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let PV = {{ items|tojson }};
+let pvCur = null, pvRoot = '', pvQ = '';
+
+function pvRender(){
+  const list = PV.filter(x =>
+    (!pvRoot || x.root === pvRoot) &&
+    (!pvQ || x.name.toLowerCase().includes(pvQ) || x.rel.toLowerCase().includes(pvQ)));
+  document.getElementById('pv-count').textContent = list.length;
+  document.getElementById('pv-list').innerHTML = list.map((x, i) => `
+    <div class="pv-item ${pvCur && pvCur.root===x.root && pvCur.rel===x.rel ? 'active':''}"
+         onclick="pvOpen(${PV.indexOf(x)})">
+      <div class="n">${x.name}</div>
+      <div class="m"><span class="pv-badge">${x.root}</span>${x.when} · ${x.size_kb} KB</div>
+    </div>`).join('') ||
+    '<div style="padding:16px;color:#94a3b8;font-size:13px">Không có bản preview nào khớp.</div>';
+}
+
+function pvOpen(i){
+  const x = PV[i];
+  pvCur = x;
+  const url = `/preview/file/${x.root}/${encodeURI(x.rel)}`;
+  document.getElementById('pv-frame').src = url;
+  document.getElementById('pv-title').textContent = x.rel;
+  document.getElementById('pv-title').classList.remove('muted');
+  const open = document.getElementById('pv-open');
+  open.href = url; open.style.display = '';
+  document.getElementById('pv-del').style.display = '';
+  document.getElementById('pv-empty').style.display = 'none';
+  pvRender();
+}
+
+async function pvDelete(){
+  if (!pvCur || !confirm('Xoá file preview này?\n' + pvCur.rel)) return;
+  const r = await fetch('/api/preview/delete', {method:'POST',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify(pvCur)});
+  const j = await r.json();
+  if (!j.ok) return alert('Lỗi: ' + (j.error || '?'));
+  PV = PV.filter(x => !(x.root===pvCur.root && x.rel===pvCur.rel));
+  pvCur = null;
+  document.getElementById('pv-frame').src = 'about:blank';
+  document.getElementById('pv-empty').style.display = '';
+  document.getElementById('pv-open').style.display = 'none';
+  document.getElementById('pv-del').style.display = 'none';
+  document.getElementById('pv-title').textContent = 'Chọn một bản preview bên trái';
+  pvRender();
+}
+
+async function pvReload(){
+  const j = await (await fetch('/api/preview/list')).json();
+  PV = j.items || [];
+  pvRender();
+}
+
+document.getElementById('pv-search').addEventListener('input', e => {
+  pvQ = e.target.value.trim().toLowerCase(); pvRender();
+});
+document.querySelectorAll('.pv-tab').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.pv-tab').forEach(x => x.classList.remove('active'));
+  b.classList.add('active'); pvRoot = b.dataset.root; pvRender();
+}));
+
+pvRender();
+</script>
+{% endblock %}
