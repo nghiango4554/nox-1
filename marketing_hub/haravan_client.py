@@ -30,6 +30,29 @@ def _base_url() -> str:
     return f"https://{cfg['shop_domain']}/admin"
 
 
+# ── Định tuyến 2 API (rà thật 4/8/2026) ────────────────────────────────────────
+# Haravan KHÔNG có 1 API phủ hết. Phải đi 2 cửa, sai cửa là chết:
+#
+#   Admin  {shop}.myharavan.com/admin  → products, collections, metafields SP  ✅
+#                                        blogs/articles/pages/redirects       ❌ 502 CỨNG
+#   Open   apis.haravan.com/web        → blogs/articles/pages/redirects       ✅
+#                                        products, collections                ❌ 404
+#
+# Trước đây mọi lệnh đều đi Admin → toàn bộ hàm content chết 502.
+_CONTENT_PREFIXES = ("/blogs", "/pages", "/redirects", "/articles")
+
+
+def _open_api_base() -> str:
+    return load_config().get("open_api_base") or "https://apis.haravan.com/web"
+
+
+def _api_base_for(path: str) -> str:
+    """Chọn base URL theo loại tài nguyên. Path bắt đầu bằng '/'."""
+    if path.startswith(_CONTENT_PREFIXES):
+        return _open_api_base()
+    return _base_url()
+
+
 def _auth_headers() -> dict:
     cfg = load_config()
     return {
@@ -146,14 +169,17 @@ def _audit(method: str, path: str, payload, ok: bool, status_code, error):
 
 
 def _request(method: str, path: str, params: dict = None, payload: dict = None) -> dict:
-    """Low-level request. Path = '/products.json' (relative to /admin).
+    """Low-level request. Path = '/products.json'.
+
+    Base URL tự chọn theo loại tài nguyên (xem `_api_base_for`):
+    product/collection đi Admin API, blog/article/page/redirect đi Open API.
 
     Bypass SSL verify (verify=False) — máy vợ đang có VPN/antivirus intercept
     HTTPS làm cert chain không verify được. Trade-off acceptable cho local dev.
     """
     _check_paused()
     _check_permission(method, path)
-    url = f"{_base_url()}{path}"
+    url = f"{_api_base_for(path)}{path}"
     # Disable urllib3 InsecureRequestWarning
     import urllib3
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
