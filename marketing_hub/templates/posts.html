@@ -1,180 +1,146 @@
 {% extends "redesign_base.html" %}
+{% from "_fb_icons.html" import icon, status_chip, status_label, status_cls %}
 {% set active = 'posts' %}
-{% block title %}Posts · Sintech Hub{% endblock %}
+{% block title %}Bài đã đăng · Sintech Hub{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fb-module.css') }}?v={{ css_v }}">
+{% endblock %}
 
 {% block page_title %}
-<span>📝 Posts</span>
+<span>Bài đăng</span>
 <span class="crumb"></span>
-<span class="muted" style="font-weight:400">{{ posts|length }} bài</span>
+<span class="muted" style="font-weight:400">{{ rows|length }} / {{ total_all }} bài</span>
 {% endblock %}
 
 {% block content %}
 
-<div class="section-head" style="margin-bottom:14px">
-  <div class="sh-left">
-    <h2 style="margin:0">📝 Bài trong tuần</h2>
-    <div class="week-nav">
-      <a class="wn-arrow" href="?week={{ prev_week }}{% if f_type %}&type={{ f_type }}{% endif %}{% if f_status %}&status={{ f_status }}{% endif %}" title="Tuần trước">◀</a>
-      <form method="get" class="wn-pick" action="">
-        <select name="month" onchange="this.form.submit()" aria-label="Tháng">
-          {% for m in range(1, 13) %}
-            <option value="{{ m }}" {% if m == display_month %}selected{% endif %}>Tháng {{ m }}</option>
-          {% endfor %}
-        </select>
-        <select name="year" onchange="this.form.submit()" aria-label="Năm">
-          {% for y in year_options %}
-            <option value="{{ y }}" {% if y == display_year %}selected{% endif %}>{{ y }}</option>
-          {% endfor %}
-        </select>
-        {% if f_type %}<input type="hidden" name="type" value="{{ f_type }}">{% endif %}
-        {% if f_status %}<input type="hidden" name="status" value="{{ f_status }}">{% endif %}
-      </form>
-      <a class="wn-arrow" href="?week={{ next_week }}{% if f_type %}&type={{ f_type }}{% endif %}{% if f_status %}&status={{ f_status }}{% endif %}" title="Tuần sau">▶</a>
-      <span class="wn-range">{{ week_start_disp }} → {{ week_end_disp }}</span>
-      {% if not is_current_week %}
-        <a class="wn-today" href="?week={{ this_week }}{% if f_type %}&type={{ f_type }}{% endif %}{% if f_status %}&status={{ f_status }}{% endif %}" title="Về tuần hiện tại">Hôm nay</a>
-      {% endif %}
-    </div>
-  </div>
-</div>
-
-<form class="filter-bar" method="get">
-  <input type="hidden" name="week" value="{{ week_start }}">
-  <select name="type">
-    <option value="">— Loại —</option>
-    {% for v, label in types %}
-      <option value="{{ v }}" {% if f_type == v %}selected{% endif %}>{{ label }}</option>
-    {% endfor %}
-  </select>
-  <select name="status">
-    <option value="">— Trạng thái —</option>
-    {% for v, label in statuses %}
-      <option value="{{ v }}" {% if f_status == v %}selected{% endif %}>{{ label }}</option>
-    {% endfor %}
-  </select>
-  <button class="btn">Lọc</button>
-  <a class="btn btn-ghost" href="{{ url_for('posts_page') }}?week={{ week_start }}">Xóa lọc</a>
-</form>
-
-<div class="legend" style="margin-bottom:10px">
-  <span><span class="legend-dot" style="background:var(--st-draft)"></span>Draft</span>
-  <span><span class="legend-dot" style="background:var(--st-ready)"></span>Ready</span>
-  <span><span class="legend-dot" style="background:var(--st-scheduled)"></span>Scheduled</span>
-  <span><span class="legend-dot" style="background:var(--st-posted)"></span>Posted</span>
-</div>
-
-<div id="bulk-bar" class="bulk-bar" style="display:none">
-  <span>✅ <b id="bulk-count">0</b> bài đã chọn</span>
-  <button type="button" class="btn btn-sm btn-ghost" id="bulk-clear">Bỏ chọn</button>
-  <span class="bulk-sep">|</span>
-  <span class="bulk-label">Đổi status:</span>
-  <select id="bulk-status">
-    {% for v, label in statuses %}
-      <option value="{{ v }}">{{ label }}</option>
-    {% endfor %}
-  </select>
-  <button type="button" class="btn btn-sm" id="bulk-apply-status">Áp dụng</button>
-  <span class="bulk-sep">|</span>
-  <button type="button" class="btn btn-sm btn-danger" id="bulk-delete">🗑 Xoá đã chọn</button>
-</div>
-
-<div class="week-grid week-board">
-  {% for u in days %}
-  <div class="day-col" data-date="{{ u.date }}">
-    <div class="day-head{% if u.is_today %} is-today{% endif %}">
-      <span class="dow">{{ u.dow_long }}</span>
-      <span class="dnum">{{ u.dnum }}/{{ u.month }}</span>
-    </div>
-    <div class="day-body">
-    {% if u.posts %}
-      {% for p in u.posts %}
-        <div class="day-post status-{{ p.status }}"
-             data-pid="{{ p.id }}"
-             data-time="{{ p.scheduled_time or '' }}"
-             data-date="{{ u.date }}"
-             data-code="{{ p.code }}">
-          <label class="dp-check-wrap" title="Chọn bài">
-            <input type="checkbox" class="dp-check" data-pid="{{ p.id }}">
-            <span class="dp-check-box"></span>
-          </label>
-          <div class="dp-row">
-            <span class="dp-time">{{ p.scheduled_time or '--:--' }}</span>
-            <span class="dp-code">{{ p.code }}</span>
-          </div>
-          <div class="dp-cap">{{ (p.caption or '(trống)')[:60] }}{% if p.caption and p.caption|length > 60 %}…{% endif %}</div>
-          <a class="dp-open" href="{{ url_for('post_detail', post_id=p.id) }}" title="Mở bài">↗</a>
-        </div>
-      {% endfor %}
-    {% else %}
-      <div class="day-empty">— trống —</div>
-    {% endif %}
-    </div>
-  </div>
+{# ─────────── Tab trạng thái ─────────── #}
+{% set qs = '&type=' ~ (f_type or '') ~ '&range=' ~ f_range ~ ('&q=' ~ q if q else '') %}
+<div class="fb-tabs" role="tablist">
+  <a class="fb-tab" role="tab" aria-selected="{{ 'true' if not f_status else 'false' }}"
+     href="?{{ qs[1:] }}">Tất cả <span class="fb-count">{{ total_all }}</span></a>
+  {% for code, n in counts | dictsort(by='value', reverse=true) %}
+  <a class="fb-tab" role="tab" aria-selected="{{ 'true' if f_status == code else 'false' }}"
+     href="?status={{ code }}{{ qs }}">{{ status_label(code) }} <span class="fb-count">{{ n }}</span></a>
   {% endfor %}
 </div>
 
-{% if not posts %}
-<div class="empty-state" style="margin-top:16px">
-  <div class="empty-state-icon">📭</div>
-  <p>Tuần này chưa có bài nào khớp bộ lọc.</p>
-  <a class="btn btn-primary mt-2" href="{{ url_for('post_new') }}">+ Tạo bài mới</a>
+{# ─────────── Thanh công cụ ─────────── #}
+<form class="fb-toolbar" method="get">
+  {% if f_status %}<input type="hidden" name="status" value="{{ f_status }}">{% endif %}
+  <label class="fb-field" style="min-width:250px">
+    {{ icon('search') }}
+    <input type="search" name="q" value="{{ q }}" placeholder="Tìm trong nội dung bài…" aria-label="Tìm bài">
+  </label>
+  <label class="fb-field">
+    {{ icon('filter') }}
+    <select name="type" onchange="this.form.submit()" aria-label="Loại bài">
+      <option value="">Mọi loại</option>
+      {% for v, label in types %}
+      <option value="{{ v }}" {% if f_type == v %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label class="fb-field">
+    {{ icon('calendar') }}
+    <select name="range" onchange="this.form.submit()" aria-label="Khoảng thời gian">
+      <option value="all" {% if f_range == 'all' %}selected{% endif %}>Mọi thời điểm</option>
+      <option value="7"   {% if f_range == '7'  %}selected{% endif %}>± 7 ngày</option>
+      <option value="30"  {% if f_range == '30' %}selected{% endif %}>± 30 ngày</option>
+      <option value="90"  {% if f_range == '90' %}selected{% endif %}>± 90 ngày</option>
+    </select>
+  </label>
+  <button class="fb-btn" type="submit">Lọc</button>
+  {% if f_status or f_type or q or f_range != 'all' %}
+  <a class="fb-btn" href="{{ url_for('posts_page') }}">{{ icon('close') }} Bỏ lọc</a>
+  {% endif %}
+  <div style="flex:1"></div>
+  <a class="fb-btn" href="{{ url_for('calendar_page') }}">{{ icon('calendar') }} Xem lịch</a>
+  <a class="fb-btn primary" href="{{ url_for('post_new') }}">{{ icon('plus') }} Bài mới</a>
+</form>
+
+{# ─────────── Bảng bài ─────────── #}
+{% if rows %}
+<div class="fb-table-wrap">
+  <table class="fb-table" id="tbl">
+    <thead>
+      <tr>
+        <th style="min-width:280px">Bài viết</th>
+        <th style="width:110px">Loại</th>
+        <th style="width:150px" class="sortable" data-k="when">Lịch đăng <span class="sort-ind">{{ icon('sort') }}</span></th>
+        <th style="width:130px">Trạng thái</th>
+        <th style="width:88px">Trên FB</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr data-when="{{ r.date }} {{ r.time }}">
+        <td>
+          <a class="fb-row-media" href="{{ url_for('post_detail', post_id=r.id) }}" style="color:inherit;text-decoration:none">
+            <span class="fb-row-thumb">
+              {% if r.thumb %}
+                <img src="{{ url_for('serve_upload', filename=r.thumb) }}" alt="" loading="lazy"
+                     width="52" height="52"
+                     onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">
+                <span class="no-img" style="display:none;width:100%;height:100%;place-items:center;color:#cbd5e1">{{ icon('image') }}</span>
+              {% else %}
+                <span style="display:grid;place-items:center;color:#cbd5e1">{{ icon('image') }}</span>
+              {% endif %}
+              {% if r.n_img > 1 %}<span class="fb-badge">{{ icon('images') }}{{ r.n_img }}</span>{% endif %}
+            </span>
+            <span class="fb-row-text">
+              <span class="fb-row-title">{{ r.headline }}</span>
+              <span class="fb-row-sub">{{ r.code }} · {{ r.n_char }} ký tự{% if r.n_img %} · {{ r.n_img }} ảnh{% endif %}</span>
+            </span>
+          </a>
+        </td>
+        <td class="muted" style="font-size:12.5px">{{ r.ptype or '—' }}</td>
+        <td class="num">
+          {% if r.date %}{{ r.date[8:10] }}/{{ r.date[5:7] }}/{{ r.date[0:4] }}<br>
+            <span class="muted" style="font-size:12px">{{ r.time or '--:--' }}</span>
+          {% else %}<span class="muted">chưa đặt</span>{% endif %}
+        </td>
+        <td>{{ status_chip(r.status) }}</td>
+        <td>
+          {% if r.fb_post_id %}
+            <span class="fb-chip is-posted" title="Đã có trên Facebook">{{ icon('facebook') }}Có</span>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="fb-table-wrap">
+  <div class="fb-empty">
+    {{ icon('inbox') }}
+    <h3>Không có bài nào khớp</h3>
+    <p>Thử bỏ bớt bộ lọc, hoặc tạo bài mới.</p>
+    <a class="fb-btn primary" href="{{ url_for('post_new') }}">{{ icon('plus') }} Tạo bài mới</a>
+  </div>
 </div>
 {% endif %}
 
 <script>
-(function(){
-  const bulkBar = document.getElementById('bulk-bar');
-  const bulkCount = document.getElementById('bulk-count');
-  const bulkStatus = document.getElementById('bulk-status');
-
-  function selectedIds() {
-    return Array.from(document.querySelectorAll('.dp-check:checked'))
-      .map(c => parseInt(c.dataset.pid, 10)).filter(Boolean);
-  }
-  function refreshBar() {
-    const ids = selectedIds();
-    bulkCount.textContent = ids.length;
-    bulkBar.style.display = ids.length ? 'flex' : 'none';
-    document.querySelectorAll('.day-post').forEach(card => {
-      const c = card.querySelector('.dp-check');
-      card.classList.toggle('is-selected', !!(c && c.checked));
+(function () {
+  var tbl = document.getElementById('tbl');
+  if (!tbl) return;
+  var dir = {};
+  tbl.querySelectorAll('th.sortable').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var k = th.dataset.k;
+      dir[k] = dir[k] === 'asc' ? 'desc' : 'asc';
+      tbl.querySelectorAll('th').forEach(function (x) { x.removeAttribute('aria-sort'); });
+      th.setAttribute('aria-sort', dir[k] === 'asc' ? 'ascending' : 'descending');
+      var body = tbl.querySelector('tbody');
+      Array.prototype.slice.call(body.querySelectorAll('tr')).sort(function (a, b) {
+        var x = a.dataset[k] || '', y = b.dataset[k] || '';
+        return (x < y ? -1 : x > y ? 1 : 0) * (dir[k] === 'asc' ? 1 : -1);
+      }).forEach(function (tr) { body.appendChild(tr); });
     });
-  }
-  document.addEventListener('change', e => {
-    if (e.target.classList && e.target.classList.contains('dp-check')) refreshBar();
   });
-  document.getElementById('bulk-clear')?.addEventListener('click', () => {
-    document.querySelectorAll('.dp-check').forEach(c => c.checked = false);
-    refreshBar();
-  });
-
-  async function callBulk(action, payload) {
-    const ids = selectedIds();
-    if (!ids.length) return;
-    const r = await fetch('/api/posts/bulk', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ids, action, payload: payload || {}}),
-    });
-    const j = await r.json();
-    if (j.ok) { location.reload(); }
-    else alert('❌ ' + (j.error || 'Lỗi không xác định'));
-  }
-  document.getElementById('bulk-apply-status')?.addEventListener('click', () => {
-    const ids = selectedIds();
-    if (!ids.length) return;
-    const status = bulkStatus.value;
-    if (!confirm(`Đổi status của ${ids.length} bài thành "${status}"?`)) return;
-    callBulk('status', {status});
-  });
-  document.getElementById('bulk-delete')?.addEventListener('click', () => {
-    const ids = selectedIds();
-    if (!ids.length) return;
-    if (!confirm(`⚠️ Xoá ${ids.length} bài đã chọn? Không hoàn tác được!`)) return;
-    callBulk('delete');
-  });
-
-  refreshBar();
 })();
 </script>
-
 {% endblock %}

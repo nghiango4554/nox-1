@@ -220,106 +220,261 @@ def _safe_lib_path(category: str, filename: str = "") -> Path | None:
 # ─────────────────────── POSTS LIST + CALENDAR ───────────────────
 
 def posts_page():
+    """DANH SÁCH bài (không phải lịch — lịch đã có tab riêng /calendar).
+
+    Học Meta: tab trạng thái ngang, bảng có ảnh + sắp xếp + lọc khoảng thời gian.
+    Query: status=… · type=… · range=all|7|30|90 · q=…
+    """
     today = date.today()
     f_status = request.args.get("status") or None
     f_type = request.args.get("type") or None
+    f_range = request.args.get("range") or "all"
+    q = (request.args.get("q") or "").strip().lower()
 
-    week_param = request.args.get("week")
-    month_param = request.args.get("month")
-    year_param = request.args.get("year")
+    kw = {"limit": 2000}
+    if f_range in ("7", "30", "90"):
+        kw["date_from"] = (today - timedelta(days=int(f_range))).isoformat()
+        kw["date_to"] = (today + timedelta(days=int(f_range))).isoformat()
+    if f_status:
+        kw["status"] = f_status
+    if f_type:
+        kw["ptype"] = f_type
+    posts = db.list_posts(**kw)
 
-    monday = None
-    if month_param and year_param:
-        try:
-            target = date(int(year_param), int(month_param), 1)
-            days_to_mon = (7 - target.weekday()) % 7
-            monday = target + timedelta(days=days_to_mon)
-        except (ValueError, TypeError):
-            monday = None
-    if monday is None and week_param:
-        try:
-            wd = date.fromisoformat(week_param)
-            monday = wd - timedelta(days=wd.weekday())
-        except ValueError:
-            monday = None
-    if monday is None:
-        monday = today - timedelta(days=today.weekday())
+    # đếm theo trạng thái TRƯỚC khi lọc chữ, để con số trên tab không nhảy lung tung
+    counts = {}
+    for p in db.list_posts(limit=2000):
+        s = p.get("status") or "draft"
+        counts[s] = counts.get(s, 0) + 1
 
-    sunday = monday + timedelta(days=6)
-    prev_week = (monday - timedelta(days=7)).isoformat()
-    next_week = (monday + timedelta(days=7)).isoformat()
-    this_week = (today - timedelta(days=today.weekday())).isoformat()
+    rows = []
+    for p in posts:
+        cap = (p.get("caption") or "").strip()
+        if q and q not in cap.lower() and q not in (p.get("code") or "").lower():
+            continue
+        c = _cal_card(p)
+        c["headline"] = cap.split("\n")[0][:110] if cap else (p.get("code") or "(chưa có nội dung)")
+        c["n_char"] = len(cap)
+        rows.append(c)
 
-    posts = db.list_posts(
-        date_from=monday.isoformat(),
-        date_to=sunday.isoformat(),
-        status=f_status,
-        ptype=f_type,
-    )
-
-    days = []
-    for i in range(7):
-        d = monday + timedelta(days=i)
-        meta = _day_meta(d, today)
-        meta["posts"] = [p for p in posts if p.get("scheduled_date") == d.isoformat()]
-        days.append(meta)
-
-    year_options = list(range(today.year - 1, today.year + 4))
+    rows.sort(key=lambda r: (r["date"] or "0000-00-00", r["time"] or "99:99"), reverse=True)
 
     return render_template(
         "posts.html",
-        posts=posts, days=days,
+        rows=rows, counts=counts, total_all=sum(counts.values()),
         types=POST_TYPES, statuses=POST_STATUSES,
-        f_status=f_status, f_type=f_type,
-        week_start=monday.isoformat(), week_end=sunday.isoformat(),
-        week_start_disp=f"{monday.day:02d}/{monday.month:02d}",
-        week_end_disp=f"{sunday.day:02d}/{sunday.month:02d}",
-        prev_week=prev_week, next_week=next_week, this_week=this_week,
-        display_month=monday.month, display_year=monday.year,
-        year_options=year_options,
-        is_current_week=(monday.isoformat() == this_week),
+        f_status=f_status, f_type=f_type, f_range=f_range, q=q,
+        today=today.isoformat(), css_v=_css_v(),
     )
+
+
+def _css_v() -> int:
+    """mtime của fb-module.css — gắn vào ?v= để trình duyệt luôn lấy bản mới nhất."""
+    try:
+        return int((Path(__file__).resolve().parents[1] / "static" / "css" / "fb-module.css").stat().st_mtime)
+    except OSError:
+        return 0
+
+
+def _cal_card(p: dict) -> dict:
+    """Gói 1 bài thành thẻ hiển thị trên lịch: ảnh đầu + số ảnh + giờ + trạng thái."""
+    imgs = post_images(p)
+    return {
+        "id": p.get("id"),
+        "code": p.get("code") or "",
+        "caption": (p.get("caption") or "").strip(),
+        "status": p.get("status") or "draft",
+        "time": p.get("scheduled_time") or "",
+        "date": p.get("scheduled_date") or "",
+        "ptype": p.get("type") or "",
+        "thumb": imgs[0] if imgs else None,
+        "n_img": len(imgs),
+        "fb_post_id": p.get("fb_post_id") or "",
+    }
 
 
 def calendar_page():
+    """Lịch đăng: xem theo THÁNG (mặc định) hoặc TUẦN, điều hướng tự do, kéo thả đổi ngày.
+
+    Query: view=month|week · ref=YYYY-MM-DD (ngày mốc) · status=… (lọc)
+    """
     today = date.today()
-    days = []
-    for i in range(14):
-        d = today + timedelta(days=i)
-        posts = db.list_posts(date=d.isoformat())
-        meta = _day_meta(d, today)
-        meta["posts"] = posts
-        days.append(meta)
+    view = (request.args.get("view") or "month").lower()
+    if view not in ("month", "week"):
+        view = "month"
+    f_status = request.args.get("status") or None
+
+    try:
+        ref = date.fromisoformat(request.args.get("ref") or "")
+    except ValueError:
+        ref = today
+
+    if view == "week":
+        start = ref - timedelta(days=ref.weekday())          # thứ 2
+        end = start + timedelta(days=6)
+        grid_start, grid_end = start, end
+        title = f"Tuần {start.day:02d}/{start.month:02d} – {end.day:02d}/{end.month:02d}/{end.year}"
+        prev_ref = (start - timedelta(days=7)).isoformat()
+        next_ref = (start + timedelta(days=7)).isoformat()
+    else:
+        first = ref.replace(day=1)
+        nxt = (first + timedelta(days=32)).replace(day=1)
+        last = nxt - timedelta(days=1)
+        grid_start = first - timedelta(days=first.weekday())   # lùi về thứ 2
+        grid_end = last + timedelta(days=(6 - last.weekday()))  # tiến tới chủ nhật
+        title = f"Tháng {first.month} · {first.year}"
+        prev_ref = (first - timedelta(days=1)).replace(day=1).isoformat()
+        next_ref = nxt.isoformat()
+        start, end = first, last
+
+    posts = db.list_posts(
+        date_from=grid_start.isoformat(), date_to=grid_end.isoformat(), status=f_status
+    )
+    by_day = {}
+    for p in posts:
+        by_day.setdefault(p.get("scheduled_date"), []).append(p)
+
+    cells, d = [], grid_start
+    while d <= grid_end:
+        iso = d.isoformat()
+        items = sorted(by_day.get(iso, []), key=lambda x: (x.get("scheduled_time") or "99:99"))
+        cells.append({
+            "iso": iso,
+            "dnum": d.day,
+            "month": d.month,
+            "is_today": d == today,
+            "is_past": d < today,
+            "in_range": (start <= d <= end),
+            "posts": [_cal_card(p) for p in items],
+        })
+        d += timedelta(days=1)
+
+    counts = {}
+    for p in posts:
+        s = p.get("status") or "draft"
+        counts[s] = counts.get(s, 0) + 1
+
     return render_template(
-        "calendar.html", days=days, types=POST_TYPES, statuses=POST_STATUSES
+        "calendar.html",
+        cells=cells, view=view, title=title, f_status=f_status,
+        prev_ref=prev_ref, next_ref=next_ref, today_ref=today.isoformat(),
+        counts=counts, total=len(posts),
+        statuses=POST_STATUSES, types=POST_TYPES,
+        dows=["Th 2", "Th 3", "Th 4", "Th 5", "Th 6", "Th 7", "CN"],
+        css_v=_css_v(),
     )
 
 
-def fb_posted_page():
-    """Bảng SP đã đăng FB — đọc từ file chống trùng fb_posted_products.json (dò ngược lên tìm)."""
+def _fb_posted_db_path() -> Path:
     here = Path(__file__).resolve()
-    db_path = next(
+    return next(
         (p / "fb_posted_products.json" for p in here.parents
          if (p / "fb_posted_products.json").exists()),
         here.parents[3] / "fb_posted_products.json",
     )
+
+
+def fb_posted_page():
+    """SP đã lên Facebook — tách rõ ĐÃ ĐĂNG với ĐANG CHỜ (trước đây trộn chung một bảng).
+
+    Bài có ngày ở tương lai = đang nằm lịch, CHƯA đăng. Nguồn ghi rõ "chưa thực đăng"
+    cũng bị tách ra để không đếm nhầm là đã lên trang.
+    """
     try:
-        data = json.loads(db_path.read_text(encoding="utf-8"))
+        data = json.loads(_fb_posted_db_path().read_text(encoding="utf-8"))
     except Exception:
         data = {"updated_at": None, "products": []}
+
+    today = date.today().isoformat()
     rows = []
-    for p in data.get("products", []):
+    for i, p in enumerate(data.get("products", []), 1):
         link = p.get("sintech_link") or (
             "https://sintech.vn/products/" + p["handle"] if p.get("handle") else ""
         )
+        d = (p.get("posted_date") or "").strip()
+        src = (p.get("source") or "").strip()
+
+        # phân loại
+        if "chưa thực đăng" in src.lower():
+            state = "chua"                       # ghi chú nói rõ chưa đăng
+        elif not d:
+            state = "thieu"                      # không có ngày → không biết
+        elif len(d) == 7:
+            state = "mo"                         # chỉ có tháng
+        elif d > today:
+            state = "cho"                        # ngày tương lai → đang nằm lịch
+        else:
+            state = "xong"
+
         rows.append({
+            "stt": i,
             "name": p.get("name", ""),
             "link": link,
-            "date": p.get("posted_date", "") or "—",
+            "date": d,
+            "state": state,
+            "source": src,
+            "ptype": (p.get("type") or "").strip(),
         })
+
+    order = {"cho": 0, "chua": 1, "thieu": 2, "mo": 3, "xong": 4}
+    rows.sort(key=lambda r: (order[r["state"]], r["date"] or "0000", r["name"]))
+
+    tabs = {
+        "all":   len(rows),
+        "xong":  sum(1 for r in rows if r["state"] == "xong"),
+        "cho":   sum(1 for r in rows if r["state"] == "cho"),
+        "chua":  sum(1 for r in rows if r["state"] == "chua"),
+        "thieu": sum(1 for r in rows if r["state"] in ("thieu", "mo")),
+    }
+    thieu_link = sum(1 for r in rows if not r["link"])
+    thieu_type = sum(1 for r in rows if not r["ptype"])
+
     return render_template(
-        "fb_posted.html", rows=rows, total=len(rows), updated_at=data.get("updated_at"),
+        "fb_posted.html",
+        rows=rows, tabs=tabs, total=len(rows),
+        updated_at=data.get("updated_at"), today=today,
+        thieu_link=thieu_link, thieu_type=thieu_type,
+        css_v=_css_v(),
     )
+
+
+def api_fb_posted_sync():
+    """Đối chiếu với lịch THẬT trên Facebook: bài nào còn nằm lịch = chưa đăng.
+
+    Chỉ ĐỌC từ Graph API rồi trả kết quả so khớp — không sửa file, không đụng Facebook.
+    """
+    try:
+        from state_paths import STATE_DIR            # noqa: F401
+    except Exception:
+        pass
+    try:
+        import requests as _rq
+        cfg_p = next(
+            (p / "state" / "facebook_token.json" for p in Path(__file__).resolve().parents
+             if (p / "state" / "facebook_token.json").exists()), None)
+        if not cfg_p:
+            return jsonify({"error": "không tìm thấy facebook_token.json"}), 400
+        cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
+        r = _rq.get(
+            f"https://graph.facebook.com/v25.0/{cfg['page_id']}/scheduled_posts",
+            params={"fields": "scheduled_publish_time,message", "limit": 100,
+                    "access_token": cfg["page_token"]},
+            timeout=30,
+        )
+        js = r.json()
+        if r.status_code != 200:
+            return jsonify({"error": (js.get("error") or {}).get("message", "lỗi Graph API")}), 502
+        pend = []
+        for it in js.get("data", []):
+            msg = (it.get("message") or "").split("\n")[0].strip()
+            pend.append({
+                "when": datetime.fromtimestamp(it["scheduled_publish_time"]).strftime("%d/%m %H:%M"),
+                "head": msg[:70],
+            })
+        pend.sort(key=lambda x: x["when"])
+        return jsonify({"ok": True, "n_pending": len(pend), "pending": pend})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ─────────────────────── POST CRUD ───────────────────────────────
@@ -753,6 +908,8 @@ def register(app):
     app.add_url_rule("/posts", "posts_page", posts_page)
     app.add_url_rule("/calendar", "calendar_page", calendar_page)
     app.add_url_rule("/fb-posted", "fb_posted_page", fb_posted_page)
+    app.add_url_rule("/api/fb-posted/sync", "api_fb_posted_sync",
+                     api_fb_posted_sync, methods=["POST"])
 
     # Post CRUD
     app.add_url_rule("/posts/new", "post_new", post_new, methods=["GET", "POST"])

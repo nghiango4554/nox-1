@@ -1,66 +1,135 @@
 {% extends "redesign_base.html" %}
+{% from "_fb_icons.html" import icon %}
 {% set active = 'fb_import' %}
 {% set a = 'fb_import' %}
-{% block title %}Bài FB đã cào · Sintech Hub{% endblock %}
+{% block title %}Bài đã cào từ FB · Sintech Hub{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fb-module.css') }}?v={{ css_v }}">
+{% endblock %}
 
 {% block page_title %}
-<span>📥 Bài Facebook đã cào</span>
+<span>Bài đã cào từ Facebook</span>
 <span class="crumb"></span>
-<span class="muted" style="font-weight:400">lấy từ Meta Business Suite</span>
+<span class="muted" style="font-weight:400">{{ items|length }} bài · lấy từ Meta Business Suite</span>
 {% endblock %}
 
-{% block page_actions %}
-<input type="text" id="fb-q" placeholder="🔍 Tìm trong caption..." class="seo-filter-input" style="min-width:240px">
-{% endblock %}
+{% block page_actions %}{% endblock %}
 
 {% block content %}
-<div class="sec-head">
-  <h2>{{ items|length }} bài</h2>
-  <div class="sec-meta">
-    Cập nhật {{ cap_nhat or 'chưa có' }} ·
-    {% for thang, n in theo_thang %}<b>{{ thang }}</b>: {{ n }} bài&nbsp;&nbsp;{% endfor %}
-  </div>
+
+<div class="fb-toolbar">
+  <label class="fb-field" style="min-width:280px">
+    {{ icon('search') }}
+    <input id="q" type="search" placeholder="Tìm trong nội dung bài…" aria-label="Tìm bài">
+  </label>
+  <span class="muted" id="cnt" style="font-size:12.5px"></span>
+  <div style="flex:1"></div>
+  {% if co_so_lieu %}
+  <span class="muted" style="font-size:12.5px">Tiếp cận trung bình <b>{{ tb_reach }}</b></span>
+  {% endif %}
+  {% if cap_nhat %}<span class="muted" style="font-size:12.5px">Cập nhật {{ cap_nhat }}</span>{% endif %}
 </div>
 
-<table class="tbl" id="fb-tbl">
-  <thead><tr>
-    <th style="width:56px">STT</th>
-    <th style="width:130px">Ngày đăng</th>
-    <th>Nội dung</th>
-    <th style="width:80px">Tiếp cận</th>
-    <th style="width:80px">Lượt xem</th>
-  </tr></thead>
-  <tbody>
-  {% for x in items %}
-    <tr>
-      <td>{{ loop.index }}</td>
-      <td>{{ x.ngay }}</td>
-      <td class="cap">{{ x.caption[:190] }}{% if x.caption|length > 190 %}…{% endif %}</td>
-      <td>{{ x.tiep_can }}</td>
-      <td>{{ x.luot_xem }}</td>
-    </tr>
+{% if theo_thang %}
+<div class="fb-toolbar" style="margin-bottom:16px">
+  {% for thang, n in theo_thang %}
+  <span class="fb-chip is-draft">{{ icon('calendar') }}{{ thang }} · {{ n }} bài</span>
   {% endfor %}
-  </tbody>
-</table>
+</div>
+{% endif %}
 
-<style>
- .tbl{width:100%;border-collapse:collapse;background:var(--card,#fff);border-radius:10px;overflow:hidden;
-   box-shadow:0 1px 3px rgba(0,0,0,.07);font-size:13px}
- .tbl th{background:#f8fafc;text-align:left;padding:9px 12px;font-size:12px;color:#475569;
-   border-bottom:1px solid var(--line,#e5e7eb)}
- .tbl td{padding:9px 12px;border-bottom:1px solid var(--line,#f1f5f9);vertical-align:top}
- .tbl tr:hover td{background:#fafafa}
- .cap{line-height:1.45}
-</style>
-{% endblock %}
+{% if items %}
+<div class="fb-table-wrap">
+  <table class="fb-table" id="tbl">
+    <thead>
+      <tr>
+        <th style="width:48px">#</th>
+        <th style="width:118px" class="sortable" data-k="ngay" data-num="0">Ngày đăng <span class="sort-ind">{{ icon('sort') }}</span></th>
+        <th>Nội dung</th>
+        <th style="width:104px" class="sortable" data-k="reach" data-num="1">Tiếp cận <span class="sort-ind">{{ icon('sort') }}</span></th>
+        <th style="width:104px" class="sortable" data-k="views" data-num="1">Lượt xem <span class="sort-ind">{{ icon('sort') }}</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for x in items %}
+      <tr data-ngay="{{ x.ngay }}" data-reach="{{ x.tiep_can }}" data-views="{{ x.luot_xem }}"
+          data-text="{{ x.caption[:400]|lower }}">
+        <td class="num">{{ x.stt }}</td>
+        <td class="num">{{ x.ngay or '—' }}</td>
+        <td>
+          <div class="fb-row-title" style="font-weight:500">{{ x.headline }}</div>
+          {% if x.stt in top_ids %}
+          <div class="fb-row-sub" style="color:var(--fb-posted);font-weight:600;display:flex;align-items:center;gap:4px;margin-top:3px">
+            {{ icon('thumbs-up') }} Nằm nhóm 3 bài tiếp cận cao nhất
+          </div>
+          {% endif %}
+        </td>
+        <td class="num" {% if x.tiep_can and tb_reach and x.tiep_can > tb_reach %}style="color:var(--fb-posted);font-weight:700"{% endif %}>
+          {{ x.tiep_can or '—' }}
+        </td>
+        <td class="num">{{ x.luot_xem or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="fb-empty" id="empty" style="display:none">
+    {{ icon('search') }}
+    <h3>Không tìm thấy bài nào</h3>
+    <p>Thử từ khoá khác.</p>
+  </div>
+</div>
+{% else %}
+<div class="fb-table-wrap">
+  <div class="fb-empty">
+    {{ icon('inbox') }}
+    <h3>Chưa cào bài nào về</h3>
+    <p>Dữ liệu lấy từ Meta Business Suite rồi nhập vào đây.</p>
+  </div>
+</div>
+{% endif %}
 
-{% block scripts %}
 <script>
-document.getElementById('fb-q').addEventListener('input', e => {
-  const q = e.target.value.trim().toLowerCase();
-  document.querySelectorAll('#fb-tbl tbody tr').forEach(tr => {
-    tr.style.display = !q || tr.innerText.toLowerCase().includes(q) ? '' : 'none';
+(function () {
+  var tbl = document.getElementById('tbl');
+  if (!tbl) return;
+  var rows = Array.prototype.slice.call(tbl.querySelectorAll('tbody tr'));
+  var q = document.getElementById('q');
+  var cnt = document.getElementById('cnt');
+  var empty = document.getElementById('empty');
+
+  function apply() {
+    var v = (q.value || '').trim().toLowerCase();
+    var n = 0;
+    rows.forEach(function (tr) {
+      var show = !v || (tr.dataset.text || '').indexOf(v) !== -1;
+      tr.style.display = show ? '' : 'none';
+      if (show) n++;
+    });
+    cnt.textContent = n + ' / ' + rows.length + ' bài';
+    empty.style.display = n ? 'none' : '';
+    tbl.style.display = n ? '' : 'none';
+  }
+  q.addEventListener('input', apply);
+
+  var dir = {};
+  tbl.querySelectorAll('th.sortable').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var k = th.dataset.k, isNum = th.dataset.num === '1';
+      dir[k] = dir[k] === 'asc' ? 'desc' : 'asc';
+      tbl.querySelectorAll('th').forEach(function (x) { x.removeAttribute('aria-sort'); });
+      th.setAttribute('aria-sort', dir[k] === 'asc' ? 'ascending' : 'descending');
+      var body = tbl.querySelector('tbody');
+      rows.sort(function (a, b) {
+        var x = a.dataset[k] || '', y = b.dataset[k] || '';
+        var r = isNum ? (parseInt(x, 10) || 0) - (parseInt(y, 10) || 0)
+                      : (x < y ? -1 : x > y ? 1 : 0);
+        return r * (dir[k] === 'asc' ? 1 : -1);
+      }).forEach(function (tr) { body.appendChild(tr); });
+    });
   });
-});
+
+  apply();
+})();
 </script>
 {% endblock %}

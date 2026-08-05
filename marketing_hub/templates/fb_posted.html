@@ -1,62 +1,213 @@
 {% extends "redesign_base.html" %}
+{% from "_fb_icons.html" import icon %}
 {% set active = 'fb_posted' %}
-{% block title %}SP đã đăng FB · Sintech Hub{% endblock %}
+{% block title %}SP đã lên Facebook · Sintech Hub{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fb-module.css') }}?v={{ css_v }}">
+{% endblock %}
 
 {% block page_title %}
-<span>✅ SP đã đăng FB</span>
-<span class="muted" style="font-weight:400">chống trùng lặp</span>
+<span>SP đã lên Facebook</span>
+<span class="crumb"></span>
+<span class="muted" style="font-weight:400">dùng để chống đăng trùng</span>
 {% endblock %}
 
 {% block content %}
-<div class="section-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-  <h2 class="muted" style="font-size:13px;font-weight:500">
-    Tổng <b>{{ total }}</b> SP đã lên Facebook{% if updated_at %} · cập nhật {{ updated_at }}{% endif %}
-  </h2>
-  <input id="fbq" type="search" placeholder="Tìm tên sản phẩm…"
-    style="padding:8px 12px;border:1px solid var(--line);border-radius:8px;min-width:240px;font-size:13px">
+
+{# ─────────── Tab trạng thái (học Meta) ─────────── #}
+<div class="fb-tabs" role="tablist">
+  <button class="fb-tab" role="tab" aria-selected="true" data-f="all">
+    Tất cả <span class="fb-count">{{ tabs.all }}</span>
+  </button>
+  <button class="fb-tab" role="tab" aria-selected="false" data-f="xong">
+    {{ icon('check-circle') }} Đã đăng <span class="fb-count">{{ tabs.xong }}</span>
+  </button>
+  <button class="fb-tab" role="tab" aria-selected="false" data-f="cho">
+    {{ icon('clock') }} Đang chờ <span class="fb-count">{{ tabs.cho }}</span>
+  </button>
+  {% if tabs.chua %}
+  <button class="fb-tab" role="tab" aria-selected="false" data-f="chua">
+    {{ icon('alert') }} Chưa đăng <span class="fb-count">{{ tabs.chua }}</span>
+  </button>
+  {% endif %}
+  <button class="fb-tab" role="tab" aria-selected="false" data-f="thieu">
+    {{ icon('alert') }} Thiếu ngày <span class="fb-count">{{ tabs.thieu }}</span>
+  </button>
 </div>
 
-<div class="card" style="overflow:auto">
-  <table class="data-table" id="fbtbl">
+{# ─────────── Thanh công cụ ─────────── #}
+<div class="fb-toolbar">
+  <label class="fb-field" style="min-width:260px">
+    {{ icon('search') }}
+    <input id="q" type="search" placeholder="Tìm tên sản phẩm…" aria-label="Tìm tên sản phẩm">
+  </label>
+  <span class="muted" id="cnt" style="font-size:12.5px"></span>
+  <div style="flex:1"></div>
+  {% if updated_at %}
+  <span class="muted" style="font-size:12.5px">Cập nhật {{ updated_at }}</span>
+  {% endif %}
+  <button class="fb-btn" type="button" id="sync">{{ icon('refresh') }} Đối chiếu Facebook</button>
+</div>
+
+{# ─────────── Cảnh báo dữ liệu thiếu ─────────── #}
+{% if tabs.cho or tabs.chua or thieu_link or thieu_type %}
+<div class="fb-panel" style="border-left:3px solid var(--fb-scheduled);margin-bottom:16px">
+  <h3 style="display:flex;align-items:center;gap:7px">{{ icon('alert') }} Cần để ý</h3>
+  <ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.9">
+    {% if tabs.cho %}<li><b>{{ tabs.cho }} sản phẩm chưa đăng</b> — ngày ghi ở tương lai, tức đang nằm lịch chờ. Ghi trước để khỏi bốc trùng thì đúng, nhưng đừng tính là đã lên trang.</li>{% endif %}
+    {% if tabs.chua %}<li><b>{{ tabs.chua }} bản ghi tự ghi chú là "chưa thực đăng"</b> nhưng vẫn nằm trong danh sách.</li>{% endif %}
+    {% if tabs.thieu %}<li><b>{{ tabs.thieu }} bản ghi thiếu ngày đăng</b> (hoặc chỉ có tháng) — không truy được đăng lúc nào.</li>{% endif %}
+    {% if thieu_link %}<li><b>{{ thieu_link }} bản ghi thiếu link sản phẩm.</b></li>{% endif %}
+    {% if thieu_type %}<li><b>{{ thieu_type }} bản ghi thiếu phân loại.</b></li>{% endif %}
+  </ul>
+</div>
+{% endif %}
+
+{# ─────────── Bảng ─────────── #}
+<div class="fb-table-wrap">
+  <table class="fb-table" id="tbl">
     <thead>
       <tr>
-        <th style="width:56px">STT</th>
-        <th>Tên sản phẩm</th>
-        <th style="width:120px">Link</th>
-        <th style="width:130px">Date up face</th>
+        <th style="width:52px">#</th>
+        <th class="sortable" data-k="name">Tên sản phẩm <span class="sort-ind">{{ icon('sort') }}</span></th>
+        <th style="width:120px">Phân loại</th>
+        <th style="width:132px" class="sortable" data-k="date">Ngày đăng <span class="sort-ind">{{ icon('sort') }}</span></th>
+        <th style="width:130px">Trạng thái</th>
+        <th style="width:96px">Link</th>
       </tr>
     </thead>
     <tbody>
       {% for r in rows %}
-      <tr>
-        <td>{{ loop.index }}</td>
-        <td>{{ r.name }}</td>
+      <tr data-state="{{ r.state }}" data-name="{{ r.name|lower }}" data-date="{{ r.date }}">
+        <td class="num">{{ r.stt }}</td>
         <td>
-          {% if r.link %}<a href="{{ r.link }}" target="_blank" rel="noreferrer">Xem SP ↗</a>{% else %}—{% endif %}
+          <div class="fb-row-text">
+            <div class="fb-row-title">{{ r.name }}</div>
+            {% if r.source %}<div class="fb-row-sub">{{ r.source[:64] }}</div>{% endif %}
+          </div>
         </td>
-        <td>{{ r.date }}</td>
+        <td class="muted" style="font-size:12.5px">{{ r.ptype or '—' }}</td>
+        <td class="num">{{ r.date or '—' }}</td>
+        <td>
+          {% if r.state == 'xong' %}
+            <span class="fb-chip is-posted">{{ icon('check-circle') }}Đã đăng</span>
+          {% elif r.state == 'cho' %}
+            <span class="fb-chip is-scheduled">{{ icon('clock') }}Đang chờ</span>
+          {% elif r.state == 'chua' %}
+            <span class="fb-chip is-error">{{ icon('alert') }}Chưa đăng</span>
+          {% elif r.state == 'mo' %}
+            <span class="fb-chip is-draft">{{ icon('alert') }}Chỉ có tháng</span>
+          {% else %}
+            <span class="fb-chip is-draft">{{ icon('alert') }}Thiếu ngày</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if r.link %}
+            <a href="{{ r.link }}" target="_blank" rel="noreferrer"
+               style="display:inline-flex;align-items:center;gap:5px">{{ icon('external') }}Xem</a>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </td>
       </tr>
       {% endfor %}
-      {% if not rows %}
-      <tr><td colspan="4" class="muted" style="text-align:center;padding:24px">Chưa có SP nào trong DB.</td></tr>
-      {% endif %}
     </tbody>
   </table>
+
+  <div class="fb-empty" id="empty" style="display:none">
+    {{ icon('inbox') }}
+    <h3>Không có sản phẩm nào</h3>
+    <p>Thử đổi tab hoặc xoá bớt từ khoá tìm.</p>
+  </div>
 </div>
 
+<div class="fb-toast-wrap" id="toasts" aria-live="polite"></div>
+
 <script>
-  // Lọc client-side theo tên SP
-  (function () {
-    var q = document.getElementById('fbq');
-    var rows = Array.prototype.slice.call(document.querySelectorAll('#fbtbl tbody tr'));
-    if (!q) return;
-    q.addEventListener('input', function () {
-      var v = this.value.trim().toLowerCase();
-      rows.forEach(function (tr) {
-        var name = (tr.children[1] && tr.children[1].textContent || '').toLowerCase();
-        tr.style.display = (!v || name.indexOf(v) !== -1) ? '' : 'none';
-      });
+(function () {
+  var tbl = document.getElementById('tbl');
+  if (!tbl) return;
+  var rows = Array.prototype.slice.call(tbl.querySelectorAll('tbody tr'));
+  var q = document.getElementById('q');
+  var cnt = document.getElementById('cnt');
+  var empty = document.getElementById('empty');
+  var filter = 'all';
+
+  function apply() {
+    var v = (q.value || '').trim().toLowerCase();
+    var n = 0;
+    rows.forEach(function (tr) {
+      var okF = (filter === 'all')
+        || (filter === 'thieu' ? (tr.dataset.state === 'thieu' || tr.dataset.state === 'mo')
+                               : tr.dataset.state === filter);
+      var okQ = !v || tr.dataset.name.indexOf(v) !== -1;
+      var show = okF && okQ;
+      tr.style.display = show ? '' : 'none';
+      if (show) n++;
     });
-  })();
+    cnt.textContent = n + ' / ' + rows.length + ' sản phẩm';
+    empty.style.display = n ? 'none' : '';
+    tbl.style.display = n ? '' : 'none';
+  }
+
+  document.querySelectorAll('.fb-tab').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.fb-tab').forEach(function (x) { x.setAttribute('aria-selected', 'false'); });
+      b.setAttribute('aria-selected', 'true');
+      filter = b.dataset.f;
+      apply();
+    });
+  });
+  q.addEventListener('input', apply);
+
+  // sắp xếp theo cột
+  var dir = {};
+  tbl.querySelectorAll('th.sortable').forEach(function (th) {
+    th.addEventListener('click', function () {
+      var k = th.dataset.k;
+      dir[k] = dir[k] === 'asc' ? 'desc' : 'asc';
+      tbl.querySelectorAll('th').forEach(function (x) { x.removeAttribute('aria-sort'); });
+      th.setAttribute('aria-sort', dir[k] === 'asc' ? 'ascending' : 'descending');
+      var body = tbl.querySelector('tbody');
+      rows.sort(function (a, b) {
+        var x = a.dataset[k] || '', y = b.dataset[k] || '';
+        return (x < y ? -1 : x > y ? 1 : 0) * (dir[k] === 'asc' ? 1 : -1);
+      }).forEach(function (tr) { body.appendChild(tr); });
+    });
+  });
+
+  function toast(msg, ok) {
+    var w = document.getElementById('toasts');
+    var t = document.createElement('div');
+    t.className = 'fb-toast ' + (ok ? 'ok' : 'err');
+    t.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" '
+      + 'stroke-linecap="round" stroke-linejoin="round">'
+      + (ok ? '<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.8 2.8L16.2 9"/>'
+            : '<path d="M12 3.2L1.8 20.5h20.4L12 3.2z"/><path d="M12 9.5v4.6M12 17.4h.01"/>')
+      + '</svg><div>' + msg + '</div>';
+    w.appendChild(t);
+    setTimeout(function () { t.remove(); }, 7000);
+  }
+
+  // đối chiếu với lịch thật trên Facebook (chỉ đọc)
+  document.getElementById('sync').addEventListener('click', function () {
+    var b = this;
+    b.disabled = true;
+    var old = b.innerHTML;
+    b.textContent = 'Đang đối chiếu…';
+    fetch('/api/fb-posted/sync', { method: 'POST' })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.j.error || 'không gọi được Facebook');
+        var d = res.j;
+        if (!d.n_pending) { toast('Facebook không còn bài nào nằm lịch.', true); return; }
+        var list = d.pending.map(function (p) { return '· ' + p.when + ' — ' + p.head; }).join('<br>');
+        toast('<b>' + d.n_pending + ' bài đang nằm lịch trên Facebook:</b><br>' + list, true);
+      })
+      .catch(function (e) { toast(e.message, false); })
+      .finally(function () { b.disabled = false; b.innerHTML = old; });
+  });
+
+  apply();
+})();
 </script>
 {% endblock %}

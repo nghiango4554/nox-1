@@ -2,6 +2,13 @@
 {% set active = 'post_new' %}
 {% block title %}{% if post %}{{ post.code }}{% else %}Bài mới{% endif %} · Sintech Hub{% endblock %}
 
+{# Layout của trang nằm trong static/style.css nhưng block legacy_css bỏ trống nên
+   file đó không được nạp → trang vỡ. Nạp bản dựng lại riêng cho trang này.
+   KHÔNG dùng fb-module.css ở đây: nó có class .fb-preview trùng tên. #}
+{% block head_extra %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fb-composer.css') }}?v={{ now.timestamp()|int }}">
+{% endblock %}
+
 {% block page_title %}
 <a href="{{ url_for('posts_page') }}" class="crumb">Posts</a>
 <span>{% if post %}{{ post.code }}{% else %}+ Bài mới{% endif %}</span>
@@ -18,7 +25,7 @@
     action="{% if post %}{{ url_for('post_update', post_id=post.id) }}{% else %}{{ url_for('post_new') }}{% endif %}"
     class="post-form" id="post-form">
 
-    <div class="row">
+    <div class="row blk blk-sched">
       <label>
         <span>Ngày đăng</span>
         <input type="date" name="scheduled_date" value="{{ post.scheduled_date or '' }}">
@@ -36,6 +43,33 @@
                  maxlength="2" placeholder="MM" value="{{ mm }}">
           <input type="hidden" name="scheduled_time" id="f-time" value="{{ t }}">
         </div>
+        {# Gợi ý khung giờ: điền vào đúng 2 ô có sẵn rồi phát sự kiện input,
+           để phần xử lý cũ tự gộp lại thành scheduled_time — không đụng logic. #}
+        <div class="time-hints">
+          {% for hh, mm, ten in [('08','00','sáng sớm'), ('10','00','giữa buổi sáng'),
+                                 ('12','00','giờ nghỉ trưa'), ('18','00','tan làm'),
+                                 ('20','00','khung vàng'), ('21','00','tối muộn')] %}
+          <button type="button" data-hh="{{ hh }}" data-mm="{{ mm }}"
+                  title="{{ ten }}">{{ hh }}:{{ mm }}</button>
+          {% endfor %}
+        </div>
+        <script>
+        (function () {
+          var box = document.currentScript.previousElementSibling;
+          box.addEventListener('click', function (e) {
+            var b = e.target.closest('button[data-hh]');
+            if (!b) return;
+            var hh = document.getElementById('f-time-hh');
+            var mm = document.getElementById('f-time-mm');
+            if (!hh || !mm) return;
+            hh.value = b.dataset.hh;
+            mm.value = b.dataset.mm;
+            hh.dispatchEvent(new Event('input', { bubbles: true }));
+            mm.dispatchEvent(new Event('input', { bubbles: true }));
+            mm.dispatchEvent(new Event('change', { bubbles: true }));
+          });
+        })();
+        </script>
       </label>
       <label>
         <span>Loại bài</span>
@@ -55,12 +89,12 @@
       </label>
     </div>
 
-    <label>
+    <label class="blk blk-text">
       <span>Caption (nội dung Facebook)</span>
       <textarea name="caption" id="f-caption" rows="20" placeholder="Nội dung bài viết...">{{ post.caption or '' }}</textarea>
     </label>
 
-    <label>
+    <label class="blk blk-link">
       <span>Link sản phẩm (tuỳ chọn)</span>
       <div class="row-flex gap-2" style="display:flex;gap:6px;align-items:stretch">
         <input type="url" name="link" id="f-link" value="{{ post.link or '' }}" placeholder="https://sintech.vn/..." style="flex:1">
@@ -91,12 +125,21 @@
     })();
     </script>
 
-    <label>
+    <label class="blk blk-media">
       <span>Ảnh bài viết <small class="muted">(tick để chọn → xoá hàng loạt · kéo thả để đổi thứ tự)</small></span>
       <div class="row-flex gap-2 mb-2" style="flex-wrap:wrap">
-        <input type="file" name="images" id="f-images-input" accept="image/*" multiple style="flex:1">
+        <label class="filepick">
+          <input type="file" name="images" id="f-images-input" accept="image/*" multiple>
+          <span class="filepick-face">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="3.5" width="14" height="12" rx="2.2"/><path d="M17 18.5H5.5A2.5 2.5 0 0 1 3 16V7"/></svg>
+            Thêm ảnh/video
+          </span>
+        </label>
         {% if post %}
-          <button type="button" class="btn" id="btn-open-library">📁 Chọn từ thư viện</button>
+          <button type="button" class="btn" id="btn-open-library">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.4h7A1.5 1.5 0 0 1 19 9.9v7.6a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 17.5v-10z"/></svg>
+            Chọn từ thư viện
+          </button>
         {% endif %}
       </div>
 
@@ -130,6 +173,8 @@
             <div class="img-tile" draggable="true" data-fn="{{ fn }}">
               <span class="img-num">{{ loop.index }}</span>
               <img src="{{ url_for('serve_upload', filename=fn) }}" alt="{{ fn }}">
+              {# kích thước điền bằng JS sau khi ảnh tải xong — giống cách Meta ghi 1254 x 1254 #}
+              <span class="img-dim" data-name="{{ fn }}">…</span>
               <div class="img-select-badge">✓</div>
               <label class="img-check-wrap" title="Chọn ảnh">
                 <input type="checkbox" class="img-check" data-fn="{{ fn }}">
@@ -141,15 +186,84 @@
         {% endif %}
       </div>
       <div id="img-pending" class="img-pending muted" style="display:none"></div>
+
+      {# Điền kích thước thật của từng ảnh (giống Meta ghi "1254 x 1254").
+         Chạy riêng, chỉ ĐỌC DOM — không gọi hay sửa hàm nào có sẵn.
+         Có theo dõi thay đổi để ảnh thêm sau vẫn được điền. #}
+      <script>
+      (function () {
+        var grid = document.getElementById('img-grid');
+        if (!grid) return;
+
+        function dat(tile) {
+          var img = tile.querySelector('img');
+          if (!img) return;
+          var out = tile.querySelector('.img-dim');
+          // ô ảnh do phần xử lý tạo ra không có sẵn chỗ này → tự thêm vào
+          if (!out) {
+            out = document.createElement('span');
+            out.className = 'img-dim';
+            out.textContent = '…';
+            img.insertAdjacentElement('afterend', out);
+          }
+          if (out.dataset.done === '1') return;
+          function fill() {
+            if (!img.naturalWidth) return;
+            out.dataset.done = '1';
+            var ten = (tile.dataset.fn || '').split(/[\\/]/).pop();
+            out.innerHTML = '<b>' + img.naturalWidth + ' x ' + img.naturalHeight + '</b>'
+                          + (ten ? ' · ' + ten.slice(0, 44) : '');
+            out.title = ten || '';
+          }
+          if (img.complete) fill();
+          else {
+            img.addEventListener('load', fill, { once: true });
+            img.addEventListener('error', function () {
+              out.dataset.done = '1';
+              out.textContent = 'không đọc được ảnh';
+            }, { once: true });
+          }
+        }
+
+        // Chặn tái nhập: chính việc thêm .img-dim / ghi chữ vào nó cũng làm DOM đổi,
+        // nên phải NGẮT theo dõi trong lúc sửa rồi mới bật lại — không thì quay vòng treo trang.
+        var dang = false, obs = null;
+        function quet() {
+          if (dang) return;
+          dang = true;
+          if (obs) obs.disconnect();
+          try { grid.querySelectorAll('.img-tile').forEach(dat); }
+          finally {
+            if (obs) obs.observe(grid, { childList: true, subtree: false });
+            dang = false;
+          }
+        }
+        obs = new MutationObserver(function () { setTimeout(quet, 0); });
+        quet();
+      })();
+      </script>
     </label>
 
     <div class="actions">
-      <button class="btn btn-primary">{% if post %}💾 Lưu thay đổi{% else %}+ Tạo bài{% endif %}</button>
+      {% set ic_save = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5 10-11"/></svg>' %}
+      <button class="btn btn-primary">
+        {% if post %}{{ ic_save|safe }} Lưu thay đổi{% else %}{{ ic_save|safe }} Tạo bài{% endif %}
+      </button>
       {% if post %}
-        <button type="button" class="btn" id="btn-publish">🚀 Đăng ngay</button>
-        <button type="button" class="btn" id="btn-schedule">⏰ Schedule (FB native)</button>
-        <form method="post" action="{{ url_for('post_delete', post_id=post.id) }}" style="display:inline" onsubmit="return confirm('Xóa bài {{ post.code }}?')">
-          <button class="btn btn-danger">🗑 Xóa</button>
+        <button type="button" class="btn" id="btn-publish">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3L10.5 13.5M21 3l-6.8 18-3.7-7.5L3 10.1 21 3z"/></svg>
+          Đăng ngay
+        </button>
+        <button type="button" class="btn" id="btn-schedule">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.4 2"/></svg>
+          Đặt lịch trên Facebook
+        </button>
+        <div style="flex:1"></div>
+        <form method="post" action="{{ url_for('post_delete', post_id=post.id) }}" style="display:inline" onsubmit="return confirm('Xoá bài {{ post.code }}? Không lấy lại được.')">
+          <button class="btn btn-danger">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9.5 7V4.8h5V7M6.5 7l.9 12.2A1.6 1.6 0 0 0 9 20.7h6a1.6 1.6 0 0 0 1.6-1.5L17.5 7"/></svg>
+            Xoá
+          </button>
         </form>
       {% endif %}
     </div>
@@ -157,8 +271,32 @@
 
   {# ───── PREVIEW PANE ───── #}
   <aside class="fb-preview" id="fb-preview">
-    <h3>👁️ Xem trước bài FB</h3>
-    <p class="muted">Đồng bộ realtime khi em sửa caption hoặc kéo ảnh.</p>
+    <h3>Xem trước trên Bảng feed Facebook</h3>
+    <p class="muted">Tự cập nhật khi em sửa nội dung hoặc đổi ảnh.</p>
+
+    {# Chuyển máy tính ↔ điện thoại — chỉ đổi bề rộng khung, không đụng dữ liệu #}
+    <div class="fbp-modes" role="group" aria-label="Kiểu xem trước">
+      <button type="button" data-m="desktop" aria-pressed="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8.5 20.5h7M12 17.2v3.3"/></svg>
+        Máy tính
+      </button>
+      <button type="button" data-m="mobile" aria-pressed="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.6h2"/></svg>
+        Điện thoại
+      </button>
+    </div>
+    <script>
+    (function () {
+      var box = document.currentScript.previousElementSibling;
+      box.addEventListener('click', function (e) {
+        var b = e.target.closest('button[data-m]');
+        if (!b) return;
+        box.querySelectorAll('button').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
+        b.setAttribute('aria-pressed', 'true');
+        document.getElementById('fb-preview').classList.toggle('is-mobile', b.dataset.m === 'mobile');
+      });
+    })();
+    </script>
 
     <div id="lint-panel" class="lint-panel" style="display:none">
       <div class="lint-head">🔍 Cảnh báo nội dung</div>
@@ -170,17 +308,91 @@
         <div class="fbp-avatar">S</div>
         <div>
           <div class="fbp-page">Sintech PC Gaming &amp; Gear</div>
-          <div class="fbp-meta">Bài đăng · 🌐</div>
+          <div class="fbp-meta">Vừa xong ·
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3.2 9.5h17.6M3.2 14.5h17.6"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"/></svg>
+          </div>
         </div>
       </div>
       <div class="fbp-caption" id="fbp-caption"></div>
       <div class="fbp-media" id="fbp-media"></div>
       <a id="fbp-link" class="fbp-link" target="_blank" rel="noopener" style="display:none"></a>
       <div class="fbp-actions">
-        <span>👍 Thích</span><span>💬 Bình luận</span><span>↗ Chia sẻ</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21V10.5l4.2-7.2A2 2 0 0 1 15 4.4V9h4.3a2 2 0 0 1 2 2.4l-1.4 7A2 2 0 0 1 18 20H7z"/><path d="M7 10.5H3.8V21H7"/></svg>Thích</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.6c0 4.2-3.8 7.6-8.5 7.6a9.7 9.7 0 0 1-2.7-.4L4 20.5l1.4-3.7a7.2 7.2 0 0 1-2.4-5.2C3 7.4 6.8 4 11.5 4s9 3.4 9 7.6z"/></svg>Bình luận</span>
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-7"/><path d="M12 15.5V3.5M7.5 8L12 3.5 16.5 8"/></svg>Chia sẻ</span>
       </div>
     </div>
   </aside>
+
+  {# ───── Phóng to ảnh: bấm ảnh trong khung xem trước là mở ─────
+     Chạy độc lập, chỉ nghe sự kiện bấm — không sửa hàm renderPreview có sẵn.
+     Dùng nghe-nổi-bọt nên ảnh vẽ lại lúc nào cũng bấm được. #}
+  <div class="lbox" id="lbox" role="dialog" aria-modal="true" aria-label="Ảnh phóng to">
+    <button type="button" class="lbox-btn lbox-close" id="lbox-close" aria-label="Đóng (Esc)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <button type="button" class="lbox-btn lbox-prev" id="lbox-prev" aria-label="Ảnh trước">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>
+    </button>
+    <button type="button" class="lbox-btn lbox-next" id="lbox-next" aria-label="Ảnh sau">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+    </button>
+    <img id="lbox-img" alt="">
+    <div class="lbox-info" id="lbox-info"></div>
+  </div>
+  <script>
+  (function () {
+    var box = document.getElementById('lbox');
+    var img = document.getElementById('lbox-img');
+    var info = document.getElementById('lbox-info');
+    var media = document.getElementById('fbp-media');
+    if (!box || !media) return;
+    var list = [], idx = 0, tra = null;
+
+    function ve() {
+      if (!list.length) return;
+      idx = (idx + list.length) % list.length;
+      img.src = list[idx];
+      info.textContent = list.length > 1 ? (idx + 1) + ' / ' + list.length : '';
+      document.getElementById('lbox-prev').style.display = list.length > 1 ? '' : 'none';
+      document.getElementById('lbox-next').style.display = list.length > 1 ? '' : 'none';
+    }
+    function mo(i) {
+      list = Array.prototype.slice.call(media.querySelectorAll('img')).map(function (x) { return x.src; });
+      if (!list.length) return;
+      idx = i; tra = document.activeElement;
+      box.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      ve();
+      document.getElementById('lbox-close').focus();
+    }
+    function dong() {
+      box.classList.remove('open');
+      document.body.style.overflow = '';
+      img.removeAttribute('src');
+      if (tra && tra.focus) tra.focus();
+    }
+
+    media.addEventListener('click', function (e) {
+      var t = e.target.closest('img');
+      if (!t) return;
+      e.preventDefault();
+      var all = Array.prototype.slice.call(media.querySelectorAll('img'));
+      mo(all.indexOf(t));
+    });
+
+    document.getElementById('lbox-close').addEventListener('click', dong);
+    document.getElementById('lbox-prev').addEventListener('click', function () { idx--; ve(); });
+    document.getElementById('lbox-next').addEventListener('click', function () { idx++; ve(); });
+    box.addEventListener('click', function (e) { if (e.target === box) dong(); });
+    document.addEventListener('keydown', function (e) {
+      if (!box.classList.contains('open')) return;
+      if (e.key === 'Escape') { e.preventDefault(); dong(); }
+      else if (e.key === 'ArrowLeft') { idx--; ve(); }
+      else if (e.key === 'ArrowRight') { idx++; ve(); }
+    });
+  })();
+  </script>
 </div>
 
 {# ───── IMAGE LIBRARY MODAL ───── #}
@@ -314,7 +526,8 @@ function renderPreview() {
   // pending files note
   if (pendingFiles.length) {
     imgPending.style.display = '';
-    imgPending.textContent = `+ ${pendingFiles.length} ảnh sẽ được upload khi lưu`;
+    imgPending.textContent = `${pendingFiles.length} ảnh mới đang chờ — đã thấy ở khung xem trước bên phải, `
+      + `bấm "Lưu thay đổi" thì mới vào danh sách ảnh phía trên.`;
   } else {
     imgPending.style.display = 'none';
   }

@@ -1,45 +1,226 @@
 {% extends "redesign_base.html" %}
+{% from "_fb_icons.html" import icon, status_chip, status_label, status_cls %}
 {% set active = 'calendar' %}
-{% block title %}Calendar · Sintech Hub{% endblock %}
+{% block title %}Lịch đăng · Sintech Hub{% endblock %}
+
+{% block head_extra %}
+{# ?v= để trình duyệt không giữ bản CSS cũ sau mỗi lần sửa #}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fb-module.css') }}?v={{ css_v }}">
+{% endblock %}
 
 {% block page_title %}
-<span>📅 Calendar</span>
+<span>Lịch đăng</span>
 <span class="crumb"></span>
-<span class="muted" style="font-weight:400">14 ngày tới</span>
+<span class="muted" style="font-weight:400">{{ total }} bài trong khoảng đang xem</span>
 {% endblock %}
 
 {% block content %}
 
-<div class="section-head">
-  <h2 class="muted" style="font-size:13px;font-weight:500">Lịch đăng FB Sintech</h2>
-  <div class="legend">
-    <span><span class="legend-dot" style="background:var(--st-draft)"></span>Draft</span>
-    <span><span class="legend-dot" style="background:var(--st-ready)"></span>Ready</span>
-    <span><span class="legend-dot" style="background:var(--st-scheduled)"></span>Scheduled</span>
-    <span><span class="legend-dot" style="background:var(--st-posted)"></span>Posted</span>
+{# ─────────── Thanh điều khiển ─────────── #}
+<div class="fb-cal-head">
+  <div class="fb-nav-group">
+    <button class="fb-icon-btn" type="button" aria-label="Kỳ trước"
+            onclick="location.href='?view={{ view }}&ref={{ prev_ref }}{% if f_status %}&status={{ f_status }}{% endif %}'">
+      {{ icon('chevron-l') }}
+    </button>
+    <button class="fb-btn" type="button"
+            onclick="location.href='?view={{ view }}&ref={{ today_ref }}{% if f_status %}&status={{ f_status }}{% endif %}'">
+      Hôm nay
+    </button>
+    <button class="fb-icon-btn" type="button" aria-label="Kỳ sau"
+            onclick="location.href='?view={{ view }}&ref={{ next_ref }}{% if f_status %}&status={{ f_status }}{% endif %}'">
+      {{ icon('chevron-r') }}
+    </button>
   </div>
+
+  <div class="fb-cal-title">{{ title }}</div>
+
+  <div class="fb-seg" role="group" aria-label="Kiểu xem">
+    <button type="button" aria-pressed="{{ 'true' if view == 'month' else 'false' }}"
+            onclick="location.href='?view=month&ref={{ today_ref }}{% if f_status %}&status={{ f_status }}{% endif %}'">Tháng</button>
+    <button type="button" aria-pressed="{{ 'true' if view == 'week' else 'false' }}"
+            onclick="location.href='?view=week&ref={{ today_ref }}{% if f_status %}&status={{ f_status }}{% endif %}'">Tuần</button>
+  </div>
+
+  <div style="flex:1"></div>
+
+  <label class="fb-field" title="Lọc theo trạng thái">
+    {{ icon('filter') }}
+    <select aria-label="Lọc trạng thái"
+            onchange="location.href='?view={{ view }}&ref={{ today_ref }}' + (this.value ? '&status=' + this.value : '')">
+      <option value="">Mọi trạng thái</option>
+      {% for code, _lbl in statuses %}
+      <option value="{{ code }}" {% if f_status == code %}selected{% endif %}>{{ status_label(code) }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <a class="fb-btn primary" href="{{ url_for('post_new') }}">{{ icon('plus') }} Bài mới</a>
 </div>
 
-<div class="cal-grid">
-  {% for day in days %}
-  <div class="cal-day">
-    <div class="day-head{% if day.is_today %} is-today{% endif %}">
-      <span class="dow">{{ day.dow_long }}</span>
-      <span class="dnum">{{ day.dnum }}/{{ day.month }}</span>
+{# ─────────── Đếm theo trạng thái ─────────── #}
+{% if counts %}
+{# lặp theo counts (không theo POST_STATUSES) để trạng thái lạ trong DB vẫn hiện #}
+<div class="fb-toolbar" style="margin-bottom:12px">
+  {% for code, n in counts | dictsort(by='value', reverse=true) %}
+  <a href="?view={{ view }}&ref={{ today_ref }}&status={{ code }}" style="text-decoration:none"
+     title="Lọc: {{ status_label(code) }}">
+    {{ status_chip(code) }}<span class="muted" style="font-size:12px;margin-left:2px">×{{ n }}</span>
+  </a>
+  {% endfor %}
+  {% if f_status %}
+  <a class="fb-btn" href="?view={{ view }}&ref={{ today_ref }}">{{ icon('close') }} Bỏ lọc</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{# ─────────── Lưới lịch ─────────── #}
+<div class="fb-cal" id="cal">
+  {% for d in dows %}<div class="fb-cal-dow">{{ d }}</div>{% endfor %}
+
+  {% for c in cells %}
+  <div class="fb-cal-cell{% if not c.in_range %} is-other{% endif %}{% if c.is_today %} is-today{% endif %}{% if c.is_past %} is-past{% endif %}"
+       data-date="{{ c.iso }}">
+    <div class="fb-cal-cell-head">
+      <span class="fb-daynum">{{ c.dnum }}{% if c.dnum == 1 %}/{{ c.month }}{% endif %}</span>
+      <a class="fb-addday" href="{{ url_for('post_new') }}?date={{ c.iso }}"
+         aria-label="Thêm bài ngày {{ c.iso }}" title="Thêm bài ngày này">{{ icon('plus') }}</a>
     </div>
-    {% if day.posts %}
-      {% for p in day.posts %}
-      <a class="cal-post status-{{ p.status }}" href="{{ url_for('post_detail', post_id=p.id) }}">
-        <div class="dp-time">{{ p.scheduled_time or '--:--' }}</div>
-        <div class="dp-title">{{ p.code }}</div>
-        <div class="dp-meta">{{ p.code }} · {{ p.status }}</div>
-      </a>
-      {% endfor %}
-    {% else %}
-      <div class="cal-empty">trống</div>
-    {% endif %}
+
+    {% for p in c.posts %}
+    <a class="fb-card s-{{ status_cls(p.status)|trim }}" draggable="true" data-id="{{ p.id }}" data-time="{{ p.time }}"
+       href="{{ url_for('post_detail', post_id=p.id) }}"
+       title="{{ p.time or '--:--' }} · {{ status_label(p.status) }} · {{ p.caption[:90] }}">
+      <div class="fb-card-top">
+        {{ icon('clock') }}<span>{{ p.time or '--:--' }}</span>
+      </div>
+      <div class="fb-card-thumb">
+        {% if p.thumb %}
+          {# ảnh có thể đã bị dọn khỏi đĩa → rơi về ô giữ chỗ, không để khung vỡ #}
+          <img src="{{ url_for('serve_upload', filename=p.thumb) }}" alt="" loading="lazy"
+               width="160" height="120"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='grid'">
+          <div class="no-img" style="display:none" title="Ảnh không còn trên máy">{{ icon('image') }}</div>
+        {% else %}
+          <div class="no-img">{{ icon('image') }}</div>
+        {% endif %}
+        {% if p.n_img > 1 %}<span class="fb-badge left">{{ icon('images') }}{{ p.n_img }}</span>{% endif %}
+        {% if p.fb_post_id %}<span class="fb-badge right">{{ icon('facebook') }}</span>{% endif %}
+      </div>
+      <div class="fb-card-title">{{ p.caption[:70] or p.code }}</div>
+    </a>
+    {% endfor %}
+
+    {% if not c.posts and c.in_range %}<div class="fb-cal-empty">—</div>{% endif %}
   </div>
   {% endfor %}
 </div>
 
+<p class="fb-help" style="margin-top:10px;display:flex;align-items:center;gap:6px">
+  {{ icon('drag') }} Kéo thẻ sang ngày khác để đổi ngày đăng — hoặc chọn thẻ rồi bấm <b>Shift + ← →</b>.
+  Bài <b>đã đăng</b> không kéo được.
+</p>
+
+<div class="fb-toast-wrap" id="toasts" aria-live="polite"></div>
+
+<script>
+(function () {
+  var cal = document.getElementById('cal');
+  if (!cal) return;
+  var dragging = null, fromDate = null;
+
+  function toast(msg, ok, undoFn) {
+    var w = document.getElementById('toasts');
+    var t = document.createElement('div');
+    t.className = 'fb-toast ' + (ok ? 'ok' : 'err');
+    var svg = ok
+      ? '<circle cx="12" cy="12" r="9"/><path d="M8 12.3l2.8 2.8L16.2 9"/>'
+      : '<path d="M12 3.2L1.8 20.5h20.4L12 3.2z"/><path d="M12 9.5v4.6M12 17.4h.01"/>';
+    t.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" '
+      + 'stroke-linecap="round" stroke-linejoin="round">' + svg + '</svg><div>' + msg + '</div>';
+    if (undoFn) {
+      var b = document.createElement('button');
+      b.className = 'undo'; b.type = 'button'; b.textContent = 'Hoàn tác';
+      b.onclick = function () { t.remove(); undoFn(); };
+      t.appendChild(b);
+    }
+    w.appendChild(t);
+    setTimeout(function () { t.remove(); }, undoFn ? 8000 : 4000);
+  }
+
+  function move(card, toCell, newDate, oldDate, silent) {
+    var id = card.dataset.id, time = card.dataset.time || '';
+    return fetch('/api/post/' + id + '/reschedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scheduled_date: newDate, scheduled_time: time })
+    })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error(res.j.error || 'không đổi được ngày');
+        toCell.appendChild(card);
+        var em = toCell.querySelector('.fb-cal-empty');
+        if (em) em.remove();
+        if (!silent) {
+          toast('Đã chuyển sang ngày ' + newDate.split('-').reverse().join('/'), true, function () {
+            var back = cal.querySelector('.fb-cal-cell[data-date="' + oldDate + '"]');
+            if (back) move(card, back, oldDate, newDate, true);
+          });
+        }
+      })
+      .catch(function (e) { toast(e.message, false); });
+  }
+
+  cal.addEventListener('dragstart', function (e) {
+    var card = e.target.closest('.fb-card');
+    if (!card) return;
+    if (card.classList.contains('s-posted')) { e.preventDefault(); return; }
+    dragging = card;
+    fromDate = card.closest('.fb-cal-cell').dataset.date;
+    card.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    try { e.dataTransfer.setData('text/plain', card.dataset.id); } catch (_) {}
+  });
+
+  cal.addEventListener('dragend', function () {
+    if (dragging) dragging.classList.remove('dragging');
+    cal.querySelectorAll('.drop-on').forEach(function (c) { c.classList.remove('drop-on'); });
+    dragging = null;
+  });
+
+  cal.addEventListener('dragover', function (e) {
+    var cell = e.target.closest('.fb-cal-cell');
+    if (!cell || !dragging) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    cal.querySelectorAll('.drop-on').forEach(function (c) { c.classList.remove('drop-on'); });
+    cell.classList.add('drop-on');
+  });
+
+  cal.addEventListener('drop', function (e) {
+    var cell = e.target.closest('.fb-cal-cell');
+    if (!cell || !dragging) return;
+    e.preventDefault();
+    cell.classList.remove('drop-on');
+    var to = cell.dataset.date;
+    if (to === fromDate) return;
+    move(dragging, cell, to, fromDate, false);
+  });
+
+  // Thay cho kéo thả khi dùng bàn phím: Shift + mũi tên trái/phải dời ±1 ngày
+  cal.addEventListener('keydown', function (e) {
+    var card = e.target.closest('.fb-card');
+    if (!card || !e.shiftKey) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (card.classList.contains('s-posted')) return;
+    e.preventDefault();
+    var cur = card.closest('.fb-cal-cell').dataset.date;
+    var d = new Date(cur + 'T00:00:00');
+    d.setDate(d.getDate() + (e.key === 'ArrowRight' ? 1 : -1));
+    var to = d.toISOString().slice(0, 10);
+    var cell = cal.querySelector('.fb-cal-cell[data-date="' + to + '"]');
+    if (cell) move(card, cell, to, cur, false).then(function () { card.focus(); });
+  });
+})();
+</script>
 {% endblock %}

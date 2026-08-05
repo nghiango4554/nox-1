@@ -95,17 +95,53 @@ def api_fb_import_list():
                     "tong": len(doc["items"]), "items": doc["items"]})
 
 
+def _so(v):
+    """'1.234' / '1,234' / '' → int. Dữ liệu cào về có nhiều kiểu ghi số."""
+    if v is None:
+        return 0
+    s = str(v).strip().replace(".", "").replace(",", "").replace(" ", "")
+    return int(s) if s.isdigit() else 0
+
+
 def fb_posts_page():
+    import os
     doc = _doc()
-    items = doc["items"]
-    # thống kê nhanh theo tháng
+    items = []
+    for i, x in enumerate(doc["items"], 1):
+        cap = (x.get("caption") or "").strip()
+        items.append({
+            "stt": i,
+            "ngay": x.get("ngay") or "",
+            "caption": cap,
+            "headline": cap.split("\n")[0][:120] if cap else "(không có nội dung)",
+            "tiep_can": _so(x.get("tiep_can")),
+            "luot_xem": _so(x.get("luot_xem")),
+        })
+
     theo_thang = {}
     for x in items:
-        k = (x.get("ngay") or "")[:7]
-        theo_thang[k] = theo_thang.get(k, 0) + 1
+        k = (x["ngay"] or "")[:7]
+        if k:
+            theo_thang[k] = theo_thang.get(k, 0) + 1
+
+    reach = [x["tiep_can"] for x in items if x["tiep_can"]]
+    tb = round(sum(reach) / len(reach)) if reach else 0
+    top = sorted(items, key=lambda x: -x["tiep_can"])[:3]
+    top_ids = {x["stt"] for x in top if x["tiep_can"]}
+
+    css = ""
+    try:
+        p = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "static", "css", "fb-module.css")
+        css = str(int(os.path.getmtime(p)))
+    except OSError:
+        css = "0"
+
     return render_template("fb_posts_import.html", items=items,
                            cap_nhat=doc.get("cap_nhat"),
-                           theo_thang=sorted(theo_thang.items(), reverse=True))
+                           theo_thang=sorted(theo_thang.items(), reverse=True),
+                           tb_reach=tb, top_ids=top_ids,
+                           co_so_lieu=bool(reach), css_v=css)
 
 
 def register(app):
