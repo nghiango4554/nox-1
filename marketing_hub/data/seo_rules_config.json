@@ -1,15 +1,30 @@
 {
-  "version": "2026-05-16-1",
+  "version": "2026-08-05-title-full61",
   "thresholds": {
     "good": 65,
     "ok": 50
   },
   "word_count_thresholds": {
-    "blog":       {"low": 700, "ok": 1500},
-    "product":    {"low": 500, "ok": 800},
-    "collection": {"low": 150, "ok": 300},
-    "page":       {"low": 500, "ok": 800},
-    "other":      {"low": 500, "ok": 800}
+    "blog": {
+      "low": 700,
+      "ok": 1500
+    },
+    "product": {
+      "low": 500,
+      "ok": 800
+    },
+    "collection": {
+      "low": 150,
+      "ok": 300
+    },
+    "page": {
+      "low": 500,
+      "ok": 800
+    },
+    "other": {
+      "low": 500,
+      "ok": 800
+    }
   },
   "rules": [
     {
@@ -29,7 +44,8 @@
       "score": 5,
       "threshold": 61,
       "msg": "Title quá dài ({len} ký tự, max {threshold})",
-      "applies_to": "all"
+      "applies_to": "all",
+      "note": "Đo trên TITLE ĐẦY ĐỦ (cả suffix ' – Sintech' theme tự nối). Phần team/AI viết phải ≤51c thì live mới ≤61c."
     },
     {
       "code": "title_short",

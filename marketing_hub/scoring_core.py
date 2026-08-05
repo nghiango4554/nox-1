@@ -256,7 +256,7 @@ def score_title(title: str | None, max_score: int = 10) -> dict:
     """Score SEO title length + brand-suffix sanity.
 
     Sub-budget (raw 20, then scaled to max_score):
-      - length (sweet 45-61 → 13, mild miss 14-44/62-... → 7-8, missing → 0): 13/20
+      - length (sweet 40-51 → 13, mild miss 14-39/52-... → 7-8, missing → 0): 13/20
       - "no sintech in raw title" bonus: 7/20
     """
     title = (title or "").strip()
@@ -269,27 +269,31 @@ def score_title(title: str | None, max_score: int = 10) -> dict:
     sl = len(stripped)  # effective length (custom part only)
     meta = {"len": tl, "stripped_len": sl}
 
-    # Length scoring dùng sl (stripped). Sweet spot 45-61c cho phần custom.
+    # Length scoring chấm trên tl (ĐỘ DÀI ĐẦY ĐỦ — cái Google đọc), sweet spot 50-61c.
+    # KHÔNG chấm trên sl: 4/2637 trang tự chứa "Sintech" nên Haravan không nối suffix,
+    # strip rồi so 51 sẽ báo oan. Phần team/AI viết vẫn phải ≤51c (theme nối +10c).
+    # Audit 5/8/2026 — xem memory project_seo_dup_rewrite.
     if tl == 0:
         len_raw = 0
         issues.append(_issue("error", "no_title", "Thiếu thẻ <title>", "high"))
-    elif 45 <= sl <= 61:
+    elif 50 <= tl <= 61:
         len_raw = 13
-    elif sl > 61:
+    elif tl > 61:
         thr = _thr("title_long", 61)
         len_raw = 7
         issues.append(_issue("warn", "title_long",
-                             f"Title quá dài ({sl}c custom, max {thr}) — Google sẽ cắt", "med"))
-    elif sl < 20:
+                             f"Title quá dài ({tl}c, max {thr}; phần tự đặt {sl}c nên ≤51) "
+                             f"— Google sẽ cắt", "med"))
+    elif tl < 20:
         thr = _thr("title_short", 20)
         len_raw = 5
         issues.append(_issue("warn", "title_short",
-                             f"Title quá ngắn ({sl}c custom, nên ≥{thr})", "med"))
+                             f"Title quá ngắn ({tl}c, nên ≥{thr})", "med"))
     else:
-        # 20..44 → partial
+        # 20..49 → partial
         len_raw = 8
         issues.append(_issue("warn", "title_short",
-                             f"Title {sl}c custom — chưa tận dụng SERP (sweet spot 45-61)", "med"))
+                             f"Title {tl}c — chưa tận dụng SERP (sweet spot 50-61)", "med"))
 
     # Brand-suffix bonus (raw 7): "sintech" không được có trong phần custom title
     brand_raw = 0

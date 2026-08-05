@@ -43,7 +43,7 @@ def _set_state(**kw):
 HV_ISSUE_LABELS = {
     "no_title":            ("🔴", "Thiếu tiêu đề", "Bắt buộc có title sản phẩm."),
     "title_short":         ("🟡", "Title ngắn", "Mở rộng 30-65 ký tự, có tên SP + USP."),
-    "title_long":          ("🟡", "Title dài", "Rút xuống ≤65 ký tự."),
+    "title_long":          ("🟡", "Title dài", "Rút xuống ≤51 ký tự (theme tự nối ' – Sintech' +10c)."),
     "no_body":             ("🔴", "Thiếu mô tả", "Viết mô tả sản phẩm ≥300 từ (Sintech chuẩn ≥800)."),
     "body_thin":           ("🟡", "Mô tả mỏng", "Tăng nội dung ≥800 từ — Google đánh giá cao trang chi tiết."),
     "no_images":           ("🔴", "Không có ảnh", "Thêm ít nhất 3 ảnh sản phẩm."),

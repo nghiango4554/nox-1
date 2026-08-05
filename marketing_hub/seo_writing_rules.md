@@ -100,7 +100,9 @@ Phải có:
 
 ## 3. Quy tắc Title — 3 phương án
 
-- **45-61 ký tự** (target — fill đủ length tận dụng SERP, không nhồi từ)
+- **40-51 ký tự** (target — fill đủ length tận dụng SERP, không nhồi từ).
+  ⚠️ Theme Haravan tự nối `" – Sintech"` = **đúng 10 ký tự** → Google thấy title = phần mình viết + 10.
+  Viết 51c là Google thấy 61c (vừa trần). Viết 61c là live thành 71c → **bị cắt cụt**.
 - Phải có **tên sản phẩm hoặc keyword chính**
 - Bổ sung lợi ích chính / ngữ cảnh dùng / spec nổi bật nếu length cho phép
 - Nếu tên SP đã chiếm ~40c, có thể thêm cụm "chính hãng / giá tốt / cho [nhu cầu]"
@@ -786,7 +788,7 @@ Bài blog không cần đủ tất cả section SP, nhưng vẫn cần:
 
 - [ ] Output đủ **2 phần lớn**: `## Phân tích` + `## Bài viết hoàn chỉnh`
 - [ ] Phân tích đủ: keyword chính/phụ, search intent, đối tượng, hướng viết unique, bảng internal link
-- [ ] **3 title** đúng độ dài 45-61 ký tự, không "Sintech", không nhồi từ
+- [ ] **3 title** đúng độ dài 40-51 ký tự, không "Sintech", không nhồi từ
 - [ ] **3 meta description** đúng 140-160 ký tự, có CTA viết HOA phần hành động
 - [ ] **1 bộ meta keywords** không nhồi
 - [ ] **KHÔNG H1** — chỉ H2 và H3

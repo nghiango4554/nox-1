@@ -115,7 +115,7 @@ def validate_body_md(body_md: str) -> list:
 
 
 def validate_titles_metas(titles: list, metas: list) -> list:
-    """Check length rules cho title (45-61c) + meta (140-160c)."""
+    """Check length rules cho title (40-51c) + meta (140-160c)."""
     warnings = []
     for i, t in enumerate(titles or []):
         n = len(t)

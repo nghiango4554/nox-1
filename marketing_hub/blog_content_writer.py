@@ -119,7 +119,7 @@ def gen_blog_content(blog_url: str, article_title: str,
 - Meta hiện tại: {existing_meta or '(rỗng)'}
 - Nội dung hiện tại (snippet 3000c): {body_snippet[:1500] if body_snippet else '(rỗng)'}
 
-Viết lại: title 45-61c + meta 140-160c + body_html theo cấu trúc blog hướng dẫn — đủ ý, không lặp, không filler kéo dài.
+Viết lại: title 40-51c + meta 140-160c + body_html theo cấu trúc blog hướng dẫn — đủ ý, không lặp, không filler kéo dài.
 Trả JSON thuần."""
 
     try:
@@ -329,7 +329,7 @@ Quy tắc viết:
 - Mỗi section viết đủ ngân sách rồi chuyển tiếp — KHÔNG viết thêm dù "còn ý"
 - Mỗi đoạn tối đa 3 câu, 1 ý — câu nào bỏ không mất ý thì bỏ
 - H3 CHỈ dùng cho bước hướng dẫn (Bước 1/2/3) và FAQ — bài tư vấn/so sánh/tin: KHÔNG H3 ngoài FAQ
-- title 45-61c + meta 140-160c (CTA HOA cuối)
+- title 40-51c + meta 140-160c (CTA HOA cuối)
 - KHÔNG bịa giá, KHÔNG bịa thông số, KHÔNG filler
 - Ít nhất 3 internal link sintech.vn (anchor là keyword/danh mục cụ thể)
 - Nếu outline có "Các bước": viết đủ Bước 1, Bước 2... người đọc tự làm được
@@ -382,7 +382,7 @@ def gen_blog_content_from_brief(brief: dict) -> dict:
 - Thuộc Pillar: {brief.get('pillar', '')}
 - Internal link nên ưu tiên chèn về: {link_hint or '(collection/product Sintech liên quan nhất)'}
 
-Viết: title 45-61c (bám keyword, KHÔNG chứa "Sintech") + meta 140-160c (CTA HOA cuối) + body_html theo đúng cấu trúc blog hướng dẫn ở trên. Bám keyword + intent + góc viết riêng. KHÔNG bịa thông số kỹ thuật. Có ít nhất 3 internal link về sintech.vn (ưu tiên {link_hint or 'collection/product liên quan'}). Trả JSON thuần."""
+Viết: title 40-51c (bám keyword, KHÔNG chứa "Sintech") + meta 140-160c (CTA HOA cuối) + body_html theo đúng cấu trúc blog hướng dẫn ở trên. Bám keyword + intent + góc viết riêng. KHÔNG bịa thông số kỹ thuật. Có ít nhất 3 internal link về sintech.vn (ưu tiên {link_hint or 'collection/product liên quan'}). Trả JSON thuần."""
 
     try:
         import ai_provider

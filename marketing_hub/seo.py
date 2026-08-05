@@ -121,6 +121,17 @@ RULES_CONFIG_PATH = _os_seo.path.join(_os_seo.path.dirname(__file__), "data", "s
 _rules_cache = {"data": None, "mtime": 0}
 _rules_lock = threading.Lock()
 
+# ─────────── NGƯỠNG TITLE (audit 5/8/2026) ───────────
+# Theme Haravan TỰ NỐI " – Sintech" (đúng 10 ký tự) vào cuối MỌI <title>.
+# Đo 34/34 trang mọi loại (product/collection/blog/page/trang chủ): 34/34 đều bị nối.
+# ⇒ Phần TEAM ĐẶT chỉ được ≤51c thì title Google thấy mới ≤61c.
+# Sai lầm cũ: đặt trần 61c cho phần team đặt → live thành 71c, 1315/1358 trang
+# đã "sửa xong" vẫn vượt ngưỡng. Xem memory project_seo_dup_rewrite.
+_TITLE_SUFFIX_LEN = 10          # độ dài " – Sintech" theme tự thêm
+_TITLE_FULL_MAX = 61            # trần Google cắt (tính cả suffix)
+_TITLE_CORE_MAX = _TITLE_FULL_MAX - _TITLE_SUFFIX_LEN   # = 51, trần cho phần team đặt
+_TITLE_CORE_SWEET = 44          # nhắm 44-51c để lấp đầy SERP mà không tràn
+
 
 def load_rules_config(force: bool = False) -> dict:
     """Load + cache config. Auto-reload nếu file mtime đổi."""
@@ -219,7 +230,7 @@ ISSUE_LABELS = {
     "fetch_fail":    ("🔴", "Không fetch được", "Kiểm tra mạng / firewall / domain. Có thể site đang block bot."),
     "no_title":      ("🔴", "Thiếu thẻ <title>", "Bắt buộc có. Đặt 30-60 ký tự, chứa từ khoá chính + brand."),
     "title_short":   ("🟡", "Title quá ngắn", "Mở rộng lên 50-60 ký tự, thêm từ khoá phụ + brand 'Sintech'."),
-    "title_long":    ("🟡", "Title quá dài", "Rút xuống ≤60 ký tự — Google sẽ cắt phần thừa."),
+    "title_long":    ("🟡", "Title quá dài", "Rút xuống ≤51 ký tự (theme tự nối ' – Sintech' +10c) — Google sẽ cắt phần thừa."),
     "no_meta":       ("🔴", "Thiếu meta description", "Viết 120-160 ký tự, có CTA + từ khoá. Google dùng để hiện snippet."),
     "meta_short":    ("🟡", "Meta description ngắn", "Mở rộng lên 140-160 ký tự để tăng tỉ lệ click."),
     "meta_long":     ("🟡", "Meta description dài", "Rút xuống ≤160 ký tự — phần thừa bị cắt."),
@@ -528,18 +539,23 @@ def analyze_html(url: str, html: bytes, status_code: int, load_ms: int,
     title_tag = soup.find("title")
     title = re.sub(r"\s+", " ", title_tag.get_text()).strip() if title_tag else ""
     title_len = len(title)
-    # Đo độ dài phần title TEAM ĐẶT: bỏ suffix " – Sintech" Haravan tự thêm (+~10c),
-    # nếu không mọi title bị chấm title_long OAN (cùng regex với check sintech_in_title).
+    # ⚠️ CHẤM TRÊN TITLE ĐẦY ĐỦ, KHÔNG strip suffix (audit 5/8/2026).
+    # Google đọc nguyên cả thẻ <title>, nên trần là 61c cho CẢ chuỗi.
+    # Đo 2637 trang live: 2633 (99,85%) bị theme nối " – Sintech" (+10c);
+    # 4 trang tự chứa "Sintech" trong title thì Haravan KHÔNG nối nữa.
+    # ⇒ Nếu strip rồi so 51 thì 4 trang kia bị báo OAN (title 57-60c vốn đã đạt).
+    #   Đo full vs 61 đúng cho cả hai nhóm.
+    # (Phần AI GEN vẫn phải ≤51c — xem _TITLE_MAX — vì theme sẽ nối thêm 10c.)
     title_core = re.sub(r"\s*[-–—|]\s*sintech.*$", "", title, flags=re.I).strip() or title
-    core_len = len(title_core)
-    t_long = _thr("title_long", 61)
+    core_len = len(title_core)          # giữ để báo cáo: phần team thật sự đặt
+    t_long = _thr("title_long", _TITLE_FULL_MAX)
     t_short = _thr("title_short", 20)
     if not title:
         _add_issue("no_title")
-    elif core_len > t_long:
-        score += _add_issue("title_long", len=core_len, threshold=t_long)
-    elif core_len < t_short:
-        score += _add_issue("title_short", len=core_len, threshold=t_short)
+    elif title_len > t_long:
+        score += _add_issue("title_long", len=title_len, threshold=t_long)
+    elif title_len < t_short:
+        score += _add_issue("title_short", len=title_len, threshold=t_short)
     else:
         score += _pass_score("title_ok")
 
@@ -2112,12 +2128,15 @@ def list_title_meta_pages(url_type: str = None, issue_filter: str = None,
         raw_title = r["title"] or ""
         stripped_title = _re.sub(r"\s*[-–—|]\s*sintech.*$", "", raw_title, flags=_re.IGNORECASE).strip()
         sl = len(stripped_title)
-        # Re-evaluate title_long/title_short dựa trên stripped length
-        if "title_long" in codes and sl <= 61:
+        # Re-evaluate title_long/title_short trên ĐỘ DÀI ĐẦY ĐỦ (cái Google đọc).
+        # KHÔNG dùng stripped length: 4/2637 trang tự chứa "Sintech" nên không bị
+        # theme nối suffix — strip rồi so 51 sẽ báo oan. Xem chú thích ở analyze().
+        fl = len(re.sub(r"\s+", " ", raw_title).strip())
+        if "title_long" in codes and fl <= _TITLE_FULL_MAX:
             codes.discard("title_long")
-        if "title_short" in codes and sl >= 20:
+        if "title_short" in codes and fl >= 20:
             codes.discard("title_short")
-        if sl > 61 and "title_long" not in codes and "no_title" not in codes:
+        if fl > _TITLE_FULL_MAX and "title_long" not in codes and "no_title" not in codes:
             codes.add("title_long")
 
         if not codes:
@@ -2318,19 +2337,22 @@ NHIỆM VỤ: Viết 3 title + 3 meta description khác nhau cho 1 trang sản p
 (Đồng bộ chuẩn seo_writing_rules.md v2026-05-08.)
 
 ⚠️ LIMIT KÝ TỰ — TUÂN THỦ TUYỆT ĐỐI:
-- Mỗi TITLE: NHẮM 54-60 ký tự để LẤP ĐẦY SERP (TỐI ĐA TUYỆT ĐỐI là 61; vượt 61 → REWRITE NGẮN). KHÔNG để title <50 ký tự khi vẫn còn dư chỗ tới 61.
+- 🔴 QUAN TRỌNG: theme Haravan TỰ NỐI " – Sintech" (10 ký tự) vào cuối title bạn viết.
+  Google thấy = title bạn viết + 10. Nên trần THẬT cho phần bạn viết là 51, KHÔNG phải 61.
+  ĐỪNG tự thêm "– Sintech" vào title — theme làm rồi, thêm nữa sẽ bị lặp.
+- Mỗi TITLE: NHẮM 44-50 ký tự để LẤP ĐẦY SERP (TỐI ĐA TUYỆT ĐỐI là 51; vượt 51 → REWRITE NGẮN). KHÔNG để title <40 ký tự khi vẫn còn dư chỗ tới 51.
 - Mỗi META: 145-158 ký tự (min 140, max 160). Nếu ngắn hơn 145 hoặc dài hơn 158 → REWRITE.
 - TRƯỚC KHI TRẢ VỀ: tự đếm len(title) và len(meta), nếu vi phạm phải sửa.
 
 LUẬT TITLE:
 - BẮT BUỘC có: tên model/sản phẩm + lợi ích chính hoặc ngữ cảnh dùng/mua
 - Bổ sung spec nổi bật / "chính hãng" / "cho [nhu cầu]" nếu length cho phép
-- LẤP CHỖ TRỐNG (quan trọng — áp cho MỌI title): ĐẾM ký tự title sau khi viết xong nội dung chính; nếu <54 ký tự và còn dư chỗ tới 61c, BẮT BUỘC chèn thêm 1 tín hiệu tin cậy để đẩy lên 54-60c (miễn ≤61c). Chọn 1 cụm theo THỨ TỰ ƯU TIÊN giảm dần: 1) "giá tốt" → 2) "chính hãng" → 3) "giá rẻ" → 4) "bảo hành chính hãng". Dùng cụm ưu tiên cao nhất mà tổng title vẫn ≤61c; riêng "bảo hành chính hãng" khá dài (~18c) → CHỈ chèn khi còn đủ chỗ ≤61c, nếu vượt thì lùi về cụm ngắn hơn. CẤM superlative: "rẻ nhất / tốt nhất / đáng mua nhất".
+- LẤP CHỖ TRỐNG (quan trọng — áp cho MỌI title): ĐẾM ký tự title sau khi viết xong nội dung chính; nếu <44 ký tự và còn dư chỗ tới 51c, BẮT BUỘC chèn thêm 1 tín hiệu tin cậy để đẩy lên 44-50c (miễn ≤51c). Chọn 1 cụm theo THỨ TỰ ƯU TIÊN giảm dần: 1) "giá tốt" → 2) "chính hãng" → 3) "giá rẻ" → 4) "bảo hành chính hãng". Dùng cụm ưu tiên cao nhất mà tổng title vẫn ≤51c; riêng "bảo hành chính hãng" khá dài (~18c) → CHỈ chèn khi còn đủ chỗ ≤51c, nếu vượt thì lùi về cụm ngắn hơn. CẤM superlative: "rẻ nhất / tốt nhất / đáng mua nhất".
 - RIÊNG LAPTOP — format title CỐ ĐỊNH:
-  · Mặc định (≤61c): "Laptop [Hãng] [Dòng] ([chip] | [RAM] | [ROM])" — vd "Laptop Asus Vivobook 15 (i5 | 16GB | 512GB)".
-  · Nếu TỔNG >61c: LƯỢC BỎ chip VÀ bỏ ngoặc → "Laptop [Hãng] [Dòng] [RAM] | [ROM]" — vd "Laptop Asus Vivobook 15 16GB | 512GB".
+  · Mặc định (≤51c): "Laptop [Hãng] [Dòng] ([chip] | [RAM] | [ROM])" — vd "Laptop Asus Vivobook 15 (i5 | 16GB | 512GB)".
+  · Nếu TỔNG >51c: LƯỢC BỎ chip VÀ bỏ ngoặc → "Laptop [Hãng] [Dòng] [RAM] | [ROM]" — vd "Laptop Asus Vivobook 15 16GB | 512GB".
   · Hàng CŨ (tên SP có "cũ"/used/like new): thêm " cũ đẹp" ở CUỐI title — vd "Laptop Dell Latitude 5420 (i5 | 8GB | 256GB) cũ đẹp". Hàng mới KHÔNG thêm.
-  · Sau khi dựng xong format, nếu title vẫn <54c và còn dư chỗ ≤61c → áp rule LẤP CHỖ TRỐNG ở trên, điền thêm tín hiệu tin cậy (giá tốt → chính hãng → giá rẻ → bảo hành chính hãng).
+  · Sau khi dựng xong format, nếu title vẫn <44c và còn dư chỗ ≤51c → áp rule LẤP CHỖ TRỐNG ở trên, điền thêm tín hiệu tin cậy (giá tốt → chính hãng → giá rẻ → bảo hành chính hãng).
 - Chuẩn hóa kỹ thuật: GDDR6 (không viết DDR6), giữ đúng độ phân giải/tỷ lệ thật
 
 LUẬT META DESCRIPTION (3 cái KHÁC GÓC NHÌN — KHÔNG được giống nhau):
@@ -2355,7 +2377,8 @@ OUTPUT BẮT BUỘC: chỉ JSON thuần (KHÔNG markdown code fence, KHÔNG text
 
 
 # Giới hạn độ dài (đồng bộ với rule + validate cứng dưới)
-_TITLE_MAX = 61
+# AI gen ra phần TEAM ĐẶT (chưa có suffix) → trần là 51c, không phải 61c.
+_TITLE_MAX = _TITLE_CORE_MAX
 _META_MIN, _META_MAX = 140, 160
 
 # Marker section "thông số kỹ thuật" — 86% SP AI-gen có heading này (khảo sát 120 SP).
@@ -3351,7 +3374,7 @@ def gsc_build_tasks(cache: dict) -> list:
         "icon": "📉",
         "title": f"{len(low_ctr)} URL impression cao + CTR thấp (<3%)",
         "desc": "Google show URL nhiều nhưng khách ít click → title/meta không hấp dẫn. Sửa title/meta = boost click ngay.",
-        "action": "Mở /seo/title-meta → AI auto-fix Codex theo rule SEO Sintech (title 45-61c, meta 140-160c, CTA HOA).",
+        "action": "Mở /seo/title-meta → AI auto-fix Codex theo rule SEO Sintech (title 40-51c, meta 140-160c, CTA HOA).",
         "needs_export": False, "items": low_ctr[:50],  # cap 50 cho UI
     })
 

@@ -20,7 +20,7 @@ Bạn là chuyên gia SEO + copywriter cho **Sintech.vn** — shop PC, laptop, g
 ## OUTPUT BẮT BUỘC — 3 FIELD
 
 ```
-TITLE: [45-61 ký tự]
+TITLE: [40-51 ký tự]
 
 META: [140-160 ký tự, có CTA HOA cuối câu]
 
@@ -69,7 +69,7 @@ turn-id        is-intersecting writing-block
 
 ---
 
-## 1. RULE TITLE (45-61 ký tự)
+## 1. RULE TITLE (40-51 ký tự — theme tự nối ' – Sintech' +10c)
 
 - **TUYỆT ĐỐI KHÔNG** chứa từ "Sintech" (Haravan auto thêm suffix " - Sintech")
 - Phải có: **tên collection / keyword chính** + lợi ích nổi bật
@@ -270,7 +270,7 @@ BODY HTML:
 
 ## ✅ CHECKLIST TRƯỚC KHI TRẢ:
 
-- [ ] Title 45-61c, KHÔNG có "Sintech"
+- [ ] Title 40-51c, KHÔNG có "Sintech"
 - [ ] Meta 140-160c, có CTA HOA cuối
 - [ ] Body 600-1200 từ
 - [ ] KHÔNG H1, chỉ H2 + H3

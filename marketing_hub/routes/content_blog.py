@@ -441,7 +441,7 @@ def blog_content_batch_gen_stream(stream_id):
 
 
 def blog_content_gen_title(job_id):
-    """Gen lại title 45-61c từ title/keyword hiện tại của job."""
+    """Gen lại title 40-51c từ title/keyword hiện tại của job."""
     job = _blog_jobs_get(job_id)
     if not job:
         return jsonify({"ok": False, "error": "Job không tồn tại"}), 404
@@ -456,7 +456,7 @@ def blog_content_gen_title(job_id):
         sys_p = "Bạn là SEO copywriter cho Sintech.vn (shop PC/laptop/gaming gear). Viết title SEO tiếng Việt."
         usr_p = (f"Tiêu đề hiện tại: {current_title}\nKeyword: {keyword or '(suy ra từ tiêu đề)'}\n"
                  f"Snippet nội dung: {body_snippet or '(chưa có)'}\n\n"
-                 f"Viết lại title 45-61 ký tự, bám keyword, KHÔNG chứa 'Sintech', tự nhiên buyer-facing. "
+                 f"Viết lại title 40-51 ký tự, bám keyword, KHÔNG chứa 'Sintech', tự nhiên buyer-facing. "
                  f"Chỉ trả text thuần, không dấu ngoặc kép.")
         raw = ai_provider.call_ai(sys_p, usr_p, timeout=60).strip()
         raw = raw.strip('"\'')

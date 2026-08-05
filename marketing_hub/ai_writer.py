@@ -218,7 +218,7 @@ Trả về **1 JSON object duy nhất** với schema chính xác:
 
 {{
   "analysis_md": "Nội dung phần Phân tích viết Markdown — gồm: keyword chính, keyword phụ, search intent, đối tượng khách hàng, hướng viết unique, ghi chú nguồn (nếu có), CTA cố định, BẢNG kế hoạch internal link (5 cột: Vị trí | Anchor text | URL | Loại link | Lý do).",
-  "titles": ["title 1 (45-61 ký tự, KHÔNG 'Sintech')", "title 2", "title 3"],
+  "titles": ["title 1 (40-51 ký tự, KHÔNG 'Sintech')", "title 2", "title 3"],
   "metas": ["meta 1 (140-160 ký tự, có CTA HOA)", "meta 2", "meta 3"],
   "keywords": "keyword chính, keyword phụ 1, keyword phụ 2, ...",
   "outline_md": "Bảng Markdown 2 cột (| Cấp heading | Nội dung |) chỉ liệt kê H2/H3 đã dùng trong body.",
@@ -357,7 +357,7 @@ def _build_user_prompt(product_info: dict) -> str:
         "4. **Outro KHÔNG có heading H2 riêng** — viết liền sau FAQ, dạng `<p>` mở bằng 'Tóm lại,/Nói ngắn gọn,/Sau tất cả,/Kết lại,'. CẤM chèn H2 'Kết lại về [tên SP]', 'Tổng kết', 'Lời kết' trước outro.\n"
         "5. Viết đủ ý theo outline, KHÔNG ép độ dài cụ thể — mỗi câu phải có nội dung thật, hết ý thì dừng, không kéo dài/lặp/filler. Internal link 3-6 trong body + Sintech ở intro và outro.\n"
         "6. Internal link **bắt buộc** format `[**anchor**](url)` — TUYỆT ĐỐI không dùng `**[anchor](url)**`. **Anchor MAX 30 ký tự**, là keyword NGẮN (vd 'thẻ nhớ MicroSD 64GB', 'chuột gaming', 'màn hình 2K') — TUYỆT ĐỐI KHÔNG dùng full tên SP làm anchor (vd 'Thẻ nhớ MicroSD 64G TEAMGROUP Box Class10 U1 100MB/s' SAI).\n"
-        "7. **Title 45-61 ký tự**, KHÔNG 'Sintech' trong title. Đếm KỸ ký tự trước khi trả.\n"
+        "7. **Title 40-51 ký tự** (theme tự nối ' – Sintech' +10c → Google thấy ≤61c), KHÔNG 'Sintech' trong title. Đếm KỸ ký tự trước khi trả.\n"
         "8. **Meta 140-160 ký tự** — CỨNG min 140! ĐẾM TỪNG KÝ TỰ TRƯỚC KHI TRẢ. Nếu meta dưới 140c, BỔ SUNG: ngữ cảnh dùng (vd 'trên bàn làm việc rộng', 'cho setup gaming gọn'), lợi ích kép ('vừa A vừa B'), tên ứng dụng/phần mềm phù hợp. Phải có CTA viết HOA phần hành động (XEM NGAY/CHỌN NGAY/THAM KHẢO NGAY/KHÁM PHÁ NGAY). Tham khảo MẪU META trong rules section 4.\n"
         "9. **VĂN PHONG**: KHÔNG cộc lốc. KHÔNG mọi câu đều mở 'Bạn...'. Đa dạng câu mở dùng connector: 'Hiện nay...', 'Đối với...', 'Nhờ đó...', 'Trong khi đó...', 'Ngoài ra...', 'Tuy nhiên...', 'Bên cạnh đó...', 'Một điểm đáng chú ý là...', 'Nếu... thì...'. Đoạn văn 2-3 câu nối ý mượt — câu sau dẫn dắt từ câu trước, KHÔNG liệt kê spec rời rạc.\n"
         "10. Đọc kỹ section 'VĂN PHONG MẪU' ở đầu rules — viết theo tone 'người am hiểu chia sẻ' giống bài PC văn phòng / máy bộ mẫu.\n"

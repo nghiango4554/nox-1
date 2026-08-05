@@ -41,7 +41,7 @@ SIGNATURE = f"Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 
 LEGACY_SIGNATURE = f"Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline {HOTLINE} · {LEGACY_ADDRESS}."
 
 TITLE_RULES = (
-    "TITLE 45-61 ký tự (target 45-58, tối đa tuyệt đối 61). "
+    "TITLE 40-51 ký tự (target 44-50, tối đa tuyệt đối 51 — theme tự nối ' – Sintech' +10c). "
     "KHÔNG chứa 'Sintech' (Haravan tự thêm hậu tố ' - Sintech'). "
     "KHÔNG nhồi keyword / lặp từ / lan man."
 )
@@ -151,7 +151,7 @@ def common_rules_block(cta_note: str = "", include_length: bool = True,
     """Khối RULE CHUNG để chèn vào mọi prompt content gen (body dài).
 
     cta_note: ghi chú CTA riêng theo loại (vd blog cho thêm 'TÌM HIỂU NGAY').
-    include_length: True → kèm rule độ dài title/meta chung (45-61 / 140-160).
+    include_length: True → kèm rule độ dài title/meta chung (40-51 / 140-160).
         Đặt False cho writer đã có rule length RIÊNG chặt hơn (vd collection 48-58,
         title-meta gen 45-58/145-158) để KHỎI mâu thuẫn.
     is_product: True → thêm luật riêng bài SP (H2 đầu = tên SP, blockquote spec cuối,

@@ -275,7 +275,7 @@ signature
 
 ## 3.2 Title / Meta / Link
 
-- **Title** 45-61 ký tự, sentence case, **không chứa "Sintech"** (theme tự thêm ~10 ký tự), khác câu chữ trang cùng cụm.
+- **Title** 40-51 ký tự, sentence case, **không chứa "Sintech"** — theme tự nối `" – Sintech"` = **đúng 10 ký tự**, nên Google thấy = phần mình viết + 10. Trần 51c là để live vừa 61c; viết 61c thì live thành 71c và **bị cắt cụt**. Khác câu chữ trang cùng cụm.
 - **Meta** 140-160 ký tự, có lợi ích + intent mua, CTA HOA cuối câu, **CTA đa dạng**: `XEM NGAY` · `CHỌN CẤU HÌNH NGAY` · `THAM KHẢO NGAY` · `CHỌN NGAY` · `BẮT ĐẦU NGAY`.
 - **Body:** mở bằng tình huống/vấn đề thật (không công thức lặp) · taxonomy rõ ở đầu · bảng phân khúc giá · bảng chọn theo nhu cầu · FAQ · signature · CTA mềm.
 - **≥6 internal link**, có link sang trang gần nhất để phân hóa intent.

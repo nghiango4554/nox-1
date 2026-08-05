@@ -6,7 +6,7 @@ Prompt đồng bộ với `seo_writing_rules.md` v2026-05-08:
 - Public voice "bạn" (không "anh"/"tôi")
 - KHÔNG H1, body chỉ <h2>/<h3>
 - Forbidden phrases banlist
-- SEO title 45-61c, KHÔNG "Sintech" (Haravan auto-suffix)
+- SEO title 40-51c, KHÔNG "Sintech" (Haravan auto-suffix ' – Sintech' +10c)
 - SEO meta 140-160c, đủ CTA HOA (XEM NGAY / THAM KHẢO NGAY / CHỌN NGAY / KHÁM PHÁ NGAY)
 - Body 7 section + outro + signature
 - Angle deterministic theo hash(name) % 5
@@ -382,7 +382,7 @@ BODY_HTML — CẤU TRÚC BẮT BUỘC (theo đúng thứ tự):
 <p><em>Tư vấn cấu hình bởi team kỹ thuật Sintech — Hotline 0911 713 000 · 457 Trần Xuân Soạn, Phường Tân Hưng, Thành phố Hồ Chí Minh.</em></p>
 
 ═══════════════════════════════════════════════════════════════
-SEO TITLE (45-61 ký tự, sweet 50-58):
+SEO TITLE (40-51 ký tự, sweet 44-50):
 ═══════════════════════════════════════════════════════════════
 - **CASE RULE — quan trọng nhất:**
   • Loại SP viết SENTENCE-CASE: "Vỏ case", "Card màn hình", "Ổ cứng SSD",
@@ -537,7 +537,7 @@ ANGLE PICK = {angle}
 
 [seo_title]
 - Angle hint: {title_hint}
-- Length: 45-61 ký tự (sweet 50-58)
+- Length: 40-51 ký tự (sweet 44-50)
 - Bắt đầu bằng "{loai}" hoặc tên SP gọn
 - CẤM "Sintech" trong title
 

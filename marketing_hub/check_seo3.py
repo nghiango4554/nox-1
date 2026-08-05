@@ -42,12 +42,13 @@ for r in rows:
         issue_list = []
     codes = {it.get('code') for it in issue_list if it.get('code') in CODES}
 
-    # Strip suffix for title_long re-eval
+    # title_long re-eval trên ĐỘ DÀI ĐẦY ĐỦ (cái Google đọc), trần 61c.
+    # KHÔNG dùng bản đã strip suffix: 4/2637 trang tự chứa "Sintech" nên Haravan
+    # không nối " – Sintech", strip rồi so 51 sẽ báo oan. Audit 5/8/2026.
     raw_title = r['title'] or ''
-    stripped = re.sub(r'\s*[-–—|]\s*sintech.*$', '', raw_title, flags=re.IGNORECASE).strip()
-    sl = len(stripped)
-    if 'title_long' in codes and sl <= 61: codes.discard('title_long')
-    if sl > 61 and 'no_title' not in codes: codes.add('title_long')
+    fl = len(re.sub(r'\s+', ' ', raw_title).strip())
+    if 'title_long' in codes and fl <= 61: codes.discard('title_long')
+    if fl > 61 and 'no_title' not in codes: codes.add('title_long')
 
     if not codes:
         continue
