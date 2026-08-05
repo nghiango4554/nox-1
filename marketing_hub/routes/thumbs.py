@@ -117,19 +117,81 @@ def _collections():
     return _COL_CACHE
 
 
-def _products_in(cid):
-    """Pager ĐÚNG (API Haravan cap 50/trang)."""
-    out, page = [], 1
-    while page <= 200:
-        b = hc._request("GET", "/products.json",
-                        params={"collection_id": cid, "limit": 50, "page": page,
-                                # published_at: thiếu field này thì mọi SP đều bị coi là ẨN
-                                "fields": "id,handle,title,images,published_at"}
-                        ).get("products", [])
-        out.extend(b)
-        if len(b) < 50:
-            break
-        page += 1
+def _warm_collections():
+    """Nạp sẵn bản đồ collection lúc server khởi động (~2,5s).
+
+    Không có nó thì lần đầu mở /thumbs/c/... phải chờ đủ 2,5s đó, dù các lần sau
+    đã nhanh. Chạy nền, lỗi thì thôi — lần gọi thật sẽ tự nạp lại.
+    """
+    try:
+        _collections()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+threading.Thread(target=_warm_collections, daemon=True).start()
+
+
+_PROD_CACHE = {}     # cid -> (thoi_diem, [products])
+_PROD_TTL = 90       # giây — chỉ dùng cho ĐƯỜNG VẼ TRANG, không dùng cho sync
+_PROD_FIELDS = "id,handle,title,images,published_at"   # thiếu published_at -> mọi SP coi như ẨN
+
+
+def _one_page(cid, page):
+    return hc._request("GET", "/products.json",
+                       params={"collection_id": cid, "limit": 50, "page": page,
+                               "fields": _PROD_FIELDS}).get("products", [])
+
+
+def _fetch_products_in(cid):
+    """Kéo toàn bộ SP của collection.
+
+    Haravan cap CỨNG 50 SP/trang — đo 4/8/2026: xin limit=100 hay 250 đều chỉ trả 50.
+    Nên collection 279 SP = 6 lượt gọi. Trước đây gọi TUẦN TỰ nên mất ~3,1s.
+    Giờ gọi song song từng lô 4 trang, dừng khi gặp trang < 50. Lỗi thì lùi về tuần tự.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    BATCH = 4
+    # Trang 1 gọi TRƯỚC một mình: đa số collection chỉ có 1 trang, bắn 4 request là phí
+    # (đo được chuot-gaming 45 SP còn CHẬM hơn cách cũ vì 3 request thừa).
+    first = _one_page(cid, 1)
+    if len(first) < 50:
+        return first
+    out, page = list(first), 2
+    try:
+        while page <= 200:
+            pages = list(range(page, page + BATCH))
+            with ThreadPoolExecutor(max_workers=BATCH) as ex:
+                res = list(ex.map(lambda p: _one_page(cid, p), pages))
+            for b in res:
+                out.extend(b)
+            if any(len(b) < 50 for b in res):
+                return out
+            page += BATCH
+        return out
+    except Exception:  # noqa: BLE001 — mạng lỗi/throttle: lùi về cách cũ cho chắc
+        out, page = [], 1
+        while page <= 200:
+            b = _one_page(cid, page)
+            out.extend(b)
+            if len(b) < 50:
+                break
+            page += 1
+        return out
+
+
+def _products_in(cid, use_cache=False):
+    """SP của collection. `use_cache=True` CHỈ dùng khi vẽ trang.
+
+    ⚠️ Luồng SYNC phải để use_cache=False (mặc định): dữ liệu cũ 90 giây đủ làm
+    sync bỏ sót SP mới thêm — đúng bẫy `thumb_collection_map.json` stale đã gặp 14/7/2026.
+    """
+    if use_cache:
+        hit = _PROD_CACHE.get(cid)
+        if hit and time.time() - hit[0] < _PROD_TTL:
+            return hit[1]
+    out = _fetch_products_in(cid)
+    _PROD_CACHE[cid] = (time.time(), out)
     return out
 
 
@@ -552,7 +614,8 @@ def _collection_items(handle):
 
     cid = _collections().get(handle)
     if cid:
-        for p in _products_in(cid):
+        # vẽ trang -> được phép dùng cache 90s (sync vẫn lấy tươi, xem _products_in)
+        for p in _products_in(cid, use_cache=True):
             ph = p.get("handle")
             if _only is not None and ph not in _only:
                 continue               # ngăn mẹ: chỉ SP được gán cho nó
@@ -1093,6 +1156,8 @@ def _sync_worker(coll_list):
     if SYNC_STATE.get("missing_local"):
         tail = (f" · ⚠️ {len(SYNC_STATE['missing_local'])} SP thiếu trong bản đồ local "
                 f"(đã sync bù) → chạy lại build_collection_map.py")
+    # sync vừa đổi ảnh trên Haravan -> bỏ cache để trang vẽ lại bằng dữ liệu mới
+    _PROD_CACHE.clear()
     SYNC_STATE.update(running=False, finished=True, current="",
                       msg=f"Xong: {SYNC_STATE['ok']} SP ok, {SYNC_STATE['fail']} lỗi{tail}")
 
