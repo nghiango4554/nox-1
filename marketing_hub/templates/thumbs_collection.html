@@ -235,8 +235,11 @@
   {% macro phantrang(vitri) %}
     {% if so_trang > 1 %}
     <div class="ptrang" data-vitri="{{ vitri }}">
+      {# 6/8/2026: lấy dải SP THẬT từ server. Trước đây tự tính (trang-1)*60+1 — sai
+         hẳn từ khi cắt theo số ẢNH, mỗi trang một cỡ (đo được: trang 34 SP mà nhãn
+         ghi "SP 1–56 trong 56"). #}
       <span class="ptrang-lb">Trang <b>{{ trang }}</b>/{{ so_trang }}
-        — đang xem SP {{ (trang - 1) * sp_moi_trang + 1 }}–{{ [trang * sp_moi_trang, n_sp_all]|min }}
+        — đang xem SP {{ sp_tu }}–{{ sp_den }} ({{ n_anh_trang }} ảnh)
         trong {{ n_sp_all }}</span>
       <span class="ptrang-nut">
         <a class="ptbtn{{ ' off' if trang == 1 }}"
@@ -250,7 +253,9 @@
       <a class="ptbtn ptall" href="?all=1" title="Hiện hết {{ n_sp_all }} SP trong 1 trang — nặng, chỉ dùng khi cần">Xem tất cả</a>
     </div>
     {% endif %}
-    {% if xem_het and n_sp_all > sp_moi_trang %}
+    {# dùng co_the_chia, KHÔNG dùng n_sp_all > 60: collection 40 SP mà 300 ảnh
+       giờ vẫn được chia, điều kiện cũ sẽ giấu mất nút quay lại. #}
+    {% if xem_het and co_the_chia %}
     <div class="ptrang">
       <span class="ptrang-lb">Đang hiện hết <b>{{ n_sp_all }}</b> SP trong 1 trang (nặng).</span>
       <a class="ptbtn on" href="?page=1">↩ Quay lại chia trang</a>

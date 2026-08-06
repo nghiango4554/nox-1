@@ -98,6 +98,14 @@
   #zoom{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;z-index:999;
     align-items:center;justify-content:center;cursor:zoom-out}
   #zoom img{max-width:92vw;max-height:92vh;background:#fff;border-radius:10px}
+  /* thanh chuyển trang */
+  .qv-nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:0 0 14px;
+    padding:9px 12px;background:var(--surface-2,#f6f7f9);border:1px solid var(--line,#e3e6ea);
+    border-radius:9px;font-size:13px}
+  .qv-nb{padding:3px 10px;border:1px solid var(--line,#d7dbe0);border-radius:7px;
+    text-decoration:none;color:inherit;background:var(--surface,#fff);line-height:1.7}
+  .qv-nb:hover{border-color:#94a3b8}
+  .qv-nb.on{background:#1e293b;color:#e2e8f0;border-color:#1e293b;font-weight:600}
 </style>
 
 <div class="qv-bar">
@@ -117,6 +125,33 @@
 
 {% if not rows %}
   <div class="qv-empty">Không có sản phẩm nào khớp bộ lọc.</div>
+{% endif %}
+
+{# ── Chia trang (6/8/2026) ──
+   Cắt theo SỐ DÒNG BẢNG, không theo số SP: `vga-nvidia` từng nhồi 15.814 dòng /
+   5.041 KB vào một trang. Mọi con số ở thanh trên vẫn tính trên TOÀN nhóm.
+   Link luôn mang theo tag + only để đổi trang không làm mất bộ lọc. #}
+{% macro qs(p) -%}
+?tag={{ tag }}{% if only %}&only={{ only }}{% endif %}{% if p %}&page={{ p }}{% endif %}
+{%- endmacro %}
+{% if so_trang > 1 or xem_het %}
+<div class="qv-nav">
+  {% if xem_het %}
+    <span>Đang hiện <b>toàn bộ {{ stat.n }} SP</b> trong 1 trang — nặng hơn.</span>
+    <a class="qv-nb on" href="{{ qs(1) }}">↩ Quay lại chia trang</a>
+  {% else %}
+    <span>Trang <b>{{ trang }}</b>/{{ so_trang }} · đang hiện <b>{{ n_sp_trang }}</b>/{{ stat.n }} SP</span>
+    {% if trang > 1 %}<a class="qv-nb" href="{{ qs(trang - 1) }}">← Trước</a>{% endif %}
+    {% for p in range(1, so_trang + 1) %}
+      <a class="qv-nb {{ 'on' if p == trang }}" href="{{ qs(p) }}">{{ p }}</a>
+    {% endfor %}
+    {% if trang < so_trang %}<a class="qv-nb" href="{{ qs(trang + 1) }}">Sau →</a>{% endif %}
+    <a class="qv-nb" style="margin-left:auto"
+       href="{{ qs(0) }}&all=1" title="Xem hết trong 1 trang để Ctrl+F tìm xuyên cả nhóm (trang sẽ nặng)">
+      📂 Hiện hết
+    </a>
+  {% endif %}
+</div>
 {% endif %}
 
 {% for r in rows %}

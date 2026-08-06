@@ -346,9 +346,32 @@ def _preview_log():
 
 UNGROUPED = "__ungrouped__"
 
-# Số SP mỗi trang ở trang chi tiết collection. Đặt 60 vì ~60 SP ≈ 200 KB HTML —
-# mức trình duyệt dựng gọn. Thêm ?all=1 vào link để xem tất cả trong 1 trang như cũ.
+# Trần mỗi trang ở trang chi tiết collection. Thêm ?all=1 để xem hết trong 1 trang.
+# ⚠️ 6/8/2026 — SỬA LẠI CÁCH ĐẾM. Bản đầu chỉ chặn theo SỐ SP (60), mà thứ làm
+# trình duyệt ì là SỐ THẺ <img>, không phải số SP. Đo ra 18 collection dưới 60 SP
+# nhưng mỗi SP nhiều ảnh vẫn ra 200-315 ảnh/trang và KHÔNG được chia gì cả
+# (man-hinh-gaming 315 · man-hinh-22-25-inch 294 · laptop-asus 288...).
+# Nay chặn theo CẢ HAI, cái nào chạm trước thì cắt.
 SP_MOI_TRANG = 60
+ANH_MOI_TRANG = 200
+
+
+def _chia_lat(items, sp_max=SP_MOI_TRANG, anh_max=ANH_MOI_TRANG):
+    """Cắt items thành các lát (đầu, cuối) — chạm trần SP hoặc trần ảnh thì sang trang.
+
+    Luôn nhận ÍT NHẤT 1 SP mỗi trang, để 1 SP có hơn 200 ảnh không đẻ ra trang rỗng.
+    """
+    lat, dau, n_sp, n_anh = [], 0, 0, 0
+    for i, it in enumerate(items):
+        w = len(it.get("imgs") or [])
+        if n_sp and (n_sp + 1 > sp_max or n_anh + w > anh_max):
+            lat.append((dau, i))
+            dau, n_sp, n_anh = i, 0, 0
+        n_sp += 1
+        n_anh += w
+    if dau < len(items) or not lat:
+        lat.append((dau, len(items)))
+    return lat
 
 # Vợ chốt 22/7/2026: nhánh PC build sẵn + combo PC HIỆN KHÔNG LÀM ảnh chuẩn.
 # Vẫn hiện trên trang (gập lại, để cuối) nhưng KHÔNG tính vào tiến độ / việc cần làm.
@@ -861,19 +884,25 @@ def thumbs_collection(handle):
     n_sp_all = len(items)
     xem_het = request.args.get("all") == "1"
     so_trang, trang = 1, 1
-    if not groups and not xem_het and n_sp_all > SP_MOI_TRANG:
-        so_trang = (n_sp_all + SP_MOI_TRANG - 1) // SP_MOI_TRANG
+    lat = _chia_lat(items)
+    if not groups and not xem_het and len(lat) > 1:
+        so_trang = len(lat)
         sp_can = request.args.get("sp") or ""
         if sp_can:   # từ ô tìm kiếm: nhảy thẳng tới trang chứa SP đó
             vt = next((i for i, it in enumerate(items) if it["handle"] == sp_can), -1)
-            trang = vt // SP_MOI_TRANG + 1 if vt >= 0 else 1
+            if vt >= 0:
+                trang = next(k for k, (a, b) in enumerate(lat, 1) if a <= vt < b)
         else:
             try:
                 trang = int(request.args.get("page") or 1)
             except (TypeError, ValueError):
                 trang = 1
             trang = max(1, min(trang, so_trang))
-        items = items[(trang - 1) * SP_MOI_TRANG: trang * SP_MOI_TRANG]
+        a, b = lat[trang - 1]
+        items = items[a:b]
+        sp_tu, sp_den = a + 1, b
+    else:
+        sp_tu, sp_den = (1, n_sp_all) if n_sp_all else (0, 0)
 
     try:
         shop = hc.load_config().get("shop_domain", "")
@@ -887,7 +916,14 @@ def thumbs_collection(handle):
                            hide_synced=hide_synced, row=row, review=review,
                            img_ver=_img_ver,
                            n_sp_all=n_sp_all, trang=trang, so_trang=so_trang,
-                           xem_het=xem_het, sp_moi_trang=SP_MOI_TRANG)
+                           xem_het=xem_het, sp_moi_trang=SP_MOI_TRANG,
+                           # dải SP thật của trang này — KHÔNG suy ra từ số SP/trang
+                           # được nữa, vì mỗi lát to nhỏ khác nhau (cắt theo số ảnh).
+                           sp_tu=sp_tu, sp_den=sp_den,
+                           # ở chế độ ?all=1 thì so_trang vẫn = 1, nên cần cờ riêng
+                           # để trang biết có nút "quay lại chia trang" hay không
+                           co_the_chia=(len(lat) > 1 and not groups),
+                           n_anh_trang=sum(len(it.get("imgs") or []) for it in items))
 
 
 def _lam_ban_nho(goc: Path, dich: Path) -> bool:

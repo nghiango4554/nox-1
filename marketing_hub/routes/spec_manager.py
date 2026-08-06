@@ -101,6 +101,33 @@ def spec_group_page(handle):
                            handle=handle, tag=tag, show_all=show_all)
 
 
+# ⚡ 6/8/2026 — chia trang View nhanh.
+# Đo trước khi sửa: `vga-nvidia` HTML **5.041 KB / 15.814 dòng bảng**, `case-gaming`
+# 4.803 KB / 14.486 dòng — 35/175 nhóm vượt 500 KB. Server trả nhanh (0,7s), cái ì
+# nằm ở chỗ trình duyệt phải dựng 15.000 dòng một lúc.
+# Cắt theo SỐ DÒNG BẢNG chứ không theo số SP: mỗi SP nặng nhẹ rất khác nhau
+# (SP ít spec 10 dòng, SP nhiều spec 120 dòng), cắt theo đầu SP thì trang vẫn phình.
+# Luôn lấy ÍT NHẤT 1 SP mỗi trang để SP siêu nặng không làm trang rỗng.
+DONG_MOI_TRANG = 1200
+
+
+def _chia_theo_dong(rows, budget=DONG_MOI_TRANG):
+    """Gom rows thành các trang sao cho mỗi trang ≲ budget dòng bảng.
+
+    Trả list các (đầu, cuối) — cắt theo lát nên thứ tự SP giữ nguyên tuyệt đối.
+    """
+    trang, dau, dem = [], 0, 0
+    for i, r in enumerate(rows):
+        w = len(r.get("aligned") or []) + len(r.get("merged") or [])
+        if dem and dem + w > budget:        # `dem and` = luôn nhận SP đầu tiên
+            trang.append((dau, i))
+            dau, dem = i, 0
+        dem += w
+    if dau < len(rows) or not trang:
+        trang.append((dau, len(rows)))
+    return trang
+
+
 def spec_quick_page(handle):
     """View nhanh: 1 trang duyệt cả collection, mỗi SP 3 mẫu spec cạnh nhau."""
     tag = request.args.get("tag", "")
@@ -122,6 +149,7 @@ def spec_quick_page(handle):
         conn.close()
         title = r["title"] if r else handle
         parent = f"{r['root']} › {r['parent']}" if r else ""
+    # Mọi con số ở thanh đầu trang vẫn tính trên TOÀN BỘ nhóm, không phải trang hiện tại.
     stat = {
         "n": len(rows),
         "co_web": sum(1 for r in rows if r["n_web"]),
@@ -130,8 +158,30 @@ def spec_quick_page(handle):
         "saved": sum(1 for r in rows if r["saved_at"]),
         "excluded": sum(1 for r in rows if r["excluded"]),
     }
+
+    xem_het = request.args.get("all") == "1"
+    lat = _chia_theo_dong(rows)
+    so_trang, trang = len(lat), 1
+    if not xem_het and so_trang > 1:
+        sp_can = request.args.get("sp") or ""
+        if sp_can:      # từ link neo: nhảy thẳng tới trang chứa SP đó
+            vt = next((i for i, r in enumerate(rows)
+                       if str(r.get("haravan_id")) == sp_can or r.get("handle") == sp_can), -1)
+            if vt >= 0:
+                trang = next(k for k, (a, b) in enumerate(lat, 1) if a <= vt < b)
+        else:
+            try:
+                trang = int(request.args.get("page") or 1)
+            except (TypeError, ValueError):
+                trang = 1
+            trang = max(1, min(trang, so_trang))
+        a, b = lat[trang - 1]
+        rows = rows[a:b]
+
     return render_template("spec_quick.html", rows=rows, title=title, parent=parent,
-                           handle=handle, tag=tag, stat=stat, only=only)
+                           handle=handle, tag=tag, stat=stat, only=only,
+                           trang=trang, so_trang=so_trang, xem_het=xem_het,
+                           n_sp_trang=len(rows))
 
 
 def spec_quick_save(pid):
