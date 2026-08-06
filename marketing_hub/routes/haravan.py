@@ -42,13 +42,6 @@ HV_FIELD_DB_MAP = {
     "meta_description": "meta_description",
 }
 
-PRODUCT_TYPES_FOR_BLOG = [
-    "CPU", "VGA / Card đồ họa", "RAM", "MAINBOARD", "SSD", "HDD",
-    "NGUỒN / Power Supply", "VỎ CASE", "TẢN NHIỆT", "MÀN HÌNH",
-    "BÀN PHÍM", "CHUỘT", "TAI NGHE", "LAPTOP", "PC",
-    "GHẾ GAMING", "BÀN GAMING", "MICRO", "WEBCAM", "Khác",
-]
-
 
 # ─────────────────────── INLINE EDIT API ─────────────────────────
 
@@ -86,38 +79,12 @@ def api_haravan_product_edit(haravan_id):
     return jsonify({"ok": True, "field": field, "value": value})
 
 
-# ─────────────────────── HARAVAN BLOG AI REWRITE ─────────────────
-
-def haravan_blog_ai_rewrite(page_id):
-    """Pre-fill form AI writer với info bài blog cũ → AI viết bản mới."""
-    p = db.seo_get_page(page_id)
-    if not p or p.get("url_type") != "blog":
-        flash("Không tìm thấy bài blog.", "error")
-        return redirect(url_for("haravan_blogs"))
-
-    title = p.get("title") or "(không title)"
-    specs = (
-        f"URL gốc: {p.get('url')}\n"
-        f"Title hiện tại: {title}\n"
-        f"Meta description hiện tại: {p.get('meta_desc') or '(thiếu)'}\n"
-        f"H1 hiện tại: {p.get('h1') or '(thiếu)'}\n"
-        f"Word count hiện tại: {p.get('word_count') or 0}\n"
-        f"Điểm SEO hiện tại: {p.get('score') or '?'}/100\n"
-        f"\nViết lại bài này theo rule v2 — giữ nguyên CHỦ ĐỀ + THÔNG TIN CHÍNH "
-        f"nhưng cải thiện cấu trúc, độ dài, meta, FAQ. Không đổi keyword chính."
-    )
-    return render_template(
-        "blog_writer.html",
-        product_types=PRODUCT_TYPES_FOR_BLOG,
-        product_info={
-            "product_name": title,
-            "product_type": "Khác",
-            "vendor": "",
-            "specs": specs,
-            "usp": f"Viết lại blog cũ điểm {p.get('score') or '?'}/100 — cải thiện SEO",
-        },
-        rewrite_source={"id": page_id, "url": p.get("url"), "old_score": p.get("score")},
-    )
+# 🗑️ 6/8/2026 — ĐÃ GỠ `haravan_blog_ai_rewrite` + `PRODUCT_TYPES_FOR_BLOG`
+# + template `blog_writer.html`.
+# Cả cụm chết hẳn từ khi form blog 1-shot bị thay bằng /content-jobs: mở trang thì
+# 500 (template gọi endpoint `blog_writer_page` đã xoá), mà gửi form thì 405 (route
+# chỉ nhận GET). Nút "✨ AI rewrite" ở haravan_blogs.html cũng gỡ theo.
+# Muốn viết lại blog cũ: dùng /content-jobs.
 
 
 # ─────────────────────── HARAVAN BLOGS PAGE ──────────────────────
@@ -354,12 +321,10 @@ def haravan_audit_page():
 # ─────────────────────── REGISTRATION ────────────────────────────
 
 def register(app):
-    """Đăng ký 10 route Haravan — giữ nguyên endpoint name."""
+    """Đăng ký 9 route Haravan — giữ nguyên endpoint name."""
     app.add_url_rule("/haravan/audit", "haravan_audit_page", haravan_audit_page)
     app.add_url_rule("/api/haravan/products/<int:haravan_id>/edit",
                      "api_haravan_product_edit", api_haravan_product_edit, methods=["POST"])
-    app.add_url_rule("/haravan/blogs/<int:page_id>/ai-rewrite",
-                     "haravan_blog_ai_rewrite", haravan_blog_ai_rewrite, methods=["GET"])
     app.add_url_rule("/haravan/blogs", "haravan_blogs", haravan_blogs)
     app.add_url_rule("/haravan", "haravan_dashboard", haravan_dashboard)
     app.add_url_rule("/haravan/sync", "haravan_sync_start", haravan_sync_start, methods=["POST"])

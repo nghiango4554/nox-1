@@ -53,7 +53,9 @@
         <td>{% if b.word_count %}<span style="color:{{ '#0f766e' if b.word_count>=800 else '#b45309' if b.word_count>=300 else '#be123c' }}">{{ b.word_count }}</span>{% else %}—{% endif %}</td>
         <td>{% if b.score is not none and b.last_crawled %}<span class="pill dotty" data-tone="{{ 'emerald' if b.score>=80 else 'amber' if b.score>=60 else 'rose' }}">{{ b.score }}</span>{% else %}<span style="color:var(--ink-3)">—</span>{% endif %}</td>
         <td>{% if b.issue_count > 0 %}<span class="pill" data-tone="amber">{{ b.issue_count }} vấn đề</span>{% else %}<span class="pill" data-tone="emerald">tốt</span>{% endif %}</td>
-        <td style="white-space:nowrap"><a class="chipf" href="{{ url_for('seo_url_detail', page_id=b.id) }}">Chi tiết</a>{% if b.score is not none and b.score < 60 %} <a class="chipf on" href="{{ url_for('haravan_blog_ai_rewrite', page_id=b.id) }}" title="AI viết lại">✨ AI rewrite</a>{% endif %}</td>
+        {# 6/8/2026: gỡ nút "✨ AI rewrite" — luồng viết blog đã chuyển sang /content-jobs,
+           route cũ chết hẳn (500 lúc mở, 405 lúc gửi form). Xem routes/haravan.py. #}
+        <td style="white-space:nowrap"><a class="chipf" href="{{ url_for('seo_url_detail', page_id=b.id) }}">Chi tiết</a></td>
       </tr>
     {% endfor %}
     </tbody>
