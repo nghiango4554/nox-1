@@ -305,10 +305,15 @@
     <thead><tr><th>URL</th><th>Loại</th><th>Owner</th><th>Mức</th><th>Điểm</th><th>HTTP</th><th>Lỗi</th><th>Chi tiết</th></tr></thead>
     <tbody>
     {% for u in dash.top_urls %}
-      <tr data-url="{{ u.url|lower }}" data-type="{{ u.url_type }}" data-sev="{{ u.severity }}" data-own="{{ u.owner }}" data-real="{{ 'true' if u.real_broken else 'false' }}" data-groups="{{ u.groups|join(' ') }}" data-score="{{ u.score if u.score is not none else 0 }}" data-ic="{{ u.issue_count }}"
+      {# ⚡ 6/8/2026: mỗi dòng từng chứa URL đầy đủ 3 LẦN — data-url (bản thường),
+         data-full (cho ngăn chi tiết) và title (tooltip). 500 dòng × 3 bản ≈ 108 KB
+         trùng lặp trong 604 KB. Nay giữ ĐÚNG 1 bản `data-full`:
+         · lọc: JS tự hạ chữ thường 1 lần rồi nhớ vào `_lc` (xem filterUrls)
+         · tooltip: gán khi rê chuột lần đầu (xem uiHoverTitle) #}
+      <tr data-type="{{ u.url_type }}" data-sev="{{ u.severity }}" data-own="{{ u.owner }}" data-real="{{ 'true' if u.real_broken else 'false' }}" data-groups="{{ u.groups|join(' ') }}" data-score="{{ u.score if u.score is not none else 0 }}" data-ic="{{ u.issue_count }}"
           data-full="{{ u.url }}" data-status="{{ u.status_code or '' }}" data-labels="{{ u.issue_labels|join(' | ') }}" data-action="{{ u.action }}" data-last="{{ u.last_crawled or '' }}"
           onclick="openDrawer(this)">
-        <td><span class="urlcell" title="{{ u.url }}">{{ u.url.split('sintech.vn')[-1] }}</span></td>
+        <td><span class="urlcell">{{ u.url.split('sintech.vn')[-1] }}</span></td>
         <td><span class="ptype">{{ u.url_type }}</span></td>
         <td><span class="own" data-o="{{ u.owner }}">{{ u.owner }}</span></td>
         <td><span class="sev" data-s="{{ u.severity }}">{{ u.severity }}</span></td>
@@ -399,13 +404,25 @@ function updateCompare(){const a=document.querySelector('input[name="cmp-a"]:che
 function goCompare(){const a=document.querySelector('input[name="cmp-a"]:checked'),b=document.querySelector('input[name="cmp-b"]:checked');if(a&&b&&a.value!==b.value)location.href='/seo/history/compare?a='+a.value+'&b='+b.value;}
 // ── action queue tabs ──
 function aqTab(o,btn){document.querySelectorAll('.aqtab').forEach(t=>t.setAttribute('aria-selected','false'));btn.setAttribute('aria-selected','true');document.querySelectorAll('.aqlist').forEach(l=>l.setAttribute('data-active',l.dataset.owner===o?'true':'false'));}
+// Tooltip URL đầy đủ: gán KHI RÊ CHUỘT lần đầu thay vì in sẵn title= vào 500 dòng.
+// Một handler cho cả bảng, gán xong là thôi — rê lại không làm gì nữa.
+document.addEventListener('mouseover', e => {
+  const o = e.target.closest && e.target.closest('#urltbl tbody .urlcell');
+  if (!o || o.title) return;
+  const tr = o.closest('tr');
+  if (tr && tr.dataset.full) o.title = tr.dataset.full;
+}, {passive: true});
+
 // ── url table filter/sort ──
 function filterUrls(){
   const q=(document.getElementById('f-q').value||'').toLowerCase(),t=document.getElementById('f-type').value,
     o=document.getElementById('f-own').value,s=document.getElementById('f-sev').value,
     real=document.getElementById('f-real').checked,g=window._grpFilter||'';
   let n=0;const rows=document.querySelectorAll('#urltbl tbody tr');
-  rows.forEach(r=>{const ok=(!q||r.dataset.url.includes(q))&&(!t||r.dataset.type===t)&&(!o||r.dataset.own===o)&&(!s||r.dataset.sev===s)&&(!real||r.dataset.real==='true')&&(!g||(' '+r.dataset.groups+' ').includes(' '+g+' '));r.style.display=ok?'':'none';if(ok)n++;});
+  // `_lc` = bản chữ thường của data-full, hạ 1 lần rồi nhớ luôn trên phần tử.
+  // Trước đây server gửi kèm data-url chỉ để làm việc này — 500 bản URL thừa.
+  rows.forEach(r=>{const u=r._lc||(r._lc=(r.dataset.full||'').toLowerCase());
+    const ok=(!q||u.includes(q))&&(!t||r.dataset.type===t)&&(!o||r.dataset.own===o)&&(!s||r.dataset.sev===s)&&(!real||r.dataset.real==='true')&&(!g||(' '+r.dataset.groups+' ').includes(' '+g+' '));r.style.display=ok?'':'none';if(ok)n++;});
   document.getElementById('f-count').textContent=n+' / '+rows.length+' URL'+(g?(' · nhóm '+g):'');
   document.getElementById('norows').style.display=n?'none':'block';
 }
