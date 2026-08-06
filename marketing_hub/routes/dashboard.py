@@ -283,14 +283,23 @@ def _dashboard_health(with_probes=True):
         out["pillar"] = {"error": str(e)[:100]}
 
     try:
-        s = alt_manager.summarize_alt_coverage()
-        out["alt"] = {
-            "total_images": s.get("total_images", 0),
-            "good": s.get("good", 0),
-            "none": s.get("none", 0),
-            "weak": s.get("weak", 0),
-            "coverage_percent": s.get("coverage_percent", 0.0),
-        }
+        # ⚡ 6/8/2026: summarize_alt_coverage() tốn ~1,07s — là hàm DUY NHẤT phải đọc
+        # cột body_html (30,8/32,6 MB cả bảng) để đếm ảnh nằm trong mô tả. Cả `/`
+        # (qua _v2_dashboard_ctx), `/old` và /api/dashboard/health đều gọi nó.
+        # Ở đây chỉ là Ô SỨC KHOẺ tổng quan nên nhớ tạm 120s là đủ, đúng như git/bot/
+        # provider bên dưới. ⚠️ /alt-manager KHÔNG dùng bản nhớ tạm này — trang vợ
+        # ngồi sửa ALT phải thấy số tươi ngay sau mỗi lần lưu.
+        s = _health_cached("alt", 120, alt_manager.summarize_alt_coverage)
+        if s.get("error"):
+            out["alt"] = s
+        else:
+            out["alt"] = {
+                "total_images": s.get("total_images", 0),
+                "good": s.get("good", 0),
+                "none": s.get("none", 0),
+                "weak": s.get("weak", 0),
+                "coverage_percent": s.get("coverage_percent", 0.0),
+            }
     except Exception as e:
         out["alt"] = {"error": str(e)[:100]}
 
@@ -455,10 +464,9 @@ def dashboard():
     display_year = monday.year
     year_options = list(range(today.year - 1, today.year + 4))
 
-    try:
-        page = fb_client.page_info()
-    except Exception as e:
-        page = {"error": str(e)}
+    # ⚡ 6/8/2026: gọi thẳng = mỗi lần mở trang lại bắn 1 request sang Graph API
+    # Facebook, ngồi chờ ~0,39s. Tên trang + số follower gần như không đổi → nhớ 300s.
+    page = _health_cached("fb_page", 300, fb_client.page_info)
     recent_activity = db.activity_recent(limit=12)
     return render_template(
         "dashboard.html",
