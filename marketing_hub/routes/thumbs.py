@@ -20,7 +20,8 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-from flask import render_template, send_from_directory, abort, request, jsonify, make_response
+from flask import (render_template, send_from_directory, abort, request, jsonify,
+                   make_response, has_request_context, g)
 from PIL import Image, ImageChops
 
 import haravan_client as hc
@@ -28,7 +29,11 @@ import haravan_client as hc
 WS = Path(r"C:\Users\NGHIANGO\.openclaw\workspace")
 NOXOUT = WS / "nox-outputs"
 THUMB_ROOT = Path(r"C:\Users\NGHIANGO\Desktop\Sintech-img\thumb_chuan")
-KINDS = {"std", "_contact"}
+KINDS = {"std", "_contact", "_preview"}
+# _preview = bản nhỏ 280px CHỈ để nhìn trên trang này (ảnh gốc 1000px hiện ở khung
+# 140px là thừa gấp 7 lần → case-gaming phải tải 112 MB). Bản nhỏ chỉ ~10 KB/ảnh.
+# Ảnh gốc trong std KHÔNG bị đụng: phóng to, đẩy Haravan, đếm, sắp thứ tự đều dùng std.
+PREVIEW_KIND = "_preview"
 STATUS_FILE = NOXOUT / "thumb_status.json"   # {handle: {status: da_duyet|da_sync, at: ...}}
 DOWNLOADS = Path.home() / "Downloads"
 ADDED_ARCHIVE = Path(r"C:\Users\NGHIANGO\Desktop\Sintech-img\anh_them_da_dung")
@@ -69,6 +74,50 @@ def _save_status(d):
 
 def _now():
     return datetime.now().strftime("%Y-%m-%d %H:%M")
+
+
+# ───────────── nhớ tạm kết quả hàm phụ ─────────────
+# Đo 6/8/2026: vẽ 1 trang collection gọi lại _menu_groups() 3 lần, _product_types()
+# 4 lần, _old_cond_handles() 4 lần — lần nào cũng quét lại DB từ đầu (~170ms phí).
+# Hai tầng nhớ:
+#   · trong 1 request  — luôn đúng tuyệt đối, chỉ bỏ phần gọi lặp
+#   · giữa các request — TTL giây; nguồn là bảng spec_* + product_spec_index,
+#                        chỉ đổi khi quét lại menu ở tab /spec nên giữ được lâu
+# ⚠️ MỌI thao tác ghi (thêm/xoá ảnh, làm lại, duyệt, sync) PHẢI gọi _memo_clear(),
+#    không thì đẩy ảnh theo bản đồ cũ — đúng bẫy thumb_collection_map.json (14/7/2026).
+_MEMO = {}
+_MEMO_LOCK = threading.Lock()
+_MEMO_TTL = 120
+
+
+def _memo(key, fn, ttl=_MEMO_TTL):
+    box = None
+    if has_request_context():
+        box = getattr(g, "_thumb_memo", None)
+        if box is None:
+            box = {}
+            g._thumb_memo = box
+        if key in box:
+            return box[key]
+    hit = _MEMO.get(key)
+    now = time.time()
+    if hit and now - hit[0] < ttl:
+        val = hit[1]
+    else:
+        val = fn()
+        with _MEMO_LOCK:
+            _MEMO[key] = (now, val)
+    if box is not None:
+        box[key] = val
+    return val
+
+
+def _memo_clear():
+    """Xoá sạch cache hàm phụ. Gọi sau mọi thao tác ghi và trước khi sync."""
+    with _MEMO_LOCK:
+        _MEMO.clear()
+    if has_request_context():
+        g._thumb_memo = {}
 
 TARGET = 1000
 FILL = 0.85
@@ -132,8 +181,15 @@ def _warm_collections():
 threading.Thread(target=_warm_collections, daemon=True).start()
 
 
-_PROD_CACHE = {}     # cid -> (thoi_diem, [products])
-_PROD_TTL = 90       # giây — chỉ dùng cho ĐƯỜNG VẼ TRANG, không dùng cho sync
+_PROD_CACHE = {}      # cid -> (thoi_diem, [products])
+# Đo 5/8/2026 trên case-gaming: có cache 190ms · hết cache 2.282ms (chênh 13 lần).
+# TTL 90s quá ngắn — vợ rời trang 2 phút quay lại là phải chờ lại từ đầu, cả ngày.
+# Danh sách SP trong collection gần như không đổi trong ngày nên nới rộng an toàn.
+_PROD_TTL = 900       # 15 phút — coi là còn tươi, trả thẳng
+_PROD_MAX = 21600     # 6 giờ — quá hạn này thì phải lấy mới, không trả bản cũ nữa
+_PROD_FILE = NOXOUT / "_thumbs_prod_cache.json"   # giữ qua lần restart
+_PROD_LOCK = threading.Lock()
+_PROD_REFRESHING = set()   # cid đang được làm mới ngầm, tránh gọi chồng
 _PROD_FIELDS = "id,handle,title,images,published_at"   # thiếu published_at -> mọi SP coi như ẨN
 
 
@@ -180,19 +236,83 @@ def _fetch_products_in(cid):
         return out
 
 
+def _cid_key(cid):
+    """JSON chỉ có key kiểu chữ, còn trong code cid là SỐ.
+    Không chuẩn hoá thì nạp lại từ đĩa tra không bao giờ khớp — cache thành vô dụng."""
+    return str(cid)
+
+
+def _prod_cache_load():
+    """Nạp cache từ đĩa lúc khởi động — restart không phải chờ lại từ đầu."""
+    try:
+        raw = json.loads(_PROD_FILE.read_text(encoding="utf-8"))
+        now = time.time()
+        n = 0
+        for cid, (t, items) in raw.items():
+            if now - t < _PROD_MAX:
+                _PROD_CACHE[_cid_key(cid)] = (t, items)
+                n += 1
+        if n:
+            print(f"[thumbs] nạp lại cache {n} collection từ đĩa")
+    except Exception:
+        pass
+
+
+def _prod_cache_save():
+    try:
+        _PROD_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _PROD_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(_PROD_CACHE, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(_PROD_FILE)
+    except Exception:
+        pass
+
+
+def _prod_refresh_bg(cid):
+    """Lấy dữ liệu mới ở luồng nền, không bắt người dùng chờ."""
+    try:
+        out = _fetch_products_in(cid)
+        with _PROD_LOCK:
+            _PROD_CACHE[_cid_key(cid)] = (time.time(), out)
+        _prod_cache_save()
+    except Exception:
+        pass
+    finally:
+        _PROD_REFRESHING.discard(_cid_key(cid))
+
+
 def _products_in(cid, use_cache=False):
     """SP của collection. `use_cache=True` CHỈ dùng khi vẽ trang.
 
-    ⚠️ Luồng SYNC phải để use_cache=False (mặc định): dữ liệu cũ 90 giây đủ làm
-    sync bỏ sót SP mới thêm — đúng bẫy `thumb_collection_map.json` stale đã gặp 14/7/2026.
+    ⚠️ Luồng SYNC phải để use_cache=False (mặc định): dữ liệu cũ đủ làm sync bỏ sót
+    SP mới thêm — đúng bẫy `thumb_collection_map.json` stale đã gặp 14/7/2026.
+
+    Đường vẽ trang dùng kiểu "trả bản cũ trước, làm mới sau":
+      · còn tươi (<15 phút)  → trả ngay
+      · quá hạn nhưng <6 giờ → VẪN trả ngay bản cũ, đồng thời lấy bản mới ở luồng nền
+      · quá 6 giờ / chưa có  → đành lấy mới rồi mới trả
+    Nhờ vậy người dùng gần như không bao giờ phải chờ 2,3 giây nữa.
     """
     if use_cache:
-        hit = _PROD_CACHE.get(cid)
-        if hit and time.time() - hit[0] < _PROD_TTL:
-            return hit[1]
+        hit = _PROD_CACHE.get(_cid_key(cid))
+        if hit:
+            tuoi = time.time() - hit[0]
+            if tuoi < _PROD_TTL:
+                return hit[1]
+            if tuoi < _PROD_MAX:
+                if _cid_key(cid) not in _PROD_REFRESHING:
+                    _PROD_REFRESHING.add(_cid_key(cid))
+                    threading.Thread(target=_prod_refresh_bg, args=(cid,), daemon=True).start()
+                return hit[1]
     out = _fetch_products_in(cid)
-    _PROD_CACHE[cid] = (time.time(), out)
+    with _PROD_LOCK:
+        _PROD_CACHE[_cid_key(cid)] = (time.time(), out)
+    if use_cache:
+        _prod_cache_save()
     return out
+
+
+_prod_cache_load()
 
 
 def _read_tracking():
@@ -226,6 +346,10 @@ def _preview_log():
 
 UNGROUPED = "__ungrouped__"
 
+# Số SP mỗi trang ở trang chi tiết collection. Đặt 60 vì ~60 SP ≈ 200 KB HTML —
+# mức trình duyệt dựng gọn. Thêm ?all=1 vào link để xem tất cả trong 1 trang như cũ.
+SP_MOI_TRANG = 60
+
 # Vợ chốt 22/7/2026: nhánh PC build sẵn + combo PC HIỆN KHÔNG LÀM ảnh chuẩn.
 # Vẫn hiện trên trang (gập lại, để cuối) nhưng KHÔNG tính vào tiến độ / việc cần làm.
 OUT_OF_SCOPE_ROOTS = {"PC Gaming – Đồ Họa – AI", "PC Văn Phòng – Máy Bộ",
@@ -233,6 +357,10 @@ OUT_OF_SCOPE_ROOTS = {"PC Gaming – Đồ Họa – AI", "PC Văn Phòng – M�
 
 
 def _menu_groups():
+    return _memo("menu_groups", _menu_groups_raw)
+
+
+def _menu_groups_raw():
     """Phân tầng theo MENU LIVE (giống tab /spec): chỉ collection LÁ, gom theo nhánh gốc.
 
     Thay cho `thumb_tracking.csv` (4 wave, thứ tự cũ) + `thumb_collection_map.json`
@@ -321,6 +449,10 @@ AGGREGATE_HANDLES = {
 
 
 def _primary_map():
+    return _memo("primary_map", _primary_map_raw)
+
+
+def _primary_map_raw():
     """handle SP -> collection 'CHÍNH' (nơi SP hiện đầy đủ 1 lần, chỗ khác đánh dấu 'đã xem').
 
     Từ 22/7/2026 chỉ còn collection LÁ nên không cần né collection mẹ nữa:
@@ -347,6 +479,28 @@ def _manifest(handle):
         except Exception:
             return None
     return None
+
+
+def _img_ver(handle, idx) -> int:
+    """Giờ sửa của ảnh gốc — gắn vào ?v= trong đường dẫn.
+    Ảnh đổi thì đường dẫn đổi, trình duyệt buộc tải bản mới thay vì bám ảnh cũ."""
+    try:
+        return int((THUMB_ROOT / "std" / handle / f"{idx}.jpg").stat().st_mtime)
+    except OSError:
+        return 0
+
+
+def _sp_state(handle):
+    """Bộ ảnh hiện tại của 1 SP, kèm giờ sửa từng ảnh.
+
+    Để trang vẽ lại ĐÚNG dải ảnh của SP đó thay vì tải lại cả trang (6/8/2026).
+    Trang collection lớn nặng ~980 KB / 976 thẻ ảnh — xoá 1 ảnh mà tải lại hết
+    thì mỗi thao tác phải chờ vài giây.
+    `vers` = ?v= chống trình duyệt bám ảnh cũ, đúng như template vẫn làm.
+    """
+    idxs = _sp_images(handle)
+    return {"handle": handle, "imgs": idxs, "n": len(idxs),
+            "vers": {str(i): _img_ver(handle, i) for i in idxs}}
 
 
 def _sp_images(handle, kind="std"):
@@ -541,6 +695,10 @@ def _strip_accents(s):
 
 
 def _old_cond_handles():
+    return _memo("old_cond", _old_cond_handles_raw)
+
+
+def _old_cond_handles_raw():
     """Handle SP hàng CŨ / qua-sử-dụng (condition_kind cu/qsd) — ẩn khỏi /thumbs."""
     try:
         import db as _db
@@ -555,6 +713,10 @@ def _old_cond_handles():
 
 
 def _product_types():
+    return _memo("product_types", _product_types_raw)
+
+
+def _product_types_raw():
     """handle -> product_type (từ DB) để lọc collection theo loại SP."""
     try:
         import db as _db
@@ -689,6 +851,30 @@ def thumbs_collection(handle):
     review = strow.get("status", "")
     groups = _group_items(handle, items, strow.get("groups"))
     n_grp_done = sum(1 for g in groups if g["status"]) if groups else 0
+
+    # ── Chia trang ──
+    # Đo 6/8/2026: case-gaming = 274 SP · 976 ảnh · HTML 989 KB. Trình duyệt phải
+    # dựng gần 1.000 thẻ <img> một lúc, trang cao 63.000 px nên thao tác gì cũng ì.
+    # Collection có NHÓM (tản nhiệt) giữ nguyên 1 trang: nút "Duyệt nhóm" tính theo
+    # cả nhóm, cắt ngang trang sẽ làm phạm vi duyệt hiểu sai.
+    # Mọi con số ở đầu trang (SP / ảnh / đã đẩy) vẫn tính trên TOÀN collection.
+    n_sp_all = len(items)
+    xem_het = request.args.get("all") == "1"
+    so_trang, trang = 1, 1
+    if not groups and not xem_het and n_sp_all > SP_MOI_TRANG:
+        so_trang = (n_sp_all + SP_MOI_TRANG - 1) // SP_MOI_TRANG
+        sp_can = request.args.get("sp") or ""
+        if sp_can:   # từ ô tìm kiếm: nhảy thẳng tới trang chứa SP đó
+            vt = next((i for i, it in enumerate(items) if it["handle"] == sp_can), -1)
+            trang = vt // SP_MOI_TRANG + 1 if vt >= 0 else 1
+        else:
+            try:
+                trang = int(request.args.get("page") or 1)
+            except (TypeError, ValueError):
+                trang = 1
+            trang = max(1, min(trang, so_trang))
+        items = items[(trang - 1) * SP_MOI_TRANG: trang * SP_MOI_TRANG]
+
     try:
         shop = hc.load_config().get("shop_domain", "")
     except Exception:  # noqa: BLE001
@@ -698,16 +884,53 @@ def thumbs_collection(handle):
                            sheets=sheets, items=items, missing=missing, groups=groups,
                            n_grp_done=n_grp_done,
                            n_img=n_img, n_seen=n_seen, n_synced=n_synced, n_moi=n_moi,
-                           hide_synced=hide_synced, row=row, review=review)
+                           hide_synced=hide_synced, row=row, review=review,
+                           img_ver=_img_ver,
+                           n_sp_all=n_sp_all, trang=trang, so_trang=so_trang,
+                           xem_het=xem_het, sp_moi_trang=SP_MOI_TRANG)
+
+
+def _lam_ban_nho(goc: Path, dich: Path) -> bool:
+    """Sinh bản nhỏ 280px từ ảnh gốc. Trả True nếu tạo được."""
+    try:
+        from PIL import Image
+        dich.parent.mkdir(parents=True, exist_ok=True)
+        with Image.open(goc) as im:
+            im = im.convert("RGB")
+            im.thumbnail((280, 280), Image.LANCZOS)
+            tmp = dich.with_suffix(".tmp")
+            im.save(tmp, "JPEG", quality=82, optimize=True, progressive=True)
+            tmp.replace(dich)
+        return True
+    except Exception:
+        return False
 
 
 def thumbs_img(kind, name):
     if kind not in KINDS:
         abort(404)
     d = THUMB_ROOT / kind
-    if not (d / name).exists():
+
+    if kind == PREVIEW_KIND:
+        goc = THUMB_ROOT / "std" / name
+        nho = d / name
+        if not goc.exists():
+            abort(404)
+        # ⚠️ Bẫy 5/8/2026: vợ sửa ảnh sau khi đã tạo bản nhỏ → ảnh gốc đổi mà bản nhỏ
+        # vẫn đứng yên, trang hiện ảnh CŨ trong khi phóng to ra ảnh MỚI.
+        # Nên: bản nhỏ thiếu HOẶC cũ hơn ảnh gốc thì tạo lại; không tạo được thì
+        # trả thẳng ảnh gốc — thà nặng còn hơn hiện sai ảnh.
+        can_lam = (not nho.exists()) or (nho.stat().st_mtime < goc.stat().st_mtime)
+        if can_lam and not _lam_ban_nho(goc, nho):
+            d = THUMB_ROOT / "std"
+    elif not (d / name).exists():
         abort(404)
-    return send_from_directory(str(d), name)
+
+    resp = send_from_directory(str(d), name)
+    # Đường dẫn có kèm ?v=<giờ sửa> (xem template) nên ảnh đổi là đường dẫn đổi
+    # → giữ lâu vẫn an toàn, không còn cảnh trình duyệt bám ảnh cũ.
+    resp.headers["Cache-Control"] = "public, max-age=604800"
+    return resp
 
 
 def thumbs_reorder():
@@ -768,7 +991,7 @@ def thumbs_redo():
             n += 1
         except Exception:
             continue
-    return jsonify(ok=True, n=n)
+    return jsonify(ok=True, n=n, sp=_sp_state(handle))
 
 
 def thumbs_gen_from_live():
@@ -810,7 +1033,7 @@ def thumbs_gen_from_live():
     if not n:
         return jsonify(ok=False, error="tải/chuẩn hoá thất bại toàn bộ"), 500
     (d / "manifest.json").write_text(json.dumps(man, ensure_ascii=False), encoding="utf-8")
-    return jsonify(ok=True, n=n, errors=errs)
+    return jsonify(ok=True, n=n, errors=errs, sp=_sp_state(handle))
 
 
 def thumbs_add_image():
@@ -842,7 +1065,8 @@ def thumbs_add_image():
     (d / "manifest.json").write_text(json.dumps(man, ensure_ascii=False), encoding="utf-8")
     if not added:
         return jsonify(ok=False, error="không ảnh nào hợp lệ"), 400
-    return jsonify(ok=True, added=len(added), idxs=added, errors=errs)
+    return jsonify(ok=True, added=len(added), idxs=added, errors=errs,
+                   sp=_sp_state(handle))
 
 
 def thumbs_paste_front():
@@ -869,7 +1093,7 @@ def thumbs_paste_front():
     man = _manifest(handle) or [{"idx": i} for i in sorted(existing)]
     man.insert(0, {"idx": nidx, "image_id": None, "position": None, "note": "pasted-front"})
     (d / "manifest.json").write_text(json.dumps(man, ensure_ascii=False), encoding="utf-8")
-    return jsonify(ok=True, idx=nidx, n=len(man))
+    return jsonify(ok=True, idx=nidx, n=len(man), sp=_sp_state(handle))
 
 
 def thumbs_delete_image():
@@ -884,11 +1108,16 @@ def thumbs_delete_image():
     fp = d / f"{idx}.jpg"
     if fp.exists():
         fp.unlink()
+    # Dọn luôn bản nhỏ — trước đây bỏ lại làm rác dần trong _preview/ (bắt được 6/8/2026).
+    try:
+        (THUMB_ROOT / PREVIEW_KIND / handle / f"{idx}.jpg").unlink(missing_ok=True)
+    except OSError:
+        pass
     man = _manifest(handle)
     if man is not None:
         man = [e for e in man if not (isinstance(e, dict) and e.get("idx") == idx)]
         (d / "manifest.json").write_text(json.dumps(man, ensure_ascii=False), encoding="utf-8")
-    return jsonify(ok=True)
+    return jsonify(ok=True, sp=_sp_state(handle))
 
 
 def _cleanup_added_from_downloads(collection_handle):
@@ -1157,7 +1386,13 @@ def _sync_worker(coll_list):
         tail = (f" · ⚠️ {len(SYNC_STATE['missing_local'])} SP thiếu trong bản đồ local "
                 f"(đã sync bù) → chạy lại build_collection_map.py")
     # sync vừa đổi ảnh trên Haravan -> bỏ cache để trang vẽ lại bằng dữ liệu mới
+    # (xoá cả bản trên đĩa, không thì restart lại nạp về dữ liệu cũ)
     _PROD_CACHE.clear()
+    _PROD_REFRESHING.clear()
+    try:
+        _PROD_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
     SYNC_STATE.update(running=False, finished=True, current="",
                       msg=f"Xong: {SYNC_STATE['ok']} SP ok, {SYNC_STATE['fail']} lỗi{tail}")
 
@@ -1167,6 +1402,9 @@ def thumbs_sync():
     with SYNC_LOCK:
         if SYNC_STATE["running"]:
             return jsonify(ok=False, error="Đang sync, đợi xong đã"), 409
+        # Sync KHÔNG được chạy trên bản đồ nhớ tạm — SP vừa thêm vào collection
+        # 2 phút trước sẽ bị bỏ sót (bẫy thumb_collection_map.json 14/7/2026).
+        _memo_clear()
         st = _load_status()
         coll = [h for h, v in st.items() if (v or {}).get("status") == "da_duyet"]
         # Thêm nhóm đã đóng cờ 'da_sync' nhưng SAU ĐÓ có SP/ảnh mới chưa đẩy —

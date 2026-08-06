@@ -13,6 +13,18 @@
   .sec h3{margin:0 0 12px;font-size:15px}
   .sheet img{width:100%;border:1px solid #eadfe6;border-radius:10px;margin-bottom:12px;display:block}
   .toggle{display:flex;gap:8px;margin-bottom:14px}
+  /* thanh chia trang (6/8/2026) */
+  .ptrang{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;
+          border:1px solid #eadfe6;border-radius:11px;padding:9px 13px;margin-bottom:13px}
+  .ptrang-lb{font-size:13px;color:var(--ink-2,#5b647a)}
+  .ptrang-nut{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+  .ptbtn{min-width:31px;text-align:center;padding:4px 9px;border:1px solid #d9cdd6;border-radius:8px;
+         background:#fff;font-size:12.5px;font-weight:600;color:#3d4457;text-decoration:none}
+  .ptbtn:hover{background:#fdf1ee;border-color:#e0a89b}
+  .ptbtn.on{background:linear-gradient(135deg,#ff9966,#d75151);color:#fff;border:0}
+  .ptbtn.off{opacity:.4;pointer-events:none}
+  .ptall{margin-left:auto;color:#1457b8;border-color:#cdd9e8}
+  .ptall:hover{background:#eef5ff;border-color:#7aa4e0}
   .tbtn{padding:6px 13px;border:1px solid #d9cdd6;border-radius:9px;background:#fff;cursor:pointer;font:inherit;font-weight:600;font-size:13px}
   .tbtn.on{background:linear-gradient(135deg,#ff9966,#d75151);color:#fff;border:0}
   .sprow{border:1px solid #eadfe6;border-radius:11px;padding:11px 13px;background:#fff;margin-bottom:12px;scroll-margin-top:90px}
@@ -20,7 +32,9 @@
   @keyframes hlfade{0%{background:#fff3f0}60%{background:#fff3f0}100%{background:#fff}}
   .sprow .t{font-weight:600;font-size:13.5px;margin-bottom:9px;word-break:break-word;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .sprow .t small{font-weight:400;color:var(--ink-3)}
-  .live-btn{margin-left:auto;padding:4px 11px;border:1px solid #cdd9e8;border-radius:8px;background:#fff;cursor:pointer;font:inherit;font-size:12px;font-weight:600;color:#1457b8;text-decoration:none}
+  /* 6/8/2026 (vợ chốt): cụm nút nằm SÁT tên SP, bỏ đẩy sang phải */
+  .tickdone{color:#1c7a3e;font-weight:800;font-size:15px;line-height:1}
+  .live-btn{padding:4px 11px;border:1px solid #cdd9e8;border-radius:8px;background:#fff;cursor:pointer;font:inherit;font-size:12px;font-weight:600;color:#1457b8;text-decoration:none}
   .live-btn:hover{background:#eef5ff;border-color:#7aa4e0}
   .redo-btn{margin-left:8px;padding:4px 11px;border:1px solid #d9cdd6;border-radius:8px;background:#fff;cursor:pointer;font:inherit;font-size:12px;font-weight:600;color:#b25a00}
   .redo-btn:hover{background:#fff7ee;border-color:#e0a060}
@@ -107,7 +121,7 @@
   </div>
 
   <div class="toggle">
-    <button class="tbtn on" data-v="sp" onclick="sw('sp')">Theo sản phẩm ({{ items|length }} SP{% if n_seen %} · ẩn {{ n_seen }} trùng{% endif %} · {{ n_img }} ảnh)</button>
+    <button class="tbtn on" data-v="sp" onclick="sw('sp')">Theo sản phẩm ({{ n_sp_all }} SP{% if n_seen %} · ẩn {{ n_seen }} trùng{% endif %} · {{ n_img }} ảnh)</button>
     <button class="tbtn" data-v="sheet" onclick="sw('sheet')">Lưới đại diện</button>
   </div>
 
@@ -150,13 +164,11 @@
   {% macro sprow(it) %}
       <div class="sprow{% if it.seen_at %} seen{% endif %}{% if it.synced and not it.seen_at %} synced{% endif %}{% if it.pending %} pending{% endif %}" data-handle="{{ it.handle }}" id="sp-{{ it.handle }}">
         <div class="t">{{ it.title or it.handle }}
-          {% if it.imgs %}<small>{{ it.imgs|length }} ảnh chuẩn</small>
-          {% elif it.n_live %}<small style="color:#b45309;font-weight:600">chưa chuẩn hoá · {{ it.n_live }} ảnh đang có trên live</small>
-          {% else %}<small>0 ảnh</small>{% endif %}
+          {# 6/8/2026 (vợ chốt): bỏ "N ảnh chuẩn" + nhãn "CHƯA ĐẨY LIVE" cho gọn mắt.
+             Đã đẩy live = MỘT dấu tick xanh; chưa đẩy thì để trống, không hiện gì. #}
+          {% if not it.imgs and it.n_live %}<small style="color:#b45309;font-weight:600">chưa chuẩn hoá · {{ it.n_live }} ảnh đang có trên live</small>{% endif %}
           {% if it.seen_at %}<span class="seenbadge">👁 đã xem ở {{ it.seen_at }}</span>{% endif %}
-          {% if it.pending %}<span class="newbadge">● CHƯA ĐẨY LIVE</span>
-          {% elif it.synced and not it.seen_at %}<span class="syncedbadge">✓ đã đẩy live</span>{% endif %}
-          <span class="saved">✓ đã lưu thứ tự</span>
+          {% if it.synced and not it.pending %}<span class="tickdone" title="Đã đẩy ảnh lên live">✓</span>{% endif %}
           {% if it.pub is defined and not it.pub %}
             <span class="seenbadge" style="background:#f1f2f6;color:#5b647a">🚫 đang ẩn — không có trang live</span>
             {% if shop and it.pid %}<a class="live-btn" href="https://{{ shop }}/admin/products/{{ it.pid }}" target="_blank" rel="noopener" title="Mở trong trang quản trị Haravan">🔗 Mở trong admin</a>{% endif %}
@@ -171,6 +183,9 @@
           <button class="redo-btn" onclick="redo(this)">↻ Làm lại (không xóa nền)</button>
           {% endif %}
           <button class="paste-btn" onclick="pasteFront(this,'{{ it.handle }}')" title="Copy ảnh từ ChatGPT (chuột phải → Copy image) rồi bấm đây — ảnh tự căn giữa & lên đầu SP">📋 Dán ảnh → đầu SP</button>
+          {# để CUỐI hàng: nhãn này ẩn (opacity 0) nhưng vẫn chiếm chỗ,
+             đứng trước cụm nút sẽ chọc một khoảng trống vô cớ giữa tên SP và nút #}
+          <span class="saved">✓ đã lưu thứ tự</span>
         </div>
         <div class="strip">
           {% if not it.imgs and it.live %}
@@ -185,8 +200,14 @@
           {% for idx in it.imgs %}
           <figure draggable="true" data-idx="{{ idx }}">
             <button class="delx" title="Xóa ảnh này" onclick="delImg(event,'{{ it.handle }}',{{ idx }})">✕</button>
-            <img loading="lazy" style="cursor:zoom-in"
-                 src="{{ url_for('thumbs_img', kind='std', name=it.handle + '/' + idx|string + '.jpg') }}">
+            {# hiện bản nhỏ 280px cho nhẹ; data-full giữ ảnh GỐC 1000px để phóng to
+               và để phần kiểm khung 1000×1000 vẫn soi đúng file thật #}
+            {# ?v=<giờ sửa ảnh gốc>: vợ thay ảnh là đường dẫn đổi theo,
+               trình duyệt buộc tải bản mới chứ không bám ảnh đã nhớ (bẫy 5/8) #}
+            {% set v = img_ver(it.handle, idx) %}
+            <img loading="lazy" style="cursor:zoom-in" width="140" height="140"
+                 src="{{ url_for('thumbs_img', kind='_preview', name=it.handle + '/' + idx|string + '.jpg') }}?v={{ v }}"
+                 data-full="{{ url_for('thumbs_img', kind='std', name=it.handle + '/' + idx|string + '.jpg') }}?v={{ v }}">
             <figcaption>#{{ loop.index }}</figcaption>
           </figure>
           {% endfor %}
@@ -209,6 +230,35 @@
     {% endfor %}
   </div>
   {% endif %}
+
+  {# ── Thanh chia trang ── chỉ hiện khi collection quá lớn (xem thumbs.py) #}
+  {% macro phantrang(vitri) %}
+    {% if so_trang > 1 %}
+    <div class="ptrang" data-vitri="{{ vitri }}">
+      <span class="ptrang-lb">Trang <b>{{ trang }}</b>/{{ so_trang }}
+        — đang xem SP {{ (trang - 1) * sp_moi_trang + 1 }}–{{ [trang * sp_moi_trang, n_sp_all]|min }}
+        trong {{ n_sp_all }}</span>
+      <span class="ptrang-nut">
+        <a class="ptbtn{{ ' off' if trang == 1 }}"
+           href="{% if trang > 1 %}?page={{ trang - 1 }}{% else %}#{% endif %}">← Trước</a>
+        {% for p in range(1, so_trang + 1) %}
+        <a class="ptbtn{{ ' on' if p == trang }}" href="?page={{ p }}">{{ p }}</a>
+        {% endfor %}
+        <a class="ptbtn{{ ' off' if trang == so_trang }}"
+           href="{% if trang < so_trang %}?page={{ trang + 1 }}{% else %}#{% endif %}">Sau →</a>
+      </span>
+      <a class="ptbtn ptall" href="?all=1" title="Hiện hết {{ n_sp_all }} SP trong 1 trang — nặng, chỉ dùng khi cần">Xem tất cả</a>
+    </div>
+    {% endif %}
+    {% if xem_het and n_sp_all > sp_moi_trang %}
+    <div class="ptrang">
+      <span class="ptrang-lb">Đang hiện hết <b>{{ n_sp_all }}</b> SP trong 1 trang (nặng).</span>
+      <a class="ptbtn on" href="?page=1">↩ Quay lại chia trang</a>
+    </div>
+    {% endif %}
+  {% endmacro %}
+
+  {{ phantrang('tren') }}
 
   <div id="view-sp" class="hide-seen{{ ' hide-synced' if hide_synced }}">
     {% if items %}
@@ -238,6 +288,8 @@
     {% endif %}
   </div>
 
+  {{ phantrang('duoi') }}
+
   <div id="view-sheet" class="hide">
     <div class="sec sheet">
       <h3>Lưới đại diện (1 ảnh/SP) — {{ handle }}</h3>
@@ -262,6 +314,9 @@
 // ── Xem ảnh phóng to + kích thước thật + khung 1000x1000 ──
 function zoomImg(ev, img, title, idx){
   ev.preventDefault(); ev.stopPropagation();
+  // LUÔN soi ảnh GỐC, không phải bản nhỏ đang hiển thị —
+  // nếu không phần kiểm khung 1000×1000 sẽ báo sai.
+  const goc = img.dataset.full || img.src;
   const wrap = document.getElementById('zoomwrap');
   const box  = document.getElementById('zoombox');
   const big  = document.getElementById('zoomimg');
@@ -285,11 +340,11 @@ function zoomImg(ev, img, title, idx){
     // ô 85% nằm giữa
     const pad = (1 - 0.85) / 2 * 100;
     g85.style.left = g85.style.right = g85.style.top = g85.style.bottom = pad + '%';
-    big.src = img.src;
+    big.src = goc;
     wrap.style.display = 'flex';
     _zoomAt = Date.now();
   };
-  probe.src = img.src;
+  probe.src = goc;
 }
 let _zoomAt = 0;
 function closeZoom(ev){
@@ -336,11 +391,53 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeZoom();
   document.addEventListener('mouseup', onUp, true);
 })();
 
+// ── Vẽ lại dải ảnh của ĐÚNG 1 sản phẩm ──
+// Thay cho location.reload() (6/8/2026). Trang collection lớn nặng ~980 KB với gần
+// 1.000 thẻ ảnh; tải lại cả trang chỉ để xoá 1 ảnh làm mỗi thao tác chờ vài giây.
+// Server trả kèm {sp:{imgs, n, vers}} — chỉ dựng lại các <figure> trong .strip đó.
+// Trình nghe kéo-thả gắn trên chính .strip nên thẻ mới vẫn kéo-thả được bình thường.
+function veLaiDaiAnh(handle, sp){
+  if(!sp || !Array.isArray(sp.imgs)) return false;
+  const row = document.querySelector('.sprow[data-handle="' + CSS.escape(handle) + '"]');
+  const strip = row && row.querySelector('.strip');
+  if(!strip) return false;
+  const addbox = strip.querySelector('.addbox');   // ô "＋ Thêm ảnh" luôn ở cuối
+  strip.querySelectorAll('figure').forEach(f => f.remove());
+  sp.imgs.forEach((idx, i) => {
+    const v = (sp.vers && sp.vers[idx]) || 0;
+    const fig = document.createElement('figure');
+    fig.draggable = true; fig.dataset.idx = idx;
+    const btn = document.createElement('button');
+    btn.className = 'delx'; btn.title = 'Xóa ảnh này'; btn.textContent = '✕';
+    btn.addEventListener('click', e => delImg(e, handle, idx));
+    const im = document.createElement('img');
+    im.loading = 'lazy'; im.style.cursor = 'zoom-in'; im.width = 140; im.height = 140;
+    const p = encodeURIComponent(handle) + '/' + idx + '.jpg?v=' + v;
+    im.src = '/thumbs/img/_preview/' + p;
+    im.dataset.full = '/thumbs/img/std/' + p;
+    const cap = document.createElement('figcaption'); cap.textContent = '#' + (i + 1);
+    fig.append(btn, im, cap);
+    strip.insertBefore(fig, addbox);
+  });
+  return true;
+}
+
+// Cập nhật tại chỗ; không dựng lại được (SP không có trên trang…) thì mới đành tải lại.
+function capNhatSP(handle, d, btn, nhan){
+  if(veLaiDaiAnh(handle, d.sp)){
+    if(btn){ btn.disabled = false; if(nhan) btn.textContent = nhan; }
+    return;
+  }
+  location.reload();
+}
+
 function sw(v){
   document.getElementById('view-sp').classList.toggle('hide', v!=='sp');
   document.getElementById('view-sheet').classList.toggle('hide', v!=='sheet');
   document.querySelectorAll('.tbtn[data-v]').forEach(b=>b.classList.toggle('on', b.dataset.v===v));
   document.querySelector('.grpnav')?.classList.toggle('hide', v!=='sp');
+  // thanh chia trang chỉ thuộc khung "Theo sản phẩm"
+  document.querySelectorAll('.ptrang').forEach(p=>p.classList.toggle('hide', v!=='sp'));
 }
 
 // Duyệt / bỏ duyệt 1 nhóm SP
@@ -398,9 +495,16 @@ function toggleSynced(){
 })();
 
 // Mở từ kết quả tìm (#sp-<handle>) -> cuộn tới + làm nổi bật SP
-window.addEventListener('load', ()=>{
+function nhayToiSP(){
   if(location.hash && location.hash.startsWith('#sp-')){
     const el=document.getElementById(location.hash.slice(1));
+    // Trang bị chia nhỏ: SP cần tìm có thể nằm ở trang khác -> nhờ server tính hộ
+    // rồi nhảy đúng trang (chỉ thử 1 lần, tránh chuyển hướng vòng tròn).
+    if(!el && document.querySelector('.ptrang') && !location.search.includes('sp=')){
+      const h=decodeURIComponent(location.hash.slice(4));
+      location.replace('?sp='+encodeURIComponent(h)+location.hash);
+      return;
+    }
     if(el){
       // nếu SP đang bị ẩn (đã xem ở nơi khác / đã đẩy live) -> tự hiện để nhảy tới được
       if(el.classList.contains('seen')){
@@ -412,7 +516,12 @@ window.addEventListener('load', ()=>{
       el.scrollIntoView({behavior:'smooth',block:'start'}); el.classList.add('hl'); setTimeout(()=>el.classList.remove('hl'),2600);
     }
   }
-});
+}
+window.addEventListener('load', nhayToiSP);
+// Đang đứng sẵn trong chính collection đó mà bấm kết quả tìm kiếm thì trình duyệt
+// CHỈ đổi #hash, KHÔNG nạp lại trang -> 'load' không bắn. Phải bắt thêm hashchange,
+// không thì SP nằm ở trang khác sẽ chẳng nhảy đi đâu (bắt được 6/8/2026).
+window.addEventListener('hashchange', nhayToiSP);
 
 // ── Kéo-thả đổi thứ tự ảnh trong 1 SP ──
 document.querySelectorAll('.strip').forEach(strip=>{
@@ -457,7 +566,10 @@ function delImg(e, handle, idx){
   if(!confirm('Xóa ảnh này khỏi sản phẩm?')) return;
   fetch('/thumbs/delete-image',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({handle,idx})})
-    .then(r=>r.json()).then(d=>{ if(d.ok) location.reload(); else alert('Lỗi: '+(d.error||'')); })
+    .then(r=>r.json()).then(d=>{
+      if(d.ok) capNhatSP(handle, d);
+      else alert('Lỗi: '+(d.error||''));
+    })
     .catch(()=>alert('Lỗi mạng'));
 }
 
@@ -471,7 +583,8 @@ function addImg(input, handle){
   fetch('/thumbs/add-image',{method:'POST',body:fd}).then(r=>r.json()).then(d=>{
     if(d.ok){
       if(d.errors>0) alert('Thêm '+d.added+' ảnh, '+d.errors+' ảnh lỗi bị bỏ qua.');
-      location.reload();
+      txt.textContent='Thêm ảnh';
+      capNhatSP(handle, d);
     } else { alert('Lỗi: '+(d.error||'')); txt.textContent='Thêm ảnh'; }
   }).catch(()=>{ alert('Lỗi mạng'); txt.textContent='Thêm ảnh'; });
   input.value='';
@@ -497,7 +610,7 @@ async function pasteFront(btn, handle){
     const resp = await fetch('/thumbs/paste',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({handle, image:b64})});
     const d = await resp.json();
-    if(d.ok){ btn.textContent='✓ Xong, tải lại...'; setTimeout(()=>location.reload(), 500); }
+    if(d.ok){ btn.textContent='✓ Đã dán'; capNhatSP(handle, d, btn, orig); }
     else { alert('Lỗi: '+(d.error||'')); btn.disabled=false; btn.textContent=orig; }
   }catch(e){
     alert('Không đọc được clipboard: '+(e.message||e)+'\n(Trình duyệt cần cho phép quyền đọc clipboard — bấm "Allow/Cho phép" khi hỏi.)');
@@ -527,7 +640,7 @@ function redo(btn){
   fetch('/thumbs/redo',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({handle})})
     .then(r=>r.json()).then(d=>{
-      if(d.ok){ btn.textContent='✓ Xong ('+d.n+' ảnh), tải lại...'; setTimeout(()=>location.reload(),600); }
+      if(d.ok){ btn.textContent='✓ Xong ('+d.n+' ảnh)'; capNhatSP(handle, d, btn, old); }
       else { alert('Lỗi: '+(d.error||'không rõ')); btn.disabled=false; btn.textContent=old; }
     }).catch(()=>{ alert('Lỗi mạng'); btn.disabled=false; btn.textContent=old; });
 }
@@ -539,7 +652,15 @@ function genFromLive(btn, handle){
   fetch('/thumbs/gen-from-live',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({handle})})
     .then(r=>r.json()).then(d=>{
-      if(d.ok){ btn.textContent='✓ Xong '+d.n+' ảnh, tải lại...'; setTimeout(()=>location.reload(),700); }
+      if(d.ok && veLaiDaiAnh(handle, d.sp)){
+        // SP vừa có ảnh chuẩn lần đầu -> nút "Tạo ảnh chuẩn" hết việc, đổi thành "Làm lại"
+        btn.className='redo-btn'; btn.textContent='↻ Làm lại (không xóa nền)';
+        btn.disabled=false; btn.onclick=function(){ redo(btn); };
+        const row=btn.closest('.sprow');
+        const s=row && row.querySelector('.t small');
+        if(s){ s.className='nimg'; s.removeAttribute('style'); s.textContent=d.sp.n+' ảnh chuẩn'; }
+      }
+      else if(d.ok){ location.reload(); }
       else { alert('Lỗi: '+(d.error||'không rõ')); btn.disabled=false; btn.textContent=old; }
     }).catch(()=>{ alert('Lỗi mạng'); btn.disabled=false; btn.textContent=old; });
 }

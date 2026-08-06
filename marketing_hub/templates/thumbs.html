@@ -301,7 +301,9 @@ _si.addEventListener('input', ()=>{
       const rs=d.results||[];
       if(!rs.length){ _sr.innerHTML='<div class="empty">Không thấy SP nào (chỉ tìm SP đã có ảnh chuẩn).</div>'; _sr.style.display='block'; return; }
       _sr.innerHTML = rs.map(r=>{
-        const url='/thumbs/c/'+encodeURIComponent(r.collection)+'#sp-'+encodeURIComponent(r.handle);
+        // ?sp= để server nhảy thẳng tới TRANG chứa SP (collection lớn bị chia trang)
+        const url='/thumbs/c/'+encodeURIComponent(r.collection)
+                +'?sp='+encodeURIComponent(r.handle)+'#sp-'+encodeURIComponent(r.handle);
         return '<a href="'+url+'"><span>'+esc(r.title)+'</span><span class="ct">'+esc(r.collection)+'</span></a>';
       }).join('');
       _sr.style.display='block';
