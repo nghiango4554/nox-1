@@ -591,31 +591,100 @@ function addImg(input, handle){
 }
 
 // ── Dán ảnh từ clipboard (ChatGPT) -> căn giữa -> lên ĐẦU SP ──
+// 🐛 6/8/2026: trước đây gửi thẳng ảnh gốc từ clipboard. Ảnh to (≥ ~3000px) làm
+// payload vượt MAX_CONTENT_LENGTH 32 MB → Flask trả TRANG HTML "413 Request Entity
+// Too Large", `resp.json()` vấp ngay chữ '<' và ném "Unexpected token '<'". Cái
+// catch chung ở dưới lại đổ tội cho quyền clipboard — sai hoàn toàn, mà còn làm
+// mất cả phút chờ vì trình duyệt phải mã hoá vài chục MB base64 trên luồng chính.
+// Vá: THU NHỎ ngay trong trình duyệt trước khi gửi. Server vốn đã chuẩn hoá về
+// 1000² (TARGET) nên gửi ảnh 3800² là phí trắng.
+const PASTE_CANH_MAX = 2000;      // 2× khổ chuẩn 1000² — thừa sức cho LANCZOS bên server
+const PASTE_NGUONG_MB = 20;       // quá mức này thì đổi sang JPEG cho nhẹ
+
+function _blobSangAnh(blob){
+  return new Promise((res, rej) => {
+    const u = URL.createObjectURL(blob);
+    const im = new Image();
+    im.onload = () => { URL.revokeObjectURL(u); res(im); };
+    im.onerror = () => { URL.revokeObjectURL(u); rej(new Error('ảnh trong clipboard không mở được')); };
+    im.src = u;
+  });
+}
+
+async function _thuNhoAnh(blob){
+  const im = await _blobSangAnh(blob);
+  const canh = Math.max(im.width, im.height);
+  const ti = canh > PASTE_CANH_MAX ? PASTE_CANH_MAX / canh : 1;
+  const c = document.createElement('canvas');
+  c.width = Math.round(im.width * ti); c.height = Math.round(im.height * ti);
+  // nền trắng: ảnh PNG trong suốt mà vẽ thẳng lên canvas sẽ ra nền ĐEN khi xuất JPEG
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(im, 0, 0, c.width, c.height);
+  // PNG trước (không mất mát — mép trắng giữ đúng 255 để server cắt viền chuẩn)
+  let url = c.toDataURL('image/png');
+  if (url.length / 1048576 > PASTE_NGUONG_MB) {
+    // ảnh nhiều chi tiết: đổi JPEG q0.92. Sai lệch mép trắng vẫn dưới ngưỡng 12
+    // mà `_trim_white` bên server dùng, nên không hỏng khâu cắt viền.
+    url = c.toDataURL('image/jpeg', 0.92);
+  }
+  return {url, w: im.width, h: im.height, wNew: c.width, hNew: c.height};
+}
+
 async function pasteFront(btn, handle){
   const orig = btn.textContent;
-  btn.disabled = true; btn.textContent = '📋 Đang đọc clipboard...';
+  const xong = (msg) => { if (msg) alert(msg); btn.disabled = false; btn.textContent = orig; };
+  btn.disabled = true;
+
+  // ── B1: đọc clipboard (chỉ khâu NÀY mới được đổ lỗi cho quyền clipboard) ──
+  let blob = null;
+  btn.textContent = '📋 Đang đọc clipboard...';
   try{
     const items = await navigator.clipboard.read();
-    let blob = null;
     for(const it of items){
       const type = it.types.find(t => t.startsWith('image/'));
       if(type){ blob = await it.getType(type); break; }
     }
-    if(!blob){
-      alert('Clipboard chưa có ảnh.\nỞ ChatGPT: chuột phải lên ảnh → "Copy image" (Sao chép hình ảnh), rồi bấm nút này.');
-      btn.disabled=false; btn.textContent=orig; return;
-    }
-    const b64 = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(blob); });
-    btn.textContent = '📋 Đang tải lên...';
-    const resp = await fetch('/thumbs/paste',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({handle, image:b64})});
-    const d = await resp.json();
-    if(d.ok){ btn.textContent='✓ Đã dán'; capNhatSP(handle, d, btn, orig); }
-    else { alert('Lỗi: '+(d.error||'')); btn.disabled=false; btn.textContent=orig; }
   }catch(e){
-    alert('Không đọc được clipboard: '+(e.message||e)+'\n(Trình duyệt cần cho phép quyền đọc clipboard — bấm "Allow/Cho phép" khi hỏi.)');
-    btn.disabled=false; btn.textContent=orig;
+    return xong('Không đọc được clipboard: ' + (e.message || e) +
+                '\n(Trình duyệt cần cho phép quyền đọc clipboard — bấm "Allow/Cho phép" khi hỏi.)');
   }
+  if(!blob){
+    return xong('Clipboard chưa có ảnh.\nỞ ChatGPT: chuột phải lên ảnh → "Copy image" (Sao chép hình ảnh), rồi bấm nút này.');
+  }
+
+  // ── B2: thu nhỏ ──
+  let anh;
+  btn.textContent = '📋 Đang thu nhỏ...';
+  try{
+    anh = await _thuNhoAnh(blob);
+  }catch(e){
+    return xong('Không xử lý được ảnh: ' + (e.message || e));
+  }
+
+  // ── B3: tải lên ──
+  btn.textContent = '📋 Đang tải lên...';
+  let resp;
+  try{
+    resp = await fetch('/thumbs/paste', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({handle, image: anh.url})});
+  }catch(e){
+    return xong('Không gửi được lên server: ' + (e.message || e) +
+                '\n(Kiểm tra Hub còn chạy ở cổng 5055 không.)');
+  }
+  // Server có thể trả TRANG HTML (413/500/404) — nói thẳng mã lỗi thay vì để
+  // resp.json() ném "Unexpected token '<'" rồi đổ tội lung tung.
+  let d;
+  try{
+    d = await resp.json();
+  }catch(e){
+    const mb = (anh.url.length / 1048576).toFixed(1);
+    return xong(resp.status === 413
+      ? `Ảnh quá nặng: ${mb} MB sau khi thu nhỏ (server nhận tối đa 32 MB).\nẢnh gốc ${anh.w}×${anh.h}. Thử copy ảnh nhỏ hơn.`
+      : `Server trả về lỗi HTTP ${resp.status} (${resp.statusText || 'không rõ'}), không phải dữ liệu.\nXem log server để biết chi tiết.`);
+  }
+  if(d.ok){ btn.textContent='✓ Đã dán'; capNhatSP(handle, d, btn, orig); }
+  else { xong('Lỗi: ' + (d.error || '')); }
 }
 
 // ── Duyệt / bỏ duyệt collection ──
