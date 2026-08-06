@@ -292,6 +292,10 @@ def seo_h1_fix_all_status():
 
 # ─────────────────────── TITLE/META HUB (7 route) ────────────────
 
+_TM_FIRST = 50       # số dòng render sẵn trong HTML
+_TM_MAX = 100000     # trần an toàn thay cho 2000 (2000 từng cắt mất 48 dòng thật)
+
+
 def seo_title_meta_page():
     url_type = request.args.get("type") or None
     issue_filter = request.args.get("issue") or None
@@ -305,8 +309,12 @@ def seo_title_meta_page():
         sort = "score_asc"
     if sync_filter not in ("synced", "unsynced", "error"):
         sync_filter = None
-    items = seo_mod.list_title_meta_pages(
-        url_type=url_type, issue_filter=issue_filter, sort=sort, limit=2000,
+    # ⚡ 6/8/2026: trước đây lấy 2000 dòng rồi NHỒI HẾT phần sau dòng 50 vào trang
+    # dưới dạng JSON → HTML 1.556 KB. Nay chỉ gửi 50 dòng đầu, "Xem thêm" gọi
+    # /seo/title-meta/rows lấy tiếp.
+    # 🐛 `limit=2000` còn ÂM THẦM CẮT MẤT 48 dòng (tổng thật 2.048). Bỏ trần luôn.
+    all_items = seo_mod.list_title_meta_pages(
+        url_type=url_type, issue_filter=issue_filter, sort=sort, limit=_TM_MAX,
         sync_filter=sync_filter,
     )
     summary = seo_mod.title_meta_summary()
@@ -314,13 +322,52 @@ def seo_title_meta_page():
     tiers = seo_mod.load_tiers()
     return render_template(
         "seo_title_meta.html",
-        items=items, summary=summary, fix_state=fix_state,
+        items=all_items[:_TM_FIRST], tm_total=len(all_items), tm_first=_TM_FIRST,
+        summary=summary, fix_state=fix_state,
         url_type=url_type, issue_filter=issue_filter, sort=sort,
         sync_filter=sync_filter,
         issue_labels=seo_mod.TITLE_META_LABELS,
         tiers=tiers,
         recrawl=seo_mod.tm_recrawl_state(),
     )
+
+
+def seo_title_meta_rows():
+    """Trả thêm dòng cho bảng title/meta (nút 'Xem thêm' / 'Hiện hết') — JSON thuần.
+
+    Nhận ĐÚNG bộ lọc như trang chính để thứ tự và nội dung khớp tuyệt đối.
+    """
+    url_type = request.args.get("type") or None
+    issue_filter = request.args.get("issue") or None
+    sort = request.args.get("sort") or "score_asc"
+    sync_filter = request.args.get("sync") or None
+    if url_type and url_type not in ("product", "collection", "blog", "page"):
+        url_type = None
+    if issue_filter and issue_filter not in seo_mod.ALL_TITLE_META_CODES:
+        issue_filter = None
+    if sort not in ("score_asc", "n_issues_desc", "url"):
+        sort = "score_asc"
+    if sync_filter not in ("synced", "unsynced", "error"):
+        sync_filter = None
+    try:
+        offset = max(0, int(request.args.get("offset") or 0))
+    except (TypeError, ValueError):
+        offset = 0
+    try:
+        limit = int(request.args.get("limit") or 50)
+    except (TypeError, ValueError):
+        limit = 50
+    limit = max(1, min(limit, _TM_MAX))
+
+    rows = seo_mod.list_title_meta_pages(
+        url_type=url_type, issue_filter=issue_filter, sort=sort, limit=_TM_MAX,
+        sync_filter=sync_filter,
+    )
+    total = len(rows)
+    chunk = rows[offset:offset + limit]
+    return jsonify({"ok": True, "rows": chunk, "total": total,
+                    "offset": offset, "returned": len(chunk),
+                    "remaining": max(0, total - (offset + len(chunk)))})
 
 
 def seo_title_meta_fix():
@@ -993,6 +1040,7 @@ def register(app):
 
     # Title/Meta (7)
     app.add_url_rule("/seo/title-meta", "seo_title_meta_page", seo_title_meta_page)
+    app.add_url_rule("/seo/title-meta/rows", "seo_title_meta_rows", seo_title_meta_rows)
     app.add_url_rule("/seo/title-meta/fix", "seo_title_meta_fix", seo_title_meta_fix, methods=["POST"])
     app.add_url_rule("/seo/title-meta/preview", "seo_title_meta_preview", seo_title_meta_preview, methods=["POST"])
     app.add_url_rule("/seo/title-meta/regen", "seo_title_meta_regen", seo_title_meta_regen, methods=["POST"])

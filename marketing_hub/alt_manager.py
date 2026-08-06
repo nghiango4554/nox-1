@@ -58,16 +58,49 @@ def _fmt_alt_synced(iso: str | None) -> str:
         return iso[:16]
 
 
-def _iter_product_images() -> list[dict[str, Any]]:
-    """Parse all SP + images cross DB. Trả list dict {product_id, handle, title, type, vendor, images: [...]}."""
+def _iter_product_images(with_body: bool = False) -> list[dict[str, Any]]:
+    """Parse all SP + images cross DB. Trả list dict {product_id, handle, title, type, vendor, images: [...]}.
+
+    ⚡ 6/8/2026 — hai điều chỉnh vì /alt-manager mở mất 1,4s:
+    · `body_html` chiếm **30,8 / 32,6 MB** cả bảng nhưng CHỈ `summarize_alt_coverage()`
+      dùng tới (đếm ảnh trong mô tả). Mặc định KHÔNG kéo cột đó nữa.
+    · Trang /alt-manager gọi hàm này **3 lần** ⇒ đọc 97,7 MB mỗi lần mở trang.
+      Nay nhớ kết quả trong PHẠM VI 1 REQUEST — hết request là quên, nên không bao
+      giờ trả dữ liệu cũ. Luồng nền (run_bulk_gen…) chạy ngoài request nên vẫn
+      luôn đọc tươi, đúng như trước.
+    """
+    box = None
+    try:
+        from flask import has_request_context, g
+        if has_request_context():
+            box = getattr(g, "_alt_imgs", None)
+            if box is None:
+                box = {}
+                g._alt_imgs = box
+            # đã nạp kèm body rồi thì bản không-body cũng dùng lại được
+            for k in (with_body, True):
+                if k in box:
+                    return box[k]
+    except Exception:  # noqa: BLE001
+        box = None
+
+    cols = ("haravan_id, handle, title, product_type, vendor, status, images, "
+            "last_synced, alt_synced_at" + (", body_html" if with_body else ""))
     conn = db.get_conn()
-    rows = conn.execute("""
-        SELECT haravan_id, handle, title, product_type, vendor, status, images, last_synced, body_html, alt_synced_at
+    rows = conn.execute(f"""
+        SELECT {cols}
         FROM haravan_products
         WHERE images IS NOT NULL AND images != '' AND images != '[]'
     """).fetchall()
     conn.close()
 
+    out = _build_product_rows(rows, with_body)
+    if box is not None:
+        box[with_body] = out
+    return out
+
+
+def _build_product_rows(rows, with_body: bool) -> list[dict[str, Any]]:
     out = []
     for r in rows:
         try:
@@ -86,7 +119,7 @@ def _iter_product_images() -> list[dict[str, Any]]:
             "last_synced": r["last_synced"],
             "alt_synced_at": r["alt_synced_at"],
             "images": imgs,
-            "body_html": r["body_html"] or "",
+            "body_html": (r["body_html"] or "") if with_body else "",
         })
     return out
 
@@ -122,7 +155,8 @@ def summarize_alt_coverage() -> dict[str, Any]:
         last_synced_max: "2026-05-03T21:06:41",
       }
     """
-    products = _iter_product_images()
+    # hàm DUY NHẤT cần body_html (đếm ảnh nằm trong mô tả SP)
+    products = _iter_product_images(with_body=True)
 
     total_images = 0
     none_cnt = weak_cnt = good_cnt = 0
@@ -263,11 +297,22 @@ def list_products_paginated(
 
 
 def list_filter_options() -> dict[str, list[str]]:
-    """Trả list product_type + vendor unique cho dropdown filter."""
-    products = _iter_product_images()
-    types = sorted({(p["type"] or "").strip() for p in products if (p["type"] or "").strip()})
-    vendors = sorted({(p["vendor"] or "").strip() for p in products if (p["vendor"] or "").strip()})
-    return {"types": types, "vendors": vendors}
+    """Trả list product_type + vendor unique cho dropdown filter.
+
+    ⚡ 6/8/2026: chỉ cần 2 cột chữ, nhưng trước đây gọi _iter_product_images() —
+    tức đọc + parse JSON ảnh của cả 2.409 SP chỉ để lấy vài chục tên. Hỏi thẳng DB.
+    Điều kiện `images` giữ ĐÚNG như cũ để danh sách chọn không đổi.
+    """
+    conn = db.get_conn()
+    rows = conn.execute("""
+        SELECT DISTINCT TRIM(COALESCE(product_type, '')) t,
+                        TRIM(COALESCE(vendor, ''))       v
+        FROM haravan_products
+        WHERE images IS NOT NULL AND images != '' AND images != '[]'
+    """).fetchall()
+    conn.close()
+    return {"types": sorted({r["t"] for r in rows if r["t"]}),
+            "vendors": sorted({r["v"] for r in rows if r["v"]})}
 
 
 def get_product_for_editor(product_id: int) -> dict[str, Any] | None:

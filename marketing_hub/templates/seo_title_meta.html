@@ -205,8 +205,8 @@ code{font-family:ui-monospace,'Cascadia Code',Consolas,monospace;background:var(
     <a class="btn btn-sm btn-ghost" href="{{ url_for('seo_title_meta_page') }}">Reset</a>
 
     <span style="margin-left:8px;padding:6px 12px;background:rgba(59,130,246,0.15);border-radius:8px;color:#3b82f6;font-weight:600;font-size:13px;white-space:nowrap"
-          title="Số dòng đang hiển thị sau khi lọc (limit 2000)">
-      📦 {{ items|length }} URL{% if summary.total and items|length != summary.total %}
+          title="Số dòng khớp bộ lọc hiện tại (không còn trần 2000)">
+      📦 {{ tm_total }} URL{% if summary.total and tm_total != summary.total %}
         <span class="muted" style="font-weight:400;font-size:12px">/ {{ summary.total }}</span>
       {% endif %}
     </span>
@@ -494,22 +494,28 @@ code{font-family:ui-monospace,'Cascadia Code',Consolas,monospace;background:var(
     {% endif %}
   </p>
 
-  {# Phân trang nhẹ: 50 dòng đầu render server-side, phần còn lại nạp dần qua "Xem thêm" #}
-  {% if items|length > 50 %}
+  {# 6/8/2026: 50 dòng đầu render sẵn, phần còn lại NẠP KHI BẤM qua
+     /seo/title-meta/rows. Trước đây nhồi hết vào <script> làm HTML nặng 1.556 KB. #}
+  {% if tm_total > tm_first %}
   <div style="text-align:center;padding:14px 0 18px">
     <button type="button" class="btn" id="tm-more-btn" onclick="tmShowMore()"
             style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;font-weight:600">
-      ⬇️ Xem thêm 50 (còn {{ items|length - 50 }})
+      ⬇️ Xem thêm 50 (còn {{ tm_total - tm_first }})
     </button>
     <button type="button" class="btn" id="tm-showall-btn" onclick="tmShowAll()"
             style="background:#334155;color:#e2e8f0;border:1px solid #475569;font-weight:600;margin-left:6px"
             title="Hiện toàn bộ dòng còn lại trong 1 lần — để Ctrl+F tìm xuyên hết bảng (trang sẽ nặng hơn).">
-      📂 Hiện hết (còn {{ items|length - 50 }})
+      📂 Hiện hết (còn {{ tm_total - tm_first }})
     </button>
-    <div class="muted" style="font-size:11px;margin-top:6px">Đang hiện <span id="tm-shown-count">50</span>/{{ items|length }} dòng</div>
+    <div class="muted" style="font-size:11px;margin-top:6px">Đang hiện <span id="tm-shown-count">{{ tm_first }}</span>/{{ tm_total }} dòng</div>
   </div>
-  <script id="tm-more-data" type="application/json">{{ items[50:]|tojson }}</script>
   {% endif %}
+  {# 🐛 6/8/2026: KHÔNG được dùng |e ở đây. Trong <script>, trình duyệt KHÔNG giải mã
+     thực thể HTML → `&` thành chuỗi `&amp;` NẰM THẬT trong biến JS, Flask đọc ra tham số
+     rác `amp;sort` và MẤT `sort` → mẻ sau sắp kiểu khác mẻ trước, bảng ra dòng trùng.
+     `|tojson` mới đúng ngữ cảnh script (escape thành &, JS đọc lại đúng `&`). #}
+  <script>window._tmTotal = {{ tm_total }};
+    window._tmRowsUrl = {{ (url_for('seo_title_meta_rows') ~ '?' ~ request.query_string.decode('utf-8'))|tojson }};</script>
 </section>
 
 <script>
@@ -1347,38 +1353,67 @@ document.getElementById('recrawl-stop-btn').style.display = '';
 pollRecrawl();
 {% endif %}
 
-// ───── Phân trang nhẹ: 50 dòng đầu (server) + "Xem thêm" nạp tiếp 50 (tái dùng tmRenderRow) ─────
-let _tmMore = [];
-let _tmShown = 0;
-(function _tmInitMore(){
-  const el = document.getElementById('tm-more-data');
-  if (el) { try { _tmMore = JSON.parse(el.textContent) || []; } catch(e){ _tmMore = []; } }
-  _tmShown = document.querySelectorAll('#tm-tbody tr').length;
-})();
-function tmShowMore() {
-  if (!_tmMore.length) return;
-  const batch = _tmMore.splice(0, 50);
-  const html = batch.map((it, i) => tmRenderRow(it, _tmShown + i + 1)).join('');
+// ───── 50 dòng đầu render sẵn; phần còn lại NẠP KHI BẤM ─────
+// 6/8/2026: trước đây toàn bộ dòng còn lại nằm sẵn trong <script> ở trang
+// (HTML 1.556 KB). Nay xin server từng mẻ qua /seo/title-meta/rows.
+let _tmShown = document.querySelectorAll('#tm-tbody tr').length;
+let _tmDangTai = false;
+
+async function _tmLayThem(soLuong) {
+  if (_tmDangTai) return [];
+  const conLai = (window._tmTotal || 0) - _tmShown;
+  if (conLai <= 0) return [];
+  _tmDangTai = true;
+  const btn = document.getElementById('tm-more-btn');
+  const allBtn = document.getElementById('tm-showall-btn');
+  const chuCu = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Đang tải...'; }
+  if (allBtn) allBtn.disabled = true;
+  try {
+    const n = Math.min(soLuong, conLai);
+    const r = await fetch(window._tmRowsUrl + '&offset=' + _tmShown + '&limit=' + n);
+    const d = await r.json();
+    if (!d.ok || !Array.isArray(d.rows)) throw new Error(d.error || 'không đọc được dữ liệu');
+    // server là nguồn đúng cho tổng số (dữ liệu có thể vừa đổi sau lần quét mới)
+    if (typeof d.total === 'number') window._tmTotal = d.total;
+    return d.rows;
+  } catch (e) {
+    alert('❌ Không tải thêm được dòng: ' + (e.message || e));
+    return [];
+  } finally {
+    _tmDangTai = false;
+    if (btn) { btn.disabled = false; btn.textContent = chuCu; }
+    if (allBtn) allBtn.disabled = false;
+  }
+}
+
+function _tmVeThem(rows) {
+  if (!rows.length) return;
+  // Chốt chặn: bỏ dòng đã có trên bảng. Cần thật vì dữ liệu có thể vừa đổi giữa
+  // 2 lần xin (quét lại xong) — khi đó lát cắt theo offset sẽ lệch, dễ ra dòng trùng.
+  const dong = [...document.querySelectorAll('#tm-tbody tr[data-url]')];
+  const daCo = new Set(dong.map(t => t.dataset.url));
+  const moi = rows.filter(it => !daCo.has(it.url));
+  if (!moi.length) { _tmSyncMoreBtn(); return; }
+  // đánh số theo số dòng THẬT trên bảng → cột STT luôn liền mạch dù có dòng bị bỏ
+  const html = moi.map((it, i) => tmRenderRow(it, dong.length + i + 1)).join('');
   document.getElementById('tm-tbody').insertAdjacentHTML('beforeend', html);
-  _tmShown += batch.length;
+  _tmShown += rows.length;   // đếm theo số dòng ĐÃ XIN để offset mẻ sau không lùi
   _tmSyncMoreBtn();
 }
-function tmShowAll() {
-  if (!_tmMore.length) return;
-  const html = _tmMore.map((it, i) => tmRenderRow(it, _tmShown + i + 1)).join('');
-  document.getElementById('tm-tbody').insertAdjacentHTML('beforeend', html);
-  _tmShown += _tmMore.length;
-  _tmMore = [];
-  _tmSyncMoreBtn();
-}
+
+async function tmShowMore() { _tmVeThem(await _tmLayThem(50)); }
+async function tmShowAll()  { _tmVeThem(await _tmLayThem((window._tmTotal || 0) - _tmShown)); }
+
 function _tmSyncMoreBtn() {
   const btn = document.getElementById('tm-more-btn');
   const allBtn = document.getElementById('tm-showall-btn');
   const cnt = document.getElementById('tm-shown-count');
   if (cnt) cnt.textContent = _tmShown;
-  const has = _tmMore.length > 0;
-  if (btn) { btn.style.display = has ? '' : 'none'; if (has) btn.textContent = `⬇️ Xem thêm 50 (còn ${_tmMore.length})`; }
-  if (allBtn) { allBtn.style.display = has ? '' : 'none'; if (has) allBtn.textContent = `📂 Hiện hết (còn ${_tmMore.length})`; }
+  const conLai = Math.max(0, (window._tmTotal || 0) - _tmShown);
+  const has = conLai > 0;
+  if (btn) { btn.style.display = has ? '' : 'none'; if (has) btn.textContent = `⬇️ Xem thêm 50 (còn ${conLai})`; }
+  if (allBtn) { allBtn.style.display = has ? '' : 'none'; if (has) allBtn.textContent = `📂 Hiện hết (còn ${conLai})`; }
 }
 
 // init grid
