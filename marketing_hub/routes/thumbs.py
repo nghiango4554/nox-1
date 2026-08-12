@@ -29,7 +29,7 @@ import haravan_client as hc
 WS = Path(r"C:\Users\NGHIANGO\.openclaw\workspace")
 NOXOUT = WS / "nox-outputs"
 THUMB_ROOT = Path(r"C:\Users\NGHIANGO\Desktop\Sintech-img\thumb_chuan")
-KINDS = {"std", "_contact", "_preview"}
+KINDS = {"std", "_preview"}      # 12/8: bỏ "_contact" — contact sheet không dùng nữa
 # _preview = bản nhỏ 280px CHỈ để nhìn trên trang này (ảnh gốc 1000px hiện ở khung
 # 140px là thừa gấp 7 lần → case-gaming phải tải 112 MB). Bản nhỏ chỉ ~10 KB/ảnh.
 # Ảnh gốc trong std KHÔNG bị đụng: phóng to, đẩy Haravan, đếm, sắp thứ tự đều dùng std.
@@ -268,6 +268,42 @@ def _prod_cache_save():
         pass
 
 
+_SP_CHET_FILE = NOXOUT / "thumb_sp_chet.json"
+
+
+def _sp_chet_raw():
+    """Handle SP đã bị XOÁ khỏi Haravan — thôi đếm chúng là 'chưa lên web'.
+
+    11/8/2026: `_live_handles_cached()` chỉ chặn được khi cache còn ấm, restart xong
+    là `SSD Laptop` lại báo "⚠ 9 SP chưa lên web" (9 SP đó đã bị xoá từ lâu).
+    Danh sách dựng bằng `lap_ds_sp_chet.py` — hỏi thẳng Haravan từng handle.
+    """
+    try:
+        return set(json.loads(_SP_CHET_FILE.read_text(encoding="utf-8")))
+    except Exception:
+        return set()
+
+
+def _sp_chet():
+    return _memo("sp_chet", _sp_chet_raw)
+
+
+def _live_handles_cached(coll_handle):
+    """Bộ handle SP ĐANG BÁN của collection — CHỈ đọc cache, KHÔNG gọi API.
+
+    Trả None khi chưa có cache, để nơi gọi giữ nguyên cách đếm cũ thay vì đếm hụt.
+    Sinh ra 11/8/2026 cho bộ đếm ngoài /thumbs: nó đếm SP từ bảng /spec (SQLite) nên
+    vẫn tính cả SP đã bị xoá khỏi Haravan — xem `thumbs_page`.
+    """
+    cid = _collections().get(coll_handle)
+    if not cid:
+        return None
+    hit = _PROD_CACHE.get(_cid_key(cid))
+    if not hit:
+        return None
+    return {p.get("handle") for p in hit[1] if p.get("published_at")}
+
+
 def _prod_refresh_bg(cid):
     """Lấy dữ liệu mới ở luồng nền, không bắt người dùng chờ."""
     try:
@@ -379,6 +415,31 @@ OUT_OF_SCOPE_ROOTS = {"PC Gaming – Đồ Họa – AI", "PC Văn Phòng – M�
                       "Dịch Vụ & Sửa Chữa"}
 
 
+# Collection lấy SP THẲNG TỪ HARAVAN thay vì bảng menu (xem chú thích trong
+# _menu_groups_raw). {handle: (tiêu đề, nhánh gốc, ngăn cha)}
+# Nhánh gốc để RIÊNG, không dùng "PC Văn Phòng – Máy Bộ": nhánh đó nằm trong
+# OUT_OF_SCOPE_ROOTS nên thẻ bị đẩy xuống khối "ngoài phạm vi" — khối đó không tô mờ,
+# không đếm vào tổng, tức đã chuẩn hoá + đẩy ảnh xong mà nhìn vào vẫn tưởng còn việc.
+# Ảnh 3 nhóm này làm xong 11/8 nên cho vào phạm vi chính. Muốn trả lại như cũ thì
+# đổi root về "PC Văn Phòng – Máy Bộ".
+EXTRA_COLLECTIONS = {
+    "muc-may-in":     ("Mực Máy In",     "Máy In & Mực", "Máy In"),
+    "may-in-wifi":    ("Máy In Wifi",    "Máy In & Mực", "Máy In"),
+    "may-in-cam-day": ("Máy In Cắm Dây", "Máy In & Mực", "Máy In"),
+    # 12/8/2026: 6 nhóm máy bộ có cờ da_sync, 0 nợ thật, ảnh đã chuẩn hoá xong —
+    # nhưng nhánh "PC Văn Phòng – Máy Bộ" nằm trong OUT_OF_SCOPE_ROOTS nên thẻ bị
+    # đẩy xuống khối "ngoài phạm vi", không tô mờ, không đếm vào tổng. Y hệt ca máy in.
+    # KHÔNG đụng nhánh "Dịch Vụ & Sửa Chữa": 11 SP dịch vụ (vệ sinh PC, cài Win…)
+    # thì ảnh nền trắng 1000² vô nghĩa — để nguyên ngoài phạm vi là đúng.
+    "pc-mini-pc":     ("PC Mini",        "Máy Bộ", "Máy Bộ"),
+    "all-in-one":     ("All In One",     "Máy Bộ", "Máy Bộ"),
+    "may-bo-dell":    ("Máy Bộ Dell",    "Máy Bộ", "Máy Bộ"),
+    "may-bo-hp":      ("Máy Bộ HP",      "Máy Bộ", "Máy Bộ"),
+    "may-bo-lenovo":  ("Máy Bộ Lenovo",  "Máy Bộ", "Máy Bộ"),
+    "may-bo-rosa":    ("Máy Bộ Rosa",    "Máy Bộ", "Máy Bộ"),
+}
+
+
 def _menu_groups():
     return _memo("menu_groups", _menu_groups_raw)
 
@@ -435,17 +496,202 @@ def _menu_groups_raw():
         out.append({"handle": c["handle"], "title": c["title"], "root": root,
                     "parent": c["parent"] or "", "sp": sp,
                     "in_scope": root not in OUT_OF_SCOPE_ROOTS})
+
+    # ── 12/8/2026 (vợ báo): nhóm lấy SP thẳng từ Haravan, không qua bảng menu ──
+    # Hai kiểu hụt cùng lúc ở ngành máy in:
+    #   · `muc-may-in` mở 9/8, chưa vào menu live -> KHÔNG có thẻ nào trên /thumbs,
+    #     11 SP mực không có đường để duyệt/căn/đẩy ảnh.
+    #   · `may-in-wifi` / `may-in-cam-day` CÓ thẻ nhưng `spec_group_products` còn là
+    #     bản quét cũ -> thẻ ghi 3 và 4 SP trong khi Haravan đang bán 9 và 9.
+    # Với riêng các handle dưới đây, hỏi thẳng Haravan rồi ghi đè danh sách SP.
+    # Vẫn đi qua `_keep` + chỉ nhận SP `published=1` để cùng bộ lọc với nhóm khác.
+    for h, (tieu_de, root, cha) in EXTRA_COLLECTIONS.items():
+        try:
+            cid = _collections().get(h)
+            if not cid:
+                continue
+            # KHÔNG lọc thêm qua `prods` (bảng product_spec_index local): 22 SP máy in
+            # lên web 9/8 chưa có trong bảng đó, lọc vào thì muc-may-in còn 1/11 SP và
+            # may-in-wifi còn 3/9. Cờ `published_at` của Haravan mới là bản tươi.
+            sp = [p["handle"] for p in _products_in(cid)
+                  if p.get("published_at") and _keep(p["handle"], h)]
+        except Exception:                      # Haravan lỗi thì giữ nguyên, đừng làm vỡ trang
+            continue
+        if not sp:
+            continue
+        seen |= set(sp)
+        cu = next((g for g in out if g["handle"] == h), None)
+        if cu:
+            # Ghi đè CẢ nhánh gốc, không chỉ danh sách SP: nhóm đã có trong menu mang
+            # root cũ ("PC Văn Phòng – Máy Bộ") nên vẫn rơi vào khối ngoài-phạm-vi.
+            cu["sp"] = sp
+            cu["root"] = root
+            cu["parent"] = cha
+            cu["in_scope"] = root not in OUT_OF_SCOPE_ROOTS
+        else:
+            out.append({"handle": h, "title": tieu_de, "root": root, "parent": cha,
+                        "sp": sp, "in_scope": root not in OUT_OF_SCOPE_ROOTS})
     # "SP chưa phân loại" cũng phải theo cùng bộ lọc, không thì SP vừa bị loại khỏi
     # nhóm (laptop lẫn trong vga, combo PC…) lại rơi hết vào đây.
+    # 🚨 12/8/2026: BỎ luôn SP đã CHẾT. Bộ đếm `pending` có lọc `_sp_chet()` từ 11/8
+    # nhưng chỗ dựng nhóm này thì không — nên 13 SP đã xoá khỏi Haravan (Netac, Apacer,
+    # Kingmax…) vẫn nằm chình ình trong thẻ "SP chưa phân loại", tưởng là việc phải làm.
+    # Lại đúng kiểu HAI THƯỚC ĐO LỆCH NHAU, gặp mấy lần trong ngày.
+    _chet = _sp_chet()
     rest = [p["handle"] for p in prods.values()
             if p["cond"] == "new" and not p["svc"] and p["handle"] not in seen
-            and p["handle"] not in _old
+            and p["handle"] not in _old and p["handle"] not in _chet
             and _ptypes.get(p["handle"]) not in HIDE_PRODUCT_TYPES]
+    # 12/8/2026 (vợ chốt "cứ theo collection tụi nó đang đứng live"): SP không có nhà
+    # ở ngăn LÁ nào nhưng vẫn nằm trong một ngăn TỔNG đã có thẻ thì cho về thẻ tổng đó,
+    # thay vì quăng vào "chưa phân loại". Ca thật: CT9000 đứng trong `gaming-gear` mà
+    # vẫn bị coi là chưa phân loại, phải dò tay mới biết nó ở đâu.
+    # Chỉ hỏi các ngăn TỔNG (vài chục cái, có nhớ tạm) và chỉ khi còn SP thừa ra.
+    if rest:
+        con = list(rest)
+        for g_ in out:
+            if not con or g_["handle"] not in AGGREGATE_HANDLES:
+                continue
+            try:
+                cid = _collections().get(g_["handle"])
+                trong = {p["handle"] for p in _products_in(cid)} if cid else set()
+            except Exception:
+                continue
+            nhan = [h for h in con if h in trong]
+            if nhan:
+                g_["sp"] = list(dict.fromkeys(g_["sp"] + nhan))
+                con = [h for h in con if h not in nhan]
+        rest = con
     if rest:
         out.append({"handle": UNGROUPED, "title": "SP chưa phân loại",
                     "root": "⚠️ Chưa phân loại", "parent": "", "sp": rest,
                     "in_scope": True})
     return out
+
+
+ANH_SNAPSHOT = NOXOUT / "thumb_anh_snapshot.json"
+ANH_THAYDOI = NOXOUT / "thumb_anh_thaydoi.json"
+
+
+def _thay_doi_anh():
+    """Thay doi anh xay ra NGOAI /thumbs (tuc lam thang tren Haravan), chua duoc xem.
+
+    12/8/2026 (vo yeu cau): "hom qua them 3 anh vao 1 SP tren Haravan, hom nay mo
+    /thumbs khong thay dau". Trang nay hien anh KHO nen moi thay doi lam ben Haravan
+    la vo hinh. `thumbs_tools/chup_trang_thai_anh.py` chay moi sang, so (id anh, vi tri)
+    voi ban chup hom truoc va ghi ra day.
+
+    Chi bao thay doi tu BEN NGOAI: sau moi lan chinh Hub day anh, `_ghi_snapshot_sp`
+    cap nhat lai ban chup cua SP do — khong thi hom nay Hub day 90 SP, sang mai popup
+    se ke lai ca 90 dong vo nghia.
+    """
+    if not ANH_THAYDOI.exists():
+        return {"thay_doi": [], "luc": "", "da_xem": None}
+    try:
+        d = json.loads(ANH_THAYDOI.read_text(encoding="utf-8"))
+    except Exception:
+        return {"thay_doi": [], "luc": "", "da_xem": None}
+    if d.get("da_xem"):
+        d["thay_doi"] = []
+    return d
+
+
+def _danh_dau_da_xem():
+    d = _thay_doi_anh() if ANH_THAYDOI.exists() else {}
+    try:
+        goc = json.loads(ANH_THAYDOI.read_text(encoding="utf-8")) if ANH_THAYDOI.exists() else {}
+    except Exception:
+        goc = {}
+    goc["da_xem"] = _now()
+    ANH_THAYDOI.write_text(json.dumps(goc, ensure_ascii=False, indent=1), encoding="utf-8")
+    return goc["da_xem"]
+
+
+def _ghi_snapshot_sp(handle, images):
+    """Cap nhat ban chup cua 1 SP sau khi CHINH HUB doi anh no.
+
+    Nho vay thay doi do Hub gay ra khong bi bao lai o popup sang hom sau — popup chi
+    con thu lam ben ngoai, dung nhu vo can.
+    """
+    if not ANH_SNAPSHOT.exists():
+        return
+    try:
+        d = json.loads(ANH_SNAPSHOT.read_text(encoding="utf-8"))
+        ims = sorted(images or [], key=lambda x: x.get("position") or 0)
+        cu = d.get("sp", {}).get(handle) or {}
+        d.setdefault("sp", {})[handle] = {
+            "t": cu.get("t", ""),
+            "anh": [[im.get("id"), im.get("position")] for im in ims]}
+        ANH_SNAPSHOT.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def thumbs_da_xem_thay_doi():
+    """Nut 'Toi da xem xet' — ghi moc gio, popup thoi bung cho toi khi co thay doi moi."""
+    return jsonify({"ok": True, "luc": _danh_dau_da_xem()})
+
+
+def _sp_moi_chua_vao_nhom():
+    """SP ĐANG BÁN trên web mà /thumbs không hiện ở bất kỳ thẻ nào.
+
+    12/8/2026 (vợ yêu cầu). Trước đó SP mới tạo là VÔ HÌNH trên /thumbs: bảng chỉ
+    mục do tab /spec quét chỉ cập nhật khi chạy tay, nên `Combo Aula F2023` và
+    `Màn hình MSI MP273UP` (tạo 11/8) không nằm ở thẻ nào — kể cả thẻ "chưa phân
+    loại" — và không ai biết cho tới khi đi dò tay.
+
+    Nguồn SP live = SITEMAP, KHÔNG dùng phân trang /products.json (nó trả THIẾU:
+    đã đo 600/2161 và 214/218 ở collection).
+    Bỏ đi 3 nhóm lọc CÓ CHỦ ĐÍCH — hàng cũ, dịch vụ, combo PC — để cảnh báo chỉ
+    còn thứ thật sự cần xử (đo 12/8: 134 SP ngoài thẻ, bóc ra chỉ 5 con cần làm).
+    """
+    return _memo("sp_moi", _sp_moi_raw, ttl=1800)
+
+
+def _sp_moi_raw():
+    import gzip as _gz
+    import re as _re
+    import urllib.request as _u
+    try:
+        idxml = _u.urlopen("https://sintech.vn/sitemap.xml", timeout=45).read().decode("utf-8", "ignore")
+        live = set()
+        for sub in _re.findall(r"<loc>([^<]*sitemap_products[^<]*)</loc>", idxml):
+            raw = _u.urlopen(sub, timeout=60).read()
+            if raw[:2] == b"\x1f\x8b":
+                raw = _gz.decompress(raw)
+            for m in _re.finditer(r"<loc>https?://[^<]*/products/([^<?]+)</loc>",
+                                  raw.decode("utf-8", "ignore")):
+                live.add(m.group(1).strip("/"))
+    except Exception:
+        return []                       # mạng lỗi thì im lặng, đừng chặn trang
+    if not live:
+        return []
+    trong = set()
+    for g_ in _menu_groups():
+        trong |= set(g_["sp"])
+    old = _old_cond_handles()
+    ptypes = _product_types()
+    try:
+        import db as _db
+        conn = _db.get_conn()
+        svc = {r[0] for r in conn.execute(
+            "SELECT handle FROM product_spec_index WHERE COALESCE(is_service,0)=1")}
+        cond = {r[0] for r in conn.execute(
+            "SELECT handle FROM product_spec_index WHERE condition_kind IS NOT 'new'")}
+        tieu_de = {r[0]: r[1] for r in conn.execute(
+            "SELECT handle, title FROM product_spec_index")}
+        conn.close()
+    except Exception:
+        svc, cond, tieu_de = set(), set(), {}
+    ra = []
+    for h in sorted(live - trong):
+        if h in old or h in cond or h in svc:
+            continue
+        if ptypes.get(h) in HIDE_PRODUCT_TYPES:
+            continue
+        ra.append({"handle": h, "title": tieu_de.get(h, ""),
+                   "trong_chi_muc": h in tieu_de})
+    return ra
 
 
 def _collection_map():
@@ -549,6 +795,7 @@ def thumbs_page():
     primary = _primary_map()          # SP -> collection 'nhà'
     done_set = _std_done()
     synced_set = _load_synced()
+    chet_set = _sp_chet()             # SP đã bị xoá khỏi Haravan -> đừng đếm là còn nợ
     status = _load_status()
     waves, waves_off = {}, {}
     tot = {"sp": 0, "col_done": 0, "approved": 0, "synced": 0, "to_sync": 0,
@@ -579,8 +826,17 @@ def thumbs_page():
         all_seen = bool(sp_handles) and own == 0
         # Bẫy 22/7/2026: cờ 'da_sync' đóng từ lần trước KHÔNG tự mở khi có SP/ảnh mới
         # → thẻ hiện xanh "đã sync" trong khi còn SP chưa đẩy (vợ bắt được 2 con laptop).
+        # 🐛 11/8/2026 (vợ bắt): `ssd-laptop` ngoài /thumbs báo "9 SP chưa lên web" mà
+        # bấm vào KHÔNG có SP nào. Truy ra: cả 9 con **đã bị xoá khỏi Haravan** (hỏi
+        # từng handle: KHÔNG CÒN) nhưng vẫn còn trong bảng /spec + còn thư mục ảnh
+        # trong kho. Bộ đếm này lấy SP từ SQLite nên tính luôn SP chết; còn trang chi
+        # tiết lấy SP từ Haravan live nên không hiện → hai thước đo lệch nhau.
+        # ⇒ Loại SP không còn trong danh sách live (đọc cache, KHÔNG gọi thêm API).
+        song = _live_handles_cached(h)
         pending = sum(1 for ph in sp_handles
-                      if (THUMB_ROOT / "std" / ph).exists() and ph not in synced_set)
+                      if (THUMB_ROOT / "std" / ph).exists() and ph not in synced_set
+                      and ph not in chet_set            # SP đã xoá khỏi Haravan
+                      and (song is None or ph in song))
         if review == "da_sync" and pending:
             review = "sync_lech"
         bucket = waves if r.get("in_scope", True) else waves_off
@@ -593,7 +849,10 @@ def thumbs_page():
         elif gstatus != "done":
             flt = "dang"
         elif review == "da_sync":
-            flt = "xong"
+            # 11/8: đổi tên từ "xong" -> "len_web". Chữ "xong" trước đây dùng cho CẢ hai
+            # thứ khác nhau: pill trên thẻ (đủ ảnh chuẩn trong kho) và bộ lọc này (đã đẩy
+            # live) -> 62 danh mục hiện chữ "xong" mà chưa lên web, vợ hỏi mới lòi ra.
+            flt = "len_web"
         else:
             flt = "chosync"
         w["cols"].append({
@@ -653,7 +912,7 @@ def thumbs_page():
     tot["gen_uniq"] = sum(1 for ph in uniq if ph in done_set)
     tot["pct"] = round(tot["gen_uniq"] * 100 / tot["sp_uniq"]) if tot["sp_uniq"] else 0
     # thẻ CẦN XỬ LÝ nổi lên đầu mỗi nhóm, thẻ 'đã xem ở nơi khác' xuống cuối
-    _rank = {"relech": 0, "nogen": 1, "dang": 2, "chosync": 3, "xong": 4}
+    _rank = {"relech": 0, "nogen": 1, "dang": 2, "chosync": 3, "len_web": 4}
     for w in list(waves.values()) + list(waves_off.values()):
         w["pct"] = round(w["gen"] * 100 / w["total"]) if w["total"] else 0
         w["cols"].sort(key=lambda c: (c["all_seen"], _rank.get(c["flt"], 9), -c["so_sp"]))
@@ -662,7 +921,8 @@ def thumbs_page():
     n_in = sum(1 for g in groups if g.get("in_scope", True))
     resp = make_response(render_template("thumbs.html", active="thumbs", waves=waves,
                                          waves_off=waves_off, tot=tot, n_std=n_std,
-                                         n_col=n_in))
+                                         n_col=n_in, sp_moi=_sp_moi_chua_vao_nhom(),
+                                         thay_doi=_thay_doi_anh()))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return resp
 
@@ -858,20 +1118,55 @@ def thumbs_collection(handle):
     row = ({"handle": handle, "nhom": g["root"], "so_sp": len(g["sp"]),
             "title": g["title"], "parent": g["parent"]} if g else None)
     wave = g["root"] if g else ""
-    # contact sheet đặt tên theo wave CŨ (W1__handle__p1.jpg) → tìm theo handle, bỏ tiền tố
-    cdir = THUMB_ROOT / "_contact"
-    sheets = sorted(p.name for p in cdir.glob(f"*__{handle}__p*.jpg")) if cdir.exists() else []
+    # 12/8/2026: BỎ hẳn contact sheet. Đó là 249 file JPG dựng sẵn từ 30/06, tab
+    # "Lưới đại diện" đã chuyển sang dựng thẳng từ ảnh LIVE hôm 11/8 nên chúng chỉ
+    # còn là rác 51 MB — và tệ hơn, là nguồn ảnh CŨ 42 ngày nếu ai lỡ đọc lại.
+    sheets = []
     items, missing, n_img = _collection_items(handle)
     # SP còn việc (chưa đẩy) luôn hiện -> không tính vào 2 nhóm bị ẩn
     n_seen = sum(1 for it in items if it.get("seen_at") and not it.get("pending"))
     # SP đã đẩy live (và KHÔNG phải loại "đã xem ở nơi khác" — cái đó đã có ô riêng)
     n_synced = sum(1 for it in items if it.get("synced") and not it.get("seen_at"))
     n_moi = sum(1 for it in items if not it.get("synced"))
-    # Chỉ ẩn-mặc-định SP đã đẩy khi còn ít nhất 1 SP để xem. Không thì trang trống trơn
-    # (vd man-hinh-22-25-inch: 50 SP 'đã xem nơi khác' + 4 SP 'đã đẩy' = 0 SP hiện).
-    hide_synced = n_moi > 0
+    # 10/8/2026 (vợ chốt): LUÔN ẩn mặc định SP đã đẩy live ở MỌI collection.
+    # Trước đây `n_moi > 0` nên collection đã đẩy hết lại bung hết SP cũ ra — mở vào
+    # thấy một đống ảnh đã xong, phải cuộn qua mới biết là không còn việc.
+    # Ca trang trống (vd man-hinh-22-25-inch: 50 SP 'xem nơi khác' + 4 SP 'đã đẩy')
+    # nay có ô thông báo riêng bên dưới thay vì lưới rỗng không lời giải thích.
+    # SP "còn việc" = không thuộc 2 nhóm bị ẩn
+    def _con_viec(it):
+        return (not (it.get("seen_at") and not it.get("pending"))
+                and not (it.get("synced") and not it.get("seen_at")))
+
+    # ══ 12/8/2026 (vợ chốt): ĐẢO MẶC ĐỊNH — mặc định hiện HẾT ══
+    # Cả ngày làm việc, MỌI đường link đều phải kèm `?hien=1`, tức mặc định cũ
+    # ("chỉ SP còn việc") không khớp cách dùng thật: mở collection 72 SP ra chỉ thấy 1.
+    # Nay: mặc định hiện hết · `?xem=viec` để lọc còn-việc · lựa chọn NHỚ bằng cookie
+    # nên đổi trang không phải chọn lại. `?hien=1` cũ vẫn hiểu, khỏi hỏng link đã lưu.
+    xem = request.args.get("xem") or ""
+    if request.args.get("hien") == "1":
+        xem = "het"
+    if xem not in ("het", "viec"):
+        xem = request.cookies.get("thumbs_xem") or "het"
+    hien_het = xem != "viec"
+    sp_can = request.args.get("sp") or ""
+    # Bấm 1 SP từ ô tìm kiếm mà nó thuộc nhóm bị ẩn: từ nay SP đó KHÔNG còn trong HTML
+    # nữa (lọc ở server), nhảy tới sẽ rơi vào hư không -> tự mở chế độ hiện hết.
+    if sp_can and any(it["handle"] == sp_can and not _con_viec(it) for it in items):
+        hien_het = True
+    hide_synced = not hien_het
+    # số SP THẬT SỰ còn hiện sau 2 lớp ẩn — để trang biết lúc nào cần báo "không còn gì"
+    n_hien = sum(1 for it in items if _con_viec(it))
+    # 🖼️ 11/8/2026 (vợ báo): tab "Lưới đại diện" dùng file JPG dựng sẵn ở `_contact/`,
+    # mà cả 249 file đều sinh ngày 30/6 -> lưới KHÔNG GIỐNG BẢN LIVE nữa. Nay dựng lưới
+    # thẳng từ ảnh ĐANG CHẠY trên web (`it["live"][0]`), không qua file trung gian nên
+    # không bao giờ cũ. Lấy TRƯỚC khi lọc/chia trang để lưới có đủ SP của collection.
+    luoi = [{"h": it["handle"], "t": it.get("title") or it["handle"],
+             "src": (it.get("live") or [None])[0]} for it in items]
     strow = _load_status().get(handle) or {}
     review = strow.get("status", "")
+    review_at = strow.get("at", "")     # 11/8: thanh duyệt cần mốc giờ, không thì bấm
+    #                                     xong nhìn y hệt lúc chưa bấm (vợ báo laptop-gaming)
     groups = _group_items(handle, items, strow.get("groups"))
     n_grp_done = sum(1 for g in groups if g["status"]) if groups else 0
 
@@ -882,12 +1177,21 @@ def thumbs_collection(handle):
     # cả nhóm, cắt ngang trang sẽ làm phạm vi duyệt hiểu sai.
     # Mọi con số ở đầu trang (SP / ảnh / đã đẩy) vẫn tính trên TOÀN collection.
     n_sp_all = len(items)
+    # 11/8/2026 — vợ báo `ban-phim-co?page=3`: TRANG 1 VÀ 2 TRẮNG TRƠN.
+    # Gốc lỗi: chia trang chạy TRƯỚC bộ lọc ẩn. `_chia_lat` cắt danh sách CHƯA lọc thành
+    # 3 lát, còn việc ẩn SP (đã xem nơi khác / đã đẩy live) làm bằng CSS ở template.
+    # ban-phim-co 92 SP ẩn mất 24+67 → SP còn việc DUY NHẤT rơi vào lát 3, hai trang đầu
+    # không còn gì để hiện mà thanh dưới vẫn ghi "đang xem SP 1–41 trong 92".
+    # ⇒ Lọc TRƯỚC rồi mới chia. Muốn xem lại SP cũ thì vào ?hien=1 (chia trang trên
+    #   danh sách đầy đủ, y như cũ).
+    if not hien_het and not groups:
+        items = [it for it in items if _con_viec(it)]
+    n_sp_pt = len(items)          # số SP thực sự đem chia trang
     xem_het = request.args.get("all") == "1"
     so_trang, trang = 1, 1
     lat = _chia_lat(items)
     if not groups and not xem_het and len(lat) > 1:
         so_trang = len(lat)
-        sp_can = request.args.get("sp") or ""
         if sp_can:   # từ ô tìm kiếm: nhảy thẳng tới trang chứa SP đó
             vt = next((i for i, it in enumerate(items) if it["handle"] == sp_can), -1)
             if vt >= 0:
@@ -902,20 +1206,22 @@ def thumbs_collection(handle):
         items = items[a:b]
         sp_tu, sp_den = a + 1, b
     else:
-        sp_tu, sp_den = (1, n_sp_all) if n_sp_all else (0, 0)
+        sp_tu, sp_den = (1, n_sp_pt) if n_sp_pt else (0, 0)
 
     try:
         shop = hc.load_config().get("shop_domain", "")
     except Exception:  # noqa: BLE001
         shop = ""
-    return render_template("thumbs_collection.html", active="thumbs", shop=shop,
-                           handle=handle, wave=wave,
-                           sheets=sheets, items=items, missing=missing, groups=groups,
+    html = render_template("thumbs_collection.html", active="thumbs", shop=shop,
+                           handle=handle, wave=wave, xem=xem,
+                           sheets=sheets, luoi=luoi, items=items, missing=missing, groups=groups,
                            n_grp_done=n_grp_done,
                            n_img=n_img, n_seen=n_seen, n_synced=n_synced, n_moi=n_moi,
-                           hide_synced=hide_synced, row=row, review=review,
+                           hide_synced=hide_synced, n_hien=n_hien, row=row, review=review,
+                           review_at=review_at,
                            img_ver=_img_ver,
-                           n_sp_all=n_sp_all, trang=trang, so_trang=so_trang,
+                           n_sp_all=n_sp_all, n_sp_pt=n_sp_pt, hien_het=hien_het,
+                           trang=trang, so_trang=so_trang,
                            xem_het=xem_het, sp_moi_trang=SP_MOI_TRANG,
                            # dải SP thật của trang này — KHÔNG suy ra từ số SP/trang
                            # được nữa, vì mỗi lát to nhỏ khác nhau (cắt theo số ảnh).
@@ -924,6 +1230,10 @@ def thumbs_collection(handle):
                            # để trang biết có nút "quay lại chia trang" hay không
                            co_the_chia=(len(lat) > 1 and not groups),
                            n_anh_trang=sum(len(it.get("imgs") or []) for it in items))
+    # nhớ lựa chọn xem — mở collection khác không phải chọn lại
+    resp = make_response(html)
+    resp.set_cookie("thumbs_xem", xem, max_age=90 * 24 * 3600, samesite="Lax")
+    return resp
 
 
 def _lam_ban_nho(goc: Path, dich: Path) -> bool:
@@ -1308,13 +1618,29 @@ def _sync_one_product(handle):
                     pass
         return {"ok": False, "error": "up thiếu ảnh %d/%d (giữ nguyên ảnh gốc)"
                 % (sum(1 for x in new_ids if x), len(order))}
-    # xóa ảnh gốc
+    # xóa ảnh gốc — 10/8 + 11/8/2026 khâu này NUỐT LỖI IM LẶNG 2 lần
+    # (id-cooling-se-206-xt, vo-case-centaur-sc-c12-trang): live còn ảnh gốc sót
+    # mà hàm vẫn trả "ok" ⇒ chỉ lộ ra khi đếm kho vs live ở bước QA.
+    # Nay: thử lại 3 nhịp, rồi ĐỐI CHIẾU LẠI với Haravan mới kết luận sót
+    # (DELETE có thể lỗi ở đường về nhưng đã xoá xong — xem vụ 500 ~50% ngày 12/8).
+    sot = []
     for im in imgs:
+        for _ in range(3):
+            try:
+                hc._request("DELETE", f"/products/{pid}/images/{im['id']}.json")
+                break
+            except Exception:
+                time.sleep(0.8)
+        else:
+            sot.append(im["id"])
+        time.sleep(0.2)
+    if sot:
         try:
-            hc._request("DELETE", f"/products/{pid}/images/{im['id']}.json")
-            time.sleep(0.2)
+            con = {i["id"] for i in (hc._request("GET", f"/products/{pid}.json")
+                                     .get("product", {}).get("images") or [])}
+            sot = [i for i in sot if i in con]
         except Exception:
-            pass
+            pass  # không đọc được thì cứ giữ nguyên nghi vấn, thà báo thừa còn hơn im
     # set vị trí 1..n
     for i, iid in enumerate(new_ids):
         if iid:
@@ -1324,7 +1650,20 @@ def _sync_one_product(handle):
                 time.sleep(0.15)
             except Exception:
                 pass
-    return {"ok": True, "n": len(new_ids)}
+    # 12/8/2026: cap nhat ban chup NGAY sau khi chinh Hub doi anh, de thay doi nay
+    # khong bi popup sang mai ke lai — popup chi bao thu lam thang tren Haravan.
+    try:
+        q = hc._request("GET", f"/products/{pid}.json").get("product", {})
+        _ghi_snapshot_sp(handle, q.get("images"))
+    except Exception:
+        pass
+    r = {"ok": True, "n": len(new_ids)}
+    if sot:
+        # ẢNH ĐÃ ĐÚNG (up đủ + đúng vị trí) nên vẫn ok=True — nhưng phải kêu lên,
+        # không thì lại phải chờ QA đếm kho-vs-live mới biết như 2 lần trước.
+        r["sot"] = sot
+        r["canh_bao"] = "còn %d ảnh gốc chưa xoá được → chạy don_anh_goc_sot.py" % len(sot)
+    return r
 
 
 def _n_live(handle):
@@ -1358,7 +1697,9 @@ def _sp_list_of(coll_handle, cmap):
     return local + missing, missing
 
 
-def _sync_worker(coll_list):
+def _sync_worker(coll_list, bo_qua=None):
+    """`bo_qua` = tập handle CỐ Ý không đẩy (SP sẽ mất ảnh, vợ đã xem và chọn bỏ)."""
+    bo_qua = bo_qua or set()
     cmap = _collection_map()
     synced = _load_synced()
     # gom SP (dedup). SP đã synced chỉ được bỏ qua khi local == live: nếu vợ chèn thêm
@@ -1372,6 +1713,8 @@ def _sync_worker(coll_list):
             if ph in seen:
                 continue
             seen.add(ph)
+            if ph in bo_qua:
+                continue          # vợ đã xem và chọn giữ nguyên ảnh web của SP này
             if not (THUMB_ROOT / "std" / ph).exists():
                 continue          # chưa có ảnh chuẩn local -> không có gì để đẩy
             if ph in synced:
@@ -1388,7 +1731,7 @@ def _sync_worker(coll_list):
         msgs.append(f"⚠️ {len(missing_all)} SP có trên Haravan nhưng THIẾU trong bản đồ local "
                     f"(đã tự thêm vào lượt sync này) → chạy lại build_collection_map.py")
     SYNC_STATE.update(running=True, finished=False, total=len(prod_order),
-                      done=0, ok=0, fail=0, current="",
+                      done=0, ok=0, fail=0, current="", sot=[],
                       msg=" · ".join(msgs),
                       relech=[{"handle": p, "local": nl, "live": nv} for p, nl, nv in relech],
                       missing_local=missing_all)
@@ -1400,6 +1743,9 @@ def _sync_worker(coll_list):
                 SYNC_STATE["ok"] += 1
                 synced.add(ph)
                 _save_synced(synced)
+                if r.get("sot"):
+                    SYNC_STATE.setdefault("sot", []).append(
+                        {"handle": ph, "n": len(r["sot"])})
             else:
                 SYNC_STATE["fail"] += 1
                 failed.add(ph)
@@ -1418,9 +1764,14 @@ def _sync_worker(coll_list):
             st[c] = {"status": "da_sync", "at": _now()}
     _save_status(st)
     tail = ""
+    if SYNC_STATE.get("sot"):
+        s = SYNC_STATE["sot"]
+        tail += (f" · 🐛 {len(s)} SP còn ảnh gốc sót trên live "
+                 f"({', '.join(x['handle'] for x in s[:5])}"
+                 f"{'…' if len(s) > 5 else ''}) → chạy don_anh_goc_sot.py")
     if SYNC_STATE.get("missing_local"):
-        tail = (f" · ⚠️ {len(SYNC_STATE['missing_local'])} SP thiếu trong bản đồ local "
-                f"(đã sync bù) → chạy lại build_collection_map.py")
+        tail += (f" · ⚠️ {len(SYNC_STATE['missing_local'])} SP thiếu trong bản đồ local "
+                 f"(đã sync bù) → chạy lại build_collection_map.py")
     # sync vừa đổi ảnh trên Haravan -> bỏ cache để trang vẽ lại bằng dữ liệu mới
     # (xoá cả bản trên đĩa, không thì restart lại nạp về dữ liệu cũ)
     _PROD_CACHE.clear()
@@ -1441,23 +1792,132 @@ def thumbs_sync():
         # Sync KHÔNG được chạy trên bản đồ nhớ tạm — SP vừa thêm vào collection
         # 2 phút trước sẽ bị bỏ sót (bẫy thumb_collection_map.json 14/7/2026).
         _memo_clear()
-        st = _load_status()
-        coll = [h for h, v in st.items() if (v or {}).get("status") == "da_duyet"]
-        # Thêm nhóm đã đóng cờ 'da_sync' nhưng SAU ĐÓ có SP/ảnh mới chưa đẩy —
-        # trước đây những nhóm này bị bỏ quên vĩnh viễn (bẫy 22/7/2026).
-        synced = _load_synced()
-        cmap = _collection_map()
-        for h, v in st.items():
-            if (v or {}).get("status") != "da_sync":
-                continue
-            if any((THUMB_ROOT / "std" / ph).exists() and ph not in synced
-                   for ph in cmap.get(h, [])):
-                coll.append(h)
+        # 12/8/2026: dùng CHUNG `_coll_can_day()` với route dò `/thumbs/sync-kiem`.
+        # Trước đây hai chỗ tự tính riêng — đúng loại lỗi "hai thước đo lệch nhau" đã
+        # dính nhiều lần (thẻ ngoài vs trang trong ở vga-nvidia, bộ đếm SP chết…).
+        coll = _coll_can_day()
         if not coll:
             return jsonify(ok=False, error="Chưa có collection nào đã duyệt"), 400
-        t = threading.Thread(target=_sync_worker, args=(coll,), daemon=True)
+        # 12/8/2026: CHẶN nếu có SP sẽ mất ảnh, trừ khi vợ đã xem danh sách và
+        # bấm xác nhận (bo_qua_mat=1 -> bỏ những SP đó ra, vẫn đẩy phần còn lại).
+        bo_qua = (request.get_json(silent=True) or {}).get("bo_qua_mat")
+        mat = _sp_se_mat_anh(coll)
+        if mat and not bo_qua:
+            return jsonify(ok=False, can_xac_nhan=True, mat=mat,
+                           tong_anh_mat=sum(x["mat"] for x in mat)), 409
+        t = threading.Thread(target=_sync_worker, args=(coll, {x["handle"] for x in mat}
+                                                        if bo_qua else set()), daemon=True)
         t.start()
     return jsonify(ok=True, started=True, collections=len(coll))
+
+
+def _sp_se_mat_anh(coll_list):
+    """SP mà đẩy sẽ XOÁ MẤT ảnh: trên web nhiều ảnh hơn trong kho.
+
+    12/8/2026 (vợ chốt). Nút đẩy hàng loạt thay TOÀN BỘ gallery bằng ảnh kho, nên
+    SP có ảnh marketing / ảnh chèn tay / GIF (kho không có) sẽ mất sạch mấy tấm đó.
+    Đúng tai nạn mất 4 ảnh tai nghe E-Dra 11/8, và cudy-gs108 suýt dính 12/8.
+    Mọi script trong thumbs_tools/ đều chặn ca này, riêng CÁI NÚT thì không — vá nốt.
+
+    Đọc từ cache SP có sẵn, KHÔNG gọi thêm API, để bấm nút không phải chờ.
+    """
+    ra = []
+    cmap = _collection_map()
+    for h in coll_list:
+        try:
+            items, _, _ = _collection_items(h)
+        except Exception:
+            continue
+        for it in items:
+            nk = len(it.get("imgs") or [])
+            nl = it.get("n_live") or 0
+            if nk and nl > nk:
+                ra.append({"collection": h, "handle": it["handle"],
+                           "title": it.get("title") or it["handle"],
+                           "kho": nk, "live": nl, "mat": nl - nk})
+    return ra
+
+
+def _coll_can_day():
+    """Danh sách collection mà nút đẩy hàng loạt sẽ đụng tới."""
+    st = _load_status()
+    coll = [h for h, v in st.items() if (v or {}).get("status") == "da_duyet"]
+    synced = _load_synced()
+    cmap = _collection_map()
+    for h, v in st.items():
+        if (v or {}).get("status") != "da_sync":
+            continue
+        if any((THUMB_ROOT / "std" / ph).exists() and ph not in synced
+               for ph in cmap.get(h, [])):
+            coll.append(h)
+    return coll
+
+
+def thumbs_sync_mot():
+    """Đẩy ĐÚNG MỘT collection — thứ vợ thật sự dùng.
+
+    12/8/2026: cả ngày làm việc là "sync cụm này" rồi "đổi status cụm này", chứ chưa
+    lần nào bấm nút đẩy-tất-cả. Trước đây muốn đẩy 1 cụm phải: bấm Duyệt cụm đó → ra
+    trang chủ → bấm đẩy hàng loạt (và nó đẩy luôn cụm khác). Nay làm thẳng tại chỗ.
+    Vẫn đi qua đúng chốt cảnh báo mất ảnh như nút hàng loạt.
+    """
+    d = request.get_json(silent=True) or {}
+    handle = d.get("handle") or ""
+    if not handle:
+        return jsonify(ok=False, error="thiếu handle"), 400
+    with SYNC_LOCK:
+        if SYNC_STATE["running"]:
+            return jsonify(ok=False, error="Đang đẩy, đợi xong đã"), 409
+        _memo_clear()
+        mat = _sp_se_mat_anh([handle])
+        if mat and not d.get("bo_qua_mat"):
+            return jsonify(ok=False, can_xac_nhan=True, mat=mat,
+                           tong_anh_mat=sum(x["mat"] for x in mat)), 409
+        t = threading.Thread(
+            target=_sync_worker,
+            args=([handle], {x["handle"] for x in mat} if d.get("bo_qua_mat") else set()),
+            daemon=True)
+        t.start()
+    return jsonify(ok=True, started=True, collections=1)
+
+
+def thumbs_danh_dau_xong():
+    """'✓ Đánh dấu đã xong' — đóng cờ da_sync + ghi SP vào sổ đã-đẩy.
+
+    Chính là việc `thumbs_tools/danh_dau_khong_can_sync.py` làm, nay bấm được từ trang.
+    CHẶN nếu còn nợ thật (kho nhiều ảnh hơn web) — đánh dấu bừa là công làm ảnh đổ sông.
+    `live > kho` KHÔNG tính là nợ: đó là ảnh marketing giữ cố ý.
+    """
+    d = request.get_json(silent=True) or {}
+    handle = d.get("handle") or ""
+    if not handle:
+        return jsonify(ok=False, error="thiếu handle"), 400
+    _memo_clear()
+    items, _, _ = _collection_items(handle)
+    no = [{"handle": it["handle"], "title": it.get("title") or it["handle"],
+           "kho": len(it.get("imgs") or []), "live": it.get("n_live") or 0}
+          for it in items
+          if len(it.get("imgs") or []) > (it.get("n_live") or 0)]
+    if no and not d.get("ke_ca_con_no"):
+        return jsonify(ok=False, con_no=no), 409
+    synced = _load_synced()
+    them = [it["handle"] for it in items if not it.get("synced")]
+    synced.update(them)
+    _save_synced(synced)
+    st = _load_status()
+    st[handle] = {"status": "da_sync", "at": _now()}
+    _save_status(st)
+    _memo_clear()
+    _PROD_CACHE.clear()
+    return jsonify(ok=True, them=len(them), luc=st[handle]["at"])
+
+
+def thumbs_sync_kiem():
+    """Dò trước khi đẩy — nút gọi cái này rồi mới hỏi vợ có chạy tiếp không."""
+    coll = _coll_can_day()
+    mat = _sp_se_mat_anh(coll)
+    return jsonify({"collections": len(coll), "mat": mat,
+                    "tong_anh_mat": sum(x["mat"] for x in mat)})
 
 
 def thumbs_sync_status():
@@ -1509,7 +1969,14 @@ def thumbs_search():
 
 
 def register(app):
+    app.add_url_rule("/thumbs/da-xem-thay-doi", "thumbs_da_xem_thay_doi",
+                     thumbs_da_xem_thay_doi, methods=["POST"])
     app.add_url_rule("/thumbs/sync", "thumbs_sync", thumbs_sync, methods=["POST"])
+    app.add_url_rule("/thumbs/sync-mot", "thumbs_sync_mot", thumbs_sync_mot,
+                     methods=["POST"])
+    app.add_url_rule("/thumbs/danh-dau-xong", "thumbs_danh_dau_xong",
+                     thumbs_danh_dau_xong, methods=["POST"])
+    app.add_url_rule("/thumbs/sync-kiem", "thumbs_sync_kiem", thumbs_sync_kiem)
     app.add_url_rule("/thumbs/sync-status", "thumbs_sync_status", thumbs_sync_status)
     app.add_url_rule("/thumbs/search", "thumbs_search", thumbs_search)
     app.add_url_rule("/thumbs", "thumbs_page", thumbs_page)
