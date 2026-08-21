@@ -440,6 +440,21 @@ EXTRA_COLLECTIONS = {
 }
 
 
+# ── 21/8/2026 (vợ chốt): GỘP nhiều ngăn LÁ thành MỘT thẻ trên /thumbs ──
+# Ba ngăn nguồn chia theo công suất (dưới 550W · 600-750W · 850W trở lên) là CÙNG
+# một việc ảnh, tách ra chỉ khiến phải duyệt và đẩy 3 lượt cho một dòng hàng.
+# Gộp về đúng ngăn TỔNG `psu-nguon` đang có thật trên Haravan: nó phủ hết 120 SP
+# của 3 ngăn con và ôm thêm 1 con không nằm ngăn con nào (Leadex Platinum 1600W)
+# — con đó trước nay KHÔNG có thẻ nào để duyệt.
+# SP lấy THẲNG TỪ HARAVAN (như EXTRA_COLLECTIONS) để thẻ ngoài và trang trong đếm
+# cùng một nguồn; Haravan lỗi thì lùi về gộp danh sách SP của các ngăn con.
+# {handle thẻ gộp: (tiêu đề, nhánh gốc, ngăn cha, [handle các ngăn bị gộp])}
+MERGE_GROUPS = {
+    "psu-nguon": ("PSU – Nguồn", "Linh Kiện Máy Tính", "PSU – Nguồn",
+                  ["nguon-duoi-550w", "nguon-600w-750w", "nguon-850w-tro-len"]),
+}
+
+
 def _menu_groups():
     return _memo("menu_groups", _menu_groups_raw)
 
@@ -496,6 +511,29 @@ def _menu_groups_raw():
         out.append({"handle": c["handle"], "title": c["title"], "root": root,
                     "parent": c["parent"] or "", "sp": sp,
                     "in_scope": root not in OUT_OF_SCOPE_ROOTS})
+
+    # ── Gộp ngăn con thành 1 thẻ (xem MERGE_GROUPS) ──
+    for h, (tieu_de, root, cha, con) in MERGE_GROUPS.items():
+        vi_tri = next((i for i, g_ in enumerate(out) if g_["handle"] in con), None)
+        if vi_tri is None:
+            continue                       # menu không còn ngăn con nào -> khỏi gộp
+        sp = []
+        try:
+            cid = _collections().get(h)
+            if cid:
+                sp = [p["handle"] for p in _products_in(cid)
+                      if p.get("published_at") and _keep(p["handle"], h)]
+        except Exception:                  # noqa: BLE001 — Haravan lỗi thì lùi, đừng vỡ trang
+            sp = []
+        if not sp:
+            for g_ in out:
+                if g_["handle"] in con:
+                    sp += [x for x in g_["sp"] if x not in sp]
+        seen |= set(sp)
+        out = [g_ for g_ in out if g_["handle"] not in con]
+        out.insert(min(vi_tri, len(out)),
+                   {"handle": h, "title": tieu_de, "root": root, "parent": cha,
+                    "sp": sp, "in_scope": root not in OUT_OF_SCOPE_ROOTS})
 
     # ── 12/8/2026 (vợ báo): nhóm lấy SP thẳng từ Haravan, không qua bảng menu ──
     # Hai kiểu hụt cùng lúc ở ngành máy in:
