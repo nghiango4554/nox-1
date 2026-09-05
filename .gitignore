@@ -123,3 +123,7 @@ marketing_hub/_trash_*/
 marketing_hub/_backup/
 marketing_hub/data/*_backup/
 marketing_hub/data/*backup*/
+
+# file backup tự sinh khi sửa script
+*.bak_*
+*.backup_*
