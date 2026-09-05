@@ -281,7 +281,13 @@ signature
 - **≥6 internal link**, có link sang trang gần nhất để phân hóa intent.
 - **Không**: trùng outline trang cùng cụm · viết như blog · bịa số lượng SP · nhắc đối thủ/research/SEO/SERP.
 - **JSON output** (khi yêu cầu): đúng 1 JSON, không bọc ```json, `body_html` bắt đầu bằng `<p>`, dùng **nháy đơn** cho thuộc tính HTML, không H1.
-- ⚠️ SEO collection/article set qua **`upsert_seo_metafields`** — NGƯỢC với product.
+- ⚠️ **SEO collection KHÔNG set được qua API thường.** `upsert_seo_metafields` trả 201 và đọc lại thấy đúng,
+  nhưng **theme không đọc metafield đó** nên title/meta live không đổi (kiểm chứng 12/7/2026, để 24 giờ vẫn y nguyên).
+  Muốn đổi phải qua API admin nội bộ `PUT https://web.haravan.app/api/collections/{id}` với JWT lấy từ session admin (sống ~5 phút),
+  hoặc sửa trong admin Haravan. **Article thì vẫn dùng `update_article` với `page_title` + `meta_description`.**
+  ✅ Cách đã chạy được 5/9/2026: mở `https://sintech.myharavan.com/admin/products/collections/{id}` bằng Chrome
+  (đường dẫn `/admin/collections/{id}` trả 404), bấm **Chỉnh sửa SEO**, set 2 ô bằng `form_input` rồi **Cập nhật**.
+  Gõ phím đoạn dài vào ô Mô tả làm trang crash, và mở admin khi đang giữ nhiều tab nặng cũng hay treo.
 
 ---
 
