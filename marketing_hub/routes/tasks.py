@@ -20,7 +20,7 @@ def api_generate():
 
 
 def api_resolve(tid):
-    d = request.json or {}
+    d = request.get_json(silent=True) or {}
     return jsonify(tc.set_status(tid, "resolved", d.get("snooze_days")))
 
 
@@ -29,7 +29,7 @@ def api_reopen(tid):
 
 
 def api_snooze(tid):
-    d = request.json or {}
+    d = request.get_json(silent=True) or {}
     return jsonify(tc.set_status(tid, "snoozed", d.get("snooze_days", 7)))
 
 

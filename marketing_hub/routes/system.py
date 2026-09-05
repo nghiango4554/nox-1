@@ -108,12 +108,21 @@ def competitors_page():
     state = competitors_mod.state_snapshot()
     topic_gap = db.competitor_topic_gap(min_competitor_count=3)
 
-    # Cross-reference với Sintech (seo_pages) để tính gap thật
+    # Cross-reference với Sintech (seo_pages) để tính gap thật.
+    # 4/9/2026: CHỈ truyền title, KHÔNG truyền url — cả hai vế của phép trừ đều vậy.
+    # Thử truyền url một lần rồi phải bỏ: URL blog Sintech dùng handle /news/, mà luật
+    # topic có từ khoá "news" → 113/268 bài bị gán nhầm topic news (trước chỉ 8).
+    # Title đã đủ: phía đối thủ cũng có _slug_to_title() đoán title khi sitemap thiếu.
     sintech_topic_count = {}
-    sintech_blogs = db.seo_list_pages(url_type="blog", limit=1000, sort="url")
+    sintech_blogs = db.seo_list_pages(url_type="blog", limit=5000, sort="url")
     for b in sintech_blogs:
         topic = classify_blog_topic(b.get("title") or "")
         sintech_topic_count[topic] = sintech_topic_count.get(topic, 0) + 1
+
+    # 5/9/2026: bỏ "other" (❓ Khác) khỏi bảng. Đây là thùng chứa mọi URL chưa phân
+    # loại được — 15.543 URL đối thủ vs 96 của Sintech, gap 15.447 đứng đầu bảng mà
+    # không nói lên chủ đề nào cả, đẩy các topic thật (gaming, top, explain) xuống dưới.
+    topic_gap = [it for it in topic_gap if it["topic"] not in ("other", "khac", "unknown")]
 
     for it in topic_gap:
         it["sintech_count"] = sintech_topic_count.get(it["topic"], 0)

@@ -225,7 +225,7 @@ def spec_product_page(pid):
 def spec_scan():
     if _SCAN["running"]:
         return jsonify({"ok": False, "error": "Đang quét rồi"}), 409
-    what = (request.json or {}).get("what", "all")
+    what = (request.get_json(silent=True) or {}).get("what", "all")
     threading.Thread(target=_scan_worker, args=(what,), daemon=True).start()
     return jsonify({"ok": True})
 
@@ -301,7 +301,7 @@ def spec_find_sources(pid):
 
 def spec_convert(pid):
     """Đổi dạng khối spec mà KHÔNG mất dữ liệu: HTML khối → cặp → dựng lại dạng kia."""
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     groups = si.block_to_groups(data.get("block_html") or "")
     target = data.get("to")
     if not groups:
@@ -312,7 +312,7 @@ def spec_convert(pid):
 
 
 def spec_publish(pid):
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     block = (data.get("block_html") or "").strip()
     body = data.get("body_html")
     p = si.get_product(pid)

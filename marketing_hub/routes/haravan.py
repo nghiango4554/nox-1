@@ -94,7 +94,9 @@ def haravan_blogs():
 
     Khi nào Haravan API blogs/articles fix lỗi 502, có thể swap source sang sync trực tiếp.
     """
-    all_blogs = db.seo_list_pages(url_type="blog", limit=500, sort="url")
+    # limit 5000: trang này lọc/phân trang trong Python nên phải nạp đủ, cắt ở 500
+    # là âm thầm giấu bớt bài khi kho blog vượt mốc đó (hiện 268).
+    all_blogs = db.seo_list_pages(url_type="blog", limit=5000, sort="url")
 
     for b in all_blogs:
         b["topic"] = classify_blog_topic(b.get("title") or "")
@@ -127,12 +129,11 @@ def haravan_blogs():
     filtered = list(all_blogs)
     if f_topic:
         filtered = [b for b in filtered if b["topic"] == f_topic]
-    if f_band == "good":
-        filtered = [b for b in filtered if (b.get("score") or 0) >= 80]
-    elif f_band == "ok":
-        filtered = [b for b in filtered if 60 <= (b.get("score") or 0) < 80]
-    elif f_band == "bad":
-        filtered = [b for b in filtered if (b.get("score") or 0) < 60]
+    # 4/9/2026: dùng chung db.score_band thay vì tự đặt 80/60. Ngưỡng cũ ở đây lệch
+    # hẳn với dashboard (65/50) — đo trên 268 blog thì 131 bài (48,9%) bị hai trang
+    # xếp hạng ngược nhau, cùng một cột điểm.
+    if f_band in ("good", "ok", "bad"):
+        filtered = [b for b in filtered if db.score_band(b.get("score")) == f_band]
     if f_search:
         filtered = [b for b in filtered if f_search in (b.get("title") or "").lower()
                     or f_search in (b.get("url") or "").lower()]
@@ -148,13 +149,14 @@ def haravan_blogs():
     }
     filtered.sort(key=sort_keys.get(f_sort, sort_keys["score_asc"]))
 
+    thr_good, thr_ok = db.score_thresholds()
     scores = [b.get("score") for b in all_blogs if b.get("score") is not None]
     stats = {
         "total": len(all_blogs),
         "avg_score": round(sum(scores) / len(scores), 1) if scores else 0,
-        "good": sum(1 for s in scores if s >= 80),
-        "ok":   sum(1 for s in scores if 60 <= s < 80),
-        "bad":  sum(1 for s in scores if s < 60),
+        "good": sum(1 for s in scores if db.score_band(s) == "good"),
+        "ok":   sum(1 for s in scores if db.score_band(s) == "ok"),
+        "bad":  sum(1 for s in scores if db.score_band(s) == "bad"),
     }
 
     try:
@@ -171,6 +173,7 @@ def haravan_blogs():
         blogs=page_items, stats=stats,
         topic_breakdown=topic_breakdown,
         topic_labels=BLOG_TOPIC_LABELS,
+        thr_good=thr_good, thr_ok=thr_ok,   # nhãn band hiện đúng ngưỡng đang hiệu lực
         filters={"topic": f_topic, "band": f_band, "q": f_search or "", "sort": f_sort},
         page_num=page_num, total_pages=total_pages, total=total, per_page=per_page,
         active="hv_blogs",
@@ -259,7 +262,12 @@ def haravan_products_page():
     elif band == "bad":
         score_filter = {"max_score": 59}
 
-    page_num = max(1, int(request.args.get("page", 1)))
+    # 4/9/2026: thêm try — /haravan/products?page=abc trả 500. Hai hàm anh em trong
+    # cùng file (haravan_blogs dòng ~163, haravan_audit dòng ~314) đã bọc, riêng đây sót.
+    try:
+        page_num = max(1, int(request.args.get("page", 1) or 1))
+    except (TypeError, ValueError):
+        page_num = 1
     per_page = 50
     total = db.hv_count_products(**filters)
     total_pages = max(1, (total + per_page - 1) // per_page)

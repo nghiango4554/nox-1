@@ -89,7 +89,16 @@ def seo_dashboard():
         page_num = 1
     per_page = 50
 
-    band_map = {"good": (80, None), "ok": (60, 79), "bad": (None, 59)}
+    # 4/9/2026: ngưỡng lấy từ db.score_thresholds() (đọc seo_rules_config.json).
+    # Trước đây hardcode 80/60 ở đây trong khi ô KPI phía trên cùng trang lại đếm bằng
+    # db.seo_stats() (65/50) → bấm vào ô là ra số khác hẳn: ô "Tốt" ghi 2.657 mà bảng
+    # chỉ đổ 2.431, ô "Khá" ghi 0 mà bấm vào lại ra 226 dòng.
+    thr_good, thr_ok = db.score_thresholds()
+    band_map = {
+        "good": (thr_good, None),
+        "ok": (thr_ok, thr_good - 1),
+        "bad": (None, thr_ok - 1),
+    }
     min_score, max_score = band_map.get(f_band, (None, None))
 
     list_kwargs = dict(
@@ -105,6 +114,7 @@ def seo_dashboard():
         stats=stats, latest_run=latest_run, state=state,
         link_state=seo_mod.link_check_state(),
         pages=pages_list, top_issues=top_issues, snapshots=snapshots,
+        thr_good=thr_good, thr_ok=thr_ok,   # nhãn ô KPI hiện đúng ngưỡng đang hiệu lực
         filters={
             "type": f_type, "band": f_band, "issue": f_issue,
             "q": f_search or "", "sort": f_sort,

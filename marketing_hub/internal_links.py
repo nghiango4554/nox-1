@@ -27,23 +27,33 @@ SINTECH_HOME_LINK = {
 MAX_SUGGESTIONS = 8
 
 # Heuristic: với mỗi product_type, gợi ý 1-2 nhóm phụ kiện dùng kèm.
-# Slug collection chuẩn theo Haravan Sintech (em sửa nếu sai).
+#
+# ⚠️ 4/9/2026 — RÀ LẠI BẰNG HTTP THẬT trên sintech.vn. 6/18 slug cũ đã hỏng:
+#     micro       → 404 CHẾT (bài tai nghe gợi ý link vào trang không tồn tại)
+#     nguon       → 301 psu-nguon
+#     ssd         → 301 ssd-m-2
+#     lot-chuot   → 301 ban-di-chuot
+#     ban-gaming  → 301 ban-phim-gaming   ⚠️ LỆCH NGHĨA: "bàn gaming" hoá "bàn phím"
+#     ghe-gaming  → 301 ghe-van-phong     ⚠️ LỆCH NGHĨA: "ghế gaming" hoá "ghế văn phòng"
+# Hai cái lệch nghĩa nguy hơn cả 404: anchor viết "bàn gaming" mà trỏ sang bàn phím.
+# Link nội bộ nên trỏ THẲNG đích, đi qua 301 là mất một phần link equity.
+# Kiểm lại khi đổi handle collection: `curl -o /dev/null -w '%{http_code} %{redirect_url}'`.
 ACCESSORY_HINTS = {
     "MÀN HÌNH": ["man-hinh-may-tinh", "ban-phim-co", "chuot-gaming"],
-    "LAPTOP": ["laptop", "chuot-gaming", "tai-nghe-gaming", "lot-chuot"],
-    "CHUỘT": ["chuot-gaming", "lot-chuot", "ban-phim-co"],
-    "BÀN PHÍM": ["ban-phim-co", "chuot-gaming", "lot-chuot"],
-    "TAI NGHE": ["tai-nghe-gaming", "micro"],
+    "LAPTOP": ["laptop", "chuot-gaming", "tai-nghe-gaming", "ban-di-chuot"],
+    "CHUỘT": ["chuot-gaming", "ban-di-chuot", "ban-phim-co"],
+    "BÀN PHÍM": ["ban-phim-co", "chuot-gaming", "ban-di-chuot"],
+    "TAI NGHE": ["tai-nghe-gaming", "tai-nghe"],       # bỏ "micro" — 404
     "PC": ["pc-gaming", "man-hinh-may-tinh", "ban-phim-co"],
     "MAINBOARD": ["cpu", "ram", "vga"],
-    "VGA": ["pc-gaming", "man-hinh-may-tinh", "nguon"],
-    "RAM": ["mainboard", "cpu", "ssd"],
+    "VGA": ["pc-gaming", "man-hinh-may-tinh", "psu-nguon"],
+    "RAM": ["mainboard", "cpu", "ssd-m-2"],
     "SSD": ["ram", "mainboard"],
     "NGUỒN": ["case", "tan-nhiet", "vga"],
-    "TẢN NHIỆT": ["case", "nguon", "cpu"],
-    "VỎ CASE": ["nguon", "tan-nhiet", "mainboard"],
-    "GHẾ GAMING": ["ban-gaming", "ban-phim-co", "chuot-gaming"],
-    "BÀN GAMING": ["ghe-gaming", "ban-phim-co"],
+    "TẢN NHIỆT": ["case", "psu-nguon", "cpu"],
+    "VỎ CASE": ["psu-nguon", "tan-nhiet", "mainboard"],
+    "GHẾ GAMING": ["ghe", "ban-phim-co", "chuot-gaming"],
+    "BÀN GAMING": ["ghe", "ban-phim-co"],
 }
 
 # Nhóm nhu cầu — match theo vendor / type chung.

@@ -988,9 +988,18 @@ def auto_post_due():
 
 
 def register_runtime(app, sched):
-    """Đăng ký template context (POST_TYPES/STATUSES) + scheduler job auto_post_due."""
+    """Đăng ký template context (POST_TYPES/STATUSES).
+
+    Job auto_post_due ĐÃ TẮT (14/8/2026) — vợ duyệt.
+    Lý do: lịch đăng thật chạy qua fb_scheduler.py (đọc state/facebook_token.json).
+    Job này là đường cũ bị bỏ lại: chạy mỗi phút, bắn mọi bài status='approved'
+    tới giờ mà KHÔNG cần ai bấm. Suốt 3 tháng không lọt bài nào chỉ vì DB không
+    có bài nào ở trạng thái 'approved' — nhưng "👍 Approved" vẫn là lựa chọn có
+    sẵn trong dropdown, nên chỉ cần đổi status 1 bài là nó tự đăng trong 60 giây.
+    Nay fb_token.json đã trỏ về Trang thật (6.903 người theo dõi) nên rủi ro đó
+    không còn vô hại nữa. Muốn đăng thì bấm tay qua /posts/<id>/publish.
+    Hàm auto_post_due giữ nguyên bên dưới, chỉ không cắm vào scheduler.
+    """
     @app.context_processor
     def _inject_post_constants():
         return {"POST_TYPES": POST_TYPES, "POST_STATUSES": POST_STATUSES}
-
-    sched.add_job(auto_post_due, "interval", minutes=1, id="auto_post_due")

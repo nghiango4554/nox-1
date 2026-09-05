@@ -43,7 +43,7 @@
   <div class="table-wrap" style="max-height:520px;overflow:auto">
     <table class="table" style="font-size:12px"><thead><tr>
       <th>#</th><th>Type</th><th>Context</th><th>Ảnh</th><th>Trang</th><th>Status</th><th>Action</th>
-    </tr></thead><tbody id="iq-body"><tr><td colspan="7" class="muted">Bấm "Lọc" để tải...</td></tr></tbody></table>
+    </tr></thead><tbody id="iq-body"><tr><td colspan="7" class="muted">Đang tải danh sách…</td></tr></tbody></table>
   </div>
 </section>
 <script>
@@ -66,6 +66,13 @@ async function iqLoad(){
         <button class="btn" style="font-size:11px;padding:2px 6px" onclick="iqMark(${it.id},'ignored')">🚫</button></td>
   </tr>`).join('');
 }
+// 4/9/2026: tu tai danh sach ngay khi mo trang. Truoc day bang de trong kem chu
+// 'Bam Loc de tai' — so tong (4.172 issue) da hien san ngay tren dau, ma van bat
+// bam them 1 nut moi thay noi dung. Bo filter van bam Loc de loc lai binh thuong.
+document.addEventListener('DOMContentLoaded', function(){
+  try { iqLoad(); } catch(e) {}
+});
+
 async function iqMark(id,st){
   await fetch('/api/alt-manager/issues/mark',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,status:st})});
   const el=document.getElementById('iq-st-'+id); if(el)el.textContent=st;
@@ -77,7 +84,8 @@ async function iqMark(id,st){
   <div class="kpi">
     <div class="kpi-row"><div class="kpi-icon">📦</div></div>
     <div class="kpi-num">{{ summary.total_products }}</div>
-    <div class="kpi-label">Tổng SP</div>
+    <div class="kpi-label">Tổng SP trong kho</div>
+    <div class="kpi-micro" style="font-size:11px;color:var(--ink-3);margin-top:3px">{{ summary.products_with_images }} SP có ảnh · {{ summary.total_products - summary.products_with_images }} SP chưa có ảnh nào</div>
   </div>
   <div class="kpi">
     <div class="kpi-row"><div class="kpi-icon">🖼️</div></div>
@@ -93,6 +101,7 @@ async function iqMark(id,st){
     <div class="kpi-row"><div class="kpi-icon" style="background:rgba(202,138,4,0.12);color:#b45309">⚠️</div></div>
     <div class="kpi-num" style="color:#b45309">{{ summary.weak }}</div>
     <div class="kpi-label">ALT yếu (weak)</div>
+    <div class="kpi-micro" style="font-size:11px;color:var(--ink-3);margin-top:3px">chỉ tên file hoặc &lt;5 từ{% if not summary.weak %} · hiện không có ảnh nào rơi vào nhóm này{% endif %}</div>
   </div>
   <div class="kpi">
     <div class="kpi-row"><div class="kpi-icon" style="background:rgba(22,163,74,0.12);color:#15803d">✅</div></div>

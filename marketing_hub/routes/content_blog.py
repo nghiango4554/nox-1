@@ -238,6 +238,15 @@ def _push_blog_to_haravan(job, publish=True):
         _qc = []
     if _qc:
         return {"ok": False, "error": "QC chặn: " + " · ".join(_qc[:4])}
+    # 4/9/2026: cảnh báo 2 luật cần soi ngữ cảnh (từ tuyệt đối, gạch ngang dài).
+    # KHÔNG chặn — nhiều hit hợp lệ (khoảng số, tên SP, thuật ngữ) — chỉ in ra để
+    # còn biết mà soi. Trước đây hai luật này chỉ nằm trong prompt gửi AI.
+    try:
+        from qc_content import check_content_warnings
+        for _cb in check_content_warnings(body_html):
+            print(f"[QC canh bao] job {job.get('id')}: {_cb}", flush=True)
+    except Exception:
+        pass
     blog_id = job.get("haravan_blog_id") or BLOG_ID_BY_TARGET.get(
         (job.get("target_blog") or "news").strip(), 1000906526)
     meta = (job.get("edited_meta") or "").strip()
@@ -267,7 +276,25 @@ def _push_blog_to_haravan(job, publish=True):
         import haravan_client as _hc
         aid = job.get("haravan_article_id")
         if aid:
-            haravan_blog.update_article(int(blog_id), int(aid), fields)
+            # 4/9/2026 — BẪY ĐÃ BIẾT: Haravan trả lỗi 5xx cho PUT article mà VẪN GHI
+            # thành công. Trước đây exception là đánh job "failed" luôn, nên bài đã lên
+            # web mà hub báo hỏng — vợ sync lại hoặc tưởng chưa đăng.
+            # Nay: PUT lỗi thì GET lại đối chiếu, title khớp = đã vào thật.
+            da_ghi = False
+            try:
+                haravan_blog.update_article(int(blog_id), int(aid), fields)
+                da_ghi = True
+            except Exception as e_put:
+                try:
+                    art_now = haravan_blog.get_article(int(blog_id), int(aid)) or {}
+                    if (art_now.get("title") or "").strip() == title:
+                        da_ghi = True
+                        print(f"[blog sync] PUT bao loi ({str(e_put)[:80]}) nhung DOI CHIEU "
+                              f"thay article {aid} da ghi dung -> coi la thanh cong", flush=True)
+                except Exception:
+                    pass
+                if not da_ghi:
+                    raise
             try:
                 _hc.upsert_seo_metafields("articles", int(aid), title=title, description=meta)
             except Exception:

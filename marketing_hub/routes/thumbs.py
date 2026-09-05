@@ -1617,18 +1617,28 @@ def _sync_one_product(handle):
     # backup ảnh gốc (local)
     bdir = BACKUP_ORIG / handle
     bdir.mkdir(parents=True, exist_ok=True)
+    # 4/9/2026: LUÔN ghi entry vào manifest, kể cả khi tải file về lỗi.
+    # Trước đây `meta.append` nằm sau `write_bytes` trong cùng try, nên mạng chập
+    # một nhịp là mất CẢ file lẫn dòng manifest → mất luôn URL gốc. Mà ảnh đã gỡ
+    # khỏi gallery vẫn còn sống trên CDN Haravan, có `src` là kéo về được. Giữ URL
+    # lại chính là đường lui duy nhất khi tải backup hỏng.
     meta = []
+    tai_loi = 0
     for im in imgs:
+        fn = f"{im.get('position') or 0}_{im['id']}.jpg"
+        row = {"id": im["id"], "position": im.get("position"), "src": im["src"], "file": fn}
         try:
             raw = urllib.request.urlopen(im["src"], timeout=30).read()
-            fn = f"{im.get('position') or 0}_{im['id']}.jpg"
             (bdir / fn).write_bytes(raw)
-            meta.append({"id": im["id"], "position": im.get("position"),
-                         "src": im["src"], "file": fn})
-        except Exception:
-            pass
+        except Exception as e:
+            row.update({"file": None, "tai_loi": f"{e.__class__.__name__}: {str(e)[:120]}"})
+            tai_loi += 1
+        meta.append(row)
     (bdir / "orig_manifest.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1),
                                              encoding="utf-8")
+    if tai_loi:
+        print(f"[thumbs sync] {handle}: backup thieu {tai_loi}/{len(imgs)} anh goc "
+              f"(van giu src trong orig_manifest.json)", flush=True)
     # up ảnh chuẩn (đọc local, KHÔNG xóa local) — có retry, đảm bảo đủ bộ
     new_ids = []
     for i, idx in enumerate(order):
@@ -1696,6 +1706,8 @@ def _sync_one_product(handle):
     except Exception:
         pass
     r = {"ok": True, "n": len(new_ids)}
+    if tai_loi:
+        r["backup_thieu"] = tai_loi        # ảnh gốc chưa kéo về được, chỉ còn src trong manifest
     if sot:
         # ẢNH ĐÃ ĐÚNG (up đủ + đúng vị trí) nên vẫn ok=True — nhưng phải kêu lên,
         # không thì lại phải chờ QA đếm kho-vs-live mới biết như 2 lần trước.
@@ -1784,6 +1796,9 @@ def _sync_worker(coll_list, bo_qua=None):
                 if r.get("sot"):
                     SYNC_STATE.setdefault("sot", []).append(
                         {"handle": ph, "n": len(r["sot"])})
+                if r.get("backup_thieu"):
+                    SYNC_STATE.setdefault("backup_thieu", []).append(
+                        {"handle": ph, "n": r["backup_thieu"]})
             else:
                 SYNC_STATE["fail"] += 1
                 failed.add(ph)
@@ -1810,6 +1825,12 @@ def _sync_worker(coll_list, bo_qua=None):
     if SYNC_STATE.get("missing_local"):
         tail += (f" · ⚠️ {len(SYNC_STATE['missing_local'])} SP thiếu trong bản đồ local "
                  f"(đã sync bù) → chạy lại build_collection_map.py")
+    if SYNC_STATE.get("backup_thieu"):
+        bt = SYNC_STATE["backup_thieu"]
+        tail += (f" · 💾 {len(bt)} SP backup ảnh gốc THIẾU file "
+                 f"({', '.join(x['handle'] for x in bt[:5])}"
+                 f"{'…' if len(bt) > 5 else ''}) — src còn trong orig_manifest.json, "
+                 f"kéo lại từ CDN nếu cần khôi phục")
     # sync vừa đổi ảnh trên Haravan -> bỏ cache để trang vẽ lại bằng dữ liệu mới
     # (xoá cả bản trên đĩa, không thì restart lại nạp về dữ liệu cũ)
     _PROD_CACHE.clear()

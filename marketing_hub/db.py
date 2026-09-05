@@ -85,6 +85,11 @@ CREATE TABLE IF NOT EXISTS seo_links (
     target_url TEXT NOT NULL,
     is_internal INTEGER NOT NULL,
     status_code INTEGER,
+    -- error_kind PHẢI khai ngay đây: index idx_seo_links_health bên dưới dùng cột này.
+    -- Trước 4/9/2026 cột chỉ được ALTER thêm trong init_db() SAU executescript(SCHEMA)
+    -- → DB trắng chết ngay "no such column: error_kind". DB cũ vẫn chạy nhờ ALTER,
+    -- nên lỗi ngủ yên tới lúc dựng lại hub trên máy mới. Đừng gỡ dòng này.
+    error_kind TEXT,
     last_checked TEXT,
     UNIQUE(source_url, target_url)
 );
@@ -535,8 +540,64 @@ def init_db():
     # ─── Analytics daily orchestration (additive) ───
     _init_analytics_ops(conn)
 
+    # ─── 2 bảng trước đây KHÔNG có migration (vá 4/9/2026) ───
+    _init_bang_thieu_migration(conn)
+
     conn.commit()
     conn.close()
+
+
+def _init_bang_thieu_migration(conn):
+    """collection_jobs + gsc_ctr_tracking — 2 bảng ĐANG DÙNG mà không file nào tạo.
+
+    Rà 4/9/2026: DB thật có 74 bảng, db.py khai 50. Trong 24 bảng chênh, 22 bảng được tạo
+    ở spec_index.py / blog_content_center.py / seo_opportunity.py / alt_issue_import.py.
+    Còn 2 bảng này thì KHÔNG file nào có câu CREATE — chúng chỉ tồn tại trong posts.db hiện
+    tại, tạo tay từ lúc nào không rõ. Dựng lại hub trên máy mới:
+      · collection_jobs → luồng viết nội dung collection sập (9 file đang gọi)
+      · gsc_ctr_tracking → db.gsc_ctr_tracking_list() bọc except nên chết IM LẶNG,
+        trang CTR Rescue chỉ hiện rỗng, không báo lỗi gì
+    Schema dưới đây dump nguyên trạng từ posts.db ngày 4/9/2026 (đã gồm các cột ALTER thêm
+    dần), nên chạy trên DB cũ là no-op hoàn toàn.
+    """
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS collection_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            collection_url TEXT UNIQUE NOT NULL,
+            handle TEXT,
+            haravan_id INTEGER,
+            collection_title TEXT,
+            edited_title TEXT,
+            edited_meta TEXT,
+            edited_body_html TEXT,
+            ai_generated_at TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            error TEXT,
+            synced_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            quality_score INTEGER, readability_score INTEGER, quality_breakdown TEXT,
+            existing_body_len INTEGER DEFAULT 0, manual_filled INTEGER DEFAULT 0,
+            excluded_from_audit INTEGER DEFAULT 0,
+            tier1_handle TEXT, tier1_name TEXT, tier2_handle TEXT, tier2_name TEXT,
+            tier3_name TEXT, tier_level TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_collection_jobs_status ON collection_jobs(status);
+
+        CREATE TABLE IF NOT EXISTS gsc_ctr_tracking (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            resource_type TEXT, resource_id INTEGER, url TEXT, query TEXT,
+            landing_group TEXT,
+            baseline_clicks INTEGER, baseline_impressions INTEGER,
+            baseline_ctr TEXT, baseline_position REAL,
+            baseline_title TEXT, baseline_meta TEXT,
+            applied_fields_json TEXT, apply_date TEXT, next_check_date TEXT,
+            check_14d_date TEXT, check_28d_date TEXT, check_60d_date TEXT,
+            status TEXT, expected_change TEXT,
+            notes TEXT, report_path TEXT, created_at TEXT, updated_at TEXT,
+            UNIQUE(resource_type, resource_id, query)
+        );
+    """)
 
 
 def _init_analytics_ops(conn):
@@ -891,15 +952,21 @@ def _init_ga4_tables(conn):
 
 
 def next_post_code():
+    """Mã bài kế tiếp = max(code) + 1.
+
+    4/9/2026: đổi từ `ORDER BY id DESC` sang lấy max SỐ thật. Bài mới nhất theo id chưa
+    chắc có code lớn nhất (vd nhập tay một mã thấp hơn) → sinh trùng, mà cột `code` là
+    UNIQUE nên INSERT sẽ ném IntegrityError.
+    """
     conn = get_conn()
-    row = conn.execute(
-        "SELECT code FROM posts WHERE code LIKE 'FB%' ORDER BY id DESC LIMIT 1"
-    ).fetchone()
+    rows = conn.execute("SELECT code FROM posts WHERE code LIKE 'FB%'").fetchall()
     conn.close()
-    if not row:
-        return "FB0001"
-    n = int(row["code"][2:]) + 1
-    return f"FB{n:04d}"
+    so = []
+    for r in rows:
+        duoi = (r["code"] or "")[2:]
+        if duoi.isdigit():
+            so.append(int(duoi))
+    return f"FB{(max(so) + 1) if so else 1:04d}"
 
 
 def list_posts(date=None, status=None, ptype=None, date_from=None, date_to=None, limit=500):
@@ -1100,7 +1167,11 @@ def seo_upsert_page(data: dict):
     ]
     cols = ", ".join(fields)
     placeholders = ", ".join("?" * len(fields))
-    updates = ", ".join(f"{f}=excluded.{f}" for f in fields if f != "url")
+    # 4/9/2026: CHỈ ghi đè những cột caller thực sự truyền. Trước đây SET hết mọi cột
+    # trong `fields`, nên caller thiếu cột nào là cột đó bị ghi NULL đè lên giá trị cũ —
+    # vd một lượt crawl không tính desc_h1_count sẽ xoá sạch kết quả quét H1-trong-mô-tả.
+    co_mat = [f for f in fields if f in data and f != "url"] or [f for f in fields if f != "url"]
+    updates = ", ".join(f"{f}=excluded.{f}" for f in co_mat)
     values = [data.get(f) for f in fields]
     conn = get_conn()
     conn.execute(
@@ -1132,26 +1203,62 @@ def seo_upsert_pages_batch(pairs: list):
     ]
     cols = ", ".join(fields)
     placeholders = ", ".join("?" * len(fields))
-    updates = ", ".join(f"{f}=excluded.{f}" for f in fields if f != "url")
+    _cache_sql = {}   # bộ khoá cột → câu SQL, để không build lại chuỗi cho từng URL
     conn = get_conn()
     try:
         for data, links in pairs:
-            conn.execute(
-                f"INSERT INTO seo_pages ({cols}) VALUES ({placeholders}) "
-                f"ON CONFLICT(url) DO UPDATE SET {updates}",
-                [data.get(f) for f in fields],
-            )
+            # Cùng lý do như seo_upsert_page: chỉ SET cột caller thực sự truyền,
+            # đừng ghi NULL đè lên dữ liệu quét trước đó.
+            co_mat = tuple(f for f in fields if f in data and f != "url") \
+                or tuple(f for f in fields if f != "url")
+            sql = _cache_sql.get(co_mat)
+            if sql is None:
+                updates = ", ".join(f"{f}=excluded.{f}" for f in co_mat)
+                sql = (f"INSERT INTO seo_pages ({cols}) VALUES ({placeholders}) "
+                       f"ON CONFLICT(url) DO UPDATE SET {updates}")
+                _cache_sql[co_mat] = sql
+            conn.execute(sql, [data.get(f) for f in fields])
             url = data.get("url")
             if url:
-                conn.execute("DELETE FROM seo_links WHERE source_url = ?", (url,))
-                if links:
-                    conn.executemany(
-                        "INSERT OR IGNORE INTO seo_links (source_url, target_url, is_internal) VALUES (?, ?, ?)",
-                        [(url, t, int(bool(i))) for t, i in links],
-                    )
+                _ghi_links(conn, url, links)
         conn.commit()
     finally:
         conn.close()
+
+
+def _ghi_links(conn, source_url: str, links: list):
+    """Ghi lại tập link của 1 trang mà KHÔNG mất kết quả kiểm link đã có.
+
+    4/9/2026: trước đây DELETE sạch theo source_url rồi INSERT lại → status_code,
+    error_kind, last_checked của MỌI link trên trang đó về NULL sau mỗi lần crawl.
+    Với ~693k link thì cứ re-crawl là phải kiểm lại từ đầu — chính là lý do việc dò
+    link chết chạy mãi không xong.
+
+    Cách mới: chỉ xoá link KHÔNG còn xuất hiện nữa, link cũ giữ nguyên trạng thái,
+    link mới thì INSERT. `INSERT OR IGNORE` đã tự bỏ qua cặp (source,target) trùng
+    nhờ ràng buộc UNIQUE, nên trạng thái link cũ không bị đụng tới.
+    """
+    moi = {(t, int(bool(i))) for t, i in (links or [])}
+    targets = {t for t, _ in moi}
+    if targets:
+        ph = ",".join("?" * len(targets))
+        conn.execute(
+            f"DELETE FROM seo_links WHERE source_url = ? AND target_url NOT IN ({ph})",
+            [source_url, *targets],
+        )
+    else:
+        conn.execute("DELETE FROM seo_links WHERE source_url = ?", (source_url,))
+    if moi:
+        conn.executemany(
+            "INSERT OR IGNORE INTO seo_links (source_url, target_url, is_internal) VALUES (?, ?, ?)",
+            [(source_url, t, i) for t, i in moi],
+        )
+        # is_internal có thể đổi (vd link đổi domain) — cập nhật riêng, không đụng status.
+        conn.executemany(
+            "UPDATE seo_links SET is_internal = ? WHERE source_url = ? AND target_url = ? AND is_internal != ?",
+            [(i, source_url, t, i) for t, i in moi],
+        )
+    _xoa_cache_broken_summary()
 
 
 def seo_list_pages(
@@ -1223,6 +1330,59 @@ def seo_get_page(page_id: int):
     return dict(row) if row else None
 
 
+# ─── Ngưỡng xếp hạng cột seo_pages.score — NGUỒN DUY NHẤT ───
+# Tuned cho Sintech-on-Haravan (2026-05-12): nền tảng trừ sẵn ~25 điểm
+# (no_schema, no_og, img_no_alt) nên điểm trần thực tế chỉ ~70-75.
+#
+# 4/9/2026 — gom về đây vì tìm ra BA nguồn ngưỡng đá nhau cho CÙNG cột `score`:
+#   · db.seo_stats()        65/50   (ô KPI trên /seo, thống kê /haravan/blogs)
+#   · routes/seo_core       80/60   (bộ lọc ?band= của chính trang /seo)
+#   · routes/haravan        80/60   (bộ lọc + thống kê trang blogs, cả template)
+# Hệ quả đo được: ô "Tốt" ghi 2.657 mà bấm vào bảng đổ 2.431; ô "Khá" ghi 0 mà bấm
+# ra 226 dòng; 131/268 blog (48,9%) bị hai trang xếp hạng ngược nhau.
+#
+# Và ngưỡng KHÔNG phải hằng số: trang /seo/rules cho vợ chỉnh 2 ô "Tốt ≥ / Khá ≥",
+# lưu vào data/seo_rules_config.json → `thresholds`. Trước đây file đó chỉ được GHI,
+# KHÔNG ai đọc ra để xếp band — chỉnh xong bấm lưu, báo thành công, mà số không đổi
+# một li. Giờ đọc thật từ file, cache theo mtime.
+SCORE_GOOD_MAC_DINH = 65
+SCORE_OK_MAC_DINH = 50
+_NGUONG_CACHE = {"mtime": None, "good": SCORE_GOOD_MAC_DINH, "ok": SCORE_OK_MAC_DINH}
+RULES_CONFIG_PATH = Path(__file__).parent / "data" / "seo_rules_config.json"
+
+
+def score_thresholds() -> tuple:
+    """(good, ok) đang hiệu lực — đọc từ seo_rules_config.json, cache theo mtime.
+
+    Hỏng file / thiếu khoá / số vô lý (good <= ok) → rơi về 65/50 mặc định.
+    """
+    try:
+        mt = RULES_CONFIG_PATH.stat().st_mtime
+    except OSError:
+        return SCORE_GOOD_MAC_DINH, SCORE_OK_MAC_DINH
+    if _NGUONG_CACHE["mtime"] != mt:
+        good, ok = SCORE_GOOD_MAC_DINH, SCORE_OK_MAC_DINH
+        try:
+            with open(RULES_CONFIG_PATH, encoding="utf-8") as f:
+                thr = (json.load(f) or {}).get("thresholds") or {}
+            g, o = int(thr.get("good", good)), int(thr.get("ok", ok))
+            if 0 <= o < g <= 100:
+                good, ok = g, o
+        except (OSError, ValueError, TypeError):
+            pass
+        _NGUONG_CACHE.update({"mtime": mt, "good": good, "ok": ok})
+    return _NGUONG_CACHE["good"], _NGUONG_CACHE["ok"]
+
+
+def score_band(score) -> str:
+    """Xếp 1 điểm seo_pages.score vào 'good' | 'ok' | 'bad'. None coi như 0."""
+    good, ok = score_thresholds()
+    s = score or 0
+    if s >= good:
+        return "good"
+    return "ok" if s >= ok else "bad"
+
+
 def seo_stats():
     conn = get_conn()
     total = conn.execute("SELECT COUNT(*) c FROM seo_pages").fetchone()["c"]
@@ -1231,19 +1391,25 @@ def seo_stats():
         r["url_type"] or "unknown": r["c"]
         for r in conn.execute("SELECT url_type, COUNT(*) c FROM seo_pages GROUP BY url_type").fetchall()
     }
-    # Threshold tuned cho Sintech-on-Haravan (2026-05-12):
-    # Haravan platform-default trừ ~25 điểm (no_schema, no_og, img_no_alt) → max ~70-75.
-    # Good ≥65, OK 50-64, Bad <50 → distribution thực tế meaningful hơn.
+    # Ngưỡng đọc động từ seo_rules_config.json — xem score_thresholds() ở đầu mục.
+    _good, _ok = score_thresholds()
     bands = conn.execute(
         """SELECT
-            SUM(CASE WHEN score >= 65 THEN 1 ELSE 0 END) good,
-            SUM(CASE WHEN score >= 50 AND score < 65 THEN 1 ELSE 0 END) ok,
-            SUM(CASE WHEN score < 50 THEN 1 ELSE 0 END) bad
+            SUM(CASE WHEN score >= ? THEN 1 ELSE 0 END) good,
+            SUM(CASE WHEN score >= ? AND score < ? THEN 1 ELSE 0 END) ok,
+            SUM(CASE WHEN score < ? THEN 1 ELSE 0 END) bad
+           FROM seo_pages""",
+        (_good, _ok, _good, _ok),
+    ).fetchone()
+    # 4/9/2026: TÁCH "chưa crawl" ra khỏi "hỏng". Trước đây gộp `OR status_code IS NULL`
+    # nên URL mới seed (chưa quét tới) bị đếm là trang hỏng — đo hôm sửa: broken=7 mà
+    # 4xx/5xx thật = 0, cả 7 đều là URL chưa crawl.
+    counts = conn.execute(
+        """SELECT
+            SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END) broken,
+            SUM(CASE WHEN status_code IS NULL THEN 1 ELSE 0 END) not_crawled
            FROM seo_pages"""
     ).fetchone()
-    broken = conn.execute(
-        "SELECT COUNT(*) c FROM seo_pages WHERE status_code >= 400 OR status_code IS NULL"
-    ).fetchone()["c"]
     conn.close()
     return {
         "total": total,
@@ -1252,7 +1418,8 @@ def seo_stats():
         "good": bands["good"] or 0,
         "ok": bands["ok"] or 0,
         "bad": bands["bad"] or 0,
-        "broken": broken,
+        "broken": counts["broken"] or 0,        # CHỈ 4xx/5xx thật
+        "not_crawled": counts["not_crawled"] or 0,
     }
 
 
@@ -1477,14 +1644,16 @@ def execute_write(sql: str, params=(), retries: int = 8):
         try:
             conn.execute(sql, params)
             conn.commit()
-            conn.close()
             return
         except sqlite3.OperationalError as e:
-            conn.close()
             if "locked" in str(e).lower() and attempt < retries - 1:
                 _t.sleep(min(0.4 * (attempt + 1), 3.0))
                 continue
             raise
+        finally:
+            # 4/9/2026: dùng finally — trước đây chỉ close ở nhánh OK và nhánh
+            # OperationalError, nên exception loại khác (IntegrityError…) làm rò connection.
+            conn.close()
 
 
 def haravan_audit_log(method, path, resource_type=None, resource_id=None,
@@ -1559,7 +1728,11 @@ def job_claim_next(types: list = None) -> dict:
         job = dict(row); job["status"] = "running"
         conn.close()
         return job
-    except Exception:
+    except Exception as e:
+        # 4/9/2026: in lỗi ra trước khi trả None. Trước đây nuốt im lặng nên lỗi DB
+        # (locked, schema hỏng…) trông y hệt "hàng đợi rỗng" — worker cứ quay vòng
+        # mà không ai biết vì sao job không chạy.
+        print(f"[job_claim_next] LOI: {type(e).__name__}: {e}", flush=True)
         try: conn.execute("ROLLBACK")
         except Exception: pass
         conn.close(); return None
@@ -1714,14 +1887,12 @@ def seo_h1_in_desc_summary() -> dict:
 
 
 def seo_replace_links(source_url: str, links: list):
-    """Xoá link cũ của source_url, ghi link mới. links = [(target, is_internal), ...]."""
+    """Ghi lại tập link của source_url. links = [(target, is_internal), ...].
+
+    Giữ nguyên status_code/error_kind/last_checked của link đã kiểm — xem `_ghi_links`.
+    """
     conn = get_conn()
-    conn.execute("DELETE FROM seo_links WHERE source_url = ?", (source_url,))
-    if links:
-        conn.executemany(
-            "INSERT OR IGNORE INTO seo_links (source_url, target_url, is_internal) VALUES (?, ?, ?)",
-            [(source_url, t, int(bool(i))) for t, i in links],
-        )
+    _ghi_links(conn, source_url, links)
     conn.commit()
     conn.close()
 
@@ -1734,6 +1905,7 @@ def seo_link_status_update(target_url: str, status_code: int, error_kind: str = 
     )
     conn.commit()
     conn.close()
+    _xoa_cache_broken_summary()
 
 
 def seo_link_status_update_batch(rows: list):
@@ -1751,6 +1923,7 @@ def seo_link_status_update_batch(rows: list):
     )
     conn.commit()
     conn.close()
+    _xoa_cache_broken_summary()
 
 
 def seo_reset_broken_links_for_recheck() -> int:
@@ -1764,6 +1937,7 @@ def seo_reset_broken_links_for_recheck() -> int:
     n = cur.rowcount
     conn.commit()
     conn.close()
+    _xoa_cache_broken_summary()
     return n
 
 
@@ -1821,6 +1995,7 @@ def seo_clear_internal_link_status() -> int:
     n = cur.rowcount
     conn.commit()
     conn.close()
+    _xoa_cache_broken_summary()
     return n
 
 
@@ -1869,24 +2044,28 @@ def seo_broken_breakdown() -> dict:
     - by_internal: dict {internal: int, external: int}
     """
     conn = get_conn()
+    # 4/9/2026: panel breakdown PHẢI loại cùng bộ error_kind như _broken_where_clause,
+    # nếu không số trên ô filter cao hơn số dòng thực tế đổ ra khi bấm vào.
+    _bo_qua = " AND (error_kind IS NULL OR error_kind NOT IN ('social_share_skip', 'asset_cdn_skip')) "
     rows1 = conn.execute(
         """SELECT status_code, COUNT(DISTINCT target_url) c
            FROM seo_links
-           WHERE status_code >= 400
+           WHERE status_code >= 400""" + _bo_qua + """
            GROUP BY status_code
            ORDER BY c DESC"""
     ).fetchall()
     rows2 = conn.execute(
         """SELECT COALESCE(error_kind, 'other_error') ek, COUNT(DISTINCT target_url) c
            FROM seo_links
-           WHERE status_code = 0
+           WHERE status_code = 0""" + _bo_qua + """
            GROUP BY ek
            ORDER BY c DESC"""
     ).fetchall()
     rows3 = conn.execute(
         """SELECT is_internal, COUNT(DISTINCT target_url) c
            FROM seo_links
-           WHERE status_code IS NOT NULL AND (status_code >= 400 OR status_code = 0)
+           WHERE status_code IS NOT NULL AND (status_code >= 400 OR status_code = 0)"""
+        + _bo_qua + """
            GROUP BY is_internal"""
     ).fetchall()
     bucket_4xx = sum(r["c"] for r in rows1 if 400 <= r["status_code"] < 500)
@@ -1987,7 +2166,15 @@ def seo_broken_links(limit: int = 200) -> list:
     return seo_broken_links_filtered(limit=limit)
 
 
-def seo_broken_link_summary() -> dict:
+_BROKEN_SUMMARY_CACHE = {"ts": 0.0, "data": None}
+_BROKEN_SUMMARY_TTL = 8.0     # giây
+
+
+def _xoa_cache_broken_summary():
+    _BROKEN_SUMMARY_CACHE["data"] = None
+
+
+def seo_broken_link_summary(bo_qua_cache: bool = False) -> dict:
     """Tổng kết link checker. Phạm vi check = chỉ external link (internal
     đã được crawler chính verify, không HEAD lại để tránh false positive).
 
@@ -1995,7 +2182,18 @@ def seo_broken_link_summary() -> dict:
     - broken / unchecked / ok: của external
     - internal_verified: số internal link unique (auto-OK theo crawler)
     - total_all: tổng cả internal + external (link gom được trên site)
+
+    4/9/2026 — CACHE 8 GIÂY. Đo trên DB thật (709k dòng seo_links): hàm này tốn
+    **273 ms**, chiếm 98,6% thời gian của /api/seo/status (tổng 277 ms) — mà trang
+    /seo poll endpoint đó **mỗi 1,5 giây** suốt lúc crawl. Tức mỗi phút đốt ~11 giây
+    CPU chỉ để đếm lại link chết, đúng lúc crawler đang ghi DB và tranh lock.
+    Số link chết đổi chậm nên 8s là thừa tươi. Mọi hàm ghi status link đều gọi
+    `_xoa_cache_broken_summary()` nên bấm re-check xong là thấy số mới ngay.
     """
+    import time as _t
+    if not bo_qua_cache and _BROKEN_SUMMARY_CACHE["data"] is not None \
+            and (_t.time() - _BROKEN_SUMMARY_CACHE["ts"]) < _BROKEN_SUMMARY_TTL:
+        return _BROKEN_SUMMARY_CACHE["data"]
     conn = get_conn()
     ext = conn.execute(
         """SELECT
@@ -2019,7 +2217,7 @@ def seo_broken_link_summary() -> dict:
         "SELECT COUNT(DISTINCT target_url) c FROM seo_links"
     ).fetchone()["c"]
     conn.close()
-    return {
+    out = {
         "broken": ext["broken"] or 0,
         "unchecked": ext["unchecked"] or 0,
         "ok": ext["ok"] or 0,
@@ -2027,6 +2225,9 @@ def seo_broken_link_summary() -> dict:
         "internal_verified": internal_count or 0,
         "total_all": total_all or 0,
     }
+    import time as _t2
+    _BROKEN_SUMMARY_CACHE.update({"ts": _t2.time(), "data": out})
+    return out
 
 
 def seo_top_issues(limit: int = 12) -> list:
@@ -2083,6 +2284,7 @@ def seo_clear_all():
     conn.execute("DELETE FROM sqlite_sequence WHERE name IN ('seo_runs','seo_pages','seo_links')")
     conn.commit()
     conn.close()
+    _xoa_cache_broken_summary()
 
 
 def seo_import_snapshot(data: dict):
@@ -2167,6 +2369,7 @@ def competitor_upsert(items: list):
     updates = ", ".join(f"{f}=excluded.{f}" for f in fields if f != "url")
     conn = get_conn()
     n = 0
+    loi = 0
     for it in items:
         values = [it.get(f) for f in fields]
         try:
@@ -2176,10 +2379,17 @@ def competitor_upsert(items: list):
                 values,
             )
             n += 1
-        except Exception:
-            pass
+        except Exception as e:
+            # 4/9/2026: đừng nuốt trọn. Trước đây `except: pass` nên import hỏng
+            # nửa chừng vẫn báo thành công, không ai biết mất bao nhiêu dòng.
+            loi += 1
+            if loi <= 3:
+                print(f"[competitor_upsert] bo qua {it.get('url')}: "
+                      f"{type(e).__name__}: {e}", flush=True)
     conn.commit()
     conn.close()
+    if loi:
+        print(f"[competitor_upsert] ghi {n} dong, BO QUA {loi} dong loi", flush=True)
     return n
 
 
@@ -2226,8 +2436,17 @@ def competitor_stats() -> dict:
 
 
 def competitor_topic_gap(min_competitor_count: int = 5) -> list:
-    """So sánh topic giữa đối thủ và Sintech (seo_pages url_type='blog').
-    Trả list topic gap (đối thủ có nhiều mà Sintech ít)."""
+    """BƯỚC 1 của phép tính gap: đếm số URL đối thủ theo từng topic.
+
+    Trả [{topic, competitor_count}] cho topic có >= min_competitor_count URL.
+
+    ⚠️ Hàm này KHÔNG đụng tới seo_pages — phép trừ gap nằm ở tầng route:
+    `routes/system.py:competitors_page()` phân loại blog Sintech bằng
+    `classify_blog_topic()` rồi gán thêm `sintech_count` + `gap` vào từng item,
+    template competitors.html mới hiện đủ 3 cột "Đối thủ có / Sintech có / Gap".
+    (Docstring cũ ghi "So sánh topic giữa đối thủ và Sintech" gây hiểu nhầm là
+    phép so làm ngay tại đây — sửa lại 4/9/2026, KHÔNG đổi logic.)
+    """
     conn = get_conn()
     comp_topics = {
         r["topic"]: r["c"]
@@ -2528,14 +2747,20 @@ def gsc_ctr_tracking_list(limit: int = 200) -> list:
 
 
 def seo_history_chart_data(limit: int = 52) -> dict:
-    """Data chuẩn cho Chart.js — sort tăng dần theo thời gian."""
+    """Data chuẩn cho Chart.js — `limit` snapshot MỚI NHẤT, vẽ theo thứ tự thời gian tăng dần.
+
+    4/9/2026: trước đây `ORDER BY captured_at ASC LIMIT ?` = lấy nhầm `limit` snapshot
+    CŨ NHẤT. Hiện chưa lộ ra vì seo_history_cleanup(keep=52) luôn giữ tổng ≤ 52 nên hai
+    cách cho cùng kết quả — nhưng ai nâng `keep` để giữ lịch sử dài hơn là biểu đồ đóng
+    băng ở quá khứ ngay. Lấy DESC rồi đảo lại cho đúng ý đồ.
+    """
     conn = get_conn()
     rows = conn.execute(
-        "SELECT * FROM seo_history ORDER BY captured_at ASC LIMIT ?",
+        "SELECT * FROM seo_history ORDER BY captured_at DESC LIMIT ?",
         (limit,),
     ).fetchall()
     conn.close()
-    items = [dict(r) for r in rows]
+    items = [dict(r) for r in rows][::-1]
     return {
         "labels": [r["captured_at"][:10] for r in items],
         "avg_score": [r["avg_score"] for r in items],
@@ -2567,7 +2792,11 @@ def hv_upsert_product(p: dict):
     ]
     cols = ", ".join(fields)
     placeholders = ", ".join("?" * len(fields))
-    updates = ", ".join(f"{f}=excluded.{f}" for f in fields if f != "haravan_id")
+    # 4/9/2026: chỉ SET cột caller truyền — tránh ghi NULL đè body_html/meta_* khi
+    # người gọi chỉ định cập nhật vài field (xem seo_upsert_page cùng lý do).
+    co_mat = [f for f in fields if f in p and f != "haravan_id"] \
+        or [f for f in fields if f != "haravan_id"]
+    updates = ", ".join(f"{f}=excluded.{f}" for f in co_mat)
     values = [p.get(f) for f in fields]
     conn = get_conn()
     conn.execute(
@@ -3751,6 +3980,11 @@ def collection_products_replace(collection_handle: str, products: list, synced_a
     (cần id; handle/title optional). Idempotent per collection."""
     if synced_at is None:
         synced_at = datetime.now().isoformat(timespec="seconds")
+    # 4/9/2026: KHÔNG xoá map khi danh sách rỗng. Trước đây DELETE chạy vô điều kiện,
+    # nên một cú gọi Haravan lỗi/timeout trả [] là map collection→SP của handle đó bị
+    # xoá sạch, im lặng. Cùng họ với sự cố "map thiếu N SP" ở /thumbs.
+    if not products:
+        return 0
     conn = get_conn()
     conn.execute("DELETE FROM collection_products WHERE collection_handle=?", (collection_handle,))
     rows = []

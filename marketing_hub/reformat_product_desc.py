@@ -59,6 +59,10 @@ def reformat(body: str) -> str:
     for h in soup.find_all("h3"):
         h["style"] = H3
     for a in soup.find_all("a"):
+        # BỎ QUA nút gọi tel: — nó có style riêng, ghi đè sẽ làm nút mất định dạng
+        # ở lần format thứ 2 (bug bắt được 24/8/2026).
+        if (a.get("href") or "").startswith("tel:"):
+            continue
         a["style"] = A_
     for t in soup.find_all("table"):
         t["style"] = TABLE
@@ -100,7 +104,13 @@ def reformat(body: str) -> str:
     # in đậm nhãn trước dấu ':' đầu mỗi <li> (li giờ có style -> khớp cả <li ...>)
     html = _re.sub(r"(<li\b[^>]*>)([^:<>]{1,28}):", r"\1<strong>\2:</strong>", html)
     # SĐT -> nút bấm gọi (tel:)
-    html = html.replace(PHONE_NUM, PHONE_BTN)
+    # ⚠️ CHẠY LẠI ĐƯỢC: nếu đã có nút tel: rồi thì KHÔNG thay nữa, không thì
+    # lần format thứ 2 sẽ lồng nút trong nút (số nằm trong text của nút cũ).
+    if "tel:0911713000" not in html:
+        html = html.replace(PHONE_NUM, PHONE_BTN)
+    # BeautifulSoup hạ chữ thuộc tính -> viewBox thành viewbox. SVG phân biệt
+    # hoa thường nên icon sẽ vỡ tỉ lệ ở lần format thứ 2. Trả lại đúng chữ.
+    html = html.replace("viewbox=", "viewBox=")
     return html
 
 

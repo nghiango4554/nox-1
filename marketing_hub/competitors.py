@@ -55,29 +55,20 @@ def classify_url_type(url: str) -> str:
     return "other"
 
 
-# Tái sử dụng phân loại topic giống Sintech (BLOG_TOPICS từ app.py)
-BLOG_TOPICS_RULES = [
-    ("pirate",   ["full 100", "full crack", "active key", "kích hoạt key", "key bản quyền"]),
-    ("review",   ["review", "đánh giá", "danh gia"]),
-    ("compare",  ["so sánh", "so sanh", " vs ", "vs."]),
-    ("build_pc", ["build pc", "cấu hình pc", "cau hinh pc"]),
-    ("top",      ["top ", "best ", "những "]),
-    ("promo",    ["khuyến mãi", "khuyen mai", "sale", "giảm giá", "ưu đãi"]),
-    ("gaming",   ["tựa game", "tua game", "fps", "moba", "esport", "gaming "]),
-    ("tutorial", ["hướng dẫn", "huong dan", "cách ", "tutorial", "tips", "thủ thuật"]),
-    ("news",     ["tin tức", "tin tuc", "news", "ra mắt", "ra mat", "công bố"]),
-    ("explain",  [" là gì", "la gi", "có nên", "co nen", "khác gì"]),
-    ("service",  ["sửa chữa", "sua chua", "dịch vụ"]),
-]
-
-
 def classify_topic(title: str, url: str = "") -> str:
-    """Detect topic theo title + url path."""
-    t = ((title or "") + " " + (url or "")).lower()
-    for code, keywords in BLOG_TOPICS_RULES:
-        if any(kw in t for kw in keywords):
-            return code
-    return "other"
+    """Detect topic — CHỈ theo title. Tham số `url` giữ lại cho tương thích, KHÔNG dùng.
+
+    4/9/2026: BỎ bản sao luật riêng, gọi thẳng nguồn duy nhất ở routes/blog_topics.py.
+    Bản sao cũ lệch cả thứ tự lẫn từ khoá so với thước dùng cho blog Sintech (service
+    nằm cuối thay vì thứ 2, thiếu "tphcm"/"quận"), làm bảng "Topic gap" trừ hai vế đo
+    bằng hai cây thước khác nhau — 11/266 blog Sintech ra 2 kết quả.
+
+    Cũng bỏ luôn việc nhét url vào chuỗi phân loại: đường dẫn chứa nhiều từ trùng
+    keyword (vd handle /news/ của blog Sintech) làm phân loại nhiễu nặng. Khi sitemap
+    thiếu title đã có `_slug_to_title()` đoán title từ slug rồi.
+    """
+    from routes.blog_topics import classify_blog_topic
+    return classify_blog_topic(title)
 
 
 def _slug_to_title(url: str) -> str:

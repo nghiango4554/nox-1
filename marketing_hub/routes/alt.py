@@ -17,11 +17,29 @@ import alt_issue_import
 import haravan_client as hv_client
 
 
+def _so_nguyen(ten, mac_dinh, nho_nhat=None, lon_nhat=None):
+    """Đọc 1 tham số số từ query string, KHÔNG bao giờ ném.
+
+    4/9/2026: `/alt-manager?page=abc` trả 500 vì int() gọi trần trên giá trị người
+    dùng gõ. Các trang khác (/seo, /content-jobs, /competitors, /haravan/blogs) đều
+    đã bọc try/except từ trước — riêng module này sót.
+    """
+    try:
+        v = int(request.args.get(ten, mac_dinh) or mac_dinh)
+    except (TypeError, ValueError):
+        v = int(mac_dinh)
+    if nho_nhat is not None:
+        v = max(nho_nhat, v)
+    if lon_nhat is not None:
+        v = min(lon_nhat, v)
+    return v
+
+
 # ─────────────────────── LIST / EDITOR PAGES ─────────────────────
 
 def alt_manager_page():
     """P2 — trang list SP với ALT coverage badge, KPI + filter + paginate."""
-    page = max(1, int(request.args.get("page", 1) or 1))
+    page = _so_nguyen("page", 1, nho_nhat=1)
     only_missing = request.args.get("missing", "1") != "0"
     filter_type = (request.args.get("type") or "").strip() or None
     filter_vendor = (request.args.get("vendor") or "").strip() or None
@@ -60,8 +78,8 @@ def api_alt_issues():
         issue_type=(request.args.get("type") or "").strip() or None,
         context=(request.args.get("context") or "").strip() or None,
         status=(request.args.get("status") or "").strip() or None,
-        limit=int(request.args.get("limit", 200) or 200),
-        offset=int(request.args.get("offset", 0) or 0),
+        limit=_so_nguyen("limit", 200, nho_nhat=1, lon_nhat=5000),
+        offset=_so_nguyen("offset", 0, nho_nhat=0),
     )
     return jsonify({"counts": alt_issue_import.counts(), "items": rows})
 
@@ -140,7 +158,7 @@ def alt_manager_summary():
 
 def alt_manager_worst():
     """P1 — top SP có nhiều ảnh thiếu/yếu ALT nhất."""
-    limit = max(1, min(int(request.args.get("limit", 50)), 500))
+    limit = _so_nguyen("limit", 50, nho_nhat=1, lon_nhat=500)
     only_missing = request.args.get("all", "").lower() not in ("1", "true", "yes")
     return jsonify({
         "items": alt_manager.worst_products(limit=limit, only_with_missing=only_missing),
@@ -206,7 +224,7 @@ def alt_manager_bulk_gen_start():
 def alt_manager_bulk_gen_start_dual():
     """Bulk gen ALT bằng AI, chạy song song Codex×N + Claude×N (workers mỗi provider)."""
     try:
-        workers = int(request.args.get("workers") or (request.get_json(silent=True) or {}).get("workers") or 3)
+        workers = _so_nguyen("workers", 3, nho_nhat=1, lon_nhat=16)
     except Exception:
         workers = 3
     ok = alt_manager.start_bulk_gen_dual_async(workers)

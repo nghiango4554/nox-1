@@ -714,7 +714,13 @@ def api_cwv_scan_start():
     api_key = body.get("api_key", "").strip() or _load_psi_key()
     mode = body.get("mode", "top")
     url_type = body.get("url_type", "product")
-    limit = min(int(body.get("limit", 30)), 200)
+    # 4/9/2026: int() gọi trần → POST {"limit":"abc"} trả 500. Cùng mẫu với
+    # /alt-manager?page=abc. Kẹp luôn min/max cho gọn.
+    try:
+        limit = int(body.get("limit", 30) or 30)
+    except (TypeError, ValueError):
+        limit = 30
+    limit = max(1, min(limit, 200))
 
     skip_scanned = bool(body.get("skip_scanned", False))
     if mode == "custom":
@@ -904,8 +910,11 @@ def seo_faq_attach():
     import faq_schema
     import haravan_blog as hb
 
-    raw = (request.form.get("url") or request.json.get("url") if request.is_json
-           else request.form.get("url") or "").strip()
+    # 4/9/2026: biểu thức cũ đọc thành `(A or B) if is_json else (C or "")` — gửi JSON
+    # rỗng là ra None rồi None.strip() → 500. Đo thật: POST {} trả 500 thay vì báo
+    # "Chưa nhập link bài". Viết tách ra cho hết mơ hồ.
+    payload = request.get_json(silent=True) or {}
+    raw = (payload.get("url") or request.form.get("url") or "").strip()
     if not raw:
         return jsonify({"ok": False, "error": "Chưa nhập link bài."}), 200
     handle = raw.rstrip("/").split("/")[-1].split("?")[0]

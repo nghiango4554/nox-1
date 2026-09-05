@@ -32,6 +32,12 @@
   @keyframes hlfade{0%{background:#fff3f0}60%{background:#fff3f0}100%{background:#fff}}
   .sprow .t{font-weight:600;font-size:13.5px;margin-bottom:9px;word-break:break-word;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .sprow .t small{font-weight:400;color:var(--ink-3)}
+  /* 22/8/2026 (vợ chốt): cột STT trước tên SP để gọi số cho nhanh.
+     user-select:none là chỗ quan trọng — quét chuột qua dòng để copy TÊN SP
+     thì con số KHÔNG dính vào clipboard. margin-right cho tách hẳn khỏi tên. */
+  .sprow .t .stt{flex:none;user-select:none;-webkit-user-select:none;min-width:32px;
+    padding:2px 7px;margin-right:6px;border-radius:6px;background:#f1e7ee;color:#8a5c78;
+    font-size:12px;font-weight:700;text-align:center;letter-spacing:.2px}
   /* 6/8/2026 (vợ chốt): cụm nút nằm SÁT tên SP, bỏ đẩy sang phải */
   .tickdone{color:#1c7a3e;font-weight:800;font-size:15px;line-height:1}
   .live-btn{padding:4px 11px;border:1px solid #cdd9e8;border-radius:8px;background:#fff;cursor:pointer;font:inherit;font-size:12px;font-weight:600;color:#1457b8;text-decoration:none}
@@ -45,6 +51,13 @@
   .paste-btn{margin-left:8px;padding:4px 11px;border:1px solid #b7e0c4;border-radius:8px;background:#effaf3;cursor:pointer;font:inherit;font-size:12px;font-weight:700;color:#1e8c4e}
   .paste-btn:hover{background:#1e8c4e;color:#fff;border-color:#1e8c4e}
   .paste-btn:disabled{opacity:.6;cursor:wait}
+  /* 22/8/2026 (vợ chốt): nút COPY ẢNH 1 — bắt cặp với nút Dán bên cạnh.
+     Xanh dương để phân biệt: xanh dương = lấy ra, xanh lá = đưa vào. */
+  .copy-btn{margin-left:8px;padding:4px 11px;border:1px solid #bcd3f0;border-radius:8px;
+    background:#eef5ff;cursor:pointer;font:inherit;font-size:12px;font-weight:700;color:#1457b8}
+  .copy-btn:hover{background:#1457b8;color:#fff;border-color:#1457b8}
+  .copy-btn:disabled{opacity:.6;cursor:wait}
+  .copy-btn.ok{background:#1e8c4e;color:#fff;border-color:#1e8c4e}
   .saved{font-size:11.5px;color:#1c7a3e;font-weight:600;opacity:0;transition:opacity .2s}
   .saved.show{opacity:1}
   .strip{display:flex;gap:9px;overflow-x:auto;padding-bottom:5px}
@@ -60,7 +73,14 @@
   .hint{font-size:12px;color:var(--ink-3);margin:-6px 0 12px}
   .approvebar{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line,#eadfe6);border-radius:12px;padding:11px 15px;margin-bottom:14px;font-size:13.5px}
   .approvebar[data-state="da_duyet"]{border-color:#2a9d5a;background:#f4fbf6}
-  .approvebar[data-state="da_sync"]{border-color:#1457b8;background:#f3f8ff}
+  .approvebar[data-state="da_sync"]{border-color:#2a9d5a;background:#f4fbf6}
+  /* 10/8: collection ĐÃ duyệt/sync mà có SP MỚI — không được hiện "đã xong" nữa,
+     và phải cho duyệt RIÊNG phần mới, khỏi bỏ duyệt cả cụm rồi xem lại từ đầu. */
+  .approvebar.comoi{border-color:#f0a020;background:#fff9f0}
+  .apbtn.phu{background:none;border:0;color:var(--ink-3);font-size:12.5px;
+    text-decoration:underline;cursor:pointer;padding:0}
+  .alldone-note{background:#f2fbf5;border:1px solid #a7e8c0;border-radius:12px;
+    padding:12px 16px;font-size:13.5px;color:#14532d;margin:0 0 14px}
   .apbtn{margin-left:auto;padding:8px 16px;border:0;border-radius:10px;background:linear-gradient(135deg,#2a9d5a,#1e8c4e);color:#fff;font:inherit;font-weight:700;cursor:pointer}
   .apbtn.un{background:#f3eef2;color:#8a7d87}
   .hide{display:none}
@@ -104,20 +124,48 @@
   .seenbar.off input{cursor:default}
   .seenbadge{font-weight:600;font-size:11.5px;color:#8a5a00;background:#fff4e0;border:1px solid #f0d9a8;border-radius:7px;padding:2px 8px}
   .muted{color:var(--ink-3);font-size:13px}
+  /* lưới đại diện dựng từ ảnh live — ô vuông đều nhau để nhìn ra SP nào lệch cỡ */
+  .luoilive{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .luoilive figure{margin:0;cursor:pointer}
+  .luoilive figure:hover img{border-color:#d75151;box-shadow:0 0 0 2px rgba(215,81,81,.18)}
+  .luoilive figure:hover figcaption{color:#d75151}
+  .luoilive img{width:100%;aspect-ratio:1/1;object-fit:contain;background:#fff;
+    border:1px solid #eee;border-radius:8px;display:block}
+  .luoilive .noimg{width:100%;aspect-ratio:1/1;border:1px dashed #e0c9d6;border-radius:8px;
+    display:flex;align-items:center;justify-content:center;color:#a06a8c;font-size:12px}
+  .luoilive figcaption{font-size:10.5px;color:var(--ink-3);text-align:center;margin-top:3px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .miss{font-size:12.5px;color:#b25a00}
   .miss li{margin:2px 0}
 </style>
 {% endblock %}
 {% block content %}
-  <div class="approvebar" id="approvebar" data-state="{{ review }}">
+  <div class="approvebar{{ ' comoi' if review and n_moi }}" id="approvebar" data-state="{{ review }}">
+    {# 11\8\2026 (vợ báo `laptop-gaming`): bấm "Duyệt N SP mới" mà MÀN HÌNH KHÔNG ĐỔI GÌ.
+       Gốc lỗi: nhánh `review and n_moi` giành quyền hiện trước, không phân biệt collection
+       ĐÃ duyệt hay chưa -> `da_duyet` + còn SP mới thì trước và sau khi bấm hiện y hệt,
+       nút vẫn mời "Duyệt" trong khi chẳng còn gì để duyệt. Nay tách rõ 2 ca. #}
     <span id="apstate">
-      {% if review=='da_sync' %}<b style="color:#1457b8">✓ Đã sync lên live</b>
-      {% elif review=='da_duyet' %}<b style="color:#1c7a3e">✓ Đã duyệt — chờ sync</b>
-      {% else %}Xem hết các sản phẩm rồi bấm <b>Duyệt</b> để đánh dấu collection này.{% endif %}
+      {# 12/8: chỉ còn 2 nghĩa — CÒN VIỆC hay XONG. Bỏ "đã duyệt / chờ đẩy live". #}
+      {% if n_moi %}<b style="color:#b45309">⚠ {{ n_moi }} SP chưa lên web</b>
+        {% if n_synced %}<span style="color:var(--ink-3)">· {{ n_synced }} SP đã đẩy rồi, đang ẩn bên dưới —
+        <b>không phải xem lại</b></span>{% endif %}
+      {% elif review=='da_sync' %}<b style="color:#1c7a3e">✓ Đã xong{% if review_at %} lúc {{ review_at }}{% endif %} — không còn gì phải làm</b>
+      {% else %}Cụm này không còn SP nào chờ đẩy. Xem xong bấm <b>Đánh dấu đã xong</b>.{% endif %}
     </span>
-    <button class="apbtn" id="apbtn" onclick="approve()">
-      {% if review %}Bỏ duyệt{% else %}✓ Duyệt collection này{% endif %}
-    </button>
+    {# ══ 12/8/2026 (vợ chốt): BỎ hẳn bước "Duyệt" ══
+       Nó là một trạng thái trung gian chỉ để quên: sáng 12/8 tìm ra 8 nhóm kẹt ở
+       "đã duyệt — chờ đẩy live" từ 10/8, duyệt xong nằm im 2 ngày không ai biết.
+       Cả ngày làm việc thật chỉ có ĐÚNG 2 hành động: "sync cụm này" và "đổi status".
+       Nên thanh này giờ có đúng 2 nút đó, làm thẳng tại chỗ. #}
+    {% if n_moi %}
+      <button class="apbtn" id="btn-day" onclick="dayCum()"
+              title="Đẩy ảnh chuẩn của {{ n_moi }} SP trong cụm này lên Haravan">
+        ⤴ Đẩy {{ n_moi }} SP lên live</button>
+    {% endif %}
+    <button class="apbtn{{ '' if n_moi else ' phu' }}" id="btn-xong" onclick="danhDauXong()"
+            title="Đánh dấu cụm này đã xong — giữ nguyên ảnh đang chạy trên web">
+      ✓ Đánh dấu đã xong</button>
   </div>
 
   <div class="toggle">
@@ -125,20 +173,28 @@
     <button class="tbtn" data-v="sheet" onclick="sw('sheet')">Lưới đại diện</button>
   </div>
 
-  {# 2 ô tích LUÔN hiện ở MỌI collection cho nhất quán (vợ chốt 27/7).
-     Collection nào không có SP để ẩn thì làm mờ + khoá, KHÔNG giấu đi. #}
+  {# 11\8\2026: 2 ô TÍCH cũ chỉ bật/tắt CSS — từ khi lọc ở server, SP bị ẩn KHÔNG còn
+     trong HTML nên tích chẳng ra gì. Đổi thành LINK đổi chế độ (?hien=1) để vẫn xem
+     lại được. Vẫn luôn hiện ở mọi collection cho nhất quán (vợ chốt 27/7). #}
+  {# ══ 12/8/2026 (vợ chốt): 2 NÚT LỌC thay cho link đổi chế độ ══
+     Mặc định nay là HIỆN HẾT — cả ngày 12/8 mọi link đều phải kèm `?hien=1` nên rõ
+     ràng mặc định cũ (chỉ SP còn việc) không khớp cách dùng. Lựa chọn NHỚ bằng cookie
+     nên mở collection khác không phải chọn lại. #}
   <div class="barrow">
-    <label class="seenbar{{ ' off' if not n_seen }}">
-      <input type="checkbox" id="showseen" onchange="toggleSeen()" {{ 'disabled' if not n_seen }}>
-      {% if n_seen %}Đang ẩn <b>{{ n_seen }}</b> SP đã xem ở collection khác — tích để hiện lại
-      {% else %}Không có SP nào trùng với collection khác{% endif %}</label>
-
-    <label class="seenbar{{ ' off' if not n_synced }}">
-      <input type="checkbox" id="showsynced" onchange="toggleSynced()"
-             {{ 'disabled' if not n_synced }}{{ ' checked' if n_synced and not hide_synced }}>
-      {% if not n_synced %}Chưa có SP nào đã đẩy live
-      {% elif hide_synced %}Đang ẩn <b>{{ n_synced }}</b> SP đã đẩy live — tích để hiện lại
-      {% else %}Đang hiện <b>{{ n_synced }}</b> SP đã đẩy live (không còn SP mới nào) — bỏ tích để ẩn{% endif %}</label>
+    <a class="ptbtn{{ ' on' if hien_het }}" href="?xem=het"
+       title="Hiện mọi SP của cụm, kể cả SP đã đẩy live và SP đã xem ở danh mục khác">
+      Tất cả {{ n_sp_all }}</a>
+    <a class="ptbtn{{ '' if hien_het else ' on' }}" href="?xem=viec"
+       title="Chỉ hiện SP còn phải làm">Còn việc {{ n_hien }}</a>
+    <span class="seenbar" style="cursor:default">
+      {% if hien_het %}
+        {% if n_seen or n_synced %}gồm {{ n_synced }} SP đã đẩy live · {{ n_seen }} SP đã xem ở danh mục khác
+        {% else %}toàn bộ SP của cụm này{% endif %}
+      {% else %}
+        {% if n_seen or n_synced %}đang ẩn {{ n_synced }} SP đã đẩy · {{ n_seen }} SP đã xem nơi khác
+        {% else %}không có SP nào bị ẩn{% endif %}
+      {% endif %}
+    </span>
 
     {% if n_moi %}<span class="newbadge">còn {{ n_moi }} SP mới / chưa đẩy</span>
     {% else %}<span class="syncedbadge">✓ đã đẩy hết</span>{% endif %}
@@ -161,9 +217,9 @@
       bấm ra ngoài hoặc Esc để đóng</div>
   </div>
 
-  {% macro sprow(it) %}
+  {% macro sprow(it, stt=None) %}
       <div class="sprow{% if it.seen_at %} seen{% endif %}{% if it.synced and not it.seen_at %} synced{% endif %}{% if it.pending %} pending{% endif %}" data-handle="{{ it.handle }}" id="sp-{{ it.handle }}">
-        <div class="t">{{ it.title or it.handle }}
+        <div class="t">{% if stt %}<span class="stt" title="Số thứ tự trong cả cụm, không phải trong trang">{{ stt }}</span>{% endif %}{{ it.title or it.handle }}
           {# 6/8/2026 (vợ chốt): bỏ "N ảnh chuẩn" + nhãn "CHƯA ĐẨY LIVE" cho gọn mắt.
              Đã đẩy live = MỘT dấu tick xanh; chưa đẩy thì để trống, không hiện gì. #}
           {% if not it.imgs and it.n_live %}<small style="color:#b45309;font-weight:600">chưa chuẩn hoá · {{ it.n_live }} ảnh đang có trên live</small>{% endif %}
@@ -182,6 +238,7 @@
           {% else %}
           <button class="redo-btn" onclick="redo(this)">↻ Làm lại (không xóa nền)</button>
           {% endif %}
+          <button class="copy-btn" onclick="copyAnh1(this)" title="Chép ảnh đại diện (ảnh #1) vào clipboard — sang ChatGPT bấm Ctrl+V là dán được ngay">📄 Copy ảnh 1</button>
           <button class="paste-btn" onclick="pasteFront(this,'{{ it.handle }}')" title="Copy ảnh từ ChatGPT (chuột phải → Copy image) rồi bấm đây — ảnh tự căn giữa & lên đầu SP">📋 Dán ảnh → đầu SP</button>
           {# để CUỐI hàng: nhãn này ẩn (opacity 0) nhưng vẫn chiếm chỗ,
              đứng trước cụm nút sẽ chọc một khoảng trống vô cớ giữa tên SP và nút #}
@@ -238,19 +295,21 @@
       {# 6/8/2026: lấy dải SP THẬT từ server. Trước đây tự tính (trang-1)*60+1 — sai
          hẳn từ khi cắt theo số ẢNH, mỗi trang một cỡ (đo được: trang 34 SP mà nhãn
          ghi "SP 1–56 trong 56"). #}
+      {# 11\8\2026: đếm theo n_sp_pt (số SP ĐEM CHIA TRANG) chứ không phải n_sp_all.
+         Từ nay mặc định chỉ chia trang trên SP CÒN VIỆC, nên "trong 92" là nói dối. #}
       <span class="ptrang-lb">Trang <b>{{ trang }}</b>/{{ so_trang }}
         — đang xem SP {{ sp_tu }}–{{ sp_den }} ({{ n_anh_trang }} ảnh)
-        trong {{ n_sp_all }}</span>
+        trong {{ n_sp_pt }}{% if not hien_het %} SP còn việc{% endif %}</span>
       <span class="ptrang-nut">
         <a class="ptbtn{{ ' off' if trang == 1 }}"
-           href="{% if trang > 1 %}?page={{ trang - 1 }}{% else %}#{% endif %}">← Trước</a>
+           href="{% if trang > 1 %}?page={{ trang - 1 }}&xem={{ xem }}{% else %}#{% endif %}">← Trước</a>
         {% for p in range(1, so_trang + 1) %}
-        <a class="ptbtn{{ ' on' if p == trang }}" href="?page={{ p }}">{{ p }}</a>
+        <a class="ptbtn{{ ' on' if p == trang }}" href="?page={{ p }}&xem={{ xem }}">{{ p }}</a>
         {% endfor %}
         <a class="ptbtn{{ ' off' if trang == so_trang }}"
-           href="{% if trang < so_trang %}?page={{ trang + 1 }}{% else %}#{% endif %}">Sau →</a>
+           href="{% if trang < so_trang %}?page={{ trang + 1 }}&xem={{ xem }}{% else %}#{% endif %}">Sau →</a>
       </span>
-      <a class="ptbtn ptall" href="?all=1" title="Hiện hết {{ n_sp_all }} SP trong 1 trang — nặng, chỉ dùng khi cần">Xem tất cả</a>
+      <a class="ptbtn ptall" href="?all=1&xem={{ xem }}" title="Hiện hết {{ n_sp_pt }} SP trong 1 trang — nặng, chỉ dùng khi cần">Xem tất cả</a>
     </div>
     {% endif %}
     {# dùng co_the_chia, KHÔNG dùng n_sp_all > 60: collection 40 SP mà 300 ảnh
@@ -265,7 +324,21 @@
 
   {{ phantrang('tren') }}
 
-  <div id="view-sp" class="hide-seen{{ ' hide-synced' if hide_synced }}">
+  {# 11\8\2026: điều kiện cũ `items and not n_hien` KHÔNG BAO GIỜ đúng từ khi lọc trước
+     khi chia trang — hết SP còn việc thì `items` rỗng luôn, ô báo im lặng, vợ nhìn thấy
+     lưới trắng không một chữ. Nay xét theo n_sp_all (collection có SP) + n_hien (còn việc). #}
+  {% if n_sp_all and not n_hien and not hien_het %}
+  <p class="alldone-note">✓ Không còn SP nào phải xem — cả {{ n_sp_all }} SP của danh mục này
+    đều đã đẩy live hoặc đã xem ở danh mục khác.
+    <a href="?hien=1" style="color:#14532d;font-weight:700">Xem lại tất cả →</a></p>
+  {% endif %}
+
+  {# hien_het: BỎ luôn 2 lớp ẩn CSS, không thì bấm "xem lại tất cả" mà SP 'đã xem ở nơi
+     khác' vẫn bị giấu — đúng thứ vợ đang muốn xem. #}
+  <div id="view-sp" class="{{ '' if hien_het else 'hide-seen' }}{{ ' hide-synced' if hide_synced }}">
+    {# STT chạy LIÊN TỤC theo cả cụm, khởi đầu từ sp_tu của trang này — để trang 2
+       tiếp số trang 1, gọi "con số N" là không lẫn giữa các trang. #}
+    {% set ns = namespace(stt = sp_tu|default(1, true)) %}
     {% if items %}
       {% if groups %}
         {% for g in groups %}
@@ -281,12 +354,12 @@
             <button class="grpfold" onclick="foldGrp(this)" title="Thu gọn / mở nhóm">▾</button>
           </h3>
           <div class="grpbody">
-            {% for it in g['items'] %}{{ sprow(it) }}{% endfor %}
+            {% for it in g['items'] %}{{ sprow(it, ns.stt) }}{% set ns.stt = ns.stt + 1 %}{% endfor %}
           </div>
         </section>
         {% endfor %}
       {% else %}
-        {% for it in items %}{{ sprow(it) }}{% endfor %}
+        {% for it in items %}{{ sprow(it, ns.stt) }}{% set ns.stt = ns.stt + 1 %}{% endfor %}
       {% endif %}
     {% else %}
       <div class="sec"><p class="muted">Chưa có ảnh đã xử cho collection này (có thể đang gen).</p></div>
@@ -297,13 +370,24 @@
 
   <div id="view-sheet" class="hide">
     <div class="sec sheet">
+      {# 11\8\2026: dựng thẳng từ ảnh ĐANG CHẠY trên web. Bản cũ dùng file JPG ở `_contact/`
+         dựng sẵn ngày 30/6 nên lưới lệch hẳn so với live (vợ bắt được). #}
       <h3>Lưới đại diện (1 ảnh/SP) — {{ handle }}</h3>
-      {% if sheets %}
-        {% for s in sheets %}
-        <img loading="lazy" src="{{ url_for('thumbs_img', kind='_contact', name=s) }}" alt="{{ s }}">
-        {% endfor %}
+      {% if luoi %}
+        <p class="muted" style="margin:-6px 0 10px">Ảnh đang chạy trên web, lấy trực tiếp lúc mở trang —
+          {{ luoi|length }} SP. Soi xem SP nào lệch cỡ hoặc lệch đáy so với hàng xóm.</p>
+        <div class="luoilive">
+          {% for x in luoi %}
+          <figure title="{{ x.t }} — bấm để xem bộ ảnh của SP này"
+                  onclick="moSP('{{ x.h }}')">
+            {% if x.src %}<img loading="lazy" src="{{ x.src }}" alt="{{ x.t }}">
+            {% else %}<div class="noimg">chưa có ảnh</div>{% endif %}
+            <figcaption>{{ x.h[:26] }}</figcaption>
+          </figure>
+          {% endfor %}
+        </div>
       {% else %}
-        <p class="muted">Chưa có lưới đại diện cho collection này.</p>
+        <p class="muted">Collection này chưa có SP nào để dựng lưới.</p>
       {% endif %}
     </div>
   </div>
@@ -436,6 +520,23 @@ function capNhatSP(handle, d, btn, nhan){
   location.reload();
 }
 
+// Bấm 1 ô trong LƯỚI ĐẠI DIỆN -> nhảy về khung "theo sản phẩm" đúng SP đó.
+// ⚠️ Lưới hiện CẢ collection, còn khung SP chỉ còn "SP còn việc" + đã chia trang
+// (sửa 11/8) -> SP đã đẩy live KHÔNG có trong DOM. Ca đó phải nhờ server tính:
+// `?sp=<handle>` tự bật chế độ hiện hết + nhảy đúng trang, rồi `nhayToiSP()` cuộn tới.
+function moSP(h){
+  const el = document.getElementById('sp-' + h);
+  if (el) {
+    sw('sp');
+    el.scrollIntoView({behavior:'smooth', block:'start'});
+    el.classList.add('hl');
+    setTimeout(() => el.classList.remove('hl'), 2600);
+    try { history.replaceState(null, '', '#sp-' + h); } catch(e) {}
+    return;
+  }
+  location.href = '?sp=' + encodeURIComponent(h) + '#sp-' + h;
+}
+
 function sw(v){
   document.getElementById('view-sp').classList.toggle('hide', v!=='sp');
   document.getElementById('view-sheet').classList.toggle('hide', v!=='sheet');
@@ -486,17 +587,15 @@ function toggleSeen(){
 function toggleSynced(){
   const cb=document.getElementById('showsynced');
   document.getElementById('view-sp').classList.toggle('hide-synced', !cb.checked);
-  try{ localStorage.setItem('tnShowSynced', cb.checked ? '1' : '0'); }catch(e){}
 }
-// nhớ lựa chọn của vợ giữa các lần vào.
-// Nếu collection này KHÔNG còn SP mới nào (server đã bật sẵn) thì cứ để hiện,
-// đừng ẩn hết làm trang trống trơn.
+// 10/8/2026 (vợ chốt): MỌI collection mở ra đều KHÔNG tick sẵn ô này.
+// Trước đây lựa chọn được nhớ trong localStorage 'tnShowSynced' — ai lỡ tick 1 lần
+// là từ đó collection nào cũng bung hết SP cũ ra. Nay bỏ hẳn phần nhớ, và dọn luôn
+// khoá cũ để máy đang lưu '1' không còn bị tick lại.
 (function(){
+  try{ localStorage.removeItem('tnShowSynced'); }catch(e){}
   const cb=document.getElementById('showsynced');
-  if(!cb || cb.disabled || !{{ 'true' if hide_synced else 'false' }}) return;
-  let v='0';
-  try{ v=localStorage.getItem('tnShowSynced')||'0'; }catch(e){}
-  if(v==='1'){ cb.checked=true; toggleSynced(); }
+  if(cb) cb.checked=false;
 })();
 
 // Mở từ kết quả tìm (#sp-<handle>) -> cuộn tới + làm nổi bật SP
@@ -636,6 +735,42 @@ async function _thuNhoAnh(blob){
   return {url, w: im.width, h: im.height, wNew: c.width, hNew: c.height};
 }
 
+/* 22/8/2026 (vợ chốt): chép ẢNH #1 của SP vào clipboard để dán thẳng sang ChatGPT.
+   Ba chỗ dễ vấp, đã xử sẵn:
+   1. Lấy ảnh từ `data-full` của thẻ <img> ĐẦU TIÊN trong strip, không truyền URL từ
+      Jinja — nhờ vậy vợ kéo-thả đổi thứ tự xong bấm là copy đúng ảnh đang đứng đầu.
+   2. Ảnh trên hub là JPEG, mà clipboard của Chrome chỉ nhận image/png -> vẽ qua canvas
+      rồi xuất PNG. Ảnh cùng gốc 127.0.0.1 nên canvas không bị "tainted".
+   3. clipboard.write phải chạy trong cùng nhịp bấm chuột; await fetch trước rồi mới ghi
+      là mất nhịp đó. Nên truyền THẲNG Promise vào ClipboardItem, Chrome chờ hộ. */
+async function copyAnh1(btn){
+  const row = btn.closest('.sprow');
+  const img = row && row.querySelector('.strip figure img[data-full]');
+  if(!img){
+    alert('SP này chưa có ảnh chuẩn để copy.\nBấm "✨ Tạo ảnh chuẩn từ ảnh live" trước.');
+    return;
+  }
+  const goc = btn.textContent;
+  const lamPng = (async () => {
+    const bl = await (await fetch(img.getAttribute('data-full'), {cache:'no-store'})).blob();
+    const bm = await createImageBitmap(bl);
+    const cv = document.createElement('canvas');
+    cv.width = bm.width; cv.height = bm.height;
+    cv.getContext('2d').drawImage(bm, 0, 0);
+    return await new Promise(r => cv.toBlob(r, 'image/png'));
+  })();
+  btn.disabled = true; btn.textContent = '📄 Đang copy...';
+  try{
+    await navigator.clipboard.write([new ClipboardItem({'image/png': lamPng})]);
+    btn.classList.add('ok'); btn.textContent = '✓ Đã copy ảnh 1';
+    setTimeout(() => { btn.classList.remove('ok'); btn.textContent = goc; btn.disabled = false; }, 1800);
+  }catch(e){
+    btn.disabled = false; btn.textContent = goc;
+    alert('Không copy được ảnh: ' + (e.message || e) +
+          '\n(Chrome cần cho phép quyền ghi clipboard — bấm "Allow/Cho phép" khi hỏi.)');
+  }
+}
+
 async function pasteFront(btn, handle){
   const orig = btn.textContent;
   const xong = (msg) => { if (msg) alert(msg); btn.disabled = false; btn.textContent = orig; };
@@ -693,10 +828,77 @@ async function pasteFront(btn, handle){
 }
 
 // ── Duyệt / bỏ duyệt collection ──
-function approve(){
+// value truyền THẲNG từ nút (10/8): trước đây suy ra bằng `!cur` nên collection đã
+// duyệt mà có SP mới thì bấm gì cũng thành BỎ DUYỆT -> vợ phải duyệt lại từ đầu,
+// xem lại cả những SP cũ đã ok. Giờ nút "Duyệt N SP mới" gửi value=true.
+/* ══ 12/8/2026: 2 nút thay cho bước "Duyệt" ══ */
+function _hopChan(tieu, phu, rows, nutOk){
+  const n=document.createElement('div'); n.className='tb-nen';
+  n.innerHTML='<div class="tb-hop"><div class="dau"><b>'+tieu+'</b><div class="sub">'+phu+'</div></div>'
+    +'<div class="than">'+rows+'</div><div class="chan">'
+    +'<span class="ghi"></span><button class="ok" style="background:#6b7280" data-x="huy">Huỷ</button>'
+    +'<button class="ok" data-x="ok">'+nutOk+'</button></div></div>';
+  document.body.appendChild(n); document.body.style.overflow='hidden';
+  return new Promise(res=>n.querySelectorAll('[data-x]').forEach(b=>b.addEventListener('click',()=>{
+    n.remove(); document.body.style.overflow=''; res(b.dataset.x==='ok');
+  })));
+}
+
+function dayCum(){
+  const btn=document.getElementById('btn-day');
+  btn.disabled=true; btn.textContent='Đang kiểm...';
+  (function chay(boQua){
+    fetch('/thumbs/sync-mot',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({handle:'{{ handle }}', bo_qua_mat:boQua})})
+      .then(r=>r.json().then(d=>({st:r.status,d})))
+      .then(async ({st,d})=>{
+        if(st===409 && d.can_xac_nhan){
+          const rows=d.mat.map(x=>'<div class="tb-row"><span class="tb-lo lo-bot">−'+x.mat+' ảnh</span>'
+            +'<span style="flex:1;min-width:200px;font-weight:600">'+(x.title||x.handle)+'</span>'
+            +'<span style="font-size:12.5px;color:#5b647a">kho '+x.kho+' / web '+x.live+'</span></div>').join('');
+          const ok=await _hopChan('⚠️ '+d.mat.length+' SP sẽ mất '+d.tong_anh_mat+' ảnh',
+            'Trên web mấy SP này đang có nhiều ảnh hơn kho — thường là ảnh marketing hoặc ảnh chèn tay. '
+            +'Đẩy sẽ thay cả bộ bằng ảnh kho, mấy tấm dư <b>bị xoá thật</b>.',
+            rows, 'Bỏ qua '+d.mat.length+' SP này, đẩy phần còn lại');
+          if(ok){ btn.textContent='Đang đẩy...'; return chay(true); }
+          btn.disabled=false; btn.textContent='⤴ Đẩy SP lên live'; return;
+        }
+        if(d.ok){ btn.textContent='Đang đẩy...'; if(window.pollSync) pollSync(); else setTimeout(()=>location.reload(), 4000); }
+        else { alert('Lỗi: '+(d.error||'không rõ')); btn.disabled=false; btn.textContent='⤴ Đẩy SP lên live'; }
+      }).catch(()=>{ alert('Lỗi mạng'); btn.disabled=false; });
+  })(false);
+}
+
+function danhDauXong(){
+  const btn=document.getElementById('btn-xong');
+  btn.disabled=true; btn.textContent='Đang lưu...';
+  (function chay(keCa){
+    fetch('/thumbs/danh-dau-xong',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({handle:'{{ handle }}', ke_ca_con_no:keCa})})
+      .then(r=>r.json().then(d=>({st:r.status,d})))
+      .then(async ({st,d})=>{
+        if(st===409 && d.con_no){
+          const rows=d.con_no.map(x=>'<div class="tb-row"><span class="tb-lo lo-them">kho nhiều hơn '
+            +(x.kho-x.live)+'</span><span style="flex:1;min-width:200px;font-weight:600">'
+            +(x.title||x.handle)+'</span><span style="font-size:12.5px;color:#5b647a">kho '
+            +x.kho+' / web '+x.live+'</span></div>').join('');
+          const ok=await _hopChan('⚠️ Còn '+d.con_no.length+' SP có ảnh chưa đẩy',
+            'Mấy SP này trong kho có nhiều ảnh hơn trên web — tức ảnh đã làm mà chưa lên. '
+            +'Đánh dấu xong bây giờ là <b>bỏ phí công làm ảnh</b>. Nên bấm “Đẩy SP lên live” trước.',
+            rows, 'Vẫn đánh dấu xong');
+          if(ok){ btn.textContent='Đang lưu...'; return chay(true); }
+          btn.disabled=false; btn.textContent='✓ Đánh dấu đã xong'; return;
+        }
+        if(d.ok) location.reload();
+        else { alert('Lỗi: '+(d.error||'không rõ')); btn.disabled=false; btn.textContent='✓ Đánh dấu đã xong'; }
+      }).catch(()=>{ alert('Lỗi mạng'); btn.disabled=false; });
+  })(false);
+}
+
+function approve(value){
   const bar=document.getElementById('approvebar');
-  const cur=bar.dataset.state;            // '' | da_duyet | da_sync
-  const value = !cur;                     // có trạng thái -> bỏ; chưa -> duyệt
+  if(value===undefined) value = !bar.dataset.state;
+  if(value===false && !confirm('Bỏ duyệt CẢ collection?\n\nLần sau mở lại sẽ phải xem lại từ đầu, kể cả các SP cũ đã duyệt xong.')) return;
   const btn=document.getElementById('apbtn'); btn.disabled=true;
   fetch('/thumbs/approve',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({handle:'{{ handle }}', value})})

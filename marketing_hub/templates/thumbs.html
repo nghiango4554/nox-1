@@ -33,12 +33,22 @@
   .pbar.full>i{background:#2a9d5a}
   .card{position:relative}
   .tick{position:absolute;top:9px;right:10px;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px}
-  .tick.duyet{background:#e7f7ec;color:#1c7a3e}
-  .tick.sync{background:#e3f0ff;color:#1457b8}
-  .card.approved{border-color:#2a9d5a}
-  .card.synced{border-color:#1457b8}
-  .card.allseen{opacity:.42;filter:grayscale(.5)}
-  .card.allseen:hover{opacity:.85;filter:none}
+  /* MÀU THEO VIỆC, không theo tên trạng thái (sửa 10/8):
+     cam = CÒN VIỆC (đã duyệt nhưng chưa đẩy live) · xanh lá = XONG (đã lên web).
+     Trước đây 'đã duyệt' tô xanh lá nên nhìn lướt tưởng xong, mà thực ra còn nợ. */
+  .tick.duyet{background:#fff4e5;color:#b45309;border:1px solid #f0c987}
+  .tick.sync{background:#e7f7ec;color:#1c7a3e}
+  .card.approved{border-color:#f0a020;border-width:2px}
+  /* 11\8 (vợ yêu cầu): danh mục ĐÃ LÊN WEB thì làm mờ hẳn đi — mắt chỉ còn nhìn
+     vào chỗ CÒN VIỆC. Rê chuột vào là rõ lại, vẫn đọc/bấm bình thường.
+     `sync_lech` KHÔNG mờ vì nó còn SP chưa đẩy. */
+    /* 4/9/2026: .42 + grayscale .55 mờ quá tay — 106/140 danh mục đã lên web nên
+     gần CẢ TRANG bị mờ, nhìn như hỏng, muốn đọc tên phải rê chuột từng thẻ.
+     Nâng lên .72 + grayscale .3: vẫn thấy rõ là 'đã xong' mà đọc được ngay. */
+  .card.synced{border-color:#2a9d5a;opacity:.72;filter:grayscale(.3)}
+  .card.synced:hover{opacity:1;filter:none}
+  .card.allseen{opacity:.7;filter:grayscale(.3)}
+  .card.allseen:hover{opacity:1;filter:none}
   .tick.allseen{background:#6b7280}
   .syncbar{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--line,#eadfe6);border-radius:14px;padding:12px 16px;margin-bottom:16px;flex-wrap:wrap}
   .syncbar .info{font-size:13px;color:var(--ink-2)}
@@ -82,10 +92,62 @@
   .tsee::before{content:"▸ ";display:inline-block;transition:.15s}
   details[open]>.tsee::before{transform:rotate(90deg)}
   .todo.push .tbody{padding-top:4px}
+  /* popup "ảnh vừa đổi trên Haravan" — chặn nền để vợ đọc xong mới vào việc */
+  .modal-nen{position:fixed;inset:0;z-index:9999;background:rgba(20,24,33,.55);
+    backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:24px}
+  .modal-hop{background:#fff;border-radius:16px;max-width:840px;width:100%;
+    max-height:86vh;display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3)}
+  .modal-dau{padding:18px 22px 14px;border-bottom:1px solid var(--line,#e3e8f0)}
+  .modal-dau b{font-size:16.5px;color:#12386e}
+  .modal-sub{font-size:13px;color:#5b647a;margin-top:4px;line-height:1.55}
+  .modal-than{overflow:auto;padding:8px 14px}
+  .td-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 10px;
+    border-bottom:1px solid #f0f3f8}
+  .td-row:last-child{border-bottom:none}
+  .td-chip{flex:none;min-width:86px;text-align:center;font-size:11.5px;font-weight:700;
+    padding:3px 9px;border-radius:999px}
+  .td-them .td-chip{background:#d7f2e1;color:#186b3a}
+  .td-bot  .td-chip{background:#fde4de;color:#a3301c}
+  .td-thay .td-chip{background:#fff3d6;color:#8a5a00}
+  .td-thutu .td-chip{background:#dbeafe;color:#12386e}
+  .td-an   .td-chip{background:#eef1f6;color:#5b647a}
+  .td-ten{font-weight:600;color:#1d2430;text-decoration:none;flex:1;min-width:220px}
+  .td-ten:hover{text-decoration:underline}
+  .td-ct{font-size:12.5px;color:#5b647a}
+  .td-live{font-size:12px;color:#1457b8;text-decoration:none;white-space:nowrap}
+  .modal-chan{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:14px 22px;border-top:1px solid var(--line,#e3e8f0);background:#fafbfd;
+    border-radius:0 0 16px 16px}
+  .modal-ghi{flex:1;font-size:12.5px;color:#5b647a;min-width:220px}
+  .modal-nut{font:inherit;font-size:14px;font-weight:700;padding:10px 20px;border:none;
+    border-radius:10px;background:#177245;color:#fff;cursor:pointer}
+  .modal-nut:hover{background:#125c37}
+  .modal-nut:disabled{opacity:.6;cursor:wait}
+  /* băng "SP mới chưa vào nhóm" — màu xanh dương để tách khỏi vàng (còn việc)
+     và xanh lá (bấm là xong): đây là thứ HUB KHÔNG TỰ SỬA ĐƯỢC, phải quét lại bảng. */
+  .todo.spmoi{background:#f4f8ff;border-color:#b6d0f5}
+  .todo.spmoi .tophead{padding:15px 17px}
+  .todo.spmoi b{font-size:15px;color:#12386e}
+  .todo.spmoi .tsub{font-size:13px;color:#3d5a86;margin-top:3px;line-height:1.5}
+  .todo.spmoi details{border-top:1px solid #d7e5f8}
+  .todo.spmoi .tsee{color:#3d5a86}
+  .todo.spmoi .tbody{padding:4px 16px 14px;grid-template-columns:1fr}
+  .todo.spmoi .trow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:8px 11px;background:#fff;border:1px solid #dbe7f8;border-radius:10px}
+  .todo.spmoi .trow a{font-weight:600;color:#12386e;text-decoration:none}
+  .todo.spmoi .trow a:hover{text-decoration:underline}
+  .todo.spmoi .pill{margin-left:auto;font-size:11.5px;font-weight:700;
+    padding:2px 9px;border-radius:999px;white-space:nowrap}
   .alldone{background:#f2fbf5;border:1px solid #a7e8c0;border-radius:14px;padding:12px 16px;
     font-size:13.5px;color:#14532d;margin-bottom:16px}
+  /* chú giải trạng thái — để nhìn màu là biết còn việc hay xong */
+  .statekey{display:flex;gap:16px;flex-wrap:wrap;margin:0 0 14px;font-size:12.5px;color:var(--ink-2)}
+  .statekey span{display:inline-flex;align-items:center;gap:6px}
+  .statekey i{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .statekey .k-warn{background:#f0c987} .statekey .k-duyet{background:#f0a020}
+  .statekey .k-sync{background:#2a9d5a} .statekey .k-seen{background:#6b7280}
   .qty.relech{background:#fff4e5;color:#b45309} .qty.nogen{background:#f3eef2;color:#8a7d87}
-  .qty.duyet{background:#e7f7ec;color:#1c7a3e}
+  .qty.duyet{background:#fff4e5;color:#b45309}
   .filters{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
   .fchip{border:1px solid #d9cdd6;background:#fff;border-radius:999px;padding:6px 14px;cursor:pointer;
     font:inherit;font-size:13px;color:var(--ink-2)}
@@ -103,15 +165,52 @@
 {% block content %}
   <div class="kpis">
     <div class="kpi"><b>{{ tot.pct }}%</b><span>{{ tot.gen_uniq }}/{{ tot.sp_uniq }} SP đã có ảnh chuẩn</span></div>
-    <div class="kpi"><b>{{ tot.col_done }}/{{ n_col }}</b><span>danh mục xong 100%</span></div>
+    <div class="kpi"><b>{{ tot.col_done }}/{{ n_col }}</b><span>danh mục đủ ảnh chuẩn</span></div>
     {% if tot.push_sp %}
     <div class="kpi hot"><a href="#viec-can-lam"><b>{{ tot.push_sp }}</b>
       <span>SP có ảnh sẵn, chờ đẩy live</span></a></div>{% endif %}
     {% if tot.nogen %}
     <div class="kpi hot"><a href="#viec-can-lam"><b>{{ tot.nogen }}</b>
       <span>danh mục chưa gen ảnh nào</span></a></div>{% endif %}
-    <div class="kpi"><b>{{ tot.synced }}</b><span>danh mục đã sync xong</span></div>
+    <div class="kpi"><b>{{ tot.synced }}</b><span>danh mục đã lên web</span></div>
   </div>
+
+{# 12/8/2026: popup báo ảnh đổi trên Haravan ĐÃ CHUYỂN sang khung nền
+   (redesign_base.html) vì chuông thông báo là của chung mọi tab.
+   Ở đây không dựng lại nữa, tránh bung 2 popup chồng nhau. #}
+
+  {# 12/8/2026 (vợ yêu cầu): bắt SP MỚI đang bán trên web mà chưa vào nhóm nào.
+     Trước đó SP mới tạo là VÔ HÌNH ở đây — F2023 và MSI MP273UP tạo 11/8 nằm
+     ngoài mọi thẻ, kể cả thẻ "chưa phân loại", phải dò tay mới thấy. #}
+  {% if sp_moi %}
+  <div class="todo spmoi" id="sp-moi">
+    <div class="tophead">
+      <div>
+        <b>🆕 {{ sp_moi|length }} SP đang bán trên web mà chưa vào nhóm nào</b>
+        <div class="tsub">Đối chiếu sitemap live với danh sách SP các thẻ đang hiện.
+          Đã bỏ hàng cũ, dịch vụ và combo PC. Mấy con này sẽ không xuất hiện ở bất kỳ
+          thẻ nào cho tới khi quét lại bảng danh mục ở tab Thông số.</div>
+      </div>
+    </div>
+    <details open>
+      <summary class="tsee">Xem {{ sp_moi|length }} SP</summary>
+      <div class="tbody">
+        {% for s in sp_moi %}
+        <div class="trow">
+          <a href="https://sintech.vn/products/{{ s.handle }}" target="_blank" rel="noopener">
+            {{ s.title or s.handle }}</a>
+          <small style="color:#8a7d87">{{ s.handle }}</small>
+          {% if not s.trong_chi_muc %}
+          <span class="pill" style="background:#fde8ef;color:#a3204a">chưa có trong bảng danh mục</span>
+          {% else %}
+          <span class="pill" style="background:#fff3d6;color:#8a5a00">có trong bảng nhưng chưa gắn nhóm</span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+  </div>
+  {% endif %}
 
   {% if tot.todo_push %}
   <div class="todo push" id="viec-can-lam">
@@ -130,7 +229,7 @@
         <a class="ti" href="{{ url_for('thumbs_collection', handle=t.handle) }}">
           <span class="nm">{{ t.title or t.handle }}</span>
           {% if t.kind=='relech' %}<span class="qty relech">{{ t.pending }} SP</span>
-          {% else %}<span class="qty duyet">đã duyệt</span>{% endif %}
+          {% else %}<span class="qty duyet">chờ đẩy</span>{% endif %}
         </a>
         {% endfor %}
       </div>
@@ -165,8 +264,8 @@
       {% if tot.relech %}<button class="fchip" data-f="relech">⚠ Cần đẩy live <b>{{ tot.relech }}</b></button>{% endif %}
       {% if tot.nogen %}<button class="fchip" data-f="nogen">Chưa gen <b>{{ tot.nogen }}</b></button>{% endif %}
       <button class="fchip" data-f="dang">Đang gen</button>
-      <button class="fchip" data-f="chosync">Gen xong, chưa duyệt</button>
-      <button class="fchip" data-f="xong">Đã sync <b>{{ tot.synced }}</b></button>
+      <button class="fchip" data-f="chosync">Đủ ảnh, chưa duyệt</button>
+      <button class="fchip" data-f="len_web">Đã lên web <b>{{ tot.synced }}</b></button>
       <span style="margin-left:auto;font-size:12.5px;color:var(--ink-3)" id="fcount"></span>
     </div>
 
@@ -177,7 +276,13 @@
     {% endif %}
   </div>
   <p class="legend">Chuẩn: 1000×1000, nền trắng, sản phẩm căn giữa chiếm 85% khung. Bấm 1 danh mục để
-    xem từng SP + kéo-thả sắp xếp. Xem xong bấm <b>Duyệt</b> trong danh mục → ngoài này hiện ✓.</p>
+    xem từng SP + kéo-thả sắp xếp. Xem xong bấm <b>Duyệt</b> trong danh mục.</p>
+  <div class="statekey">
+    <span><i class="k-warn"></i>⚠ N SP chưa lên web — ảnh mới thêm sau lần đẩy trước</span>
+    <span><i class="k-duyet"></i>⤴ chờ đẩy live — đã duyệt, <b>chưa lên web</b></span>
+    <span><i class="k-sync"></i>✓ đã lên web — xong, <b>thẻ được làm mờ</b>, rê chuột vào là rõ lại</span>
+    <span><i class="k-seen"></i>đã xem ở nơi khác — SP trùng danh mục khác</span>
+  </div>
   <div class="empty-note hidden" id="emptynote">Không có danh mục nào ở bộ lọc này.</div>
 
   {% for wkey, w in waves.items() %}
@@ -192,16 +297,18 @@
       {% if c.gen %}
         <a class="card {{ 'approved' if c.review=='da_duyet' }}{{ 'synced' if c.review=='da_sync' }}{{ ' allseen' if c.all_seen }}" data-f="{{ c.flt }}" href="{{ url_for('thumbs_collection', handle=c.handle) }}"
            {% if c.all_seen %}title="Toàn bộ SP của collection này đã có ở collection khác — không có gì mới để duyệt"{% endif %}>
-          {% if c.review=='sync_lech' %}<span class="tick" style="background:#fff4e5;color:#b45309;border-color:#f0c987">⚠ còn {{ c.pending }} SP chưa sync</span>
+          {% if c.review=='sync_lech' %}<span class="tick" style="background:#fff4e5;color:#b45309;border-color:#f0c987">⚠ {{ c.pending }} SP chưa lên web</span>
           {% elif c.all_seen %}<span class="tick allseen">đã xem ở nơi khác</span>
-          {% elif c.review=='da_sync' %}<span class="tick sync">✓ đã sync</span>
-          {% elif c.review=='da_duyet' %}<span class="tick duyet">✓ đã duyệt</span>{% endif %}
+          {% elif c.review=='da_sync' %}<span class="tick sync">✓ đã lên web</span>
+          {% elif c.review=='da_duyet' %}<span class="tick duyet">⤴ chờ đẩy live</span>{% endif %}
           <div class="h">{{ c.title or c.handle }}</div>
           {% if c.parent %}<div class="sub">{{ c.parent }}</div>{% endif %}
           <div class="m">
             <span class="frac">{{ c.gen }}/{{ c.so_sp }}</span>
-            {% if c.synced %}<span class="pill ready">{{ c.synced }} đã sync</span>{% endif %}
-            {% if c.status == 'done' %}<span class="pill ready">xong</span>
+            {% if c.synced %}<span class="pill ready">{{ c.synced }} SP đã lên web</span>{% endif %}
+            {# 11\8: pill này CHỈ nói "đã làm đủ ảnh chuẩn trong kho", KHÔNG phải đã lên web.
+               Trước ghi "xong" -> 62 danh mục đủ ảnh mà chưa đẩy vẫn khoe "xong" (vợ hỏi). #}
+            {% if c.status == 'done' %}<span class="pill ready">đủ ảnh chuẩn</span>
             {% else %}<span class="pill warn">đang gen</span>{% endif %}
             {% if c.rembg %}<span class="pill warn">{{ c.rembg }} xóa nền</span>{% endif %}
             {% if c.noimg %}<span class="pill warn">{{ c.noimg }} thiếu ảnh</span>{% endif %}
@@ -312,15 +419,53 @@ _si.addEventListener('input', ()=>{
 });
 document.addEventListener('click', e=>{ if(!e.target.closest('.searchwrap')) _sr.style.display='none'; });
 
+/* 12/8/2026 (vợ chốt): TRƯỚC KHI đẩy phải nói rõ SP nào sẽ MẤT ảnh.
+   Nút này thay TOÀN BỘ gallery bằng ảnh kho, nên SP có ảnh marketing / ảnh chèn tay /
+   GIF (kho không có) sẽ mất sạch mấy tấm đó — đúng tai nạn mất 4 ảnh tai nghe E-Dra
+   hôm 11/8. Mọi script đều chặn ca này, riêng cái nút thì chưa. */
+function veCanhBaoMat(mat, tong){
+  const rows = mat.map(x =>
+    '<div class="tb-row"><span class="tb-lo lo-bot">−'+x.mat+' ảnh</span>'
+    + '<span style="flex:1;min-width:200px;font-weight:600">'+ (x.title||x.handle) +'</span>'
+    + '<span style="font-size:12.5px;color:#5b647a">kho '+x.kho+' / web '+x.live+' · '+x.collection+'</span>'
+    + '<a href="https://sintech.vn/products/'+encodeURIComponent(x.handle)+'" target="_blank"'
+    + ' rel="noopener" style="font-size:12px;color:#1457b8;text-decoration:none">xem ↗</a></div>').join('');
+  const n=document.createElement('div'); n.className='tb-nen';
+  n.innerHTML = '<div class="tb-hop"><div class="dau">'
+    + '<b>⚠️ '+mat.length+' sản phẩm sẽ mất '+tong+' ảnh</b>'
+    + '<div class="sub">Trên web mấy SP này đang có nhiều ảnh hơn trong kho — thường là ảnh '
+    + 'marketing hoặc ảnh chèn tay. Đẩy sẽ thay cả bộ bằng ảnh kho, mấy tấm dư <b>bị xoá thật</b>.</div></div>'
+    + '<div class="than">'+rows+'</div>'
+    + '<div class="chan"><span class="ghi">Muốn giữ thì kéo mấy tấm đó về kho trước rồi đẩy lại.</span>'
+    + '<button class="ok" style="background:#6b7280" data-x="huy">Huỷ</button>'
+    + '<button class="ok" data-x="bo">Bỏ qua '+mat.length+' SP này, đẩy phần còn lại</button></div></div>';
+  document.body.appendChild(n); document.body.style.overflow='hidden';
+  return new Promise(res=>{
+    n.querySelectorAll('[data-x]').forEach(b=>b.addEventListener('click',()=>{
+      n.remove(); document.body.style.overflow=''; res(b.dataset.x==='bo');
+    }));
+  });
+}
+
 function syncApproved(){
   const btn=document.getElementById('syncbtn');
-  if(!confirm('Đẩy ảnh chuẩn lên Haravan LIVE?\n\n• Danh mục ĐÃ DUYỆT chờ đẩy\n• Danh mục đã sync trước đó nhưng có SP MỚI chưa đẩy\n\nẢnh chuẩn sẽ thay ảnh sản phẩm trên store thật (ảnh local giữ nguyên).')) return;
-  btn.disabled=true; btn.textContent='Đang khởi động...';
-  fetch('/thumbs/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})})
-    .then(r=>r.json()).then(d=>{
-      if(d.ok){ pollSync(); }
+  if(!confirm('Đẩy ảnh chuẩn lên Haravan LIVE?\n\n• Danh mục ĐÃ DUYỆT đang chờ đẩy\n• Danh mục đã lên web trước đó nhưng có SP MỚI chưa đẩy\n\nẢnh chuẩn sẽ thay ảnh sản phẩm trên store thật (ảnh local giữ nguyên).')) return;
+  btn.disabled=true; btn.textContent='Đang kiểm...';
+  chay(false);
+
+  function chay(boQua){
+  fetch('/thumbs/sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bo_qua_mat:boQua})})
+    .then(r=>r.json().then(d=>({st:r.status,d})))
+    .then(async ({st,d})=>{
+      if(st===409 && d.can_xac_nhan){
+        const tiep = await veCanhBaoMat(d.mat, d.tong_anh_mat);
+        if(tiep){ btn.textContent='Đang khởi động...'; return chay(true); }
+        btn.disabled=false; btn.textContent='⤴ Đẩy SP lên live'; return;
+      }
+      if(d.ok){ btn.textContent='Đang khởi động...'; pollSync(); }
       else { alert('Lỗi: '+(d.error||'không rõ')); btn.disabled=false; btn.textContent='⤴ Sync lại'; }
     }).catch(()=>{ alert('Lỗi mạng'); btn.disabled=false; });
+  }
 }
 function pollSync(){
   const btn=document.getElementById('syncbtn');

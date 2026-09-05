@@ -1,20 +1,20 @@
 {
-  "generated_at": "2026-07-26T02:00:02",
+  "generated_at": "2026-08-30T02:00:04",
   "current_week": {
-    "week_no": 30,
+    "week_no": 35,
     "year": 2026
   },
   "prev_week": {
-    "week_no": 29,
+    "week_no": 30,
     "year": 2026
   },
   "strategies": {
     "mobile": {
       "strategy": "mobile",
-      "current_avg_score": 68.4,
+      "current_avg_score": 68.3,
       "prev_avg_score": 68.4,
-      "avg_change": 0.0,
-      "current_count": 2688,
+      "avg_change": -0.1,
+      "current_count": 2785,
       "prev_count": 2688,
       "common_count": 2688,
       "improved_count": 0,
@@ -27,7 +27,7 @@
       "current_avg_score": 88.8,
       "prev_avg_score": 88.8,
       "avg_change": 0.0,
-      "current_count": 2688,
+      "current_count": 2785,
       "prev_count": 2688,
       "common_count": 2688,
       "improved_count": 0,

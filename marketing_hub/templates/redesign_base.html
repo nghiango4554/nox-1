@@ -106,8 +106,20 @@
   <header class="topbar">
     <div class="crumb">{% block page_title %}{% block crumb %}<i class="ic" data-icon="layout-dashboard" style="color:var(--accent-ink)"></i><span>Dashboard</span>{% endblock %}{% endblock %}</div>
     <div class="top-actions">
-      {% block topbar_extra %}<div class="seg" role="tablist"><button class="on"><i class="ic" data-icon="sparkles"></i>Gradient</button><button><i class="ic" data-icon="feather"></i>Dịu</button><button><i class="ic" data-icon="droplet"></i>Đơn sắc</button></div>
-      <button class="icon-btn" aria-label="Thông báo"><i class="ic" data-icon="bell"></i><span class="dot"></span></button>{% endblock %}
+      {% block topbar_extra %}<div class="seg" role="tablist"><button class="on"><i class="ic" data-icon="sparkles"></i>Gradient</button><button><i class="ic" data-icon="feather"></i>Dịu</button><button><i class="ic" data-icon="droplet"></i>Đơn sắc</button></div>{% endblock %}
+      {# 12/8/2026: chuông ĐỂ NGOÀI block topbar_extra — nó là của chung mọi tab,
+         mà seo.html có ghi đè block đó nên để trong sẽ mất chuông ở tab SEO. #}
+      <div class="tb-boc">
+        <button class="icon-btn" id="tb-nut" aria-label="Thông báo" onclick="tbMo(event)">
+          <i class="ic" data-icon="bell"></i>
+          <span class="tb-so" id="tb-so" {% if not tb_chua_doc %}hidden{% endif %}>{{ tb_chua_doc }}</span>
+        </button>
+        <div class="tb-drop" id="tb-drop" hidden>
+          <div class="tb-dh"><span>Thông báo</span>
+            <a href="#" onclick="tbDocHet(event)">Đánh dấu đã đọc hết</a></div>
+          <div class="tb-than" id="tb-than"></div>
+        </div>
+      </div>
       {% block page_actions %}<a class="btn-primary" href="{{ url_for('post_new') }}"><i class="ic" data-icon="plus"></i>Bài mới</a>{% endblock %}
     </div>
   </header>
@@ -153,5 +165,194 @@
 </script>
 {% block legacy_js %}{% endblock %}
 {% block scripts %}{% endblock %}
+
+{# ══════════ 🔔 Thông báo dùng chung (vợ chốt 12/8/2026) ══════════
+   3 mức: chuông có số · bong bóng 1 lần mỗi phiên · popup chặn CHỈ cho loại `can_xem`.
+   Để ở khung nền nên có mặt ở mọi tab. #}
+<style>
+.tb-boc{position:relative}
+.tb-so{position:absolute;top:-4px;right:-4px;min-width:17px;height:17px;border-radius:999px;
+  background:#facc15;color:#5a3d00;font-size:10.5px;font-weight:800;display:flex;
+  align-items:center;justify-content:center;padding:0 4px;border:2px solid #fff}
+.tb-drop{position:absolute;top:44px;right:0;width:400px;max-height:70vh;background:#fff;
+  border:1px solid #dbe3ef;border-radius:12px;box-shadow:0 12px 34px rgba(20,30,60,.18);
+  overflow:hidden;z-index:900;display:flex;flex-direction:column}
+/* 12/8: `display:flex` de len thuoc tinh [hidden] (von chi la display:none) nen
+   phan tu hien san du da dat hidden — dinh 2 lan: dropdown, roi badge hien so "0".
+   Chan mot the cho MOI phan tu cua khoi thong bao. */
+.tb-drop[hidden], .tb-so[hidden]{display:none}
+.tb-dh{padding:11px 14px;border-bottom:1px solid #eef1f6;font-weight:700;font-size:13.5px;
+  display:flex;justify-content:space-between;align-items:center;color:#1d2430}
+.tb-dh a{font-size:12px;font-weight:600;color:#1457b8;text-decoration:none}
+.tb-than{overflow:auto}
+.tb-it{display:flex;gap:10px;padding:11px 14px;border-bottom:1px solid #f2f5f9;
+  cursor:pointer;text-decoration:none;color:inherit}
+.tb-it:hover{background:#f8fafd}
+.tb-it:last-child{border-bottom:none}
+.tb-cham{width:8px;height:8px;border-radius:999px;background:#c0392b;margin-top:6px;flex:none}
+.tb-it.da .tb-cham{background:#d6dbe4}
+.tb-n{font-size:13.5px;font-weight:600;line-height:1.42;color:#1d2430}
+.tb-it.da .tb-n{font-weight:500;color:#5b647a}
+.tb-t{font-size:11.5px;color:#8a93a6;margin-top:2px}
+.tb-chip{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;
+  border-radius:999px;margin-right:6px;vertical-align:1px}
+.tb-can_xem{background:#fde4de;color:#a3301c}.tb-sp_moi{background:#dbeafe;color:#12386e}
+.tb-nhac{background:#fff3d6;color:#8a5a00}.tb-xong{background:#d7f2e1;color:#186b3a}
+.tb-loi{background:#fde4de;color:#a3301c}
+.tb-trong{padding:26px 14px;text-align:center;color:#8a93a6;font-size:13px}
+/* bong bóng */
+.tb-toast{position:fixed;top:64px;right:22px;width:376px;background:#fff;
+  border:1px solid #dbe3ef;border-left:4px solid #c0392b;border-radius:11px;
+  box-shadow:0 12px 30px rgba(20,30,60,.2);padding:13px 15px;z-index:950;
+  animation:tbVao .22s ease-out}
+@keyframes tbVao{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.tb-toast b{font-size:14px;color:#1d2430}
+.tb-toast p{margin:5px 0 10px;font-size:13px;color:#5b647a;line-height:1.5}
+.tb-toast .nut{font-size:12.5px;font-weight:700;color:#c0392b;text-decoration:none;
+  margin-right:16px;cursor:pointer}
+.tb-toast .nut.phu{color:#8a93a6}
+/* popup chặn — CHỈ loại can_xem */
+.tb-nen{position:fixed;inset:0;z-index:9999;background:rgba(20,24,33,.55);
+  backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:24px}
+.tb-hop{background:#fff;border-radius:16px;max-width:840px;width:100%;max-height:86vh;
+  display:flex;flex-direction:column;box-shadow:0 18px 50px rgba(0,0,0,.3)}
+.tb-hop .dau{padding:18px 22px 14px;border-bottom:1px solid #e3e8f0}
+.tb-hop .dau b{font-size:16.5px;color:#12386e}
+.tb-hop .sub{font-size:13px;color:#5b647a;margin-top:4px;line-height:1.55}
+.tb-hop .than{overflow:auto;padding:8px 14px}
+.tb-hop .chan{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:14px 22px;
+  border-top:1px solid #e3e8f0;background:#fafbfd;border-radius:0 0 16px 16px}
+.tb-hop .ghi{flex:1;font-size:12.5px;color:#5b647a;min-width:200px}
+.tb-hop .ok{font:inherit;font-size:14px;font-weight:700;padding:10px 20px;border:none;
+  border-radius:10px;background:#177245;color:#fff;cursor:pointer}
+.tb-hop .ok:disabled{opacity:.6;cursor:wait}
+.tb-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 10px;
+  border-bottom:1px solid #f0f3f8}
+.tb-row:last-child{border-bottom:none}
+.tb-lo{flex:none;min-width:84px;text-align:center;font-size:11.5px;font-weight:700;
+  padding:3px 9px;border-radius:999px}
+.lo-them{background:#d7f2e1;color:#186b3a}.lo-bot{background:#fde4de;color:#a3301c}
+.lo-thay{background:#fff3d6;color:#8a5a00}.lo-thutu{background:#dbeafe;color:#12386e}
+.lo-an{background:#eef1f6;color:#5b647a}
+</style>
+<script>
+(function(){
+  // mã phiên: bong bóng chỉ bung 1 lần cho mỗi lần mở trình duyệt
+  var PHIEN = sessionStorage.getItem('tb_phien');
+  if(!PHIEN){ PHIEN = Math.random().toString(36).slice(2,10); sessionStorage.setItem('tb_phien', PHIEN); }
+  var LOAI = {can_xem:'cần xem', sp_moi:'SP mới', nhac:'nhắc', xong:'xong', loi:'lỗi'};
+  var esc = function(s){ var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; };
+
+  window.tbMo = function(e){
+    e.preventDefault(); e.stopPropagation();
+    var d = document.getElementById('tb-drop');
+    if(!d.hidden){ d.hidden = true; return; }
+    d.hidden = false; tbNap();
+  };
+  document.addEventListener('click', function(e){
+    var d = document.getElementById('tb-drop');
+    if(d && !d.hidden && !e.target.closest('.tb-boc')) d.hidden = true;
+  });
+
+  function ve(ds){
+    if(!ds.length) return '<div class="tb-trong">Chưa có thông báo nào</div>';
+    return ds.map(function(t){
+      return '<a class="tb-it'+(t.doc?' da':'')+'" href="'+(t.link||'#')+'" data-id="'+t.id+'">'
+        +'<span class="tb-cham"></span><div><div class="tb-n">'
+        +'<span class="tb-chip tb-'+t.loai+'">'+(LOAI[t.loai]||t.loai)+'</span>'+esc(t.tieu_de)+'</div>'
+        +'<div class="tb-t">'+esc(t.luc)+(t.tom_tat?' · '+esc(t.tom_tat):'')
+        +(t.luu_tru?' · <span style="color:#1457b8">đã lưu bản đầy đủ</span>':'')+'</div></div></a>';
+    }).join('');
+  }
+
+  window.tbNap = function(){
+    fetch('/thong-bao?phien='+PHIEN).then(function(r){return r.json()}).then(function(d){
+      var t = document.getElementById('tb-than'); if(t) t.innerHTML = ve(d.ds||[]);
+      tbSo(d.so);
+      if(t) t.querySelectorAll('.tb-it').forEach(function(a){
+        a.addEventListener('click', function(){
+          fetch('/thong-bao/doc',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({id:a.dataset.id})});
+        });
+      });
+    });
+  };
+
+  function tbSo(n){
+    var s = document.getElementById('tb-so'); if(!s) return;
+    s.textContent = n; s.hidden = !n;
+  }
+
+  window.tbDocHet = function(e){
+    e.preventDefault(); e.stopPropagation();
+    fetch('/thong-bao/doc-het',{method:'POST'}).then(function(){ tbNap(); });
+  };
+
+  // ── bong bóng + popup: hỏi 1 lần khi mở trang ──
+  fetch('/thong-bao?phien='+PHIEN).then(function(r){return r.json()}).then(function(d){
+    tbSo(d.so);
+    if(d.chan){ bungPopup(d.chan); return; }      // popup chặn thì thôi bong bóng
+    if(d.toast) bungToast(d.toast);
+  }).catch(function(){});
+
+  function bungToast(t){
+    var el = document.createElement('div');
+    el.className = 'tb-toast';
+    el.innerHTML = '<b>🔔 '+esc(t.tieu_de)+'</b><p>'+esc(t.viec||t.tom_tat||'')+'</p>'
+      + '<a class="nut" href="'+(t.link||'/thumbs')+'">Xem ngay</a>'
+      + '<a class="nut phu" href="#">Để sau</a>';
+    document.body.appendChild(el);
+    fetch('/thong-bao/toast-da-hien',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({phien:PHIEN})});
+    var di = function(){ el.remove(); };
+    el.querySelector('.phu').addEventListener('click', function(e){ e.preventDefault(); di(); });
+    setTimeout(di, 12000);        // tự thu, không thì đổi trang lại nhảy ra
+  }
+
+  function bungPopup(t){
+    var ds = ((t.du_lieu||{}).thay_doi)||[];
+    var rows = ds.map(function(x){
+      var nhan = x.loai==='them' ? ('+'+((x.so_moi||0)-(x.so_cu||0))+' ảnh')
+               : x.loai==='bot'  ? ('−'+((x.so_cu||0)-(x.so_moi||0))+' ảnh')
+               : x.loai==='thutu'? 'đổi thứ tự'
+               : x.loai==='an'   ? 'ngừng bán' : 'thay ảnh';
+      return '<div class="tb-row"><span class="tb-lo lo-'+x.loai+'">'+nhan+'</span>'
+        +'<span style="flex:1;min-width:210px;font-weight:600">'+esc(x.title||x.handle)+'</span>'
+        +'<span style="font-size:12.5px;color:#5b647a">'+esc(x.chi_tiet||'')+' · '
+        +(x.so_cu||0)+' → '+(x.so_moi||0)+' ảnh</span>'
+        +'<a href="https://sintech.vn/products/'+encodeURIComponent(x.handle)+'" target="_blank"'
+        +' rel="noopener" style="font-size:12px;color:#1457b8;text-decoration:none">xem trên web ↗</a></div>';
+    }).join('');
+    var n = document.createElement('div');
+    n.className = 'tb-nen'; n.id = 'tb-nen';
+    n.innerHTML = '<div class="tb-hop"><div class="dau"><b>🔔 '+esc(t.tieu_de)+'</b>'
+      +'<div class="sub">'+esc(t.tom_tat||'')+'</div></div>'
+      +'<div class="than">'+(rows||'<div class="tb-trong">Không có chi tiết</div>')+'</div>'
+      +'<div class="chan"><span class="ghi">Xem xong bấm nút này — bản đầy đủ có ảnh sẽ được '
+      +'lưu vào tab Preview để tra lại sau.</span>'
+      +'<button class="ok">✓ Tôi đã xem xét</button></div></div>';
+    document.body.appendChild(n);
+    document.body.style.overflow = 'hidden';
+    n.querySelector('.ok').addEventListener('click', function(){
+      var b = this; b.disabled = true; b.textContent = 'Đang lưu…';
+      fetch('/thong-bao/da-xem-xet',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({id:t.id})})
+        .then(function(r){return r.json()})
+        .then(function(res){
+          n.remove(); document.body.style.overflow = '';
+          tbNap();
+          if(res.luu_tru){
+            var ok = document.createElement('div');
+            ok.className = 'tb-toast'; ok.style.borderLeftColor = '#177245';
+            ok.innerHTML = '<b>✓ Đã lưu bản đầy đủ</b><p>Xem lại bất cứ lúc nào ở tab Preview.</p>'
+              + '<a class="nut" style="color:#177245" href="/preview">Mở Preview</a>';
+            document.body.appendChild(ok); setTimeout(function(){ ok.remove(); }, 9000);
+          }
+        })
+        .catch(function(e){ b.disabled=false; b.textContent='✓ Tôi đã xem xét'; alert('Chưa lưu được: '+e); });
+    });
+  }
+})();
+</script>
 </body>
 </html>

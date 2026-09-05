@@ -25,7 +25,11 @@ def ga4_page():
 
 def api_ga4_status():
     ga4_sync_service.reconcile_stale_runs()       # dọn run treo do app restart
-    probe = request.args.get("probe", "1") not in ("0", "false", "no")
+    # 4/9/2026: mặc định KHÔNG probe (đổi từ "1" → "0"), khớp docstring module và khớp
+    # /api/gsc/status. Probe = gọi GA4 API validate property/token, gọi trần endpoint
+    # này (curl, script giám sát) là âm thầm đốt quota. Frontend luôn truyền probe
+    # tường minh (ga4_dashboard.js: probe=0 ở 2 chỗ, probe=1 ở 1 chỗ) nên không đổi UI.
+    probe = request.args.get("probe", "0") in ("1", "true", "yes")
     data = ga4_client.status(probe=probe)
     data["last_sync"] = ga4_sync_service.latest_sync()
     data.update(ga4_sync_service.running_info())
@@ -35,7 +39,7 @@ def api_ga4_status():
 def api_ga4_refresh():
     sync_type = request.args.get("type")
     if not sync_type and request.is_json:
-        sync_type = (request.json or {}).get("type")
+        sync_type = (request.get_json(silent=True) or {}).get("type")
     sync_type = sync_type or "incremental"
     if sync_type not in ("incremental", "backfill"):
         sync_type = "incremental"

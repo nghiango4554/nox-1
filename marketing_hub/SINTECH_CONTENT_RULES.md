@@ -387,3 +387,208 @@ Script `qc_push` tự chặn các mục có dấu 🤖.
 - `seo_research_rules.md` — bản nguyên văn rules research vợ đưa 9/7.
 - `collection_writing_rules.md` — bản đầy đủ rules collection cho ChatGPT Plus (ví dụ input/output).
 - `docs/heading_research_prompt.md` — prompt research heading.
+
+---
+
+# PHẦN 9 — LUẬT CẤU TRÚC HEADING & NHÃN (vợ chốt 26/8/2026)
+
+## 9.1 🚨 CẤM H3 ĐƠN LẺ dưới một H2
+
+**Dưới mỗi H2: hoặc KHÔNG có H3 nào, hoặc phải có TỪ 2 H3 TRỞ LÊN.**
+Chia mà chỉ ra đúng một mục con là chia vô nghĩa, đọc bị hẫng.
+
+Ba cách xử khi lỡ có H3 đơn lẻ:
+1. **Thêm H3 thứ hai** nếu phần nội dung vốn đã tách được (vd mục GDDR7 tách thành
+   "GDDR7 nhanh hơn GDDR6 ở chỗ nào" + "VRAM 8GB hay 16GB nên hiểu thế nào").
+2. **Bỏ H3 đó đi**, gộp nội dung vào thẳng phần H2 (dùng khi phần con quá ngắn).
+3. **Nâng H3 lên H2** nếu nó thực sự là một ý ngang hàng.
+
+⚠️ Ngoại lệ đã có sẵn ở mục 358: FAQ và mục "cần kiểm tra trước khi mua" được phép H2 kề H3.
+
+**Cách tự kiểm trước khi đẩy** (dựng cây rồi đếm, đừng nhìn bằng mắt):
+```python
+tree, cur = [], None
+for m in re.finditer(r'<h([23])[^>]*>(.*?)</h\1>', body, re.S):
+    lv = m.group(1)
+    if lv == '2': cur = [m.group(2), []]; tree.append(cur)
+    elif cur: cur[1].append(m.group(2))
+don_le = [h for h, x in tree if len(x) == 1]
+assert not don_le, f"H3 don le: {don_le}"
+```
+
+## 9.2 🚨 KHÔNG dùng `<p><strong>Nhãn</strong></p>` làm tiêu đề giả
+
+Đoạn in đậm đứng riêng một dòng **trông y hệt H3** (cùng đen, cùng đậm), đặt ngay dưới một
+H3 thật thì người đọc không biết đâu là mục, đâu là nhãn.
+
+✅ **Dùng caption nhỏ, chữ HOA, màu đỏ** cho nhãn dẫn vào danh sách hoặc checklist:
+```html
+<p style="font-family:Arial,sans-serif;font-size:10pt;font-weight:700;color:#e74c3c;
+letter-spacing:.7px;text-transform:uppercase;margin:18px 0 6px">Kiểm 6 thứ này trước khi chốt</p>
+```
+Nhỏ hơn H3 (10pt so với 13pt), khác màu, chữ HOA giãn chữ → nhìn phát biết là nhãn.
+
+## 9.3 Checklist phải TẮT chấm đầu dòng NGAY TRÊN `<li>`
+
+Đặt `list-style:none` ở thẻ `<ul>` là **KHÔNG ĐỦ**: CSS theme nhắm thẳng vào `li` nên đè lại,
+kết quả ra vừa chấm tròn vừa dấu tích. Phải để inline trên **từng `<li>`**:
+`style="list-style:none;list-style-type:none;margin-bottom:8px;padding-left:0"`
+
+## 9.4 🚨 CẤM `<thead>` và `<tbody>` — Haravan xoá làm CÁC BẢNG LỒNG VÀO NHAU
+
+Mục 256 đã liệt kê thẻ được phép (`<table> <tr> <td> <th>`), nhưng chưa nói **hậu quả**:
+
+Bộ lọc Haravan **xoá `</thead>`** rồi dời `</table>` đi chỗ khác. Kết quả 26/8/2026 trên bài RTX 5060:
+bảng 1 nuốt luôn bảng 2 và bảng 3 vào trong nó, thành **73 ô dồn vào một bảng**.
+Trang vẫn hiện 3 bảng nên **nhìn bằng mắt KHÔNG phát hiện được**.
+
+→ Dựng bảng phẳng: `<table><caption>…</caption><tr><th>…</th></tr><tr><td>…</td></tr></table>`.
+
+⚠️ Đã vá bảng hỏng bằng regex 2 lần đều không sạch (dư 1 `<th>` mỗi bảng).
+**Bảng đã bị bẻ cấu trúc thì DỰNG LẠI TỪ DỮ LIỆU GỐC, đừng vá.**
+
+## 9.5 Khuôn bảng bài BLOG (chốt 26/8/2026)
+
+```
+div bọc : overflow-x:auto;-webkit-overflow-scrolling:touch;margin:16px 0   ← thiếu cái này là vỡ trên điện thoại
+table   : border-collapse:collapse;width:100%;min-width:560px;font-size:10.5pt;border:2px solid #e74c3c
+caption : chữ HOA, đỏ #e74c3c, font-weight:800, 10.5pt
+th      : nền #e74c3c, chữ trắng, padding:10px 12px, white-space:nowrap
+td      : border:1px solid #d9d9d9, padding:9px 12px
+cột đầu : font-weight:700 + nền #fdf2f2
+kẻ sọc  : dòng chẵn nền #fafafa (đặt inline trên từng <td>, KHÔNG dùng nth-child)
+```
+Luật cũ chỉ ghi "bảng blog viền đậm" mà không nói đậm bao nhiêu → nay chốt **2px màu đỏ**.
+
+## 9.6 Nhãn dẫn vào danh sách: đã có MÀU thì phải IN ĐẬM (vợ chốt 26/8)
+
+Nhãn đỏ 10pt font-weight:700 nhìn vẫn mảnh, chìm so với nội dung.
+→ Chuẩn: **`font-size:11.5pt;font-weight:800;color:#e74c3c;letter-spacing:.4px;text-transform:uppercase`**
+
+## 9.7 🚨 Cách NGHIỆM THU bảng — đếm cấu trúc, đừng so chuỗi
+
+Hai cách kiểm SAI đã dính trong cùng một buổi:
+1. **So chuỗi tuyệt đối** `body_gui == body_web` → báo "chưa ghi" trong khi **đã ghi rồi**,
+   vì Haravan tự chuẩn hoá vài ký tự. Nhớ: [[reference_haravan_content_api]] PUT article
+   **trả HTTP 500 mà VẪN GHI**.
+2. **Đếm bằng regex** `len(re.findall('<table'))` → ra 3 bảng dù ba bảng đang lồng nhau.
+   Regex `<th` còn đếm nhầm cả `<thead>`.
+
+✅ Đúng: parse bằng BeautifulSoup rồi đối chiếu số mong đợi:
+```python
+for t, (cot, dong) in zip(soup.find_all("table"), MONG_DOI):
+    assert len(t.find_all("th")) == cot
+    assert len(t.find_all("td")) == cot * dong
+    assert not t.find("table")        # <<< bắt bảng lồng nhau
+```
+
+## 9.8 🚨 Ép `font-family:Arial` là VÔ HIỆU HOÁ mọi nét đậm trên 700
+
+Arial **chỉ có 2 nét: 400 và 700**. Khai `font-weight:800` trên chữ Arial thì trình duyệt
+vẫn chỉ vẽ 700. Đây là lý do 26/8/2026 vợ nói "chưa đủ đậm" hai lần liền mà sửa số không ăn.
+
+Giao diện Sintech nạp **Nunito Sans biến thiên, dải nét `200..1000`**
+(`fonts.googleapis.com/css2?family=Nunito+Sans:...wght@...200..1000`).
+
+→ **Muốn nét trên 700 thì ĐỪNG đặt `font-family`**, để thừa hưởng phông giao diện.
+Áp cho: nhãn chữ HOA, caption bảng, ô tiêu đề bảng, heading.
+`apply_sintech_style()` tự nhét `font-family:Arial,sans-serif` vào mọi thứ → **phải gỡ lại** ở
+những chỗ cần nét dày.
+
+**Cách kiểm nhanh phông có nét dày không:**
+```python
+"200..1000" in html_trang_live      # dai net cua Nunito Sans
+```
+
+## 9.9 Khuôn CSS HEADING chuẩn cho bài blog (chốt 26/8/2026, mẫu là bài The Isle)
+
+```
+H2: font-size:18px;color:#dc2626;font-weight:800;border-left:4px solid #dc2626;
+    padding-left:10px;margin:26px 0 12px
+H3: font-size:16px;color:#1a1a1a;font-weight:800;margin:18px 0 8px;
+    padding-left:9px;border-left:3px solid #f0a5a5
+```
+Cả hai **KHÔNG đặt font-family** (xem 9.8). Bài mẫu: `/blogs/news/the-isle-ra-mat-nam-nao-lich-su`.
+
+⚠️ **Sắc đỏ chuẩn là `#dc2626`.** `apply_sintech_style()` và code cũ hay dùng `#e74c3c`,
+để lẫn hai sắc trên một trang là lệch tông. Gom hết về `#dc2626`.
+
+**Cách đối chiếu với bài mẫu** (đừng nhìn bằng mắt):
+```python
+kieu_mau  = set(re.findall(r'<h2 style="([^"]*)"', body_bai_mau))
+kieu_minh = set(re.findall(r'<h2 style="([^"]*)"', body_bai_minh))
+assert kieu_mau == kieu_minh and len(kieu_minh) == 1
+```
+
+## 9.10 🚨 ĐÓNG DẤU ẢNH: chọn loại dấu THEO NỀN ẢNH (vợ chốt 26/8/2026)
+
+> Vợ: *"nếu ảnh đa dạng màu sắc thế này thì chèn watermark xoá nền, nhỏ nhỏ, mờ mờ chứ,
+> sao lại để cái kia to đùng, xấu ảnh"* và *"chỉ khi ảnh là nền trắng chiếm đa số thì anh mới
+> chèn logo màu này nha, mà cũng nên chèn nhỏ thôi"*.
+
+**Đo trước, chọn sau.** Tính tỉ lệ điểm ảnh gần trắng (độ sáng ≥ 238):
+
+| Tỉ lệ nền trắng | Dùng dấu | Thông số |
+|---|---|---|
+| **≥ 55%** | `sintech.png` (logo MÀU) | rộng **92px**, mờ 88% |
+| **< 55%** | `logo xóa nền.png` (trong suốt) | rộng **84px**, mờ **38-42%** |
+
+⚠️ **`logo xóa nền.png` là chữ TRẮNG** → dán thẳng lên nền sáng là mất tăm (bẫy 25/8).
+Phải **tự tô lại màu theo nền chỗ dán**: nền tối tô trắng, nền sáng tô xám đậm `#334155`.
+```python
+lg = Image.new("RGBA", base.size, mau + (0,))
+lg.putalpha(base.split()[3].point(lambda v: int(v * mo)))   # giu hinh dang, doi mau
+```
+
+**Đừng mặc định badge đỏ cho mọi ảnh.** Badge đỏ hợp ảnh CHỤP nền tối (bài Minisforum 25/8),
+KHÔNG hợp ảnh đồ hoạ nhiều màu, dán vào là phá bố cục.
+
+## 9.11 Vị trí đóng dấu: TRƯỢT DỌC MÉP, đừng chấm 4 góc
+
+Cách chấm độ nhiễu ở 4 góc rồi chọn góc phẳng nhất **ĐÃ HỎNG 26/8**: cả 4 góc đều bận thì
+nó vẫn chọn góc ít tệ nhất, kết quả **dấu đè thẳng lên chữ tiêu đề** 2 tấm. Số liệu không báo lỗi,
+chỉ nhìn ảnh mới thấy (đúng luật [[feedback_chi_vao_anh_dung_ta_bang_loi]]).
+
+✅ Đúng: **trượt dấu dọc 4 mép**, bước 6px, chấm độ lệch chuẩn từng vị trí, cộng phạt nhẹ khi xa góc:
+```python
+diem = do_lech_chuan + khoang_cach_toi_goc * 0.012
+```
+Nhận vị trí khi độ nhiễu < 10. Bận quá thì thu nhỏ dấu rồi quét lại.
+**BẮT BUỘC ghép ảnh contact sheet rồi NHÌN trước khi up.**
+
+## 9.12 🚨 TRƯỚC KHI VIẾT BÀI MỚI: bắt buộc kiểm site đã có bài chưa
+
+26/8/2026 anh viết bài **"So sánh các loại DLSS"** trong khi site **đã có sẵn**
+*"DLSS 4 là gì, cách bật DLSS 4"* từ 9/2025. Anh có kiểm `site:sintech.vn` cho chủ đề nguồn
+và mini PC, **nhưng quên kiểm cho DLSS**. May là hai bài đủ khác nhau nên không giẫm chân,
+nhưng đó là may chứ không phải do làm đúng.
+
+**Bắt buộc chạy 2 lệnh này TRƯỚC KHI viết, không có ngoại lệ:**
+```
+site:sintech.vn <từ khoá chính>
+site:sintech.vn <từ khoá phụ>
+```
+Quét cả bằng API cho chắc, vì Google có thể chưa index bài mới:
+```python
+for blog in (1000906526, 1000960873):
+    for a in hc.list_articles(blog, page=pg, limit=50):   # co san body_html
+        if TU_KHOA in (a['title'] + a['body_html']): ...
+```
+
+**Nếu đã có bài:** ưu tiên **CẬP NHẬT bài cũ** thay vì viết mới. Chỉ viết mới khi bài cũ phục vụ
+truy vấn khác hẳn, và khi đó **hai bài phải trỏ sang nhau**.
+
+## 9.13 🚨 Bài mới đăng xong là MỒ CÔI, phải gắn link vào ngay
+
+Đăng xong mà không bài nào trỏ tới thì bài nằm chết một góc. 26/8/2026 kiểm 278 bài:
+hai bài vừa đăng có **0 bài trỏ tới**.
+
+**Việc bắt buộc ngay sau khi đăng:**
+1. Quét toàn blog tìm bài liên quan (dùng `list_articles`, xem [[reference_haravan_list_articles_co_body]])
+2. Chấm điểm theo số lần khớp từ khoá trong `title` (nhân 4) và trong thân bài
+3. Chọn **3 bài chủ** điểm cao nhất, chèn **một câu dẫn có ngữ cảnh** kèm link
+4. Đặt link **giữa bài, đúng chỗ người đọc đang có nhu cầu**, không dồn xuống cuối
+5. Anchor bọc `<strong>`, gắn `?ref=lien-ket-noi-bo` để đo được
+6. Backup body cũ từng bài trước khi ghi
+
+**Nghiệm thu:** quét lại toàn blog, mỗi bài mới phải có **≥3 bài trỏ tới**.

@@ -521,8 +521,20 @@ def analyze_html(url: str, html: bytes, status_code: int, load_ms: int,
         return r.get("threshold", default)
 
     def _word_thresholds(ut: str) -> tuple:
-        """Trả (low_thr, ok_thr) theo url_type. Đọc từ config key
-        `word_count_thresholds`, fallback default kiểu product."""
+        """Trả (low_thr, ok_thr) theo url_type — DÙNG CHUNG với scoring_core.
+
+        4/9/2026: trước đây đây là bản sao y hệt của `scoring_core._word_thresholds`
+        (cùng defaults blog 700/1500 · product 500/800 · collection 150/300…). Hiện
+        chưa lệch, nhưng hai bản sao là đúng loại lỗi đã dính 3 lần trong lượt rà này
+        (ngưỡng điểm 80/60 vs 65/50 ở 3 nơi, taxonomy topic ở 2 nơi). Gọi thẳng
+        scoring_core — nó standalone, không import ngược nên không sinh vòng.
+        Fallback giữ nguyên phòng khi import scoring_core hỏng.
+        """
+        if _sc is not None:
+            try:
+                return _sc._word_thresholds(ut)
+            except Exception:
+                pass
         cfg = load_rules_config() or {}
         wt = (cfg.get("word_count_thresholds") or {})
         defaults = {

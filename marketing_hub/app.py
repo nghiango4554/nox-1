@@ -15,8 +15,10 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import db
 import seo as seo_mod
 
-# Route modules — 171 endpoint trải 13 module
+# Route modules — 329 endpoint trải 25 module (đếm lại 4/9/2026; ghi chú cũ "171/13" đã lỗi thời).
+# Nặng nhất: seo_tools 48 · alt 25 · posts 24 · seo_core 23 · content_blog 19 · thumbs 18.
 from routes import system as routes_system
+from routes import thong_bao as routes_thong_bao
 from routes import alt as routes_alt
 from routes import haravan as routes_haravan
 from routes import posts as routes_posts
@@ -78,9 +80,23 @@ routes_products.register(app)
 routes_blog_content_center.register(app)
 routes_seo_opportunity.register(app)
 routes_thumbs.register(app)
+routes_thong_bao.register(app)
 routes_spec_manager.register(app)
 routes_preview.register(app)
 routes_fb_import.register(app)
+
+
+# 12/8/2026: chuông thông báo là của CHUNG — mọi tab đều cần số chưa đọc, nên bơm
+# qua context processor thay vì sửa từng route.
+# 4/9/2026: dời xuống đây. Trước nó nằm CHEN GIỮA khối register, cắt 3 dòng
+# spec_manager/preview/fb_import khỏi danh sách — đọc lướt là tưởng thiếu 3 module.
+@app.context_processor
+def _bom_thong_bao():
+    try:
+        import notify as _nt
+        return {"tb_chua_doc": _nt.so_chua_doc()}
+    except Exception:
+        return {"tb_chua_doc": 0}
 
 
 @app.template_filter("from_json")
@@ -155,8 +171,17 @@ if __name__ == "__main__":
     # Analytics daily orchestration — chỉ chạy khi config enabled (kiểm tại fire time)
     def _analytics_daily_job():
         from services import analytics_daily_service as _ops
-        if _ops.load_config().get("enabled"):
-            _ops.run_orchestration(trigger="scheduler")
+        if not _ops.load_config().get("enabled"):
+            return
+        # 4/9/2026: gọi start_async chứ KHÔNG gọi run_orchestration thẳng.
+        # run_orchestration không tự giữ khoá — khoá nằm trong start_async. Trước đây
+        # scheduler chạy thẳng nên: (1) `is_running()` vẫn báo rảnh dù đang chạy, nút
+        # "Chạy ngay" trên /ops/analytics bấm được → hai lượt sync GA4+GSC chồng nhau,
+        # tranh DB; (2) ngược lại, vợ bấm tay lúc 6h30 thì scheduler vẫn nhảy vào.
+        r = _ops.start_async(trigger="scheduler")
+        if not r.get("started"):
+            print(f"[analytics daily] bo qua luot scheduler: {r.get('reason')} "
+                  f"(dang chay tu {r.get('started_at')})", flush=True)
     _adc = __import__("services.analytics_daily_service", fromlist=["load_config"]).load_config()
     sched.add_job(_analytics_daily_job, "cron", hour=_adc.get("hour", 6), minute=_adc.get("minute", 30),
                   id="analytics_daily_orchestration")

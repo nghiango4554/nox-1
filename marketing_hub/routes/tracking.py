@@ -36,7 +36,7 @@ def api_funnel():
 
 
 def api_finding_resolve(fid):
-    d = request.json or {}
+    d = request.get_json(silent=True) or {}
     return jsonify(report.set_finding_status(fid, "resolved", d.get("snooze_days")))
 
 
@@ -45,7 +45,7 @@ def api_finding_reopen(fid):
 
 
 def api_finding_snooze(fid):
-    d = request.json or {}
+    d = request.get_json(silent=True) or {}
     return jsonify(report.set_finding_status(fid, "snoozed", d.get("snooze_days", 7)))
 
 

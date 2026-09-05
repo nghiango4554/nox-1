@@ -804,6 +804,15 @@ def sanitize_pasted_html(html: str) -> str:
     if not html:
         return html
 
+    # 5/9/2026: dọn gạch ngang dài NGAY Ở WRITER (luật vợ chốt 17/7). Trước đây
+    # luật chỉ nằm trong prompt gửi AI nên vẫn lọt xuống body live.
+    # sanitize_dash() tự giữ khoảng số, signature và tên SP trong <strong>/<h1>.
+    try:
+        from qc_content import sanitize_dash
+        html = sanitize_dash(html)
+    except Exception:
+        pass
+
     soup = BeautifulSoup(html, "lxml")
 
     WRAPPER_ATTRS = {
@@ -966,6 +975,22 @@ def sync_collection_to_haravan(haravan_id: int, title: str, meta: str, body_html
             )
             return {"ok": True, "type": "custom_collections"}
         except Exception as e_custom:
+            # 4/9/2026 — BẪY ĐÃ BIẾT: Haravan trả 5xx cho PUT mà VẪN GHI thành công.
+            # Ở đây còn nặng hơn: PUT smart lỗi → thử tiếp PUT custom (sai loại, chắc
+            # chắn lỗi) → kết luận hỏng, trong khi lần PUT đầu có thể đã vào. Đối chiếu
+            # bằng GET trước khi kết tội, so 200 ký tự đầu của body đã nén.
+            dau = body_compressed[:200]
+            for loai, khoa in (("smart_collections", "smart_collection"),
+                               ("custom_collections", "custom_collection")):
+                try:
+                    got = haravan_client._request("GET", f"/{loai}/{haravan_id}.json")
+                    live = ((got or {}).get(khoa) or {}).get("body_html") or ""
+                    if dau and dau in live:
+                        print(f"[collection sync] PUT bao loi nhung DOI CHIEU thay "
+                              f"{loai}/{haravan_id} da ghi dung -> coi la thanh cong", flush=True)
+                        return {"ok": True, "type": loai, "xac_minh_bang_get": True}
+                except Exception:
+                    continue
             return {"ok": False, "error": f"smart fail: {e_smart} | custom fail: {e_custom}"}
 
 
@@ -991,7 +1016,11 @@ def sync_page_to_haravan(page_id: int, title: str, meta: str, body_html: str,
     # Backup body sắp đẩy (audit/rollback) TRƯỚC khi PUT
     try:
         from pathlib import Path as _P
-        _bk = _P(__file__).parent.parent / "nox-outputs"
+        # 4/9/2026: sai 1 cấp. File này ở marketing_hub/ nên parent.parent = nox-1/,
+        # backup rơi vào nox-1/nox-outputs (thư mục không tồn tại, mkdir tự đẻ ra).
+        # Kho thật là workspace/nox-outputs — cũng là nơi tab /preview quét, nên bản
+        # backup cũ nằm chỗ khuất, mở /preview không bao giờ thấy.
+        _bk = _P(__file__).resolve().parent.parent.parent / "nox-outputs"
         _bk.mkdir(parents=True, exist_ok=True)
         (_bk / f"_page_sync_{int(page_id)}.html").write_text(body_compressed, encoding="utf-8")
     except Exception:

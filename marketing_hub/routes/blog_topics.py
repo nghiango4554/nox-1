@@ -24,8 +24,25 @@ BLOG_TOPIC_LABELS = {code: (label, color) for code, label, color, _ in BLOG_TOPI
 BLOG_TOPIC_LABELS["other"] = ("❓ Khác", "rgba(120,120,140,0.15)")
 
 
-def classify_blog_topic(title: str) -> str:
-    """Detect chủ đề blog theo keyword trong title."""
+def classify_blog_topic(title: str, url: str = "") -> str:
+    """Detect chủ đề blog theo keyword trong TITLE. Tham số `url` bị BỎ QUA hoàn toàn.
+
+    ⚠️ ĐÂY LÀ NGUỒN DUY NHẤT. Cả blog Sintech (routes/system.py) lẫn URL đối thủ
+    (competitors.py) phải gọi hàm này — bảng "Topic gap" ở /competitors lấy hiệu của
+    hai vế, nên hai vế BẮT BUỘC dùng chung một thước.
+
+    4/9/2026: trước đây competitors.py giữ bản sao riêng `BLOG_TOPICS_RULES` — lệch cả
+    thứ tự lẫn từ khoá (service nằm CUỐI thay vì thứ 2, thiếu "tphcm"/"quận",
+    thiếu "build cấu hình", thiếu "khac gi"). Đo trên 266 blog Sintech: **11 bài (4,1%)
+    ra 2 kết quả khác nhau**, dồn hết vào topic `service` — thước này đếm 14, thước kia
+    đếm 3. Nghĩa là cột "Đối thủ có" và cột "Sintech có" đang đo bằng 2 cây thước khác
+    nhau, gap của mảng dịch vụ sửa chữa bị âm giả. Đừng tách bản sao lần nữa.
+
+    ⚠️ `url` CỐ Ý bị bỏ qua, chữ ký giữ lại chỉ cho tương thích caller cũ. Thử nhét url
+    vào chuỗi phân loại một lần rồi phải gỡ: blog Sintech dùng handle **/news/**, trùng
+    keyword của topic "news" → 113/268 bài bị gán nhầm thành Tin tức (trước chỉ 8).
+    Đường dẫn còn nhiều từ trùng keyword khác nữa. Phân loại theo title, chấm hết.
+    """
     t = (title or "").lower()
     for code, _label, _color, keywords in BLOG_TOPICS:
         if any(kw in t for kw in keywords):

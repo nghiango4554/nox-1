@@ -24,7 +24,7 @@ def api_gsc_refresh():
         return jsonify({"ok": False, "error": "token_missing"}), 400
     sync_type = request.args.get("type")
     if not sync_type and request.is_json:
-        sync_type = (request.json or {}).get("type")
+        sync_type = (request.get_json(silent=True) or {}).get("type")
     sync_type = sync_type if sync_type in ("incremental", "backfill") else "incremental"
     gsync.reconcile_stale_runs()
     res = gsync.start_sync_async(sync_type)
@@ -52,7 +52,7 @@ def api_djoin_refresh():
         return jsonify({"ok": False, "error": "token_missing"}), 400
     sync_type = request.args.get("type")
     if not sync_type and request.is_json:
-        sync_type = (request.json or {}).get("type")
+        sync_type = (request.get_json(silent=True) or {}).get("type")
     sync_type = sync_type if sync_type in ("incremental", "backfill") else "incremental"
     djoin.reconcile_stale_runs()
     res = djoin.start_refresh_async(sync_type)

@@ -151,11 +151,19 @@ def run_sync(sync_type="incremental"):
                     rows_written += _sync_day(conn, ds, stype, cfg, fetched)
                     conn.commit()                     # checkpoint per-day → resume được
                 except GSCError as e:
+                    # 4/9/2026: BỎ phần ghi dở của ngày này. _sync_day ghi lần lượt
+                    # summary → pages → queries → devices → countries; lỗi ở giữa mà
+                    # không rollback thì phần đầu vẫn nằm trong transaction và được
+                    # commit ké ở ngày kế tiếp. Sau đó _day_done() thấy summary đã có
+                    # nên backfill BỎ QUA ngày đó vĩnh viễn — thiếu queries/devices/
+                    # countries mà không ai biết.
+                    conn.rollback()
                     if e.code in _FATAL:
                         fatal = e
                         break
                     partial["%s:%s" % (ds, stype)] = e.code
                 except Exception as e:
+                    conn.rollback()
                     partial["%s:%s" % (ds, stype)] = gsc.classify_error(e).code
                 d += timedelta(days=1)
             if fatal:

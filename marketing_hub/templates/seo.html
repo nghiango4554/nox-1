@@ -88,15 +88,15 @@ select,input[type=text],input[type=number]{padding:7px 10px;border:1px solid var
   {# Good / OK / Bad — clickable filters #}
   <a href="?band=good" class="seo-kpi-cell seo-kpi-good">
     <div class="seo-kpi-num" data-target="{{ stats.good }}">0</div>
-    <div class="seo-kpi-label">🟢 Tốt (≥80)</div>
+    <div class="seo-kpi-label">🟢 Tốt (≥{{ thr_good }})</div>
   </a>
   <a href="?band=ok" class="seo-kpi-cell seo-kpi-ok">
-    <div class="seo-kpi-num" data-target="{{ ok_count }}">0</div>
-    <div class="seo-kpi-label">🟡 OK (60-79)</div>
+    <div class="seo-kpi-num" data-target="{{ stats.ok }}">0</div>
+    <div class="seo-kpi-label">🟡 OK ({{ thr_ok }}-{{ thr_good - 1 }})</div>
   </a>
   <a href="?band=bad" class="seo-kpi-cell seo-kpi-bad">
     <div class="seo-kpi-num" data-target="{{ stats.bad }}">0</div>
-    <div class="seo-kpi-label">🔴 Cần sửa (&lt;60)</div>
+    <div class="seo-kpi-label">🔴 Cần sửa (&lt;{{ thr_ok }})</div>
   </a>
 
   {# By_type — modern pills với icon circle #}

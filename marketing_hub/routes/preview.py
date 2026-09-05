@@ -34,8 +34,15 @@ def _safe(root_key: str, rel: str) -> Path:
     if not root:
         abort(404)
     p = (root / rel).resolve()
-    if not str(p).startswith(str(root.resolve())):
-        abort(403)
+    # 4/9/2026: dùng is_relative_to thay cho startswith trên chuỗi. So chuỗi thô không
+    # có dấu phân cách nên "…/nox-outputs-cu" cũng startswith "…/nox-outputs" → lọt ra
+    # ngoài thư mục gốc nếu tồn tại thư mục anh em cùng tiền tố.
+    try:
+        if not p.is_relative_to(root.resolve()):
+            abort(403)
+    except AttributeError:                      # Python < 3.9
+        if root.resolve() not in p.parents and p != root.resolve():
+            abort(403)
     return p
 
 
