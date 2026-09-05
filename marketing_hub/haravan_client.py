@@ -78,7 +78,6 @@ def _check_paused():
 # thường xuyên. Các chốt XÓA giữ nguyên: xóa SP vẫn cấm tuyệt đối.
 import re as _re_perm
 _BLOCKED_OPERATIONS = [
-    ("POST",   _re_perm.compile(r"^/blogs/\d+/articles\.json"),      "Tạo bài viết blog mới"),
     ("DELETE", _re_perm.compile(r"^/products/\d+\.json$"),           "Xóa sản phẩm"),
     ("DELETE", _re_perm.compile(r"^/blogs/\d+/articles/\d+\.json$"), "Xóa bài viết blog"),
     ("DELETE", _re_perm.compile(r"^/articles/\d+\.json$"),           "Xóa bài viết"),
@@ -197,6 +196,18 @@ def _request(method: str, path: str, params: dict = None, payload: dict = None) 
         r = requests.request(method, url, headers=_auth_headers(),
                               params=params, json=payload, timeout=TIMEOUT, verify=False)
     is_mut = method.upper() in ("PUT", "POST", "DELETE")
+    # 12/8/2026: Haravan tra HTTP 500 ngau nhien ~50% request (do 8 luot: 4 ok / 4 loi).
+    # Truoc day 1 lan 500 la nem loi ngay -> ca me sync chet o SP dau tien.
+    # CHI thu lai GET: no idempotent. PUT/POST/DELETE co the DA thuc hien roi moi loi
+    # o duong tra ve — thu lai se tao anh trung / xoa nham.
+    if r.status_code >= 500 and not is_mut:
+        for lan in range(4):
+            time.sleep(1.5 * (lan + 1))
+            r = requests.request(method, url, headers=_auth_headers(),
+                                 params=params, json=payload, timeout=TIMEOUT,
+                                 verify=False)
+            if r.status_code < 500:
+                break
     if r.status_code >= 400:
         try:
             err = r.json()
@@ -274,10 +285,94 @@ def list_products_in_collection(collection_id: int, fields: str = "id,handle,tit
     return out
 
 
+# ─────────────── TỰ ĐỘNG FORMAT BODY SP (thêm 24/8/2026) ───────────────
+# Vợ chốt: "lần nào làm SP xong cũng không format" -> cắm thẳng vào chokepoint
+# create_product / update_product để KHÔNG THỂ QUÊN nữa.
+# Muốn ghi body thô (hiếm) thì truyền fields["_khong_format"] = True.
+
+def _tu_dong_format(fields: dict) -> dict:
+    if not isinstance(fields, dict):
+        return fields
+    if fields.pop("_khong_format", False):
+        return fields
+    body = fields.get("body_html")
+    if not body or not body.strip():
+        return fields
+    try:
+        from reformat_product_desc import reformat
+    except Exception:
+        try:
+            import sys as _s, os as _o
+            _s.path.insert(0, _o.path.dirname(_o.path.abspath(__file__)))
+            from reformat_product_desc import reformat
+        except Exception as e:
+            print("[haravan_client] KHONG format duoc body: %s" % str(e)[:80])
+            return fields
+    moi = reformat(body)
+    # 5/9/2026: dọn gạch ngang dài ngay tại nút cổ chai của MỌI luồng ghi
+    # (writer, sync, sửa tay) — luật vợ chốt 17/7 trước đây chỉ nằm trong prompt.
+    # sanitize_dash tự chừa khoảng số, signature và tên SP trong <strong>/<h1>/<a>.
+    try:
+        from qc_content import sanitize_dash
+        sach = sanitize_dash(moi)
+        if sach != moi:
+            print("[haravan_client] da don gach ngang dai trong body_html", flush=True)
+            moi = sach
+    except Exception as e:
+        print("[haravan_client] KHONG don duoc dash: %s" % str(e)[:60], flush=True)
+    # 5/9/2026: guard kho ảnh chạy ở chế độ CẢNH BÁO. Không chặn — chặn thì 15 SP
+    # đang nhúng ảnh theme asset sẽ không sync được cho tới khi thay hết ảnh.
+    # Ảnh theme asset vẫn hiển thị, nhưng đổi/gỡ giao diện là mất → cần dọn dần.
+    try:
+        from haravan_image_store_guard import scan_inline_images
+        q = scan_inline_images(moi, "product_description_inline")
+        if not q["ok"]:
+            print("[haravan_client] ⚠️ body co %d anh SAI KHO (%s) — van ghi, can thay dan"
+                  % (sum(q["blocking_reasons"].values()), ",".join(q["blocking_reasons"])), flush=True)
+    except Exception:
+        pass
+    if moi != body:
+        fields["body_html"] = moi
+        print("[haravan_client] da tu dong format body_html (%d -> %d ky tu)"
+              % (len(body), len(moi)))
+    return fields
+
+
 def update_product(product_id: int, fields: dict) -> dict:
+    """PUT 1 SP. Nếu Haravan báo lỗi, GET lại đối chiếu trước khi kết tội thất bại.
+
+    4/9/2026 — BẪY ĐÃ BIẾT của Haravan: PUT trả 5xx (hoặc đứt ở đường về) mà nội dung
+    VẪN GHI xong. Trước đây exception bay thẳng lên caller, nên hub đánh job "failed"
+    dù SP trên web đã đúng — rồi lại sync đè lần nữa. Vá ở đây thay vì từng caller vì
+    có 5 chỗ gọi (alt, content_blog, content_product, haravan inline-edit, products)
+    cộng các script rời.
+
+    Chỉ kết luận "đã ghi" khi MỌI field vừa gửi mà GET đọc lại được đều khớp. Field
+    Haravan không trả về trong /products.json (vd một số metafield) thì bỏ qua khi so;
+    không so được field nào thì vẫn ném lỗi như cũ — thà báo thừa còn hơn báo nhầm.
+    """
+    fields = _tu_dong_format(fields)
     payload = {"product": fields}
-    data = _request("PUT", f"/products/{product_id}.json", payload=payload)
-    return data.get("product", {})
+    try:
+        data = _request("PUT", f"/products/{product_id}.json", payload=payload)
+        return data.get("product", {})
+    except Exception:
+        try:
+            live = (_request("GET", f"/products/{product_id}.json") or {}).get("product") or {}
+        except Exception:
+            raise
+        so_duoc = 0
+        for k, v in fields.items():
+            if k == "id" or k not in live:
+                continue
+            so_duoc += 1
+            if str(live.get(k) or "").strip() != str(v or "").strip():
+                raise
+        if not so_duoc:
+            raise
+        print(f"[haravan] PUT product {product_id} bao loi nhung DOI CHIEU {so_duoc} field "
+              f"deu khop -> coi la da ghi", flush=True)
+        return live
 
 
 def put_image_alt(product_id: int, image_id: int, alt: str) -> dict:
@@ -291,6 +386,7 @@ def put_image_alt(product_id: int, image_id: int, alt: str) -> dict:
 
 
 def create_product(fields: dict) -> dict:
+    fields = _tu_dong_format(fields)
     payload = {"product": fields}
     data = _request("POST", "/products.json", payload=payload)
     return data.get("product", {})
@@ -336,9 +432,31 @@ def get_article(blog_id: int, article_id: int) -> dict:
 
 
 def update_article(blog_id: int, article_id: int, fields: dict) -> dict:
+    """PUT 1 article. Lỗi thì GET lại đối chiếu — cùng bẫy 5xx-mà-vẫn-ghi của Haravan
+    (xem update_product). Dùng bởi seo.fix_h1_in_desc_for_url cho blog: báo lỗi oan ở đó
+    là vợ tưởng H1 chưa sửa rồi chạy lại cả lượt.
+    """
     payload = {"article": fields}
-    data = _request("PUT", f"/blogs/{blog_id}/articles/{article_id}.json", payload=payload)
-    return data.get("article", {})
+    try:
+        data = _request("PUT", f"/blogs/{blog_id}/articles/{article_id}.json", payload=payload)
+        return data.get("article", {})
+    except Exception:
+        try:
+            live = get_article(blog_id, article_id) or {}
+        except Exception:
+            raise
+        so_duoc = 0
+        for k, v in fields.items():
+            if k == "id" or k not in live:
+                continue
+            so_duoc += 1
+            if str(live.get(k) or "").strip() != str(v or "").strip():
+                raise
+        if not so_duoc:
+            raise
+        print(f"[haravan] PUT article {article_id} bao loi nhung DOI CHIEU {so_duoc} field "
+              f"deu khop -> coi la da ghi", flush=True)
+        return live
 
 
 # ─────────────────────────── METAFIELDS (SEO title/description) ───────────────────────────

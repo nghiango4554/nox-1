@@ -51,6 +51,125 @@ _MONEY_LINK = re.compile(
 )
 
 
+# ── Hai luật vợ đã chốt mà TRƯỚC 4/9/2026 chỉ nằm trong prompt gửi AI ─────────
+# Docstring trên đầu file viết: "Prompt có thể bị AI phớt lờ. QC thì không." —
+# nhưng chính hai luật này lại không có cổng nào kiểm:
+#   · Từ so sánh tuyệt đối (Luật Quảng cáo cấm khi không có tài liệu chứng minh)
+#   · Gạch ngang dài — vợ chốt 17/7/2026
+#
+# 🚨 5/9/2026 — VÁ CÁI THƯỚC. Bản 4/9 quét thô cả bài, báo 377 SP "cần soi";
+# soi tay 408 lượt thì gần như TOÀN BÁO ĐỘNG GIẢ:
+#   · 45/45 lượt "số 1" là "thông số 1300Mbps", "tần số 144Hz" — cắt giữa con số
+#   · 195/195 lượt "duy nhất" mang nghĩa "chỉ một" (một ổ duy nhất, một chuẩn duy nhất)
+#   · 91/91 lượt "tốt nhất" là thành ngữ ("phát huy tốt nhất khi…", "tốt nhất là bạn nên…")
+# Luật vợ chốt 19/7: chỉ CẤM khi nói về hàng/dịch vụ CỦA SINTECH. Nên bản này soi
+# theo TỪNG CÂU + ngữ cảnh, chia 2 mức:
+#   · "cao"  = câu nhắc Sintech/cửa hàng, hoặc tự khen hàng mình  → phải sửa
+#   · "thap" = khoa trương khi tả hàng hãng thứ ba                → soi khi rảnh
+#
+# ⚠️ Vẫn CẢNH BÁO, KHÔNG CHẶN sync.
+_TU_TUYET_DOI = (r"tốt nhất|số một|số 1|duy nhất|rẻ nhất|nhanh nhất|mạnh nhất"
+                 r"|uy tín nhất|hàng đầu|đáng mua nhất|chất lượng nhất|vượt trội|đỉnh cao")
+_TUYET_DOI = re.compile(_TU_TUYET_DOI, re.I)
+
+# Nhắc tới chính Sintech → mọi từ tuyệt đối trong câu đều là mức "cao"
+_NHAC_SHOP = re.compile(r"sintech|cửa hàng|shop\b|showroom|bên mình|chúng tôi"
+                        r"|nơi bán|địa chỉ mua|đơn vị cung cấp", re.I)
+# Tự khen hàng/dịch vụ mình dù không gọi tên shop
+_TU_KHEN = re.compile(
+    r"(sản phẩm|dịch vụ|giá|chất lượng|bảo hành|hỗ trợ|tư vấn|kỹ thuật|đội ngũ)"
+    r"[^.]{0,30}(tốt nhất|hàng đầu|số 1|số một|uy tín nhất|nhanh nhất|rẻ nhất)", re.I)
+# Mẫu HỢP LỆ — cắt trước khi tính, đây là chỗ bản 4/9 báo nhầm
+_HOP_LE = re.compile(
+    r"(thông|tần|con|sai|chỉ|mã|ký|hệ|đa|tỉ|tỷ)\s*số\s*1"        # "thông số 1300Mbps"
+    r"|số\s*1[\d.,]"                                              # "số 144Hz", "số 1.5"
+    r"|(ưu tiên|tiêu chí|đặt lên|lên|không phải)\s+(số một|hàng đầu)"
+    r"|thông số một cách"
+    r"|tốt nhất là\b|phát huy tốt nhất|hoạt động tốt nhất|khai thác tốt nhất"
+    r"|thể hiện tốt nhất|làm việc tốt nhất|chạy tốt nhất"
+    r"|phát huy[^.]{0,14}tốt nhất"                              # "phát huy giá trị tốt nhất khi…"
+    r"|(hỗ trợ|tương thích|ăn|hợp)\s+tốt nhất\s+(với|cho)"      # tương thích kỹ thuật, không phải tự khen
+    r"|(cảm giác|tốc độ|phản hồi)\s+nhanh nhất\s+(ở|khi|trong)"  # tả trải nghiệm hàng hãng
+    r"|(đừng|không nên|thay vì|chỉ|không)\s+(chọn|mua|nhìn)[^.]{0,30}(rẻ nhất|tốt nhất)",
+    re.I)
+# "duy nhất" theo sau danh từ = "chỉ một", cách viết đúng — chỉ sai khi khoe shop
+_DUY_NHAT_CHI_MOT = re.compile(
+    r"(một|1|kiểu|chuẩn|nhóm|thiết bị|ổ|khe|cổng|màu|tác vụ|setup|bản|loại|máy"
+    r"|thanh|dây|nguồn|file|gói|mật khẩu|tài khoản|lần|điểm|vùng|kênh)\s+[^.]{0,18}duy nhất", re.I)
+
+_DASH = re.compile(r"[—–]")
+# "khoảng số": vế trước kết thúc bằng chữ số kèm đơn vị tuỳ ý (70, 5, 0°C, 256GB),
+# vế sau bắt đầu bằng chữ số. Đây là cách viết ĐÚNG, không được báo.
+#   0°C – 70°C · 5 – 10 phút · 100 – 240V
+_TRUOC_LA_SO = re.compile(r"\d+\s*[^\s\d]{0,3}\s*$")
+_SAU_LA_SO = re.compile(r"^\s*\d")
+
+
+def _dash_xau(t: str):
+    """Trả (vị trí, đoạn) của gạch ngang dài KHÔNG phải khoảng số. None nếu sạch."""
+    for m in _DASH.finditer(t):
+        i = m.start()
+        if _TRUOC_LA_SO.search(t[max(0, i - 12):i]) and _SAU_LA_SO.search(t[i + 1:i + 13]):
+            continue                      # khoảng số → hợp lệ
+        return i, t[max(0, i - 40):i + 40].strip()
+    return None
+
+
+def _van_ban_thuan(html: str) -> str:
+    """HTML → chữ thuần, đã gỡ signature (bản thân nó có ' — Hotline' đúng chuẩn)."""
+    import html as _h
+    t = _h.unescape(re.sub(r"<[^>]+>", " ", html or ""))
+    t = re.sub(r"\s+", " ", t)
+    for sig in ("Sintech — Hotline", "Sintech – Hotline"):
+        t = t.replace(sig, "Sintech Hotline")
+    return t
+
+
+def soi_tu_tuyet_doi(html: str) -> list:
+    """Soi từ so sánh tuyệt đối THEO CÂU. Trả [{tu, muc, cau}].
+
+    muc "cao"  → câu nói về Sintech / tự khen hàng mình: phải sửa (Luật Quảng cáo).
+    muc "thap" → khoa trương khi tả hàng hãng thứ ba: soi khi rảnh, rủi ro thấp.
+    Câu mang nghĩa thông thường ("một ổ duy nhất", "thông số 144Hz") KHÔNG trả về.
+    """
+    t = _van_ban_thuan(html)
+    ket = []
+    for cau in re.split(r"(?<=[.!?])\s+", t):
+        if not _TUYET_DOI.search(cau):
+            continue
+        co_shop = bool(_NHAC_SHOP.search(cau))
+        for m in _TUYET_DOI.finditer(cau):
+            tu = m.group(0).lower()
+            i = m.start()
+            cua_so = cau[max(0, i - 35):i + 35]
+            if _HOP_LE.search(cua_so):
+                continue
+            if tu == "duy nhất" and _DUY_NHAT_CHI_MOT.search(cua_so):
+                continue
+            if co_shop or _TU_KHEN.search(cau):
+                muc = "cao"
+            elif tu in ("duy nhất", "số 1", "số một"):
+                continue                  # không khoe shop thì đây là nghĩa thường
+            else:
+                muc = "thap"
+            ket.append({"tu": tu, "muc": muc, "cau": cau.strip()[:220]})
+            break                         # mỗi câu báo 1 lần là đủ để soi
+    return ket
+
+
+def check_content_warnings(html: str) -> list:
+    """Cảnh báo 2 luật cần người soi ngữ cảnh. KHÔNG dùng để chặn sync.
+
+    Trả list chuỗi mô tả, kèm câu chứa lỗi để soi nhanh.
+    """
+    canh_bao = [f"[{h['muc']}] từ tuyệt đối {h['tu']!r}: …{h['cau']}…"
+                for h in soi_tu_tuyet_doi(html)]
+    hit = _dash_xau(_van_ban_thuan(html))
+    if hit:
+        canh_bao.append(f"gạch ngang dài ngoài khoảng số: …{hit[1]}…")
+    return canh_bao
+
+
 def _strip_blockquote(html: str) -> str:
     return re.sub(r"<blockquote>.*?</blockquote>", "", html, flags=re.S | re.I)
 
@@ -217,3 +336,53 @@ def main(paths) -> int:
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:] or ["-"]))
+
+
+# ── Dọn gạch ngang dài trong body AI sinh ra (vợ chốt 17/7/2026) ──────────────
+# Trước 5/9/2026 luật này chỉ nằm trong prompt: `sanitize_pasted_html()` chỉ gỡ
+# wrapper HTML của ChatGPT, không đụng dash. Bản này dọn ngay ở khâu writer.
+#
+# 🚫 KHÔNG đụng: khoảng số ("0°C – 70°C"), khối signature, và chữ trong
+#    <strong>/<b>/<h1>/<a>/<code> — TÊN SP hay nằm ở đó ("Ventus XS OC – Cũ",
+#    "Usb C – Hdmi"), mà luật 18/7 chốt giữ nguyên dấu trong tên SP.
+_KHONG_DUNG_DASH = ("strong", "b", "h1", "a", "code", "title")
+
+
+def sanitize_dash(html: str) -> str:
+    """Thay gạch ngang dài bằng dấu phẩy ở phần VĂN XUÔI. Giữ tên SP + khoảng số."""
+    if not html or ("—" not in html and "–" not in html):
+        return html
+    try:
+        from bs4 import BeautifulSoup
+    except Exception:
+        return html
+    soup = BeautifulSoup(html, "html.parser")
+    for node in list(soup.find_all(string=True)):
+        s = str(node)
+        if "—" not in s and "–" not in s:
+            continue
+        if any(p.name in _KHONG_DUNG_DASH for p in node.parents if p.name):
+            continue
+        if "Hotline" in s:                      # khối signature giữ nguyên
+            continue
+        # trong tiêu đề, dash thường là "Nhãn – Mô tả" → dấu hai chấm đọc mượt hơn
+        trong_heading = any(p.name in ("h2", "h3", "h4") for p in node.parents if p.name)
+        dau_thay = ":" if trong_heading else ","
+        moi, i = [], 0
+        for m in _DASH.finditer(s):
+            j = m.start()
+            truoc, sau = s[max(0, j - 12):j], s[j + 1:j + 13]
+            moi.append(s[i:j])
+            if _TRUOC_LA_SO.search(truoc) and _SAU_LA_SO.search(sau):
+                moi.append(m.group(0))          # khoảng số ("0°C – 70°C") giữ nguyên
+            elif _SAU_LA_SO.search(sau):
+                moi.append(":")                 # "Rear – 80mm" là nhãn : trị số
+            else:
+                moi.append(dau_thay)          # khoảng số giữ, còn lại thành dấu câu thường
+            i = j + 1
+        moi.append(s[i:])
+        moi = "".join(moi)
+        moi = re.sub(r"\s*([,:])\s*", lambda m: m.group(1) + " ", moi).rstrip()
+        if moi != s:
+            node.replace_with(moi)
+    return str(soup)

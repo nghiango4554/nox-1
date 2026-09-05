@@ -24,6 +24,7 @@ import re
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 
 from flask import (
     render_template, request, jsonify,
@@ -281,6 +282,12 @@ def collection_content_page():
             j["synced_at_disp"] = datetime.fromisoformat(sa).strftime("%d/%m %H:%M") if sa else ""
         except Exception:
             j["synced_at_disp"] = (sa or "")[:16]
+    # cột "Cov": lấy từ cache coverage live (trước 5/9/2026 không ai truyền `j.cov`
+    # nên cột này luôn hiện ✅ dù collection trống hẳn)
+    _cov_map = (_cc_doc_cache() or {}).get("by_handle") or {}
+    for j in jobs:
+        j["cov"] = _cov_map.get(j.get("handle") or "")
+
     conn = db.get_conn()
     stats = {}
     for s in ("pending", "draft", "synced", "failed", "existing"):
@@ -480,6 +487,111 @@ def collection_content_sync_all():
 
 # ─────────────────────── REGISTRATION ────────────────────────────
 
+
+# ─────────────────────── COVERAGE LIVE (5/9/2026) ────────────────
+# Panel "Coverage LIVE web" trên /collection-content gọi 2 endpoint này, nhưng
+# TRƯỚC 5/9/2026 chúng KHÔNG TỒN TẠI: fetch trả 404, JS nuốt lỗi trong catch rồi
+# vẽ lại đúng dòng "Chưa quét — bấm Quét lại live" → bấm nút bao nhiêu lần cũng
+# không ra gì, và không có lỗi nào hiện ra để biết. Cột "Cov" trong bảng cũng
+# luôn hiện ✅ vì route list chưa bao giờ truyền `j.cov`.
+_CC_COVERAGE_FILE = Path(__file__).parent.parent / "data" / "collection_content_coverage.json"
+
+# Collection dịch vụ (sửa chữa, vệ sinh, thu mua…) không cần bài mô tả dài như
+# collection bán hàng → xếp riêng, không tính là thiếu nội dung.
+_CC_SERVICE_DAU_HIEU = ("dich-vu", "sua-chua", "sua-", "ve-sinh", "cai-win", "cai-dat",
+                        "nang-cap", "bao-hanh", "thu-mua", "lap-dat")
+
+
+def _cc_phan_loai(body_html: str, handle: str) -> str:
+    """Phân loại 1 collection theo nội dung LIVE. Trả mã khớp với template."""
+    if any(k in (handle or "") for k in _CC_SERVICE_DAU_HIEU):
+        return "service"
+    html = body_html or ""
+    text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html)).strip()
+    if len(text) < 50:
+        return "miss_content"
+    if len(text) < 200 or not re.search(r"<h[23]\b", html, re.I):
+        return "thin_content"          # intro suông, không có heading nào
+    if "<img" not in html.lower():
+        return "miss_image"
+    return "ok"
+
+
+def _cc_scan_coverage_live() -> dict:
+    """Quét LIVE toàn bộ collection Haravan → phân loại → ghi cache JSON."""
+    import haravan_client as hv
+
+    def lay_het(fn, kind):
+        out, page = [], 1
+        while True:
+            try:
+                batch = fn(page=page, limit=50)
+            except Exception:
+                break
+            if not batch:
+                break
+            for c in batch:
+                out.append({
+                    "handle": c.get("handle") or "",
+                    "title": c.get("title") or "",
+                    "kind": kind,
+                    "cov": _cc_phan_loai(c.get("body_html"), c.get("handle") or ""),
+                })
+            if len(batch) < 50:
+                break
+            page += 1
+        return out
+
+    items = lay_het(hv.list_custom_collections, "custom") + lay_het(hv.list_smart_collections, "smart")
+    counts, nhom = {}, {"miss_content": [], "thin_content": [], "miss_image": []}
+    for c in items:
+        counts[c["cov"]] = counts.get(c["cov"], 0) + 1
+        if c["cov"] in nhom:
+            nhom[c["cov"]].append({"handle": c["handle"], "title": c["title"]})
+    for v in nhom.values():
+        v.sort(key=lambda x: x["title"])
+    data = {
+        "updated_at": datetime.now().strftime("%d/%m %H:%M"),
+        "total": len(items),
+        "counts": counts,
+        "by_handle": {c["handle"]: c["cov"] for c in items},
+        **nhom,
+    }
+    try:
+        _CC_COVERAGE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _CC_COVERAGE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception as e:
+        print(f"[cc-coverage] khong ghi duoc cache: {e}", flush=True)
+    return data
+
+
+def _cc_doc_cache() -> dict | None:
+    try:
+        if _CC_COVERAGE_FILE.exists():
+            return json.loads(_CC_COVERAGE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return None
+
+
+def collection_content_coverage():
+    """GET — trả cache, KHÔNG tự quét (quét live tốn ~30s, để nút Refresh lo)."""
+    d = _cc_doc_cache()
+    if d:
+        d.pop("by_handle", None)      # map chỉ dùng cho cột trong bảng, JS không cần
+    return jsonify({"ok": True, "data": d})
+
+
+def collection_content_coverage_refresh():
+    """POST — quét lại live rồi trả luôn kết quả."""
+    try:
+        d = dict(_cc_scan_coverage_live())
+        d.pop("by_handle", None)
+        return jsonify({"ok": True, "data": d})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)[:200]}), 500
+
+
 def register(app):
     """Đăng ký 10 route Collection Content."""
     app.add_url_rule("/collection-content", "collection_content_page", collection_content_page)
@@ -501,5 +613,10 @@ def register(app):
                      "collection_content_save", collection_content_save, methods=["POST"])
     app.add_url_rule("/collection-content/<int:job_id>/sync",
                      "collection_content_sync", collection_content_sync, methods=["POST"])
+    app.add_url_rule("/collection-content/coverage",
+                     "collection_content_coverage", collection_content_coverage)
+    app.add_url_rule("/collection-content/coverage/refresh",
+                     "collection_content_coverage_refresh", collection_content_coverage_refresh,
+                     methods=["POST"])
     app.add_url_rule("/collection-content/sync-all",
                      "collection_content_sync_all", collection_content_sync_all, methods=["POST"])
