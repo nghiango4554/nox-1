@@ -5,7 +5,32 @@ sys.stdout.reconfigure(encoding="utf-8")
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
-API_KEY = "AIzaSyAXk2hMOvGUi5h4ekXmT-gmCKG5COPN6_4"
+def _doc_khoa():
+    """Đọc khoá Google từ biến môi trường hoặc `.secrets/google.env`.
+
+    KHÔNG dán khoá thẳng vào file này. Bản trước ghi cứng khoá ở đây, khoá đó
+    đã bị Google chặn ngày 16/8/2026 với lý do "reported as leaked" — mà cả 4
+    script đều chép cùng một khoá nên chết đồng loạt, sửa phải sửa 12 chỗ.
+    """
+    k = os.environ.get("GOOGLE_API_KEY")
+    if k:
+        return k.strip()
+    d = os.path.dirname(os.path.abspath(__file__))
+    for _ in range(5):
+        for p in (os.path.join(d, ".secrets", "google.env"),
+                  os.path.join(d, "nox-1", ".secrets", "google.env")):
+            if os.path.isfile(p):
+                # utf-8-sig: Notepad/PowerShell hay chèn BOM, utf-8 thường sẽ
+                # đọc lẫn BOM vào tên khoá rồi so sánh trượt mà không báo gì
+                for dong in open(p, encoding="utf-8-sig"):
+                    if dong.startswith("GOOGLE_API_KEY="):
+                        return dong.split("=", 1)[1].strip()
+        d = os.path.dirname(d)
+    raise SystemExit("Thiếu GOOGLE_API_KEY — đặt biến môi trường, "
+                     "hoặc thêm dòng GOOGLE_API_KEY=... vào nox-1/.secrets/google.env")
+
+
+API_KEY = _doc_khoa()
 MODEL = "gemini-2.5-flash-lite"
 ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key={API_KEY}"
 
